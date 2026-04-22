@@ -116,12 +116,11 @@ public class ProductService {
     /** Atomically generates the next policy number for a product. */
     @Transactional
     public String generatePolicyNumber(UUID productId) {
-        PolicyNumberFormat fmt = productRepository.findByIdForUpdate(productId)
-                .map(p -> p)  // ensure product exists and is locked
-                .orElseThrow(() -> new ResourceNotFoundException("Product", productId))
-                .getSections(); // dummy — real lock is on product via findByIdForUpdate
+        // Verify product exists (applies a SELECT FOR UPDATE lock via findByIdForUpdate)
+        productRepository.findByIdForUpdate(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", productId));
 
-        // Delegate to PolicyNumberFormat service
+        // Actual number generation is delegated to PolicyNumberFormatService
         throw new UnsupportedOperationException("Use PolicyNumberFormatService.generateNext()");
     }
 

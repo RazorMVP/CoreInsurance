@@ -1,5 +1,7 @@
 package com.nubeero.cia.setup.finance;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -10,4 +12,5 @@ public interface CurrencyRepository extends JpaRepository<Currency, UUID> {
     Optional<Currency> findByCodeAndDeletedAtIsNull(String code);
     Optional<Currency> findByIsDefaultTrueAndDeletedAtIsNull();
     List<Currency> findAllByDeletedAtIsNull();
+    Page<Currency> findAllByDeletedAtIsNull(Pageable pageable);
 }
