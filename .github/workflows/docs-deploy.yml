@@ -1,25 +1,17 @@
-name: Deploy Docs to GitHub Pages
+name: Deploy Docs to Vercel
 
 on:
   push:
     branches: [main]
     paths:
       - 'docs-site/**'
+      - 'cia-backend/cia-partner-api/docs/openapi.json'
       - '.github/workflows/docs-deploy.yml'
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
 jobs:
-  build:
-    name: Build Docusaurus
+  deploy:
+    name: Build & Deploy Docusaurus
     runs-on: ubuntu-latest
 
     steps:
@@ -32,8 +24,15 @@ jobs:
           cache: npm
           cache-dependency-path: docs-site/package-lock.json
 
-      - name: Setup GitHub Pages
-        uses: actions/configure-pages@v4
+      - name: Sync latest OpenAPI spec into static/
+        run: cp cia-backend/cia-partner-api/docs/openapi.json docs-site/static/openapi.json
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel environment
+        working-directory: docs-site
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Install dependencies
         working-directory: docs-site
@@ -41,23 +40,11 @@ jobs:
 
       - name: Build Docusaurus
         working-directory: docs-site
+        env:
+          DOCUSAURUS_URL: ${{ vars.DOCUSAURUS_URL }}
+          DOCUSAURUS_BASE_URL: "/"
         run: npm run build
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs-site/build
-
-  deploy:
-    name: Deploy to GitHub Pages
-    needs: build
-    runs-on: ubuntu-latest
-
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy to Vercel
+        working-directory: docs-site
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}

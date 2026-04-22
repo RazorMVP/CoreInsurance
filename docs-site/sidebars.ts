@@ -53,13 +53,13 @@ const sidebars: SidebarsConfig = {
       items: [
         {
           type: "link",
-          label: "Interactive API Explorer (Swagger UI)",
-          href: "https://razormvp.github.io/CoreInsurance/partner/docs",
+          label: "Interactive API Explorer",
+          href: "/partner/api-reference",
         },
         {
           type: "link",
           label: "OpenAPI Specification (JSON)",
-          href: "https://razormvp.github.io/CoreInsurance/openapi.json",
+          href: "/openapi.json",
         },
       ],
     },

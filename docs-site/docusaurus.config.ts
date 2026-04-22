@@ -7,8 +7,9 @@ const config: Config = {
   tagline: "Core Insurance Application — Developer & Partner Reference",
   favicon: "img/favicon.ico",
 
-  url: "https://razormvp.github.io",
-  baseUrl: "/CoreInsurance/",
+  // Updated by Vercel env vars at deploy time; falls back to localhost for dev.
+  url: process.env.DOCUSAURUS_URL || "http://localhost:3000",
+  baseUrl: process.env.DOCUSAURUS_BASE_URL || "/",
 
   organizationName: "RazorMVP",
   projectName: "CoreInsurance",
@@ -22,7 +23,24 @@ const config: Config = {
     locales: ["en"],
   },
 
-  plugins: [],
+  plugins: [
+    [
+      "@scalar/docusaurus",
+      {
+        label: "API Reference",
+        route: "/partner/api-reference",
+        configuration: {
+          spec: { url: "/openapi.json" },
+          // Match the docs site colour scheme
+          darkMode: true,
+          defaultHttpClient: {
+            targetKey: "javascript",
+            clientKey: "fetch",
+          },
+        },
+      },
+    ],
+  ],
 
   presets: [
     [
@@ -65,6 +83,11 @@ const config: Config = {
           label: "Partner API",
         },
         {
+          to: "/partner/api-reference",
+          position: "left",
+          label: "API Explorer",
+        },
+        {
           href: "https://github.com/RazorMVP/CoreInsurance",
           label: "GitHub",
           position: "right",
@@ -85,12 +108,12 @@ const config: Config = {
         {
           title: "Partner Resources",
           items: [
-            { label: "API Reference", to: "/docs/partner/overview" },
+            { label: "API Explorer", to: "/partner/api-reference" },
+            { label: "Authentication Guide", to: "/docs/partner/authentication" },
             {
               label: "Postman Collection",
               href: "https://github.com/RazorMVP/CoreInsurance/blob/main/cia-backend/cia-partner-api/docs/postman_collection.json",
             },
-            { label: "Authentication Guide", to: "/docs/partner/authentication" },
           ],
         },
       ],
