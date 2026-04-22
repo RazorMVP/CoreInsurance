@@ -7,7 +7,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 @Slf4j
-@Component
+@Component("reinsurancePolicyApprovedEventListener")
 @RequiredArgsConstructor
 public class PolicyApprovedEventListener {
 

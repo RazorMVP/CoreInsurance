@@ -1,8 +1,6 @@
 -- Module 1: Setup & Administration tables
 -- Applied to every tenant schema on startup via Flyway multi-schema migration.
 
-SET search_path TO :schema;
-
 -- -----------------------------------------------------------------------
 -- Company & system config
 -- -----------------------------------------------------------------------
@@ -418,5 +416,3 @@ CREATE TABLE IF NOT EXISTS vehicle_types (
     created_by VARCHAR(255),
     deleted_at TIMESTAMPTZ
 );
-
-RESET search_path;

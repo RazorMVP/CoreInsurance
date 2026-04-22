@@ -51,6 +51,7 @@
     <minio.version>8.5.11</minio.version>
     <aws-sdk.version>2.25.60</aws-sdk.version>
     <bucket4j-starter.version>0.12.7</bucket4j-starter.version>
+    <bucket4j.version>8.10.1</bucket4j.version>
     <testcontainers.version>1.20.1</testcontainers.version>
   </properties>
 
@@ -199,6 +200,11 @@
         <groupId>com.giffing.bucket4j.spring.boot.starter</groupId>
         <artifactId>bucket4j-spring-boot-starter</artifactId>
         <version>${bucket4j-starter.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bucket4j</groupId>
+        <artifactId>bucket4j-redis</artifactId>
+        <version>${bucket4j.version}</version>
       </dependency>
 
       <!-- ── Testcontainers BOM ────────────────────────────────────── -->

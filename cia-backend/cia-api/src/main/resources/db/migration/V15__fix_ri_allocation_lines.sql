@@ -1,0 +1,1 @@
+ALTER TABLE ri_allocation_lines ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;

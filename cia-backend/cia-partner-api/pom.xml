@@ -71,10 +71,25 @@
       <groupId>com.giffing.bucket4j.spring.boot.starter</groupId>
       <artifactId>bucket4j-spring-boot-starter</artifactId>
     </dependency>
-    <!-- Redis for distributed rate limit counters -->
+    <!-- Redis for distributed rate limit counters — Jedis (sync/blocking) required by bucket4j servlet filter -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-data-redis</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>io.lettuce</groupId>
+          <artifactId>lettuce-core</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>redis.clients</groupId>
+      <artifactId>jedis</artifactId>
+    </dependency>
+    <!-- bucket4j-redis provides JedisBasedProxyManager (optional in starter, must be explicit) -->
+    <dependency>
+      <groupId>com.bucket4j</groupId>
+      <artifactId>bucket4j-redis</artifactId>
     </dependency>
     <dependency>
       <groupId>org.mapstruct</groupId>

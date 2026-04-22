@@ -5,7 +5,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-@Component
+@Component("financePolicyApprovedEventListener")
 public class PolicyApprovedEventListener {
 
     private final DebitNoteService debitNoteService;

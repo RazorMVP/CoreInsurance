@@ -1,6 +1,8 @@
 spring:
   application:
     name: cia-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
 
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5434/cia}
@@ -15,8 +17,6 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         multiTenancy: SCHEMA
-        multi_tenant_connection_provider: com.nubeero.cia.common.tenant.MultiTenantConnectionProvider
-        tenant_identifier_resolver: com.nubeero.cia.common.tenant.TenantIdentifierResolver
         format_sql: false
     show-sql: false
 
@@ -103,9 +103,11 @@ springdoc:
 
 bucket4j:
   enabled: true
+  cache-to-use: redis-jedis
   filters:
     - cache-name: rate-limit-partner
       url: /partner/v1/.*
+      filter-method: SERVLET
       rate-limits:
         - bandwidths:
             - capacity: 1000
