@@ -5,7 +5,7 @@ import type * as Preset from "@docusaurus/preset-classic";
 const config: Config = {
   title: "CIA Documentation",
   tagline: "Core Insurance Application — Developer & Partner Reference",
-  favicon: "img/favicon.ico",
+  favicon: "img/favicon.png",
 
   url: process.env.DOCUSAURUS_URL || "https://cia-docs.vercel.app",
   baseUrl: process.env.DOCUSAURUS_BASE_URL || "/",
@@ -65,8 +65,8 @@ const config: Config = {
     navbar: {
       title: "CIA Docs",
       logo: {
-        alt: "CIA Logo",
-        src: "img/logo.svg",
+        alt: "Nubeero Logo",
+        src: "img/logo.png",
       },
       items: [
         {
