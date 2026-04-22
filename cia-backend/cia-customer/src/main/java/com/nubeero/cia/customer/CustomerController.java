@@ -1,6 +1,6 @@
 package com.nubeero.cia.customer;
 
-import com.nubeero.cia.common.ApiResponse;
+import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.customer.dto.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
