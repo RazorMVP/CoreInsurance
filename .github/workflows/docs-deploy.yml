@@ -34,16 +34,9 @@ jobs:
         working-directory: docs-site
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
-      - name: Install dependencies
+      - name: Build with Vercel
         working-directory: docs-site
-        run: npm ci
-
-      - name: Build Docusaurus
-        working-directory: docs-site
-        env:
-          DOCUSAURUS_URL: ${{ vars.DOCUSAURUS_URL }}
-          DOCUSAURUS_BASE_URL: "/"
-        run: npm run build
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy to Vercel
         working-directory: docs-site
