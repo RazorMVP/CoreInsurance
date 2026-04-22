@@ -7,8 +7,7 @@ const config: Config = {
   tagline: "Core Insurance Application — Developer & Partner Reference",
   favicon: "img/favicon.ico",
 
-  // Updated by Vercel env vars at deploy time; falls back to localhost for dev.
-  url: process.env.DOCUSAURUS_URL || "http://localhost:3000",
+  url: process.env.DOCUSAURUS_URL || "https://cia-docs.vercel.app",
   baseUrl: process.env.DOCUSAURUS_BASE_URL || "/",
 
   organizationName: "RazorMVP",
