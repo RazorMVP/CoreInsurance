@@ -1,0 +1,58 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch",
+      "Bash(source *)",
+      "Bash(export *)",
+      "Bash(curl *)",
+      "Bash(jq *)",
+      "Bash(cat *)",
+      "Bash(ls *)",
+      "Bash(grep *)",
+      "Bash(echo *)",
+      "Bash(which *)",
+      "Bash(wc *)",
+      "Bash(file *)",
+      "Bash(pwd)",
+      "Bash(mkdir *)",
+      "Bash(touch *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(find *)",
+      "Bash(sort *)",
+      "Bash(tree *)",
+      "Bash(diff *)",
+      "Bash(node *)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import json; print(json.dumps({'systemMessage': 'CIA SESSION COMPLETION GATE\\n\\nBefore this session closes, confirm each item was completed:\\n\\n  [ ] cia-log.md       -- all changes logged with date heading\\n  [ ] CLAUDE.md        -- updated if architecture/modules/env vars changed\\n  [ ] SKILL.md         -- updated if module count/rules/conventions changed\\n  [ ] OpenAPI          -- new /partner/v1/ endpoints have @Operation + @ApiResponse + @Schema\\n  [ ] Postman          -- noted for regeneration if endpoint shape changed\\n  [ ] Backend APIs     -- service interfaces and DTOs match current business rules\\n\\nIf any item is incomplete, complete it now.'}))\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import json; print(json.dumps({'systemMessage': 'CIA PRE-COMPACTION: Updating docs before context is compressed.', 'hookSpecificOutput': {'hookEventName': 'PreCompact', 'additionalContext': 'MANDATORY BEFORE COMPACTION -- Complete the CIA Session Completion Gate now: (1) Update cia-log.md with ALL changes made this session -- every file created or modified, every decision made. (2) Update CLAUDE.md if any module, architecture, environment variable, or business rule changed. (3) Update SKILL.md if module count, feature count, entities, or conventions changed. (4) Ensure all new /partner/v1/ endpoints in cia-partner-api have @Operation + @ApiResponse + @Schema annotations. (5) Note in cia-log.md if Postman collection regeneration is needed. Complete all of this BEFORE the compaction proceeds.'}}))\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
