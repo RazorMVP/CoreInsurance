@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.nubeero.cia</groupId>
+    <artifactId>cia-backend</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>cia-api</artifactId>
+  <name>CIA API</name>
+  <description>Assembly module — main Spring Boot application, Flyway migrations, application config</description>
+
+  <dependencies>
+
+    <!-- ── Infrastructure ─────────────────────────────────────────── -->
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-common</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-auth</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-storage</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-integrations</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-notifications</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-workflow</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-documents</artifactId>
+    </dependency>
+
+    <!-- ── Business modules ───────────────────────────────────────── -->
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-setup</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-customer</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-quotation</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-policy</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-endorsement</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-claims</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-reinsurance</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-finance</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-partner-api</artifactId>
+    </dependency>
+
+    <!-- ── Spring Boot runtime ────────────────────────────────────── -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <!-- ── Database ───────────────────────────────────────────────── -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+    </dependency>
+
+    <!-- ── Test ───────────────────────────────────────────────────── -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Build the executable fat JAR -->
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

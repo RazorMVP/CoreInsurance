@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.3.5</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.nubeero.cia</groupId>
+  <artifactId>cia-backend</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>CIA Backend — Parent</name>
+  <description>Core Insurance Application (General Business) — Multi-module Spring Boot backend</description>
+
+  <modules>
+    <module>cia-common</module>
+    <module>cia-auth</module>
+    <module>cia-storage</module>
+    <module>cia-integrations</module>
+    <module>cia-notifications</module>
+    <module>cia-workflow</module>
+    <module>cia-documents</module>
+    <module>cia-setup</module>
+    <module>cia-customer</module>
+    <module>cia-quotation</module>
+    <module>cia-policy</module>
+    <module>cia-endorsement</module>
+    <module>cia-claims</module>
+    <module>cia-reinsurance</module>
+    <module>cia-finance</module>
+    <module>cia-partner-api</module>
+    <module>cia-api</module>
+  </modules>
+
+  <properties>
+    <java.version>21</java.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <lombok.version>1.18.36</lombok.version>
+    <temporal.version>1.25.0</temporal.version>
+    <mapstruct.version>1.5.5.Final</mapstruct.version>
+    <springdoc.version>2.5.0</springdoc.version>
+    <pdfbox.version>3.0.2</pdfbox.version>
+    <minio.version>8.5.11</minio.version>
+    <aws-sdk.version>2.25.60</aws-sdk.version>
+    <bucket4j-starter.version>0.12.7</bucket4j-starter.version>
+    <testcontainers.version>1.20.1</testcontainers.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+
+      <!-- ── Internal modules ─────────────────────────────────────── -->
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-common</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-auth</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-storage</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-integrations</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-notifications</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-workflow</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-documents</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-setup</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-customer</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-quotation</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-policy</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-endorsement</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-claims</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-reinsurance</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-finance</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-partner-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <!-- ── Temporal ──────────────────────────────────────────────── -->
+      <dependency>
+        <groupId>io.temporal</groupId>
+        <artifactId>temporal-sdk</artifactId>
+        <version>${temporal.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.temporal</groupId>
+        <artifactId>temporal-spring-boot-starter</artifactId>
+        <version>${temporal.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.temporal</groupId>
+        <artifactId>temporal-testing</artifactId>
+        <version>${temporal.version}</version>
+        <scope>test</scope>
+      </dependency>
+
+      <!-- ── MapStruct ─────────────────────────────────────────────── -->
+      <dependency>
+        <groupId>org.mapstruct</groupId>
+        <artifactId>mapstruct</artifactId>
+        <version>${mapstruct.version}</version>
+      </dependency>
+
+      <!-- ── Springdoc OpenAPI ─────────────────────────────────────── -->
+      <dependency>
+        <groupId>org.springdoc</groupId>
+        <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        <version>${springdoc.version}</version>
+      </dependency>
+
+      <!-- ── PDF generation ────────────────────────────────────────── -->
+      <dependency>
+        <groupId>org.apache.pdfbox</groupId>
+        <artifactId>pdfbox</artifactId>
+        <version>${pdfbox.version}</version>
+      </dependency>
+
+      <!-- ── MinIO client ──────────────────────────────────────────── -->
+      <dependency>
+        <groupId>io.minio</groupId>
+        <artifactId>minio</artifactId>
+        <version>${minio.version}</version>
+      </dependency>
+
+      <!-- ── AWS SDK v2 BOM ─────────────────────────────────────────── -->
+      <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>bom</artifactId>
+        <version>${aws-sdk.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- ── Bucket4j rate limiting ─────────────────────────────────── -->
+      <dependency>
+        <groupId>com.giffing.bucket4j.spring.boot.starter</groupId>
+        <artifactId>bucket4j-spring-boot-starter</artifactId>
+        <version>${bucket4j-starter.version}</version>
+      </dependency>
+
+      <!-- ── Testcontainers BOM ────────────────────────────────────── -->
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers-bom</artifactId>
+        <version>${testcontainers.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+    </dependencies>
+  </dependencyManagement>
+
+  <!-- Dependencies inherited by ALL modules -->
+  <dependencies>
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <configuration>
+            <source>21</source>
+            <target>21</target>
+            <annotationProcessorPaths>
+              <path>
+                <groupId>org.projectlombok</groupId>
+                <artifactId>lombok</artifactId>
+                <version>${lombok.version}</version>
+              </path>
+              <path>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct-processor</artifactId>
+                <version>${mapstruct.version}</version>
+              </path>
+            </annotationProcessorPaths>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-maven-plugin</artifactId>
+          <configuration>
+            <excludes>
+              <exclude>
+                <groupId>org.projectlombok</groupId>
+                <artifactId>lombok</artifactId>
+              </exclude>
+            </excludes>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+
+</project>

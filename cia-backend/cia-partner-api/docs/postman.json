@@ -1,0 +1,745 @@
+{
+	"info": {
+		"name": "CIA Partner API",
+		"description": {
+		    "content": "Open API for Insurtech connectivity — aggregators, digital brokers, and embedded insurance providers.",
+		    "type": "text/markdown"
+		},
+		"version": "1.0.0",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+	        {
+	            "name": "Products",
+	            "item": [
+	                        {
+    "name": "/products",
+                "description": "",
+                 "item": [
+                            {
+                                "name": "List products",
+                                "request": {
+                                    "method": "GET",
+                                    "header": [
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/products",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "products"
+                                        ],
+                                        "variable": [
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": ""
+                                }
+                            }
+                            ]
+                        },
+	                        {
+    "name": "/products/:id",
+                "description": "",
+                 "item": [
+                            {
+                                "name": "Get product",
+                                "request": {
+                                    "method": "GET",
+                                    "header": [
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/products/:id",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "products",
+                                            ":id"
+                                        ],
+                                        "variable": [
+                                            {
+                                                "key": "id",
+                                                "value": "",
+                                                "description": ""
+                                            }
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": ""
+                                }
+                            }
+                            ]
+                        },
+	                        {
+    "name": "/products/:id/classes",
+                "description": "",
+                 "item": [
+                            {
+                                "name": "List classes of business for a product",
+                                "request": {
+                                    "method": "GET",
+                                    "header": [
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/products/:id/classes",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "products",
+                                            ":id",
+                                            "classes"
+                                        ],
+                                        "variable": [
+                                            {
+                                                "key": "id",
+                                                "value": "",
+                                                "description": ""
+                                            }
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": ""
+                                }
+                            }
+                            ]
+                        }
+	                    ]
+	        },
+	        {
+	            "name": "Claims",
+	            "item": [
+	                        {
+    "name": "/claims/:id",
+                "description": "",
+                 "item": [
+                            {
+                                "name": "Get claim status",
+                                "request": {
+                                    "method": "GET",
+                                    "header": [
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/claims/:id",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "claims",
+                                            ":id"
+                                        ],
+                                        "variable": [
+                                            {
+                                                "key": "id",
+                                                "value": "",
+                                                "description": ""
+                                            }
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": ""
+                                }
+                            }
+                            ]
+                        },
+	                        {
+    "name": "/policies/:id/claims",
+                "description": "",
+                 "item": [
+                            {
+                                "name": "Submit claim notification",
+                                "request": {
+                                    "method": "POST",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
+                                        }
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/policies/:id/claims",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "policies",
+                                            ":id",
+                                            "claims"
+                                        ],
+                                        "variable": [
+                                            {
+                                                "key": "id",
+                                                "value": "",
+                                                "description": ""
+                                            }
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": ""
+                                }
+                            }
+                            ]
+                        }
+	                    ]
+	        },
+	        {
+	            "name": "Policies",
+	            "item": [
+	                        {
+    "name": "/policies",
+                "description": "",
+                 "item": [
+                            {
+                                "name": "Bind policy",
+                                "request": {
+                                    "method": "POST",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
+                                        }
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/policies",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "policies"
+                                        ],
+                                        "variable": [
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": ""
+                                }
+                            }
+                            ]
+                        },
+	                        {
+    "name": "/policies/:id",
+                "description": "",
+                 "item": [
+                            {
+                                "name": "Get policy",
+                                "request": {
+                                    "method": "GET",
+                                    "header": [
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/policies/:id",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "policies",
+                                            ":id"
+                                        ],
+                                        "variable": [
+                                            {
+                                                "key": "id",
+                                                "value": "",
+                                                "description": ""
+                                            }
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": ""
+                                }
+                            }
+                            ]
+                        },
+	                        {
+    "name": "/policies/:id/document",
+                "description": "",
+                 "item": [
+                            {
+                                "name": "Download policy certificate (PDF)",
+                                "request": {
+                                    "method": "GET",
+                                    "header": [
+                                        {
+                                            "key": "Accept",
+                                            "value": "application/pdf",
+                                            "description": "",
+                                            "disabled": false
+                                        }
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/policies/:id/document",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "policies",
+                                            ":id",
+                                            "document"
+                                        ],
+                                        "variable": [
+                                            {
+                                                "key": "id",
+                                                "value": "",
+                                                "description": ""
+                                            }
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": ""
+                                }
+                            }
+                            ]
+                        }
+	                    ]
+	        },
+	        {
+	            "name": "Customers",
+	            "item": [
+	                        {
+    "name": "/customers/:id",
+                "description": "",
+                 "item": [
+                            {
+                                "name": "Get customer",
+                                "request": {
+                                    "method": "GET",
+                                    "header": [
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/customers/:id",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "customers",
+                                            ":id"
+                                        ],
+                                        "variable": [
+                                            {
+                                                "key": "id",
+                                                "value": "",
+                                                "description": ""
+                                            }
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": ""
+                                }
+                            }
+                            ]
+                        },
+	                        {
+    "name": "/customers/corporate",
+                "description": "",
+                 "item": [
+                            {
+                                "name": "Register corporate customer",
+                                "request": {
+                                    "method": "POST",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
+                                        }
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/customers/corporate",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "customers",
+                                            "corporate"
+                                        ],
+                                        "variable": [
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": ""
+                                }
+                            }
+                            ]
+                        },
+	                        {
+    "name": "/customers/individual",
+                "description": "",
+                 "item": [
+                            {
+                                "name": "Register individual customer",
+                                "request": {
+                                    "method": "POST",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
+                                        }
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/customers/individual",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "customers",
+                                            "individual"
+                                        ],
+                                        "variable": [
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": ""
+                                }
+                            }
+                            ]
+                        }
+	                    ]
+	        },
+	        {
+	            "name": "Webhooks",
+	            "item": [
+	                        {
+    "name": "/webhooks",
+                "description": "",
+                 "item": [
+                            {
+                                "name": "List webhooks",
+                                "request": {
+                                    "method": "GET",
+                                    "header": [
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/webhooks",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "webhooks"
+                                        ],
+                                        "variable": [
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": ""
+                                }
+                            }
+                            ]
+                        },
+	                        {
+    "name": "/webhooks",
+                "description": "",
+                 "item": [
+                            {
+                                "name": "Register webhook",
+                                "request": {
+                                    "method": "POST",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
+                                        }
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/webhooks",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "webhooks"
+                                        ],
+                                        "variable": [
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": ""
+                                }
+                            }
+                            ]
+                        },
+	                        {
+    "name": "/webhooks/:id",
+                "description": "",
+                 "item": [
+                            {
+                                "name": "Delete webhook",
+                                "request": {
+                                    "method": "DELETE",
+                                    "header": [
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/webhooks/:id",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "webhooks",
+                                            ":id"
+                                        ],
+                                        "variable": [
+                                            {
+                                                "key": "id",
+                                                "value": "",
+                                                "description": ""
+                                            }
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": ""
+                                }
+                            }
+                            ]
+                        }
+	                    ]
+	        },
+	        {
+	            "name": "Quotation",
+	            "item": [
+	                        {
+    "name": "/quotes",
+                "description": "",
+                 "item": [
+                            {
+                                "name": "Create quote",
+                                "request": {
+                                    "method": "POST",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
+                                        }
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/quotes",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "quotes"
+                                        ],
+                                        "variable": [
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": ""
+                                }
+                            }
+                            ]
+                        },
+	                        {
+    "name": "/quotes/:id",
+                "description": "",
+                 "item": [
+                            {
+                                "name": "Get quote",
+                                "request": {
+                                    "method": "GET",
+                                    "header": [
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/quotes/:id",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "quotes",
+                                            ":id"
+                                        ],
+                                        "variable": [
+                                            {
+                                                "key": "id",
+                                                "value": "",
+                                                "description": ""
+                                            }
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": ""
+                                }
+                            }
+                            ]
+                        }
+	                    ]
+	        }
+    ],
+    
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "{{baseUrl}}/partner/v1",
+			"type": "string"
+        }
+	]
+}
+

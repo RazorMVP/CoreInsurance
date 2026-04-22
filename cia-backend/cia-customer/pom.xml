@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.nubeero.cia</groupId>
+    <artifactId>cia-backend</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>cia-customer</artifactId>
+  <name>CIA Customer</name>
+  <description>Module 7: Customer Onboarding and KYC (10 features)</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-common</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-integrations</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.mapstruct</groupId>
+      <artifactId>mapstruct</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+</project>

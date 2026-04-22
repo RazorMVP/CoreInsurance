@@ -1,0 +1,120 @@
+spring:
+  application:
+    name: cia-backend
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/cia}
+    username: ${DB_USERNAME:cia}
+    password: ${DB_PASSWORD:cia_dev}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        multiTenancy: SCHEMA
+        multi_tenant_connection_provider: com.nubeero.cia.common.tenant.MultiTenantConnectionProvider
+        tenant_identifier_resolver: com.nubeero.cia.common.tenant.TenantIdentifierResolver
+        format_sql: false
+    show-sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    schemas: public
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:cia}
+
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+server:
+  port: ${SERVER_PORT:8090}
+  servlet:
+    context-path: /
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+cia:
+  temporal:
+    host: ${TEMPORAL_HOST:localhost:7233}
+    namespace: ${TEMPORAL_NAMESPACE:default}
+
+  storage:
+    type: ${STORAGE_TYPE:minio}
+    endpoint: ${STORAGE_ENDPOINT:http://localhost:9000}
+    bucket-name: ${STORAGE_BUCKET:cia-documents}
+    access-key: ${STORAGE_ACCESS_KEY:minioadmin}
+    secret-key: ${STORAGE_SECRET_KEY:minioadmin}
+    region: ${STORAGE_REGION:us-east-1}
+
+  naicom:
+    mode: ${NAICOM_MODE:stub}
+    api-url: ${NAICOM_API_URL:}
+
+  niid:
+    mode: ${NIID_MODE:stub}
+    api-url: ${NIID_API_URL:}
+
+  kyc:
+    provider: ${KYC_PROVIDER:mock}
+    provider-url: ${KYC_PROVIDER_URL:}
+
+  notifications:
+    email:
+      enabled: ${EMAIL_NOTIFICATIONS_ENABLED:true}
+    sms:
+      enabled: ${SMS_NOTIFICATIONS_ENABLED:true}
+
+  partner:
+    oauth2:
+      token-url: ${PARTNER_TOKEN_URL:http://localhost:8080/realms/cia/protocol/openid-connect/token}
+    webhook:
+      signing-secret: ${WEBHOOK_SIGNING_SECRET:dev-secret-replace-in-prod}
+
+springdoc:
+  api-docs:
+    path: /partner/v3/api-docs
+  swagger-ui:
+    path: /partner/docs
+  default-produces-media-type: application/json
+
+bucket4j:
+  enabled: true
+  filters:
+    - cache-name: rate-limit-partner
+      url: /partner/v1/.*
+      rate-limits:
+        - bandwidths:
+            - capacity: 1000
+              time: 1
+              unit: minutes
+              refill-speed: interval
+
+logging:
+  level:
+    com.nubeero.cia: INFO
+    org.hibernate.SQL: WARN
+    org.springframework.security: WARN

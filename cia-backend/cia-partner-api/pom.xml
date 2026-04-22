@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.nubeero.cia</groupId>
+    <artifactId>cia-backend</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>cia-partner-api</artifactId>
+  <name>CIA Partner API</name>
+  <description>Module 9: Partner Open API — Insurtech connectivity, OAuth2 CC, webhooks, OpenAPI 3.1 docs, Postman collection</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-common</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-auth</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-storage</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-setup</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-customer</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-quotation</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-policy</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-claims</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-workflow</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-notifications</artifactId>
+    </dependency>
+    <!-- OAuth2 resource server for client_credentials validation -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+    </dependency>
+    <!-- Springdoc OpenAPI 3.1 — auto-generates spec + Swagger UI -->
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+    </dependency>
+    <!-- Rate limiting via token bucket per client_id -->
+    <dependency>
+      <groupId>com.giffing.bucket4j.spring.boot.starter</groupId>
+      <artifactId>bucket4j-spring-boot-starter</artifactId>
+    </dependency>
+    <!-- Redis for distributed rate limit counters -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.mapstruct</groupId>
+      <artifactId>mapstruct</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Generate Postman collection from OpenAPI spec after compile -->
+      <plugin>
+        <groupId>org.openapitools</groupId>
+        <artifactId>openapi-generator-maven-plugin</artifactId>
+        <version>7.4.0</version>
+        <executions>
+          <execution>
+            <id>generate-postman-collection</id>
+            <phase>package</phase>
+            <goals>
+              <goal>generate</goal>
+            </goals>
+            <configuration>
+              <inputSpec>${project.basedir}/docs/openapi.json</inputSpec>
+              <generatorName>postman-collection</generatorName>
+              <output>${project.basedir}/docs</output>
+              <configOptions>
+                <postmanVariables>baseUrl,accessToken</postmanVariables>
+              </configOptions>
+              <skipValidateSpec>true</skipValidateSpec>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

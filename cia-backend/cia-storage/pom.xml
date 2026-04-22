@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.nubeero.cia</groupId>
+    <artifactId>cia-backend</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>cia-storage</artifactId>
+  <name>CIA Storage</name>
+  <description>DocumentStorageService interface + MinIO, S3, GCS, Azure Blob adapters</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-common</artifactId>
+    </dependency>
+    <!-- MinIO client (default on-prem adapter) -->
+    <dependency>
+      <groupId>io.minio</groupId>
+      <artifactId>minio</artifactId>
+    </dependency>
+    <!-- AWS SDK v2 S3 (cloud adapter) -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
+    </dependency>
+    <!-- OkHttp3 required by MinIO client -->
+    <dependency>
+      <groupId>com.squareup.okhttp3</groupId>
+      <artifactId>okhttp</artifactId>
+    </dependency>
+  </dependencies>
+
+</project>

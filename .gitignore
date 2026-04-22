@@ -1,0 +1,61 @@
+# ─── Claude Code ─────────────────────────────────────────────────────────────
+.claude/settings.local.json
+
+# ─── Environment / secrets ───────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ─── Java / Maven ────────────────────────────────────────────────────────────
+target/
+*.class
+*.jar
+# Keep the Maven wrapper jar if present
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/repository/
+hs_err_pid*
+replay_pid*
+
+# ─── Spring Boot local overrides ─────────────────────────────────────────────
+application-local.yml
+application-local.properties
+
+# ─── Frontend / Node ─────────────────────────────────────────────────────────
+node_modules/
+dist/
+build/
+.next/
+.nuxt/
+.cache/
+*.tsbuildinfo
+
+# ─── Docusaurus ──────────────────────────────────────────────────────────────
+docs-site/.docusaurus/
+docs-site/build/
+
+# ─── Logs ────────────────────────────────────────────────────────────────────
+*.log
+logs/
+spring-boot-*.log
+
+# ─── OS ──────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# ─── IDE ─────────────────────────────────────────────────────────────────────
+.idea/
+*.iml
+*.iws
+.vscode/
+*.suo
+*.user
+*.orig
+
+# ─── Test / coverage output ──────────────────────────────────────────────────
+coverage/
+test-results/
+playwright-report/
+playwright/.cache/

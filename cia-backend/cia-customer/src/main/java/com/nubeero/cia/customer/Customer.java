@@ -1,0 +1,126 @@
+package com.nubeero.cia.customer;
+
+import com.nubeero.cia.common.entity.BaseEntity;
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+
+@Entity
+@Table(name = "customers")
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class Customer extends BaseEntity {
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "customer_type", nullable = false, length = 20)
+    private CustomerType customerType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "customer_status", nullable = false, length = 20)
+    @Builder.Default
+    private CustomerStatus customerStatus = CustomerStatus.ACTIVE;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "kyc_status", nullable = false, length = 20)
+    @Builder.Default
+    private KycStatus kycStatus = KycStatus.PENDING;
+
+    @Column(name = "kyc_provider_ref", length = 100)
+    private String kycProviderRef;
+
+    @Column(name = "kyc_failure_reason", columnDefinition = "TEXT")
+    private String kycFailureReason;
+
+    @Column(name = "kyc_verified_at")
+    private Instant kycVerifiedAt;
+
+    // Individual fields
+    @Column(name = "first_name", length = 100)
+    private String firstName;
+
+    @Column(name = "last_name", length = 100)
+    private String lastName;
+
+    @Column(name = "other_names", length = 100)
+    private String otherNames;
+
+    @Column(name = "date_of_birth")
+    private LocalDate dateOfBirth;
+
+    @Column(length = 10)
+    private String gender;
+
+    @Column(name = "marital_status", length = 20)
+    private String maritalStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "id_type", length = 30)
+    private IdType idType;
+
+    @Column(name = "id_number", length = 50)
+    private String idNumber;
+
+    // Corporate fields
+    @Column(name = "company_name", length = 200)
+    private String companyName;
+
+    @Column(name = "rc_number", length = 50)
+    private String rcNumber;
+
+    @Column(name = "incorporation_date")
+    private LocalDate incorporationDate;
+
+    @Column(length = 100)
+    private String industry;
+
+    @Column(name = "contact_person", length = 200)
+    private String contactPerson;
+
+    // Common contact & address
+    @Column(length = 200)
+    private String email;
+
+    @Column(length = 30)
+    private String phone;
+
+    @Column(name = "alternate_phone", length = 30)
+    private String alternatePhone;
+
+    @Column(columnDefinition = "TEXT")
+    private String address;
+
+    @Column(length = 100)
+    private String city;
+
+    @Column(length = 100)
+    private String state;
+
+    @Column(length = 100, nullable = false)
+    @Builder.Default
+    private String country = "Nigeria";
+
+    // Blacklist
+    @Column(name = "blacklist_reason", columnDefinition = "TEXT")
+    private String blacklistReason;
+
+    @Column(name = "blacklisted_at")
+    private Instant blacklistedAt;
+
+    @Column(name = "blacklisted_by", length = 100)
+    private String blacklistedBy;
+
+    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<CustomerDirector> directors = new ArrayList<>();
+
+    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<CustomerDocument> documents = new ArrayList<>();
+}

@@ -1,0 +1,387 @@
+package com.nubeero.cia.customer;
+
+import com.nubeero.cia.common.audit.AuditAction;
+import com.nubeero.cia.common.audit.AuditService;
+import com.nubeero.cia.common.exception.BusinessRuleException;
+import com.nubeero.cia.common.exception.ResourceNotFoundException;
+import com.nubeero.cia.customer.dto.*;
+import com.nubeero.cia.integrations.kyc.*;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class CustomerService {
+
+    private final CustomerRepository repository;
+    private final CustomerDirectorRepository directorRepository;
+    private final KycVerificationService kycVerificationService;
+    private final AuditService auditService;
+
+    // ─── Queries ────────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public Page<CustomerSummaryResponse> list(CustomerType type, KycStatus kycStatus, Pageable pageable) {
+        Page<Customer> page;
+        if (type != null) {
+            page = repository.findAllByCustomerTypeAndDeletedAtIsNull(type, pageable);
+        } else if (kycStatus != null) {
+            page = repository.findAllByKycStatusAndDeletedAtIsNull(kycStatus, pageable);
+        } else {
+            page = repository.findAllByDeletedAtIsNull(pageable);
+        }
+        return page.map(this::toSummary);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CustomerSummaryResponse> search(String query, Pageable pageable) {
+        return repository.search(query, pageable).map(this::toSummary);
+    }
+
+    @Transactional(readOnly = true)
+    public CustomerResponse get(UUID id) {
+        return toResponse(findOrThrow(id));
+    }
+
+    // ─── Create ─────────────────────────────────────────────────────
+
+    @Transactional
+    public CustomerResponse createIndividual(IndividualCustomerRequest request) {
+        Customer customer = Customer.builder()
+                .customerType(CustomerType.INDIVIDUAL)
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
+                .otherNames(request.getOtherNames())
+                .dateOfBirth(request.getDateOfBirth())
+                .gender(request.getGender())
+                .maritalStatus(request.getMaritalStatus())
+                .idType(request.getIdType())
+                .idNumber(request.getIdNumber())
+                .email(request.getEmail())
+                .phone(request.getPhone())
+                .alternatePhone(request.getAlternatePhone())
+                .address(request.getAddress())
+                .city(request.getCity())
+                .state(request.getState())
+                .country(request.getCountry())
+                .build();
+
+        runIndividualKyc(customer);
+        Customer saved = repository.save(customer);
+        auditService.log("Customer", saved.getId().toString(), AuditAction.CREATE, null, saved);
+        return toResponse(saved);
+    }
+
+    @Transactional
+    public CustomerResponse createCorporate(CorporateCustomerRequest request) {
+        Customer customer = Customer.builder()
+                .customerType(CustomerType.CORPORATE)
+                .companyName(request.getCompanyName())
+                .rcNumber(request.getRcNumber())
+                .incorporationDate(request.getIncorporationDate())
+                .industry(request.getIndustry())
+                .contactPerson(request.getContactPerson())
+                .email(request.getEmail())
+                .phone(request.getPhone())
+                .alternatePhone(request.getAlternatePhone())
+                .address(request.getAddress())
+                .city(request.getCity())
+                .state(request.getState())
+                .country(request.getCountry())
+                .build();
+
+        runCorporateKyc(customer, request.getDirectors());
+        Customer saved = repository.save(customer);
+        auditService.log("Customer", saved.getId().toString(), AuditAction.CREATE, null, saved);
+        return toResponse(saved);
+    }
+
+    // ─── Update ─────────────────────────────────────────────────────
+
+    @Transactional
+    public CustomerResponse update(UUID id, CustomerUpdateRequest request) {
+        Customer customer = findOrThrow(id);
+        if (customer.getCustomerType() == CustomerType.INDIVIDUAL) {
+            applyIndividualUpdate(customer, request);
+        } else {
+            applyCorporateUpdate(customer, request);
+        }
+        Customer saved = repository.save(customer);
+        auditService.log("Customer", id.toString(), AuditAction.UPDATE, null, saved);
+        return toResponse(saved);
+    }
+
+    // ─── KYC ────────────────────────────────────────────────────────
+
+    @Transactional
+    public CustomerResponse retriggerKyc(UUID id) {
+        Customer customer = findOrThrow(id);
+        if (customer.getKycStatus() == KycStatus.PASSED) {
+            throw new BusinessRuleException("KYC_ALREADY_PASSED", "KYC already verified for customer: " + id);
+        }
+        if (customer.getCustomerType() == CustomerType.INDIVIDUAL) {
+            runIndividualKyc(customer);
+        } else {
+            List<CustomerDirectorRequest> directorRequests = directorRepository
+                    .findAllByCustomerIdAndDeletedAtIsNull(id)
+                    .stream()
+                    .map(d -> {
+                        CustomerDirectorRequest r = new CustomerDirectorRequest();
+                        r.setFirstName(d.getFirstName());
+                        r.setLastName(d.getLastName());
+                        r.setDateOfBirth(d.getDateOfBirth());
+                        r.setIdType(d.getIdType());
+                        r.setIdNumber(d.getIdNumber());
+                        return r;
+                    }).toList();
+            runCorporateKyc(customer, directorRequests);
+        }
+        Customer saved = repository.save(customer);
+        auditService.log("Customer", id.toString(), AuditAction.UPDATE, null, saved);
+        return toResponse(saved);
+    }
+
+    // ─── Blacklist ───────────────────────────────────────────────────
+
+    @Transactional
+    public CustomerResponse blacklist(UUID id, BlacklistRequest request) {
+        Customer customer = findOrThrow(id);
+        customer.setCustomerStatus(CustomerStatus.BLACKLISTED);
+        customer.setBlacklistReason(request.getReason());
+        customer.setBlacklistedAt(Instant.now());
+        customer.setBlacklistedBy(currentUserId());
+        Customer saved = repository.save(customer);
+        auditService.log("Customer", id.toString(), AuditAction.UPDATE, null, saved);
+        return toResponse(saved);
+    }
+
+    @Transactional
+    public CustomerResponse unblacklist(UUID id) {
+        Customer customer = findOrThrow(id);
+        if (customer.getCustomerStatus() != CustomerStatus.BLACKLISTED) {
+            throw new BusinessRuleException("CUSTOMER_NOT_BLACKLISTED", "Customer is not blacklisted: " + id);
+        }
+        customer.setCustomerStatus(CustomerStatus.ACTIVE);
+        customer.setBlacklistReason(null);
+        customer.setBlacklistedAt(null);
+        customer.setBlacklistedBy(null);
+        Customer saved = repository.save(customer);
+        auditService.log("Customer", id.toString(), AuditAction.UPDATE, null, saved);
+        return toResponse(saved);
+    }
+
+    // ─── KYC logic ──────────────────────────────────────────────────
+
+    private void runIndividualKyc(Customer customer) {
+        customer.setKycStatus(KycStatus.IN_PROGRESS);
+        try {
+            KycResult result = kycVerificationService.verifyIndividual(
+                    IndividualKycRequest.builder()
+                            .idType(customer.getIdType() != null ? customer.getIdType().name() : null)
+                            .idNumber(customer.getIdNumber())
+                            .firstName(customer.getFirstName())
+                            .lastName(customer.getLastName())
+                            .dateOfBirth(customer.getDateOfBirth())
+                            .build());
+            applyKycResult(customer, result);
+        } catch (Exception e) {
+            log.warn("KYC verification failed for individual customer: {}", e.getMessage());
+            customer.setKycStatus(KycStatus.FAILED);
+            customer.setKycFailureReason("KYC provider unavailable: " + e.getMessage());
+        }
+    }
+
+    private void runCorporateKyc(Customer customer, List<CustomerDirectorRequest> directorRequests) {
+        customer.setKycStatus(KycStatus.IN_PROGRESS);
+        try {
+            KycResult corpResult = kycVerificationService.verifyCorporate(
+                    CorporateKycRequest.builder()
+                            .rcNumber(customer.getRcNumber())
+                            .companyName(customer.getCompanyName())
+                            .build());
+
+            if (!corpResult.isVerified()) {
+                customer.setKycStatus(KycStatus.FAILED);
+                customer.setKycFailureReason(corpResult.getFailureReason());
+                customer.setKycProviderRef(corpResult.getVerificationId());
+                addDirectors(customer, directorRequests);
+                return;
+            }
+
+            customer.setKycProviderRef(corpResult.getVerificationId());
+            addDirectors(customer, directorRequests);
+            verifyDirectors(customer);
+
+            boolean allDirectorsPassed = customer.getDirectors().stream()
+                    .allMatch(d -> d.getKycStatus() == KycStatus.PASSED);
+
+            if (allDirectorsPassed) {
+                customer.setKycStatus(KycStatus.PASSED);
+                customer.setKycVerifiedAt(Instant.now());
+            } else {
+                customer.setKycStatus(KycStatus.FAILED);
+                customer.setKycFailureReason("One or more directors failed KYC verification");
+            }
+        } catch (Exception e) {
+            log.warn("Corporate KYC verification failed: {}", e.getMessage());
+            customer.setKycStatus(KycStatus.FAILED);
+            customer.setKycFailureReason("KYC provider unavailable: " + e.getMessage());
+            addDirectors(customer, directorRequests);
+        }
+    }
+
+    private void addDirectors(Customer customer, List<CustomerDirectorRequest> requests) {
+        customer.getDirectors().clear();
+        requests.forEach(r -> customer.getDirectors().add(
+                CustomerDirector.builder()
+                        .customer(customer)
+                        .firstName(r.getFirstName())
+                        .lastName(r.getLastName())
+                        .dateOfBirth(r.getDateOfBirth())
+                        .idType(r.getIdType())
+                        .idNumber(r.getIdNumber())
+                        .build()));
+    }
+
+    private void verifyDirectors(Customer customer) {
+        customer.getDirectors().forEach(director -> {
+            try {
+                KycResult result = kycVerificationService.verifyDirector(
+                        DirectorKycRequest.builder()
+                                .idType(director.getIdType() != null ? director.getIdType().name() : null)
+                                .idNumber(director.getIdNumber())
+                                .firstName(director.getFirstName())
+                                .lastName(director.getLastName())
+                                .dateOfBirth(director.getDateOfBirth())
+                                .build());
+                director.setKycStatus(result.isVerified() ? KycStatus.PASSED : KycStatus.FAILED);
+                director.setKycProviderRef(result.getVerificationId());
+                director.setKycFailureReason(result.getFailureReason());
+            } catch (Exception e) {
+                director.setKycStatus(KycStatus.FAILED);
+                director.setKycFailureReason("KYC provider unavailable: " + e.getMessage());
+            }
+        });
+    }
+
+    private void applyKycResult(Customer customer, KycResult result) {
+        if (result.isVerified()) {
+            customer.setKycStatus(KycStatus.PASSED);
+            customer.setKycVerifiedAt(Instant.now());
+        } else {
+            customer.setKycStatus(KycStatus.FAILED);
+            customer.setKycFailureReason(result.getFailureReason());
+        }
+        customer.setKycProviderRef(result.getVerificationId());
+    }
+
+    // ─── Helpers ────────────────────────────────────────────────────
+
+    private void applyIndividualUpdate(Customer c, CustomerUpdateRequest r) {
+        if (r.getFirstName() != null) c.setFirstName(r.getFirstName());
+        if (r.getLastName() != null) c.setLastName(r.getLastName());
+        if (r.getOtherNames() != null) c.setOtherNames(r.getOtherNames());
+        if (r.getDateOfBirth() != null) c.setDateOfBirth(r.getDateOfBirth());
+        if (r.getGender() != null) c.setGender(r.getGender());
+        if (r.getMaritalStatus() != null) c.setMaritalStatus(r.getMaritalStatus());
+        applyContactUpdate(c, r);
+    }
+
+    private void applyCorporateUpdate(Customer c, CustomerUpdateRequest r) {
+        if (r.getCompanyName() != null) c.setCompanyName(r.getCompanyName());
+        if (r.getIncorporationDate() != null) c.setIncorporationDate(r.getIncorporationDate());
+        if (r.getIndustry() != null) c.setIndustry(r.getIndustry());
+        if (r.getContactPerson() != null) c.setContactPerson(r.getContactPerson());
+        applyContactUpdate(c, r);
+    }
+
+    private void applyContactUpdate(Customer c, CustomerUpdateRequest r) {
+        if (r.getEmail() != null) c.setEmail(r.getEmail());
+        if (r.getPhone() != null) c.setPhone(r.getPhone());
+        if (r.getAlternatePhone() != null) c.setAlternatePhone(r.getAlternatePhone());
+        if (r.getAddress() != null) c.setAddress(r.getAddress());
+        if (r.getCity() != null) c.setCity(r.getCity());
+        if (r.getState() != null) c.setState(r.getState());
+        if (r.getCountry() != null) c.setCountry(r.getCountry());
+    }
+
+    public Customer findOrThrow(UUID id) {
+        return repository.findById(id)
+                .filter(c -> c.getDeletedAt() == null)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", id));
+    }
+
+    private String currentUserId() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
+            return jwt.getSubject();
+        }
+        return "system";
+    }
+
+    // ─── Mapping ────────────────────────────────────────────────────
+
+    private CustomerSummaryResponse toSummary(Customer c) {
+        String displayName = c.getCustomerType() == CustomerType.INDIVIDUAL
+                ? c.getFirstName() + " " + c.getLastName()
+                : c.getCompanyName();
+        return CustomerSummaryResponse.builder()
+                .id(c.getId()).customerType(c.getCustomerType())
+                .customerStatus(c.getCustomerStatus()).kycStatus(c.getKycStatus())
+                .displayName(displayName).email(c.getEmail()).phone(c.getPhone())
+                .createdAt(c.getCreatedAt())
+                .build();
+    }
+
+    CustomerResponse toResponse(Customer c) {
+        List<CustomerDirectorResponse> directors = c.getDirectors() == null ? List.of() :
+                c.getDirectors().stream()
+                        .filter(d -> d.getDeletedAt() == null)
+                        .map(d -> CustomerDirectorResponse.builder()
+                                .id(d.getId()).firstName(d.getFirstName()).lastName(d.getLastName())
+                                .dateOfBirth(d.getDateOfBirth()).idType(d.getIdType())
+                                .idNumber(d.getIdNumber()).kycStatus(d.getKycStatus())
+                                .kycFailureReason(d.getKycFailureReason())
+                                .build())
+                        .toList();
+
+        List<CustomerDocumentResponse> docs = c.getDocuments() == null ? List.of() :
+                c.getDocuments().stream()
+                        .filter(d -> d.getDeletedAt() == null)
+                        .map(d -> CustomerDocumentResponse.builder()
+                                .id(d.getId()).documentType(d.getDocumentType())
+                                .documentName(d.getDocumentName()).documentPath(d.getDocumentPath())
+                                .mimeType(d.getMimeType()).fileSizeBytes(d.getFileSizeBytes())
+                                .uploadedBy(d.getUploadedBy()).createdAt(d.getCreatedAt())
+                                .build())
+                        .toList();
+
+        return CustomerResponse.builder()
+                .id(c.getId()).customerType(c.getCustomerType())
+                .customerStatus(c.getCustomerStatus()).kycStatus(c.getKycStatus())
+                .kycProviderRef(c.getKycProviderRef()).kycFailureReason(c.getKycFailureReason())
+                .kycVerifiedAt(c.getKycVerifiedAt())
+                .firstName(c.getFirstName()).lastName(c.getLastName()).otherNames(c.getOtherNames())
+                .dateOfBirth(c.getDateOfBirth()).gender(c.getGender()).maritalStatus(c.getMaritalStatus())
+                .idType(c.getIdType()).idNumber(c.getIdNumber())
+                .companyName(c.getCompanyName()).rcNumber(c.getRcNumber())
+                .incorporationDate(c.getIncorporationDate()).industry(c.getIndustry())
+                .contactPerson(c.getContactPerson())
+                .email(c.getEmail()).phone(c.getPhone()).alternatePhone(c.getAlternatePhone())
+                .address(c.getAddress()).city(c.getCity()).state(c.getState()).country(c.getCountry())
+                .directors(directors).documents(docs)
+                .createdAt(c.getCreatedAt()).updatedAt(c.getUpdatedAt())
+                .build();
+    }
+}
