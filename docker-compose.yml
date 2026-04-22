@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: cia_dev
       POSTGRES_DB: cia
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
@@ -28,12 +28,12 @@ services:
       KC_DB_USERNAME: cia
       KC_DB_PASSWORD: cia_dev
     ports:
-      - "8180:8080"
+      - "8280:8080"
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health/ready || exit 1"]
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo ok || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -42,7 +42,7 @@ services:
   temporal:
     image: temporalio/auto-setup:1.25.0
     environment:
-      DB: postgresql
+      DB: postgres12
       DB_PORT: 5432
       POSTGRES_USER: cia
       POSTGRES_PWD: cia_dev
@@ -53,7 +53,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "tctl", "--address", "localhost:7233", "cluster", "health"]
+      test: ["CMD", "tctl", "--address", "127.0.0.1:7233", "cluster", "health"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -89,7 +89,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

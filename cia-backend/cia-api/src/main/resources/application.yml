@@ -3,7 +3,7 @@ spring:
     name: cia-backend
 
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/cia}
+    url: ${DB_URL:jdbc:postgresql://localhost:5434/cia}
     username: ${DB_USERNAME:cia}
     password: ${DB_PASSWORD:cia_dev}
     driver-class-name: org.postgresql.Driver
@@ -30,7 +30,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/${KEYCLOAK_REALM:cia}
+          issuer-uri: ${KEYCLOAK_URL:http://localhost:8280}/realms/${KEYCLOAK_REALM:cia}
 
   mail:
     host: ${SMTP_HOST:localhost}
@@ -41,7 +41,7 @@ spring:
   data:
     redis:
       host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      port: ${REDIS_PORT:6380}
 
 server:
   port: ${SERVER_PORT:8090}
@@ -90,7 +90,7 @@ cia:
 
   partner:
     oauth2:
-      token-url: ${PARTNER_TOKEN_URL:http://localhost:8080/realms/cia/protocol/openid-connect/token}
+      token-url: ${PARTNER_TOKEN_URL:http://localhost:8280/realms/cia/protocol/openid-connect/token}
     webhook:
       signing-secret: ${WEBHOOK_SIGNING_SECRET:dev-secret-replace-in-prod}
 
