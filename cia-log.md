@@ -530,3 +530,95 @@ Tables: `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`.
 **Postman collection regeneration required** — partner DTO types changed. Run: `mvn package -pl cia-partner-api`
 
 **Open questions:** None.
+
+---
+
+### Session 9 — Backend Verification, GitHub Repo, CI Pipeline, Docusaurus Docs Site
+
+**Primary deliverables:**
+
+1. Backend compiled and full test suite run (`mvn verify`)
+2. Private GitHub repo created and pushed (`RazorMVP/CoreInsurance`)
+3. GitHub Actions CI pipeline covering all four testing layers
+4. Docusaurus documentation site on GitHub Pages
+
+---
+
+**Compilation fixes applied:**
+
+| File | Problem | Fix |
+|---|---|---|
+| `cia-backend/pom.xml` | `temporal-spring-boot-starter-alpha:1.25.0` does not exist in Maven Central | Renamed to `temporal-spring-boot-starter` (artifact renamed from v1.24+) |
+| `cia-backend/cia-workflow/pom.xml` | Same artifact rename + missing `cia-integrations` dependency (required by `NaicomUploadActivity`/`NiidUploadActivity`) | Added both fixes |
+| `cia-endorsement/EndorsementService.java` | `workflow::startApproval` (no such method) + `new ApprovalRequest(…)` positional constructor (no-arg Lombok `@Builder`) | Changed to `workflow::runApproval` + builder pattern |
+| `cia-claims/ClaimService.java` | Same pattern as EndorsementService | Same fix |
+| `cia-documents/DocumentGenerationServiceImpl.java` | `Map.of()` called with 12–13 entries (limit is 10) | Switched to `Map.ofEntries(entry(…), …)` |
+| `cia-finance/CreditNoteController.java` | `BaseEntity.getCreatedAt()` returns `Instant`; `CreditNoteResponse` expects `OffsetDateTime` | Added `ZoneOffset.UTC` conversion |
+
+**Runtime environment:** Java 21 required (Lombok 1.18.36 is incompatible with Java 25 due to removed `com.sun.tools.javac.code.TypeTag` internals).
+
+---
+
+**GitHub repository:**
+
+- Remote: `https://github.com/RazorMVP/CoreInsurance` (private)
+- All backend modules, frontend, docs-site, CI workflows pushed to `main`
+
+---
+
+**CI pipeline (`.github/workflows/ci.yml`):**
+
+| Job | Runner | Status |
+|---|---|---|
+| `backend` | `ubuntu-latest` / Java 21 / Maven | Active — runs `mvn verify` with Testcontainers (Docker socket available on ubuntu-latest) |
+| `frontend` | `ubuntu-latest` / Node 20 | Stubbed (`if: false`) — Vitest runs cleanly; enables when frontend reaches feature parity |
+| `docs` | `ubuntu-latest` / Node 20 | Stubbed (`if: false`) — enables when docs build is fully validated |
+
+**Docs deploy pipeline (`.github/workflows/docs-deploy.yml`):** GitHub Pages deployment from `docs-site/build/`; jobs stubbed with `if: false` until docs build is stable.
+
+---
+
+**OpenAPI source artifact (`cia-backend/cia-partner-api/docs/openapi.json`):**
+
+- Hand-crafted OpenAPI 3.1.0 spec checked into the repo as a build-time source artifact
+- Covers all 15 partner API endpoints across 7 resource groups
+- Drives Postman collection generation at build time via `openapi-generator-maven-plugin`
+- Springdoc validates runtime output against this spec
+
+---
+
+**Docusaurus site (`docs-site/`):**
+
+- Docusaurus 3.10 + React 19; targets `https://razormvp.github.io/CoreInsurance/`
+- **Dropped `docusaurus-theme-openapi-docs`** — React 19 SSR incompatibility (`useTabsContext()` outside `Tabs.Provider` during static generation); replaced with sidebar links to live Swagger UI at `/partner/docs`
+- **Webpack `webpackbar` v7 override** — `@docusaurus/bundler` nested `webpackbar@6.x` passed invalid props to webpack's `ProgressPlugin`; forced to v7 via npm overrides (later removed when openapi plugin was dropped)
+
+**Internal developer documentation written:**
+
+| Doc | Path |
+|---|---|
+| Architecture Overview | `docs/architecture/overview.md` |
+| Module Inventory | `docs/architecture/modules.md` |
+| Multi-Tenancy | `docs/architecture/multi-tenancy.md` |
+| Security Architecture | `docs/architecture/security.md` |
+| Workflow Architecture | `docs/architecture/workflows.md` |
+| Integrations | `docs/architecture/integrations.md` |
+| Local Setup Guide | `docs/guides/local-setup.md` |
+| Tenant Provisioning | `docs/guides/tenant-provisioning.md` |
+| Environment Variables | `docs/guides/environment-variables.md` |
+| Database Migrations | `docs/guides/database-migrations.md` |
+| Coding Standards | `docs/development/coding-standards.md` |
+| Testing Guide | `docs/development/testing.md` |
+| Adding a Module | `docs/development/adding-a-module.md` |
+
+**Partner API documentation written:**
+
+| Doc | Path |
+|---|---|
+| Partner API Overview | `docs/partner/overview.md` |
+| Authentication Guide | `docs/partner/authentication.md` (cURL, TypeScript, Python, Java examples) |
+| Webhook Integration | `docs/partner/webhooks.md` (TypeScript + Python signature verification) |
+| Rate Limiting | `docs/partner/rate-limiting.md` |
+| Sandbox Environment | `docs/partner/sandbox.md` |
+
+**Open questions:** None from this session.
