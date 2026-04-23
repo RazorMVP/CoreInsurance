@@ -3,11 +3,13 @@ package com.nubeero.cia.common.audit;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Slf4j
@@ -17,14 +19,26 @@ public class AuditService {
 
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     public void log(String entityType, String entityId, AuditAction action,
                     Object oldValue, Object newValue) {
-        log(entityType, entityId, action, oldValue, newValue, null, null);
+        log(entityType, entityId, action, oldValue, newValue, null, null, null);
     }
 
     public void log(String entityType, String entityId, AuditAction action,
                     Object oldValue, Object newValue, String ipAddress, String sessionId) {
+        log(entityType, entityId, action, oldValue, newValue, ipAddress, sessionId, null);
+    }
+
+    public void logWithAmount(String entityType, String entityId, AuditAction action,
+                              Object oldValue, Object newValue, BigDecimal approvalAmount) {
+        log(entityType, entityId, action, oldValue, newValue, null, null, approvalAmount);
+    }
+
+    private void log(String entityType, String entityId, AuditAction action,
+                     Object oldValue, Object newValue,
+                     String ipAddress, String sessionId, BigDecimal approvalAmount) {
         try {
             AuditLog entry = AuditLog.builder()
                     .entityType(entityType)
@@ -37,11 +51,12 @@ public class AuditService {
                     .newValue(toJson(newValue))
                     .ipAddress(ipAddress)
                     .sessionId(sessionId)
+                    .approvalAmount(approvalAmount)
                     .build();
 
-            auditLogRepository.save(entry);
+            AuditLog saved = auditLogRepository.save(entry);
+            eventPublisher.publishEvent(new AuditLogCreatedEvent(this, saved));
         } catch (Exception e) {
-            // Audit failure must never break the business operation
             log.error("Failed to write audit log for entity={} id={} action={}", entityType, entityId, action, e);
         }
     }

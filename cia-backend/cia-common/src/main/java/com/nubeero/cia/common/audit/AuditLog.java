@@ -3,6 +3,7 @@ package com.nubeero.cia.common.audit;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -48,4 +49,7 @@ public class AuditLog {
 
     @Column(name = "session_id")
     private String sessionId;
+
+    @Column(name = "approval_amount", precision = 19, scale = 2)
+    private BigDecimal approvalAmount;
 }

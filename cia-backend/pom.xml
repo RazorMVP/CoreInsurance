@@ -36,6 +36,7 @@
     <module>cia-reinsurance</module>
     <module>cia-finance</module>
     <module>cia-partner-api</module>
+    <module>cia-audit</module>
     <module>cia-api</module>
   </modules>
 
@@ -43,7 +44,7 @@
     <java.version>21</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <lombok.version>1.18.36</lombok.version>
+    <lombok.version>1.18.46</lombok.version>
     <temporal.version>1.25.0</temporal.version>
     <mapstruct.version>1.5.5.Final</mapstruct.version>
     <springdoc.version>2.5.0</springdoc.version>
@@ -137,6 +138,11 @@
       <dependency>
         <groupId>com.nubeero.cia</groupId>
         <artifactId>cia-partner-api</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-audit</artifactId>
         <version>${project.version}</version>
       </dependency>
 
