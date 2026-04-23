@@ -1,6 +1,6 @@
 ---
 name: cia
-description: Core Insurance Application — General Business (CIAGB) domain expert. Use when building, designing, debugging, or discussing any part of the CIAGB system. Covers all 9 modules (Setup & Admin, Customer Onboarding, Quotation, Policy, Endorsements, Claims, Reinsurance, Finance, Partner Open API), the agreed tech stack, multi-tenant SaaS architecture, Nigerian regulatory integrations (NAICOM, NIID, NDPR), cross-cutting business rules, and the Insurtech Open API platform. Activate for any task involving insurance domain logic, data models, module flows, compliance requirements, or partner API integration.
+description: Core Insurance Application — General Business (CIAGB) domain expert. Use when building, designing, debugging, or discussing any part of the CIAGB system. Covers all 10 modules (Setup & Admin, Customer Onboarding, Quotation, Policy, Endorsements, Claims, Reinsurance, Finance, Partner Open API, Audit & Compliance), the agreed tech stack, multi-tenant SaaS architecture, Nigerian regulatory integrations (NAICOM, NIID, NDPR), cross-cutting business rules, and the Insurtech Open API platform. Activate for any task involving insurance domain logic, data models, module flows, compliance requirements, or partner API integration.
 ---
 
 # Core Insurance Application — General Business (CIAGB)
@@ -41,7 +41,7 @@ description: Core Insurance Application — General Business (CIAGB) domain expe
 
 ---
 
-## Module Inventory (143 features across 9 modules)
+## Module Inventory (158 features across 10 modules)
 
 ### Module 1 — Setup & Administration (35 features)
 Company setup, password policy, bank/currency setup, access groups, user management, password reset, signature/profile uploads, approval group setup (single-level and multi-level), class of business, product setup (single-risk and multi-risk), commission setup, policy specifications, policy number naming convention, required document setup for claims, claim notification timelines, nature/cause of loss, SBU/branch/broker/relationship manager/surveyor/insurance company/reinsurance company setup, vehicle makes/models/types, pre-loss and loss inspection survey thresholds, claim reserve setup, partner app management (create/revoke Insurtech OAuth2 clients, configure scopes, rate limits, webhook secrets, usage dashboard).
@@ -69,6 +69,9 @@ Receipt generation (single debit note), bulk receipt generation (multiple debit 
 
 ### Module 9 — Partner Open API (15 features)
 Insurtech partner app registration and credential management, OAuth2 Client Credentials authentication (Keycloak service accounts), scoped API access (`products:read`, `quotes:create`, `customers:create`, `policies:create`, `policies:read`, `claims:create`, `claims:read`, `webhooks:manage`), product catalog API, quotation API, customer registration API (with KYC), policy binding and retrieval API, policy document download API, claims submission and status API, webhook registration and management (11 event types), webhook event dispatch (HMAC-SHA256 signed payloads via Temporal), rate limiting per partner (bucket4j token bucket, 3 configurable tiers), Springdoc OpenAPI 3.1 spec auto-generation, Postman collection generation per build, sandbox environment per partner.
+
+### Module 10 — Audit & Compliance (15 features)
+System-wide audit log viewer (filterable by entity type, entity ID, user, action, date range), event detail view (before/after JSONB snapshots), login and session log viewer (LOGIN, LOGOUT, LOGIN_FAILED, PASSWORD_RESET, ACCOUNT_LOCKED events), CSV export of audit logs with applied filters, 6 pre-built reports (actions by user, actions by module, approval audit trail, data change history, login security report, ranked user activity summary), real-time alert detection (failed logins ≥3, bulk deletes ≥5 in 5 min, off-hours activity, large financial approvals ≥₦50M), alert acknowledgement workflow, alert configuration (System Admin only — thresholds, business hours, retention period), in-app + email alert notifications, 7-year default retention (configurable per tenant), System Auditor role (AUDIT_VIEW — read-only, separate from System Admin).
 
 ---
 
@@ -125,7 +128,7 @@ Insurtech partner app registration and credential management, OAuth2 Client Cred
 ## Data Model Highlights
 
 ### Core entities (per tenant schema)
-`customers`, `policies`, `quotes`, `endorsements`, `claims`, `claim_reserves`, `claim_expenses`, `reinsurance_treaties`, `ri_allocations`, `debit_notes`, `credit_notes`, `receipts`, `payments`, `products`, `classes_of_business`, `brokers`, `users`, `access_groups`, `approval_groups`, `document_templates`, `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`.
+`customers`, `policies`, `quotes`, `endorsements`, `claims`, `claim_reserves`, `claim_expenses`, `reinsurance_treaties`, `ri_allocations`, `debit_notes`, `credit_notes`, `receipts`, `payments`, `products`, `classes_of_business`, `brokers`, `users`, `access_groups`, `approval_groups`, `document_templates`, `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`, `audit_log`, `login_audit_log`, `audit_alert`, `audit_alert_config`.
 
 ### Key relationships
 - `policies` → `customers` (many-to-one)
@@ -167,6 +170,12 @@ Insurtech partner app registration and credential management, OAuth2 Client Cred
 - Temporal `WorkerFactory` is started by a single `ApplicationReadyEvent` listener in `cia-api` (`TemporalWorkerStarter`). Each module registers its workers via `@PostConstruct` beans before `factory.start()` is called. Never call `factory.start()` inside a module — always delegate to the assembly module.
 - `WebhookEventListener` runs **synchronously** (no `@Async`) so `TenantContext` ThreadLocal is still populated on the request thread. Actual HTTP delivery happens asynchronously inside Temporal workflows — the listener only starts a Temporal workflow per matching registration.
 - `ClaimSettledEvent` is published by `ClaimService.markSettled()` — consumed by cia-partner-api for webhook fanout.
+- `AuditService.log()` publishes `AuditLogCreatedEvent` after every save. `AlertDetectionService` listens with `@Async @EventListener` so alert detection never blocks the calling request thread.
+- `cia-audit` depends only on `cia-common` and `cia-notifications`. It does not depend on any business module — business modules publish events; cia-audit consumes them through Spring's event bus.
+- `audit_alert_config` is a singleton-per-tenant table (one row only, seeded by V16 migration). `AuditAlertConfigService.loadConfig()` always calls `findFirstByOrderByCreatedAtAsc()`.
+- Login events (`LoginAuditLog`) are separate from general audit events (`AuditLog`). Login tracking uses `LoginEventType` (LOGIN, LOGOUT, LOGIN_FAILED, PASSWORD_RESET, ACCOUNT_LOCKED); off-hours login detection is triggered directly from `LoginAuditController.loginFailed()` rather than through `AuditLogCreatedEvent`.
+- `/api/v1/auth/login/failed` is a **public endpoint** (no JWT required) because it records authentication failures before a valid token exists.
+- Lombok must be at `1.18.46` or later. Earlier versions (≤1.18.36) fail with `TypeTag :: UNKNOWN` on JDK 24+.
 
 ---
 

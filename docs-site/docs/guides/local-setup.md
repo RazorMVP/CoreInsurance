@@ -92,7 +92,7 @@ cd cia-backend
 
 ## Common Issues
 
-**`Lombok @Builder not found`** — ensure `JAVA_HOME` points to Java 21, not a newer JDK. Lombok 1.18.x is incompatible with Java 25+.
+**`Lombok @Builder not found` / `TypeTag :: UNKNOWN`** — ensure Lombok is at `1.18.46` or later in the parent `pom.xml`. Versions below 1.18.40 are incompatible with JDK 24+. If you must use JDK 21, set `JAVA_HOME=/opt/homebrew/opt/openjdk@21` before running Maven.
 
 **`Keycloak fails to start`** — confirm the `keycloak` PostgreSQL database was created by the init script. Check with:
 ```bash

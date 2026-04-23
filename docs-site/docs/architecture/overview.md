@@ -17,7 +17,7 @@ CIA (Core Insurance Application) is a **multi-tenant SaaS platform** for end-to-
 │  ┌────────────────┐    HTTPS/REST    ┌──────────────────────┐   │
 │  │   React SPA    │ ──────────────▶  │  Spring Boot API     │   │
 │  │  (Vite / TS)   │                  │  (cia-api  :8090)    │   │
-│  │  Vercel / CDN  │ ◀──────────────  │  18 Maven modules    │   │
+│  │  Vercel / CDN  │ ◀──────────────  │  19 Maven modules    │   │
 │  └────────────────┘                  └──────────┬───────────┘   │
 │                                                 │               │
 │  ┌──────────────┐  ┌────────────────┐  ┌────────┴─────┐        │
@@ -72,3 +72,4 @@ ApiResponse<T> { data, meta, errors }
 | 7 | Customer Onboarding | Customer records, KYC status |
 | 8 | Finance | Receipts, payments, reconciliation |
 | 9 | Partner Open API | OAuth2 clients, REST API, webhooks |
+| 10 | Audit & Compliance | Full audit trail, login logs, 6 reports, CSV export, real-time alerts |

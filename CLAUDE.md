@@ -117,6 +117,7 @@ cia-backend/
 ├── cia-reinsurance/     # Module 6: Reinsurance (17 features)
 ├── cia-finance/         # Module 8: Finance (5 features)
 ├── cia-partner-api/     # Module 9: Partner Open API (Insurtech connectivity, webhooks, docs)
+├── cia-audit/           # Module 10: Audit & Compliance (trail, login logs, reports, alerts)
 └── cia-api/             # Assembly: main app, REST controllers, Flyway, application.yml
 ```
 
@@ -154,6 +155,8 @@ cia-backend/
 ```
 
 **`cia-partner-api` depends on:** `cia-common`, `cia-auth` (JWT filter + scope enforcement), `cia-storage` (DocumentStorageService — PDF download streaming), `cia-setup` (ProductService, ClassOfBusinessService), `cia-customer`, `cia-quotation`, `cia-policy`, `cia-claims`, `cia-workflow` (webhook dispatch), `cia-notifications`.
+
+**`cia-audit` depends on:** `cia-common` (AuditLog, AuditLogRepository, AuditService, AuditLogCreatedEvent), `cia-notifications` (alert delivery via NotificationService). No dependency on any business module — business modules publish events; `cia-audit` consumes them through Spring's ApplicationEvent bus.
 
 **Cross-module wiring within business modules:**
 
@@ -719,6 +722,7 @@ Each tenant can optionally enable a **sandbox mode** for Insurtechs to test inte
 | 7 | Customer Onboarding | 10 | Customer records, KYC status, reports |
 | 8 | Finance | 5 | Receipts, payments, settled/outstanding tracking |
 | 9 | Partner Open API | 15 | OAuth2 client management, REST partner API, webhooks, OpenAPI docs, Postman collection |
+| 10 | Audit & Compliance | 15 | Full audit trail, login logs, 6 reports, CSV export, real-time alerts, System Auditor role |
 
 ---
 

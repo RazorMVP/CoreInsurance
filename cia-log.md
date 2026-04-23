@@ -622,3 +622,85 @@ Tables: `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`.
 | Sandbox Environment | `docs/partner/sandbox.md` |
 
 **Open questions:** None from this session.
+
+---
+
+## 2026-04-23
+
+### Session — Audit & Compliance Module (Module 10) + Build Fixes + Docs Update
+
+**New Maven module: `cia-audit`**
+
+| File | Description |
+|---|---|
+| `cia-audit/pom.xml` | New module; deps: cia-common, cia-notifications, commons-csv:1.10.0 |
+| `V16__create_audit_module_tables.sql` | Adds `approval_amount` column to `audit_log`; creates `login_audit_log`, `audit_alert_config` (singleton row seeded), `audit_alert` tables |
+
+**`cia-common` extensions:**
+
+| File | Change |
+|---|---|
+| `AuditLog.java` | Added `approval_amount NUMERIC(19,2)` field |
+| `AuditLogRepository.java` | Added `JpaSpecificationExecutor<AuditLog>`, `countByUserIdAndActionAndTimestampAfter()`, JPQL `findUserActivitySummary()` with `UserActivityProjection` inner interface |
+| `AuditService.java` | Added `ApplicationEventPublisher`; refactored to publish `AuditLogCreatedEvent` after every save; added `logWithAmount()` overload |
+| `AuditLogCreatedEvent.java` | New Spring `ApplicationEvent` wrapping `AuditLog` |
+
+**`cia-audit` entities / repos / DTOs / services / controllers — all new:**
+
+| Layer | Files |
+|---|---|
+| Entities | `AlertType`, `AuditAlertConfig`, `AuditAlert`, `LoginEventType`, `LoginAuditLog` |
+| Repositories | `AuditAlertConfigRepository`, `AuditAlertRepository`, `LoginAuditLogRepository` |
+| DTOs | `AuditLogFilter`, `AuditLogResponse`, `LoginAuditLogResponse`, `AuditAlertResponse`, `AuditAlertConfigRequest/Response`, `UserActivitySummary` |
+| Services | `AuditQueryService`, `LoginAuditService`, `AuditAlertConfigService`, `AuditAlertService`, `AlertDetectionService`, `AuditExportService`, `AuditReportService` |
+| Controllers | `AuditLogController`, `LoginAuditController`, `AuditAlertController`, `AuditAlertConfigController`, `AuditExportController`, `AuditReportController` |
+
+**API endpoints added (15):**
+
+| Endpoint | Notes |
+|---|---|
+| `GET /api/v1/audit/logs` | Filterable audit log with pagination |
+| `POST /api/v1/auth/session/start` | Login event recording (public — requires valid JWT) |
+| `POST /api/v1/auth/session/end` | Logout event recording |
+| `POST /api/v1/auth/login/failed` | Failed login recording (**public endpoint** — no JWT) |
+| `GET /api/v1/audit/login-logs` | Login log viewer |
+| `GET /api/v1/audit/alerts` | List alerts (with `?unacknowledgedOnly=true`) |
+| `POST /api/v1/audit/alerts/{id}/acknowledge` | Acknowledge an alert |
+| `GET /api/v1/setup/audit-config` | Read alert config (AUDIT_VIEW + SETUP_UPDATE) |
+| `PUT /api/v1/setup/audit-config` | Update alert config (SETUP_UPDATE only) |
+| `GET /api/v1/audit/export` | CSV export of audit log (text/csv, streaming) |
+| `GET /api/v1/audit/reports/actions-by-user` | Report 1 |
+| `GET /api/v1/audit/reports/actions-by-module` | Report 2 |
+| `GET /api/v1/audit/reports/approvals` | Report 3 |
+| `GET /api/v1/audit/reports/data-changes` | Report 4 |
+| `GET /api/v1/audit/reports/login-security` | Report 5 |
+| `GET /api/v1/audit/reports/user-activity` | Report 6 |
+
+**Other changes:**
+
+| File | Change |
+|---|---|
+| `CiaApplication.java` | Added `@EnableAsync` for `AlertDetectionService` |
+| `SecurityConfig.java` | Added `AntPathRequestMatcher("/api/v1/auth/login/failed")` to permit list |
+| `cia-backend/pom.xml` | Upgraded Lombok from `1.18.36` → `1.18.46` (JDK 25 compatibility fix) |
+
+**Documentation updated:**
+
+| Doc | What changed |
+|---|---|
+| `CLAUDE.md` | Module Summary: added row 10; Backend Module Inventory: added `cia-audit`; Dependency Graph: added `cia-audit` entry |
+| `SKILL.md` | Frontmatter: 9 → 10 modules, 143 → 158 features; added Module 10 section; added 4 new entities; added 8 new development conventions |
+| `docs-site/docs/architecture/modules.md` | Added `cia-audit` to inventory and cross-module dependency table |
+| `docs-site/docs/architecture/overview.md` | Module count 18 → 19; added row 10 to Business Modules table |
+| `docs-site/docs/architecture/security.md` | Replaced placeholder stub with full security documentation |
+| `docs-site/docs/guides/local-setup.md` | Updated Lombok troubleshooting note for JDK 24+ |
+
+**Decisions made:**
+
+- `cia-audit` depends only on `cia-common` + `cia-notifications` — zero dependency on business modules.
+- `audit_alert_config` is a singleton per tenant (one row, seeded by migration); `loadConfig()` always reads `findFirstByOrderByCreatedAtAsc()`.
+- Off-hours login detection is handled directly in `LoginAuditController.loginFailed()` via `checkFailedLogins()`, not via `AuditLogCreatedEvent` (logins are not in `AuditLog`).
+- `AuditAction.LOGIN` does not exist — login events use `LoginEventType` in a separate table.
+- System Auditor role (`AUDIT_VIEW`) is strictly read-only; only System Admin (`SETUP_UPDATE`) can modify alert config.
+
+**Open questions:** None.

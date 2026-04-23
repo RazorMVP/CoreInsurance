@@ -28,6 +28,7 @@ cia-backend/
 ├── cia-reinsurance/     # Module 6: Reinsurance
 ├── cia-finance/         # Module 8: Finance
 ├── cia-partner-api/     # Module 9: Partner Open API
+├── cia-audit/           # Module 10: Audit & Compliance
 └── cia-api/             # Assembly: main app, REST controllers, Flyway, config
 ```
 
@@ -47,6 +48,7 @@ cia-backend/
 | `cia-customer` | `cia-integrations` (KYC) |
 | `cia-quotation` | `cia-workflow` |
 | `cia-partner-api` | `cia-common`, `cia-auth`, `cia-storage`, `cia-setup`, `cia-customer`, `cia-quotation`, `cia-policy`, `cia-claims`, `cia-workflow`, `cia-notifications` |
+| `cia-audit` | `cia-common`, `cia-notifications` |
 | `cia-api` | All modules |
 
 ## Package Conventions
