@@ -4,6 +4,9 @@ import com.nubeero.cia.audit.alert.AuditAlertService;
 import com.nubeero.cia.audit.alert.dto.AuditAlertResponse;
 import com.nubeero.cia.common.api.ApiMeta;
 import com.nubeero.cia.common.api.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,12 +20,22 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/audit/alerts")
 @RequiredArgsConstructor
+@Tag(name = "Audit Alerts", description = "Real-time anomaly alerts — failed logins, bulk deletes, off-hours activity, large approvals")
 public class AuditAlertController {
 
     private final AuditAlertService alertService;
 
     @GetMapping
     @PreAuthorize("hasAnyRole('AUDIT_VIEW', 'SETUP_UPDATE')")
+    @Operation(
+        summary = "List alerts",
+        description = "Returns all alerts or unacknowledged-only when `unacknowledgedOnly=true`. Ordered newest first."
+    )
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Paginated alert list"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient role")
+    })
     public ResponseEntity<ApiResponse<Page<AuditAlertResponse>>> listAll(
             @RequestParam(defaultValue = "false") boolean unacknowledgedOnly,
             @PageableDefault(size = 20) Pageable pageable) {
@@ -36,6 +49,12 @@ public class AuditAlertController {
 
     @PostMapping("/{id}/acknowledge")
     @PreAuthorize("hasAnyRole('AUDIT_VIEW', 'SETUP_UPDATE')")
+    @Operation(summary = "Acknowledge an alert", description = "Marks the alert as acknowledged. The acknowledging user is recorded.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Alert acknowledged"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Alert not found"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
     public ResponseEntity<ApiResponse<AuditAlertResponse>> acknowledge(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(alertService.acknowledge(id)));
     }

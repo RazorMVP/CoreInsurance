@@ -6,6 +6,9 @@ import com.nubeero.cia.audit.report.AuditReportService;
 import com.nubeero.cia.audit.report.dto.UserActivitySummary;
 import com.nubeero.cia.common.api.ApiMeta;
 import com.nubeero.cia.common.api.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,13 +24,18 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/audit/reports")
 @RequiredArgsConstructor
+@Tag(name = "Audit Reports", description = "Six pre-built compliance reports — user activity, module actions, approvals, data changes, login security, and ranked user summary")
 public class AuditReportController {
 
     private final AuditReportService reportService;
 
-    /** Report 1: All actions by a specific user in a date range. */
     @GetMapping("/actions-by-user")
     @PreAuthorize("hasAnyRole('AUDIT_VIEW', 'SETUP_UPDATE')")
+    @Operation(summary = "Report 1 — Actions by user", description = "All audit events performed by a specific user in a date range.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Paginated audit events for user"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
     public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> actionsByUser(
             @RequestParam String userId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
@@ -37,9 +45,13 @@ public class AuditReportController {
         return ResponseEntity.ok(ApiResponse.success(page, buildMeta(page)));
     }
 
-    /** Report 2: All actions within a specific module (entity type). */
     @GetMapping("/actions-by-module")
     @PreAuthorize("hasAnyRole('AUDIT_VIEW', 'SETUP_UPDATE')")
+    @Operation(summary = "Report 2 — Actions by module", description = "All audit events for a specific entity type (module) in a date range.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Paginated audit events for module"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
     public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> actionsByModule(
             @RequestParam String entityType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
@@ -49,9 +61,13 @@ public class AuditReportController {
         return ResponseEntity.ok(ApiResponse.success(page, buildMeta(page)));
     }
 
-    /** Report 3: All approvals and rejections across all modules. */
     @GetMapping("/approvals")
     @PreAuthorize("hasAnyRole('AUDIT_VIEW', 'SETUP_UPDATE')")
+    @Operation(summary = "Report 3 — Approval audit trail", description = "All APPROVE and REJECT events across every module in a date range.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Paginated approval events"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
     public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> approvalAuditTrail(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
@@ -60,9 +76,13 @@ public class AuditReportController {
         return ResponseEntity.ok(ApiResponse.success(page, buildMeta(page)));
     }
 
-    /** Report 4: Full change history for a specific entity. */
     @GetMapping("/data-changes")
     @PreAuthorize("hasAnyRole('AUDIT_VIEW', 'SETUP_UPDATE')")
+    @Operation(summary = "Report 4 — Data change history", description = "Full before/after change history for a specific entity.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Paginated change events"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
     public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> dataChanges(
             @RequestParam String entityType,
             @RequestParam String entityId,
@@ -71,9 +91,13 @@ public class AuditReportController {
         return ResponseEntity.ok(ApiResponse.success(page, buildMeta(page)));
     }
 
-    /** Report 5: Login and security events in a date range. */
     @GetMapping("/login-security")
     @PreAuthorize("hasAnyRole('AUDIT_VIEW', 'SETUP_UPDATE')")
+    @Operation(summary = "Report 5 — Login & security events", description = "Login, logout, and failed authentication events in a date range.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Paginated login events"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
     public ResponseEntity<ApiResponse<Page<LoginAuditLogResponse>>> loginSecurityReport(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
@@ -82,9 +106,13 @@ public class AuditReportController {
         return ResponseEntity.ok(ApiResponse.success(page, buildMeta(page)));
     }
 
-    /** Report 6: Ranked user activity summary for a date range. */
     @GetMapping("/user-activity")
     @PreAuthorize("hasAnyRole('AUDIT_VIEW', 'SETUP_UPDATE')")
+    @Operation(summary = "Report 6 — User activity summary", description = "Ranked list of users by total action count in a date range.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Ranked user activity list"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
     public ResponseEntity<ApiResponse<List<UserActivitySummary>>> userActivitySummary(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) {

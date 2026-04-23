@@ -6,6 +6,9 @@ import com.nubeero.cia.audit.login.LoginEventType;
 import com.nubeero.cia.audit.login.dto.LoginAuditLogResponse;
 import com.nubeero.cia.common.api.ApiMeta;
 import com.nubeero.cia.common.api.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -22,13 +25,18 @@ import java.time.Instant;
 
 @RestController
 @RequiredArgsConstructor
+@Tag(name = "Login & Session Logs", description = "Login, logout, and failed authentication event recording and retrieval")
 public class LoginAuditController {
 
     private final LoginAuditService loginAuditService;
     private final AlertDetectionService alertDetectionService;
 
-    /** Called by the frontend Keycloak adapter on successful authentication. */
     @PostMapping("/api/v1/auth/session/start")
+    @Operation(summary = "Record login event", description = "Called by the frontend after successful Keycloak authentication. Requires a valid JWT.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Login event recorded"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
     public ResponseEntity<Void> sessionStart(Authentication auth, HttpServletRequest request) {
         if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
             loginAuditService.record(
@@ -41,8 +49,12 @@ public class LoginAuditController {
         return ResponseEntity.ok().build();
     }
 
-    /** Called by the frontend on logout. */
     @PostMapping("/api/v1/auth/session/end")
+    @Operation(summary = "Record logout event", description = "Called by the frontend on logout. Requires a valid JWT.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Logout event recorded"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
     public ResponseEntity<Void> sessionEnd(Authentication auth) {
         if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
             loginAuditService.record(
@@ -53,8 +65,14 @@ public class LoginAuditController {
         return ResponseEntity.ok().build();
     }
 
-    /** Record a failed login attempt (called when JWT validation fails for a known user). */
     @PostMapping("/api/v1/auth/login/failed")
+    @Operation(
+        summary = "Record failed login attempt",
+        description = "Public endpoint — no JWT required. Called when JWT validation fails for a known user. Triggers failed-login alert detection."
+    )
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Failure event recorded")
+    })
     public ResponseEntity<Void> loginFailed(
             @RequestParam String userId,
             @RequestParam(required = false) String userName,
@@ -68,6 +86,12 @@ public class LoginAuditController {
 
     @GetMapping("/api/v1/audit/login-logs")
     @PreAuthorize("hasAnyRole('AUDIT_VIEW', 'SETUP_UPDATE')")
+    @Operation(summary = "List login & session logs", description = "Filterable by userId or date range. Requires AUDIT_VIEW or SETUP_UPDATE role.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Paginated login log entries"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient role")
+    })
     public ResponseEntity<ApiResponse<Page<LoginAuditLogResponse>>> list(
             @RequestParam(required = false) String userId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,

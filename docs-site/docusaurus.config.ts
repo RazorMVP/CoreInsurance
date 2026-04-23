@@ -26,11 +26,26 @@ const config: Config = {
     [
       "@scalar/docusaurus",
       {
-        label: "API Reference",
+        label: "Partner API Reference",
         route: "/partner/api-reference",
         configuration: {
           spec: { url: "/openapi.json" },
-          // Match the docs site colour scheme
+          darkMode: true,
+          defaultHttpClient: {
+            targetKey: "javascript",
+            clientKey: "fetch",
+          },
+        },
+      },
+    ],
+    [
+      "@scalar/docusaurus",
+      {
+        id: "internal-api-reference",
+        label: "Internal API Reference",
+        route: "/internal/api-reference",
+        configuration: {
+          spec: { url: "/internal-api.json" },
           darkMode: true,
           defaultHttpClient: {
             targetKey: "javascript",
@@ -84,7 +99,12 @@ const config: Config = {
         {
           to: "/partner/api-reference",
           position: "left",
-          label: "API Explorer",
+          label: "Partner API",
+        },
+        {
+          to: "/internal/api-reference",
+          position: "left",
+          label: "Internal API",
         },
         {
           href: "https://github.com/RazorMVP/CoreInsurance",

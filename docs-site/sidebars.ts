@@ -26,6 +26,14 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: "category",
+      label: "Audit & Compliance",
+      items: [
+        "audit/overview",
+        "audit/api-reference",
+      ],
+    },
+    {
+      type: "category",
       label: "Development",
       items: [
         "development/coding-standards",
