@@ -39,19 +39,12 @@ const config: Config = {
       },
     ],
     [
-      "@scalar/docusaurus",
+      "@docusaurus/plugin-content-docs",
       {
-        id: "internal-api-reference",
-        label: "Internal API Reference",
-        route: "/internal/api-reference",
-        configuration: {
-          spec: { url: "/internal-api.json" },
-          darkMode: true,
-          defaultHttpClient: {
-            targetKey: "javascript",
-            clientKey: "fetch",
-          },
-        },
+        id: "internalApi",
+        path: "docs-internal",
+        routeBasePath: "internal",
+        sidebarPath: "./sidebarsInternal.ts",
       },
     ],
   ],
@@ -95,16 +88,6 @@ const config: Config = {
           sidebarId: "partnerApiSidebar",
           position: "left",
           label: "Partner API",
-        },
-        {
-          to: "/partner/api-reference",
-          position: "left",
-          label: "Partner API",
-        },
-        {
-          to: "/internal/api-reference",
-          position: "left",
-          label: "Internal API",
         },
         {
           href: "https://github.com/RazorMVP/CoreInsurance",

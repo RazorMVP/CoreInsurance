@@ -41,6 +41,11 @@ const sidebars: SidebarsConfig = {
         "development/adding-a-module",
       ],
     },
+    {
+      type: "link",
+      label: "Internal API Reference",
+      href: "/internal/api-reference",
+    },
   ],
 
   partnerApiSidebar: [
