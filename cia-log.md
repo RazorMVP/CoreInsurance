@@ -1057,3 +1057,31 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** commit `fa4078f` | **Vercel:** auto-deploy triggered via GitHub Actions
 
 **Open questions:** None.
+---
+
+### Session 9 — Build 6: Finance module complete
+
+**Build queue progress: 10/19 builds complete (53%)**
+
+**Files created:**
+
+| File | Description |
+|---|---|
+| `apps/back-office/src/modules/finance/index.tsx` | Module routing — single FinancePage route |
+| `apps/back-office/src/modules/finance/pages/FinancePage.tsx` | Two-tab page (Receivables / Payables) with PageHeader |
+| `apps/back-office/src/modules/finance/pages/receivables/ReceivablesTab.tsx` | Debit Notes DataTable (outstanding/settled badges, Bulk Receipt button) + Receipts DataTable (approve/reject/reverse actions) |
+| `apps/back-office/src/modules/finance/pages/receivables/PostReceiptSheet.tsx` | Single + bulk receipt posting; debit note summary with per-note breakdown, payment date/method/reference/bank/amount/notes |
+| `apps/back-office/src/modules/finance/pages/payables/PayablesTab.tsx` | Credit Notes DataTable (source badges: Claim DV/Endorsement/Commission/RI FAC) + Payments DataTable (Approve/Reject/Reverse) |
+
+**Figma:** Finance page created (id: `75:2`)
+- `Finance / Receivables` (node `75:3`): debit notes table with outstanding/settled status badges, Bulk Receipt button, Receivables/Payables tab bar
+
+**Decisions made:**
+- Finance is split into Receivables (debit notes → receipts) and Payables (credit notes → payments) tabs — mirrors the accounting conceptual split that finance officers use.
+- PostReceiptSheet accepts `bulk: boolean` prop and `debitNoteIds: string[]` — same component handles single and bulk posting, showing a summary/breakdown when bulk mode is active.
+- Credit notes have source type badges: CLAIM → "Claim DV", ENDORSEMENT → "Endorsement", COMMISSION → "Commission", REINSURANCE → "RI FAC" — finance officers need to know the originating module at a glance.
+- PayablesTab `useState` for selectedCn was removed since the Process Payment action is currently a no-op placeholder — will be wired when a ProcessPaymentSheet is built.
+
+**GitHub:** commit `f12aa22` | **Vercel:** auto-deploy triggered via GitHub Actions
+
+**Open questions:** None.
