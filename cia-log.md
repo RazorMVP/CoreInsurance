@@ -1391,3 +1391,21 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
 
 **Open questions:** None.
+
+---
+
+### Session 20 — Fix blank page after Session 19 perf deploy
+
+**Root cause:** In `keycloak.ts`, production mode used `onLoad: 'login-required'`. This calls `window.location.href = keycloakLoginUrl` (a full browser redirect to `http://localhost:8180/...`). Since there is no Keycloak server deployed, the browser navigates to an unreachable host and shows a connection-refused error page. The app appeared blank because the page was redirected away, not because of a rendering error.
+
+**Secondary bug:** `configureKeycloak()` used `Object.assign(keycloak, { url: '...' })` but keycloak-js stores the URL as `authServerUrl` internally, not `url`. So even if `VITE_KEYCLOAK_URL` had been set on Vercel, the Keycloak instance would still have used `localhost:8180`. Fixed by also assigning `authServerUrl` directly.
+
+**Why it looked like it worked before:** `onLoad: 'login-required'` with no reachable Keycloak server → browser redirects to localhost:8180 → connection refused error page. Before the perf-commit deploy, the user was likely testing at `localhost:5173` (DevAuthProvider) and not the Vercel URL. The previous Vercel build had the same bug but it went unnoticed.
+
+**Fixes:**
+1. `main.tsx` — gated `AuthWrapper` on `VITE_KEYCLOAK_URL` being set, not on `import.meta.env.DEV`. Without the env var, always uses `DevAuthProvider`. When `VITE_KEYCLOAK_URL` is set in Vercel env vars (when Keycloak is deployed), `AuthProvider` is used automatically.
+2. `keycloak.ts` — `onLoad` now uses `'check-sso'` (no redirect) when `VITE_KEYCLOAK_URL` is not configured. Removed the `silentCheckSsoRedirectUri` which referenced a `silent-check-sso.html` that doesn't exist. Fixed `configureKeycloak` to also set `authServerUrl` directly.
+
+**GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
+
+**Open questions:** None.

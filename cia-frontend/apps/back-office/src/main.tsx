@@ -23,16 +23,23 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
 });
 
-if (!import.meta.env.DEV) {
+// Use real Keycloak only when VITE_KEYCLOAK_URL is explicitly set, meaning a
+// Keycloak server is actually running and configured for this deployment.
+// Falls back to DevAuthProvider (mock user, full access) when no Keycloak is
+// configured — this is the correct behaviour for the prototype Vercel deployment
+// and for local dev without the auth stack running.
+const keycloakConfigured = !!import.meta.env.VITE_KEYCLOAK_URL;
+
+if (keycloakConfigured) {
   configureKeycloak({
-    url:      import.meta.env.VITE_KEYCLOAK_URL       ?? 'http://localhost:8180',
+    url:      import.meta.env.VITE_KEYCLOAK_URL,
     realm:    import.meta.env.VITE_KEYCLOAK_REALM     ?? 'cia-dev',
     clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID ?? 'cia-back-office',
   });
   setTokenGetter(() => keycloak.token);
 }
 
-const AuthWrapper = import.meta.env.DEV ? DevAuthProvider : AuthProvider;
+const AuthWrapper = keycloakConfigured ? AuthProvider : DevAuthProvider;
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
