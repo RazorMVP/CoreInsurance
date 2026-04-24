@@ -968,3 +968,64 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **Vercel:** Production deployment `back-office-bkycm4xxs` — Status: Ready ✅
 
 **Open questions:** None.
+
+---
+
+### Session 6 — Build 3: Customer Onboarding module complete
+
+**Build queue progress: 7/19 builds complete (37%)**
+
+**Files created:**
+
+| File | Description |
+|---|---|
+| `apps/back-office/src/modules/customers/index.tsx` | Module routing: list, detail (/:id), reports |
+| `apps/back-office/src/modules/customers/pages/CustomersListPage.tsx` | DataTable with Individual/Corporate type badge, KYC badge (verified/pending/failed), Status badge, Broker column, "New Customer ▾" dropdown |
+| `apps/back-office/src/modules/customers/pages/individual/IndividualOnboardingSheet.tsx` | Sheet with first/last name, email, phone, DOB, ID type (NIN/Voter/DL/Passport), ID number, address, occupation, broker-enabled toggle |
+| `apps/back-office/src/modules/customers/pages/corporate/CorporateOnboardingSheet.tsx` | Sheet with company name, RC number, email, phone, address, useFieldArray directors table, broker-enabled toggle |
+| `apps/back-office/src/modules/customers/pages/detail/CustomerDetailPage.tsx` | Tabs: Summary (contact details), KYC (ID + re-submit button), Policies (inline table), Claims (inline table); breadcrumb + action buttons |
+| `apps/back-office/src/modules/customers/pages/reports/LossRatioReportPage.tsx` | StatCards + table by class with colour-coded rating badge (Good/Moderate/High) |
+| `apps/back-office/src/modules/customers/pages/reports/ActiveCustomersReportPage.tsx` | StatCards + table by onboarding channel (individual vs corporate count + share %) |
+
+**Figma:** Customers page created (id: `62:2`)
+- `Customers / List` (node `62:3`): DataTable with all 5 rows, KYC badges, type badges, broker column
+- `Customers / Detail` (node `65:2`): Summary tab with Contact Details card, tabs row (Summary/KYC/Policies 2/Claims 1)
+
+**Decisions made:**
+- Customers entry point uses a "New Customer ▾" dropdown splitting individual vs corporate onboarding — same pattern as "New Quote ▾" in quotation.
+- `updatedAt` field added to all CustomerDto mock objects to satisfy the DTO type.
+- Removed `Separator` unused import from CustomerDetailPage — TS strict mode catches unused imports.
+
+**GitHub:** commit `dbd05db` | **Vercel:** Ready ✅
+
+**Open questions:** None.
+
+---
+
+### Session 7 — Build 4: Quotation module complete
+
+**Build queue progress: 8/19 builds complete (42%)**
+
+**Files created:**
+
+| File | Description |
+|---|---|
+| `apps/back-office/src/modules/quotation/index.tsx` | Module routing: list, detail (/:id), bulk-upload |
+| `apps/back-office/src/modules/quotation/pages/QuotationListPage.tsx` | DataTable with quote number (teal link), customer, product, ₦ sum insured + net premium, 5 status variants (approved/submitted/draft/converted/rejected), version badge; Bulk Upload + New Quote ▾ dropdown |
+| `apps/back-office/src/modules/quotation/pages/create/SingleRiskQuoteSheet.tsx` | Customer + product selects (product auto-fills rate), policy period, sum insured, rate, discount, live premium preview block (gross → discount → net) visible when SI+rate filled |
+| `apps/back-office/src/modules/quotation/pages/create/MultiRiskQuoteSheet.tsx` | useFieldArray risk items each with description/SI/rate, rolling total SI + total premium summary |
+| `apps/back-office/src/modules/quotation/pages/detail/QuoteDetailPage.tsx` | 2-column cards (quote details + premium summary), version history timeline with v-dot indicators, status-conditional action buttons (Submit / Convert / Edit) |
+| `apps/back-office/src/modules/quotation/pages/bulk/BulkUploadPage.tsx` | Drag-and-drop CSV zone, validation results with error row detail, CSV template download section |
+
+**Figma:** Quotation page created (id: `66:2`)
+- `Quotation / List` (node `66:3`): all 5 status badge variants, ₦ premium columns, version numbers
+
+**Decisions made:**
+- `MockQuote` type defined explicitly (not `Partial<QuoteDto>`) to avoid TypeScript narrowing issues where `q.status === 'DRAFT'` was always false due to literal type.
+- SingleRiskQuoteSheet auto-fills the rate field when a product is selected from the dropdown, using `form.setValue('rate', product.defaultRate)`.
+- QuoteDetailPage action buttons are status-conditional: `canSubmit = DRAFT`, `canConvert = APPROVED`, `canEdit = not CONVERTED and not APPROVED`.
+- Bulk upload uses a controlled `UploadState` ('idle' | 'validating' | 'done') — simulates async validation with setTimeout.
+
+**GitHub:** commit `0ff5f66` | **Vercel:** Ready (latest production: `back-office-9dsx0cqzx`) ✅
+
+**Open questions:** None.
