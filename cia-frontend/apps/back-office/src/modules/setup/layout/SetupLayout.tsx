@@ -21,8 +21,9 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   {
     label: 'Products',
     items: [
-      { label: 'Classes of Business', path: '/setup/classes' },
-      { label: 'Products',           path: '/setup/products' },
+      { label: 'Classes of Business',  path: '/setup/classes' },
+      { label: 'Products',             path: '/setup/products' },
+      { label: 'Policy Specifications', path: '/setup/policy-specifications' },
     ],
   },
   {

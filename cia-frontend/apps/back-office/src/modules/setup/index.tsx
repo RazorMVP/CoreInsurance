@@ -3,16 +3,17 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { Skeleton } from '@cia/ui';
 import SetupLayout from './layout/SetupLayout';
 
-const CompanySettingsPage  = lazy(() => import('./pages/company/CompanySettingsPage'));
-const UsersPage            = lazy(() => import('./pages/users/UsersPage'));
-const AccessGroupsPage     = lazy(() => import('./pages/access-groups/AccessGroupsPage'));
-const ApprovalGroupsPage   = lazy(() => import('./pages/approval-groups/ApprovalGroupsPage'));
-const ClassesPage          = lazy(() => import('./pages/classes/ClassesPage'));
-const ProductsPage         = lazy(() => import('./pages/products/ProductsPage'));
-const OrganisationsPage    = lazy(() => import('./pages/organisations/OrganisationsPage'));
-const VehicleRegistryPage  = lazy(() => import('./pages/vehicle-registry/VehicleRegistryPage'));
-const ClaimsConfigPage     = lazy(() => import('./pages/claims-config/ClaimsConfigPage'));
-const PartnerAppsPage      = lazy(() => import('./pages/partner-apps/PartnerAppsPage'));
+const CompanySettingsPage     = lazy(() => import('./pages/company/CompanySettingsPage'));
+const UsersPage               = lazy(() => import('./pages/users/UsersPage'));
+const AccessGroupsPage        = lazy(() => import('./pages/access-groups/AccessGroupsPage'));
+const ApprovalGroupsPage      = lazy(() => import('./pages/approval-groups/ApprovalGroupsPage'));
+const ClassesPage             = lazy(() => import('./pages/classes/ClassesPage'));
+const ProductsPage            = lazy(() => import('./pages/products/ProductsPage'));
+const PolicySpecificationsPage = lazy(() => import('./pages/policy-specs/PolicySpecificationsPage'));
+const OrganisationsPage       = lazy(() => import('./pages/organisations/OrganisationsPage'));
+const VehicleRegistryPage     = lazy(() => import('./pages/vehicle-registry/VehicleRegistryPage'));
+const ClaimsConfigPage        = lazy(() => import('./pages/claims-config/ClaimsConfigPage'));
+const PartnerAppsPage         = lazy(() => import('./pages/partner-apps/PartnerAppsPage'));
 
 function PageLoading() {
   return (
@@ -34,9 +35,10 @@ export default function SetupModule() {
           <Route path="users"            element={<UsersPage />} />
           <Route path="access-groups"    element={<AccessGroupsPage />} />
           <Route path="approval-groups"  element={<ApprovalGroupsPage />} />
-          <Route path="classes"          element={<ClassesPage />} />
-          <Route path="products"         element={<ProductsPage />} />
-          <Route path="organisations"    element={<OrganisationsPage />} />
+          <Route path="classes"               element={<ClassesPage />} />
+          <Route path="products"              element={<ProductsPage />} />
+          <Route path="policy-specifications" element={<PolicySpecificationsPage />} />
+          <Route path="organisations"         element={<OrganisationsPage />} />
           <Route path="vehicle-registry" element={<VehicleRegistryPage />} />
           <Route path="claims-config"    element={<ClaimsConfigPage />} />
           <Route path="partner-apps"     element={<PartnerAppsPage />} />
