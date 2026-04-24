@@ -941,3 +941,30 @@ Two frames pushed to Figma file `Zaiu2K7NvEJ7Cjj6z1xt2D`, new page "Setup" (id: 
 Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding to Build 3.
 
 **Open questions:** None.
+
+---
+
+### Session 5c — ProductSheet: inline Class of Business creation
+
+**File modified:**
+
+| File | Change |
+|---|---|
+| `apps/back-office/src/modules/setup/pages/products/ProductSheet.tsx` | Full rewrite — see decisions below |
+| `apps/back-office/src/modules/customers/index.tsx` | Module routing scaffold (stub pages) |
+| `apps/back-office/src/modules/customers/pages/*.tsx` | Stub placeholder pages for Build 3 |
+
+**Decisions made:**
+
+- Classes of Business dropdown now has a `+ New Class of Business` sentinel item (`value="__create_new__"`) at the bottom, separated by a `SelectSeparator`.
+- Sentinel is intercepted in `onValueChange` before `field.onChange` — the field value is never set to the sentinel string.
+- Inline creation opens a **Dialog** (centred modal), not a Sheet, to avoid z-index issues from nesting a Sheet inside an already-open Sheet.
+- On save: new class appended to local state (`useState`) and immediately auto-selected via `form.setValue`. When backend is wired, `onCreateClass` will POST to `/api/v1/setup/classes` and use the returned ID.
+- Seed list expanded from 4 hardcoded entries to 14 covering the full Nigerian market range: Motor Private/Commercial, Fire & Burglary, Marine Cargo/Hull, Goods in Transit, Engineering/CAR, Professional Indemnity, Public Liability, Employer's Liability, Personal Accident, Travel Insurance, Group Life, Bonds.
+- The same inline-create pattern (sentinel value → Dialog → append to state → auto-select) should be applied to other master-data selects (Brokers, Reinsurers, Surveyors, etc.) as those modules are built.
+- `tsc --noEmit` passes with 0 errors.
+
+**GitHub:** commit `bd39256` on `main`
+**Vercel:** Production deployment `back-office-bkycm4xxs` — Status: Ready ✅
+
+**Open questions:** None.
