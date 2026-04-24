@@ -1194,3 +1194,21 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** commit `0083c7f` | **Vercel:** auto-deploy triggered
 
 **Open questions:** None.
+---
+
+### Session 12c — CreateFACOfferSheet: Direct vs Broker placement toggle
+
+**File modified:** `apps/back-office/src/modules/reinsurance/pages/fac/CreateFACOfferSheet.tsx`
+
+**Change:** Added `placedThrough: 'DIRECT' | 'BROKER'` toggle (card-style selector).
+- **DIRECT** → Reinsurer select (9 companies: Munich Re, Swiss Re, African Re, Lloyd's syndicates, ZEP-RE, GIC Re, Trans-Atlantic Re, Continental Re)
+- **BROKER** → FAC Broker select (7 entries: Marsh Re, Aon Re, Willis TW, SCIB Nigeria, Gras Savoye Willis, Brokerage International, Anchor) + optional "Target Markets" text field
+- Commission label adapts: "Reinsurer Commission %" vs "Brokerage %"
+- Submit button adapts: "Send FAC Offer" vs "Send to Broker"
+- `counterpartyId` and `brokerMarkets` are cleared when placement type is switched
+
+**Decision:** The broker-arranged FAC path needs a "Target Markets" field because the broker approaches multiple reinsurance markets on the cedant's behalf — the underwriter can specify preferred markets (e.g. "Lloyd's, Munich Re") or leave blank to let the broker decide. This field maps to a `brokerInstructions` field on the backend FAC record.
+
+**GitHub:** commit `cb5d9db` | **Vercel:** auto-deploy triggered
+
+**Open questions:** None.
