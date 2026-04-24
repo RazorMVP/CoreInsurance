@@ -3,8 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import {
   Badge, Button, Card, CardContent, CardHeader, CardTitle, PageHeader,
   Separator, Tabs, TabsContent, TabsList, TabsTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@cia/ui';
 import type { ClaimDto, ClaimReserveDto, ClaimExpenseDto } from '@cia/api-client';
+import SubmitClaimDialog    from './SubmitClaimDialog';
+import CancelClaimDialog    from './CancelClaimDialog';
+import AddReserveDialog     from './AddReserveDialog';
+import AddExpenseDialog     from './AddExpenseDialog';
+import AddCommentDialog     from './AddCommentDialog';
+import UploadDocumentDialog from './UploadDocumentDialog';
 
 // ── Mock data ─────────────────────────────────────────────────────────────
 type MockClaim = ClaimDto & {
@@ -37,7 +44,7 @@ const mockClaim: MockClaim = {
   surveyorId: 'sv1', surveyorName: 'Maxwell & Partners',
   createdAt: '2026-03-12', updatedAt: '2026-03-15',
   comments: [
-    { id: 'cmt1', user: 'Adaeze Nwosu', date: '2026-03-12', text: 'Claim registered. Assessor assigned to conduct pre-loss inspection report.' },
+    { id: 'cmt1', user: 'Adaeze Nwosu',       date: '2026-03-12', text: 'Claim registered. Assessor assigned to conduct pre-loss inspection report.' },
     { id: 'cmt2', user: 'Maxwell & Partners', date: '2026-03-14', text: 'Inspection completed. Repair estimate from Mercedes dealer: ₦720,000. Advising reserve of ₦650,000 pending final report.' },
   ],
   requiredDocs: [
@@ -45,8 +52,8 @@ const mockClaim: MockClaim = {
     { id: 'd2', name: 'Driver Licence',        received: true,  receivedDate: '2026-03-12' },
     { id: 'd3', name: 'Vehicle Registration',  received: true,  receivedDate: '2026-03-12' },
     { id: 'd4', name: 'Repair Estimate',       received: true,  receivedDate: '2026-03-14' },
-    { id: 'd5', name: 'Survey Report',         received: false  },
-    { id: 'd6', name: 'Completed Claim Form',  received: false  },
+    { id: 'd5', name: 'Survey Report',         received: false },
+    { id: 'd6', name: 'Completed Claim Form',  received: false },
   ],
   dvType: undefined, dvAmount: undefined, dvExecuted: false,
 };
@@ -76,22 +83,34 @@ function Row({ label, value }: { label: string; value: string }) {
 
 type DvType = 'OWN_DAMAGE' | 'THIRD_PARTY' | 'EX_GRATIA';
 const DV_LABELS: Record<DvType, string> = {
-  OWN_DAMAGE:   'Own Damage DV',
-  THIRD_PARTY:  'Third Party DV',
-  EX_GRATIA:    'Ex-gratia DV',
+  OWN_DAMAGE:  'Own Damage DV',
+  THIRD_PARTY: 'Third Party DV',
+  EX_GRATIA:   'Ex-gratia DV',
 };
 
 export default function ClaimDetailPage() {
   const navigate = useNavigate();
   const c = mockClaim;
-  const [dvType,  setDvType]  = useState<DvType | ''>('');
-  const [dvAmount,setDvAmount]= useState('');
+
+  // DV state
+  const [dvType,      setDvType]      = useState<DvType | ''>('');
+  const [dvAmount,    setDvAmount]    = useState('');
   const [dvGenerated, setDvGenerated] = useState(false);
 
-  const missingDocs = c.requiredDocs.filter(d => !d.received);
-  const canSubmit   = c.status === 'PROCESSING';
-  const canApprove  = c.status === 'PENDING_APPROVAL';
-  const totalReserve = mockReserves.reduce((s, r) => s + r.amount, 0);
+  // Dialog / sheet state
+  const [submitOpen,          setSubmitOpen]          = useState(false);
+  const [cancelOpen,          setCancelOpen]          = useState(false);
+  const [addReserveOpen,      setAddReserveOpen]      = useState(false);
+  const [addExpenseOpen,      setAddExpenseOpen]      = useState(false);
+  const [addCommentOpen,      setAddCommentOpen]      = useState(false);
+  const [uploadDoc,           setUploadDoc]           = useState<{ id: string; name: string } | null>(null);
+  const [declineInspectOpen,  setDeclineInspectOpen]  = useState(false);
+
+  const missingDocs   = c.requiredDocs.filter(d => !d.received);
+  const canEdit       = c.status === 'PROCESSING';   // reserve/expense/comment editable only while PROCESSING
+  const canSubmit     = c.status === 'PROCESSING';
+  const canApprove    = c.status === 'PENDING_APPROVAL';
+  const totalReserve  = mockReserves.reduce((s, r) => s + r.amount, 0);
   const totalExpenses = mockExpenses.reduce((s, e) => s + e.amount, 0);
 
   return (
@@ -110,9 +129,12 @@ export default function ClaimDetailPage() {
             {missingDocs.length > 0 && (
               <Badge variant="pending" className="text-[10px]">{missingDocs.length} doc(s) missing</Badge>
             )}
-            {canSubmit  && <Button size="sm">Submit for Approval</Button>}
+            {canSubmit  && <Button size="sm" onClick={() => setSubmitOpen(true)}>Submit for Approval</Button>}
             {canApprove && <Button size="sm" variant="outline">Reject</Button>}
             {canApprove && <Button size="sm">Approve Claim</Button>}
+            <Button size="sm" variant="outline" className="text-destructive" onClick={() => setCancelOpen(true)}>
+              Cancel Claim
+            </Button>
           </div>
         }
       />
@@ -139,23 +161,23 @@ export default function ClaimDetailPage() {
             <Card>
               <CardHeader><CardTitle>Incident Details</CardTitle></CardHeader>
               <CardContent>
-                <Row label="Policy"          value={`${c.policyNumber} · ${c.policyProduct}`} />
-                <Row label="Customer"        value={c.customerName} />
-                <Row label="Incident Date"   value={c.incidentDate} />
-                <Row label="Registered"      value={c.registeredDate} />
-                <Row label="Nature of Loss"  value={c.natureOfLoss} />
-                <Row label="Cause of Loss"   value={c.causeOfLoss} />
-                <Row label="Location"        value={c.location} />
-                <Row label="Contact"         value={`${c.contactName} · ${c.contactPhone}`} />
+                <Row label="Policy"         value={`${c.policyNumber} · ${c.policyProduct}`} />
+                <Row label="Customer"       value={c.customerName} />
+                <Row label="Incident Date"  value={c.incidentDate} />
+                <Row label="Registered"     value={c.registeredDate} />
+                <Row label="Nature of Loss" value={c.natureOfLoss} />
+                <Row label="Cause of Loss"  value={c.causeOfLoss} />
+                <Row label="Location"       value={c.location} />
+                <Row label="Contact"        value={`${c.contactName} · ${c.contactPhone}`} />
               </CardContent>
             </Card>
             <Card>
               <CardHeader><CardTitle>Financial Summary</CardTitle></CardHeader>
               <CardContent>
-                <Row label="Estimated Loss"  value={`₦${c.estimatedLoss.toLocaleString()}`} />
-                <Row label="Total Reserve"   value={`₦${totalReserve.toLocaleString()}`} />
-                <Row label="Total Expenses"  value={`₦${totalExpenses.toLocaleString()}`} />
-                <Row label="Paid Amount"     value={c.paidAmount > 0 ? `₦${c.paidAmount.toLocaleString()}` : '—'} />
+                <Row label="Estimated Loss" value={`₦${c.estimatedLoss.toLocaleString()}`} />
+                <Row label="Total Reserve"  value={`₦${totalReserve.toLocaleString()}`} />
+                <Row label="Total Expenses" value={`₦${totalExpenses.toLocaleString()}`} />
+                <Row label="Paid Amount"    value={c.paidAmount > 0 ? `₦${c.paidAmount.toLocaleString()}` : '—'} />
                 <Separator className="my-3" />
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">Outstanding Reserve</p>
@@ -164,8 +186,6 @@ export default function ClaimDetailPage() {
               </CardContent>
             </Card>
           </div>
-
-          {/* Description */}
           <Card className="mt-4">
             <CardHeader><CardTitle>Incident Description</CardTitle></CardHeader>
             <CardContent>
@@ -176,18 +196,37 @@ export default function ClaimDetailPage() {
 
         {/* ── Processing ───────────────────────────────────────────────── */}
         <TabsContent value="processing" className="mt-4 space-y-4">
+          {/* Lock / advisory notice */}
+          {canEdit ? (
+            <div className="rounded-lg bg-[var(--status-pending-bg)] px-4 py-3">
+              <p className="text-xs font-semibold text-[var(--status-pending-fg)]">Editable — not yet submitted</p>
+              <p className="text-xs text-[var(--status-pending-fg)]/80 mt-0.5">
+                Reserves, expenses and comments can only be modified before submitting for approval. Once submitted, this section is locked.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-lg bg-muted/60 px-4 py-3">
+              <p className="text-xs font-semibold text-muted-foreground">Locked — submitted for approval</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                This claim has been submitted. Processing details are read-only until the claim is returned for revision.
+              </p>
+            </div>
+          )}
+
           {/* Reserves */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Reserves</CardTitle>
-                <Button size="sm" variant="outline">Add Reserve</Button>
+                {canEdit && <Button size="sm" variant="outline" onClick={() => setAddReserveOpen(true)}>Add Reserve</Button>}
               </div>
             </CardHeader>
             <CardContent className="p-0">
               <table className="w-full text-sm">
                 <thead><tr className="border-b bg-muted/40">
-                  {['Category','Amount','Date'].map(h => <th key={h} className="h-9 px-4 text-left text-xs font-semibold text-muted-foreground">{h}</th>)}
+                  {['Category', 'Amount', 'Date'].map(h => (
+                    <th key={h} className="h-9 px-4 text-left text-xs font-semibold text-muted-foreground">{h}</th>
+                  ))}
                 </tr></thead>
                 <tbody>
                   {mockReserves.map((r, i) => (
@@ -212,13 +251,15 @@ export default function ClaimDetailPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Claim Expenses</CardTitle>
-                <Button size="sm" variant="outline">Add Expense</Button>
+                {canEdit && <Button size="sm" variant="outline" onClick={() => setAddExpenseOpen(true)}>Add Expense</Button>}
               </div>
             </CardHeader>
             <CardContent className="p-0">
               <table className="w-full text-sm">
                 <thead><tr className="border-b bg-muted/40">
-                  {['Type','Amount','Status','Date'].map(h => <th key={h} className="h-9 px-4 text-left text-xs font-semibold text-muted-foreground">{h}</th>)}
+                  {['Type', 'Amount', 'Status', 'Date'].map(h => (
+                    <th key={h} className="h-9 px-4 text-left text-xs font-semibold text-muted-foreground">{h}</th>
+                  ))}
                 </tr></thead>
                 <tbody>
                   {mockExpenses.map((e, i) => (
@@ -243,7 +284,7 @@ export default function ClaimDetailPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Comments</CardTitle>
-                <Button size="sm" variant="outline">Add Comment</Button>
+                <Button size="sm" variant="outline" onClick={() => setAddCommentOpen(true)}>Add Comment</Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -287,7 +328,16 @@ export default function ClaimDetailPage() {
                   <div className="flex items-center gap-2">
                     {doc.received
                       ? <p className="text-xs text-muted-foreground">{doc.receivedDate}</p>
-                      : <Button size="sm" variant="outline" className="h-7 text-xs">Upload</Button>
+                      : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => setUploadDoc({ id: doc.id, name: doc.name })}
+                        >
+                          Upload
+                        </Button>
+                      )
                     }
                   </div>
                 </div>
@@ -308,14 +358,30 @@ export default function ClaimDetailPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {canEdit && (
+                <div className="rounded-lg bg-[var(--status-pending-bg)] px-4 py-3">
+                  <p className="text-xs font-semibold text-[var(--status-pending-fg)]">Editable before submission</p>
+                  <p className="text-xs text-[var(--status-pending-fg)]/80 mt-0.5">
+                    Inspection decisions can only be changed before the claim is submitted for approval.
+                  </p>
+                </div>
+              )}
               {c.surveyorId ? (
                 <>
                   <Row label="Surveyor"      value={c.surveyorName ?? '—'} />
                   <Row label="Type"          value="External Surveyor" />
                   <Row label="Assigned Date" value="2026-03-12" />
                   <Row label="Report Status" value="Submitted — awaiting claim officer review" />
-                  <div className="flex gap-2 mt-4">
+                  <div className="flex gap-2 mt-4 flex-wrap">
                     <Button size="sm">Approve Inspection Report</Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-destructive"
+                      onClick={() => setDeclineInspectOpen(true)}
+                    >
+                      Decline Report
+                    </Button>
                     <Button size="sm" variant="outline">Override Requirement</Button>
                     <Button size="sm" variant="outline">Download Report</Button>
                   </div>
@@ -371,9 +437,9 @@ export default function ClaimDetailPage() {
                       >
                         <p className="text-sm font-semibold text-foreground">{DV_LABELS[type]}</p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {type === 'OWN_DAMAGE' ? 'Payment to insured for own vehicle/property damage'
-                            : type === 'THIRD_PARTY' ? 'Payment for third party bodily injury or property damage'
-                            : 'Discretionary payment outside policy terms'}
+                          {type === 'OWN_DAMAGE'  ? 'Payment to insured for own vehicle/property damage'
+                           : type === 'THIRD_PARTY' ? 'Payment for third party bodily injury or property damage'
+                           : 'Discretionary payment outside policy terms'}
                         </p>
                       </button>
                     ))}
@@ -405,6 +471,77 @@ export default function ClaimDetailPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* ── Dialogs ──────────────────────────────────────────────────────── */}
+
+      <SubmitClaimDialog
+        open={submitOpen}
+        onOpenChange={setSubmitOpen}
+        claim={c}
+        onConfirm={() => setSubmitOpen(false)}
+      />
+
+      <CancelClaimDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        claim={c}
+        onConfirm={() => setCancelOpen(false)}
+      />
+
+      <AddReserveDialog
+        open={addReserveOpen}
+        onOpenChange={setAddReserveOpen}
+        claimNumber={c.claimNumber}
+        onSuccess={() => setAddReserveOpen(false)}
+      />
+
+      <AddExpenseDialog
+        open={addExpenseOpen}
+        onOpenChange={setAddExpenseOpen}
+        claimNumber={c.claimNumber}
+        onSuccess={() => setAddExpenseOpen(false)}
+      />
+
+      <AddCommentDialog
+        open={addCommentOpen}
+        onOpenChange={setAddCommentOpen}
+        claimNumber={c.claimNumber}
+        onSuccess={() => setAddCommentOpen(false)}
+      />
+
+      <UploadDocumentDialog
+        open={uploadDoc !== null}
+        onOpenChange={(v) => { if (!v) setUploadDoc(null); }}
+        documentName={uploadDoc?.name ?? ''}
+        onSuccess={() => setUploadDoc(null)}
+      />
+
+      {/* Decline inspection report confirmation */}
+      <Dialog open={declineInspectOpen} onOpenChange={setDeclineInspectOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Decline Inspection Report</DialogTitle>
+            <DialogDescription>
+              Declining the report from <span className="font-medium text-foreground">{c.surveyorName}</span> will require them to resubmit. This action cannot be modified after the claim is submitted for approval.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg bg-[var(--status-rejected-bg)] px-4 py-3">
+            <p className="text-xs font-semibold text-[var(--status-rejected-fg)]">Cannot be undone after submission</p>
+            <p className="text-xs text-[var(--status-rejected-fg)]/80 mt-0.5">
+              Once the claim is submitted for approval, inspection decisions are locked.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeclineInspectOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => {
+              // TODO: PATCH /api/v1/claims/{id}/inspection/decline
+              setDeclineInspectOpen(false);
+            }}>
+              Decline Report
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

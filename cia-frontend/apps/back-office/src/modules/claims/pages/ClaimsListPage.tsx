@@ -7,6 +7,8 @@ import {
 import { type ColumnDef } from '@tanstack/react-table';
 import type { ClaimDto } from '@cia/api-client';
 import RegisterClaimSheet from './register/RegisterClaimSheet';
+import SubmitClaimDialog  from './detail/SubmitClaimDialog';
+import CancelClaimDialog  from './detail/CancelClaimDialog';
 
 const mockClaims: ClaimDto[] = [
   { id: 'cl1', claimNumber: 'CLM-2026-00001', policyId: 'pol1', policyNumber: 'POL-2026-00001', customerId: 'c1', customerName: 'Chioma Okafor',     status: 'PROCESSING',        incidentDate: '2026-03-10', registeredDate: '2026-03-12', description: 'Rear-end collision at Ozumba Mbadiwe Ave.', estimatedLoss: 850_000,  reserveAmount: 650_000, paidAmount: 0,       surveyorId: 'sv1', surveyorName: 'Maxwell & Partners', createdAt: '2026-03-12', updatedAt: '2026-03-15' },
@@ -29,7 +31,9 @@ const statusVariant: Record<ClaimDto['status'], 'active' | 'pending' | 'draft' |
 
 export default function ClaimsListPage() {
   const navigate = useNavigate();
-  const [registerOpen, setRegisterOpen] = useState(false);
+  const [registerOpen,  setRegisterOpen]  = useState(false);
+  const [submitTarget,  setSubmitTarget]  = useState<ClaimDto | null>(null);
+  const [cancelTarget,  setCancelTarget]  = useState<ClaimDto | null>(null);
 
   // Dashboard stats
   const open      = mockClaims.filter(c => !['SETTLED','CLOSED','WITHDRAWN'].includes(c.status)).length;
@@ -106,11 +110,11 @@ export default function ClaimsListPage() {
             row={row}
             actions={[
               { label: 'View claim',          onClick: () => navigate(`/claims/${id}`) },
-              ...(status === 'REGISTERED'     ? [{ label: 'Start processing',     onClick: () => {} }] : []),
-              ...(status === 'PROCESSING'     ? [{ label: 'Submit for approval',  onClick: () => {} }] : []),
+              ...(status === 'REGISTERED'     ? [{ label: 'Start processing',    onClick: () => {} }] : []),
+              ...(status === 'PROCESSING'     ? [{ label: 'Submit for approval', onClick: () => setSubmitTarget(row.original) }] : []),
               ...(status === 'PENDING_APPROVAL' ? [{ label: 'Approve', onClick: () => {} }, { label: 'Reject', onClick: () => {}, className: 'text-destructive' }] : []),
               ...(status === 'APPROVED'       ? [{ label: 'Generate DV',         onClick: () => {} }] : []),
-              ...(status !== 'SETTLED' && status !== 'CLOSED' ? [{ label: 'Cancel claim', onClick: () => {}, separator: true, className: 'text-destructive' }] : []),
+              ...(status !== 'SETTLED' && status !== 'CLOSED' ? [{ label: 'Cancel claim', onClick: () => setCancelTarget(row.original), separator: true, className: 'text-destructive' }] : []),
             ]}
           />
         );
@@ -156,6 +160,20 @@ export default function ClaimsListPage() {
         open={registerOpen}
         onOpenChange={setRegisterOpen}
         onSuccess={() => setRegisterOpen(false)}
+      />
+
+      <SubmitClaimDialog
+        open={submitTarget !== null}
+        onOpenChange={(v) => { if (!v) setSubmitTarget(null); }}
+        claim={submitTarget}
+        onConfirm={() => setSubmitTarget(null)}
+      />
+
+      <CancelClaimDialog
+        open={cancelTarget !== null}
+        onOpenChange={(v) => { if (!v) setCancelTarget(null); }}
+        claim={cancelTarget}
+        onConfirm={() => setCancelTarget(null)}
       />
     </div>
   );

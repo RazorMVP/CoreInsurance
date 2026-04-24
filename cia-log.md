@@ -1287,3 +1287,31 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
 
 **Open questions:** None.
+
+---
+
+### Session 16 — Claims: wire all silent interactions
+
+**Files modified/created:**
+
+| File | Change |
+|---|---|
+| `pages/bulk/BulkClaimPage.tsx` | Modified — "browse" button now triggers a hidden `<input type="file" accept=".csv">` via ref; drag-drop also correctly calls processFile(); was previously skipping straight to results state |
+| `pages/ClaimsListPage.tsx` | Modified — "Submit for approval" row action opens `SubmitClaimDialog`; "Cancel claim" row action opens `CancelClaimDialog` |
+| `pages/detail/ClaimDetailPage.tsx` | Modified — "Submit for Approval" header button → `SubmitClaimDialog`; "Cancel Claim" → `CancelClaimDialog`; "Add Reserve" → `AddReserveDialog`; "Add Expense" → `AddExpenseDialog`; "Add Comment" → `AddCommentDialog`; Documents "Upload" buttons → `UploadDocumentDialog` with correct doc name; "Decline Report" button added to Inspection tab → inline confirmation Dialog; Processing tab shows advisory banner (editable/locked) based on claim status |
+| `pages/detail/SubmitClaimDialog.tsx` | New — Full claim summary (policy, customer, incident date, reserve, description); amber "cannot be undone" warning banner; Submit + Cancel buttons; used from both list and detail pages |
+| `pages/detail/CancelClaimDialog.tsx` | New — Claim summary + free-text reason textarea (min 5 chars to enable submit); red "cannot be undone" warning banner; "Cancel Claim" destructive button |
+| `pages/detail/AddReserveDialog.tsx` | New — RHF form: reserve category (select from 9 types), amount, notes; advisory text that reserves are locked after submission |
+| `pages/detail/AddExpenseDialog.tsx` | New — RHF form: expense type (select from 8 types), amount, invoice reference; advisory text about lock |
+| `pages/detail/AddCommentDialog.tsx` | New — Textarea dialog; character counter; disabled until ≥3 chars |
+| `pages/detail/UploadDocumentDialog.tsx` | New — Real file picker: hidden `<input type="file">` + drag-drop zone; shows selected filename + size + remove option; accepts PDF/JPG/PNG/Word; Upload button disabled until file selected |
+
+**Decisions made:**
+- `canEdit = c.status === 'PROCESSING'` gates Add Reserve/Expense buttons and the advisory banner. Comments have no gate (the Add Comment button stays visible always — auditors can still comment after approval).
+- Processing tab shows two different banners: amber "editable" advisory when still PROCESSING, grey "locked" notice once submitted — matching the insurance system pattern where the four-eyes principle freezes financial records on submission.
+- "Decline Report" on inspection tab was missing entirely — added with an inline Dialog (not a separate file, no form input needed) that carries the "locked after submission" warning.
+- BulkClaimPage file input and UploadDocumentDialog are both noted as stubs — the backend upload endpoint (`POST /api/v1/claims/{id}/documents`) is a TODO. The file is selected client-side; actual upload will be wired when the backend is ready.
+
+**GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
+
+**Open questions:** None.

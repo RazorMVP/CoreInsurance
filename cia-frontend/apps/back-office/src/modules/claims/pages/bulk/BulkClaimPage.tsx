@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Badge, Button, Card, CardContent, PageHeader } from '@cia/ui';
 
@@ -8,10 +8,20 @@ export default function BulkClaimPage() {
   const navigate = useNavigate();
   const [state, setState] = useState<State>('idle');
   const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function processFile() {
+    setState('validating');
+    setTimeout(() => setState('done'), 1200);
+  }
 
   function handleDrop(e: React.DragEvent) {
-    e.preventDefault(); setDragOver(false); setState('validating');
-    setTimeout(() => setState('done'), 1200);
+    e.preventDefault(); setDragOver(false);
+    if (e.dataTransfer.files?.[0]) processFile();
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files?.[0]) processFile();
   }
 
   return (
@@ -35,8 +45,24 @@ export default function BulkClaimPage() {
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
               </svg>
             </div>
-            <p className="text-sm font-medium text-foreground">Drop CSV here or <button className="text-primary hover:underline" onClick={() => setState('done')}>browse</button></p>
-            <p className="mt-1 text-xs text-muted-foreground">Max 200 claims per upload</p>
+            <p className="text-sm font-medium text-foreground">
+              Drop CSV here or{' '}
+              <button
+                type="button"
+                className="text-primary hover:underline"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                browse
+              </button>
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">Max 200 claims per upload · CSV only</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              className="sr-only"
+              onChange={handleFileChange}
+            />
           </>
         )}
         {state === 'validating' && <p className="text-sm font-medium animate-pulse">Validating…</p>}
