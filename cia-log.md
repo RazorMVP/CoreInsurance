@@ -1409,3 +1409,19 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
 
 **Open questions:** None.
+
+---
+
+### Session 21 — Revert manualChunks to restore page load
+
+**Problem:** After the performance commit (`5a7eaf2`), the deployed page stopped loading entirely. All server-side checks passed (all assets return 200, correct content-types, HTML is valid, DevAuthProvider is active in the bundle, no 404s). The issue could not be reproduced locally without a browser. The `manualChunks` configuration is the most structurally complex change introduced and cannot be debugged without browser console access.
+
+**Fix:** Removed the `manualChunks` rollupOptions from `vite.config.ts`. Vite's default chunking strategy is used instead (single vendor bundle per entry point). All other performance improvements from Session 19 are kept: font loading strategy (preconnect + link rel=stylesheet), devtools tree-shake, auth fix (Session 20), cache headers in vercel.json.
+
+**What's retained from Session 19:** Font loading fix, devtools tree-shake, `chunkSizeWarningLimit: 600`, Vercel cache headers, auth fix.
+
+**What's reverted:** Only `manualChunks` rollupOptions. Can be re-introduced after verifying the app loads in the browser and a chunk-splitting approach that doesn't cause module loading issues is confirmed.
+
+**GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
+
+**Open questions:** None.
