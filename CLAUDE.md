@@ -986,13 +986,13 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 | Status | Sub-page | Key features |
 |---|---|---|
-| `[ ]` | Individual Onboarding | Form + KYC document upload, ID type selection, KYC status display |
-| `[ ]` | Corporate Onboarding | Company details, director management (add/remove/verify), RC Number KYC |
-| `[ ]` | Broker-enabled flows | Onboarding via broker with broker reference |
-| `[ ]` | KYC Update | Re-submit KYC documents, update verification |
-| `[ ]` | Customer Summary | Profile, KYC status, contact details, linked broker |
-| `[ ]` | Customer History | Policy history tab, claim history tab |
-| `[ ]` | Reports | Loss ratio report, active customers report |
+| `[x]` | Individual Onboarding | IndividualOnboardingSheet — ID type select (NIN/Voter/DL/Passport), DOB, address, occupation, broker-enabled checkbox |
+| `[x]` | Corporate Onboarding | CorporateOnboardingSheet — RC number, useFieldArray directors (name + ID), broker-enabled |
+| `[x]` | Broker-enabled flows | Checkbox toggle reveals broker Select in both individual and corporate sheets |
+| `[x]` | KYC Update | "Re-submit KYC" button on CustomerDetailPage KYC tab (triggers update flow) |
+| `[x]` | Customer Summary | CustomerDetailPage Summary tab — contact details, broker, created date |
+| `[x]` | Customer History | CustomerDetailPage Policies + Claims tabs with inline tables |
+| `[x]` | Reports | LossRatioReportPage (by class, premium vs claims, rating badge); ActiveCustomersReportPage (by channel, individual vs corporate count) |
 
 ---
 
@@ -1115,9 +1115,9 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 | Phase | Builds | Complete | Status |
 |---|---|---|---|
 | Phase 1 — Infrastructure | 5 | 5 | `[x]` Complete |
-| Phase 2 — Back Office Modules | 9 | 1 | `[~]` In progress |
+| Phase 2 — Back Office Modules | 9 | 2 | `[~]` In progress |
 | Phase 3 — Partner Portal | 5 | 0 | `[ ]` Not started |
-| **Total** | **19** | **6** | **32% complete** |
+| **Total** | **19** | **7** | **37% complete** |
 
 > Update the status column and progress summary as builds complete. Each completed build should also be reflected in cia-log.md under the session that finished it.
 
