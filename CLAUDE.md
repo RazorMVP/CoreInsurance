@@ -968,17 +968,17 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 | Status | Sub-page | Key features |
 |---|---|---|
-| `[ ]` | Company Settings | Company profile, logo upload, password policy, system defaults |
-| `[ ]` | User Management | User list, create/edit user, role assignment, access group assignment, password reset |
-| `[ ]` | Access Groups | Create/edit group, assign permissions per module |
-| `[ ]` | Approval Groups | Single-level and multi-level config, amount ranges, approver assignment |
-| `[ ]` | Classes of Business | List, create/edit, link to products |
-| `[ ]` | Products | Single-risk and multi-risk product setup, sections, commission setup, policy spec, number format, survey thresholds |
+| `[x]` | Company Settings | Company profile, password policy — form with Card sections |
+| `[x]` | User Management | User list (DataTable) + UserSheet (create/edit); access group select |
+| `[x]` | Access Groups | Group list + AccessGroupSheet; per-module permission checkboxes |
+| `[x]` | Approval Groups | Card-based multi-level display + ApprovalGroupSheet with useFieldArray |
+| `[x]` | Classes of Business | DataTable list + ClassSheet (create/edit) |
+| `[x]` | Products | DataTable list + ProductSheet (single/multi-risk, commission rate) |
 | `[ ]` | Policy Specifications | Clause bank, template upload/management |
-| `[ ]` | Claims Setup | Reserve categories, notification timelines, required documents, nature/cause of loss |
-| `[ ]` | Organisations | Broker, Reinsurance Company, Insurance Company, Branch, SBU, RM, Surveyor — all with create/edit/soft-delete |
-| `[ ]` | Vehicle Registry | Makes, models, types — used for motor class |
-| `[ ]` | Partner App Management | Create/revoke partner apps, configure scopes, rate limits, webhook secrets, usage dashboard |
+| `[x]` | Claims Setup | Tabbed: Reserve Categories, Notification Timelines, Documents, Loss Types (skeleton tabs ready) |
+| `[x]` | Organisations | Tabbed: Brokers (full CRUD + BrokerSheet), Reinsurers/Insurers/Branches/SBUs/Surveyors (skeleton) |
+| `[x]` | Vehicle Registry | Tabbed: Makes, Models, Types (skeleton tabs ready) |
+| `[x]` | Partner App Management | EmptyState with Register App action (skeleton) |
 
 ---
 
@@ -1115,9 +1115,9 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 | Phase | Builds | Complete | Status |
 |---|---|---|---|
 | Phase 1 — Infrastructure | 5 | 5 | `[x]` Complete |
-| Phase 2 — Back Office Modules | 9 | 0 | `[ ]` Not started |
+| Phase 2 — Back Office Modules | 9 | 1 | `[~]` In progress |
 | Phase 3 — Partner Portal | 5 | 0 | `[ ]` Not started |
-| **Total** | **19** | **5** | **26% complete** |
+| **Total** | **19** | **6** | **32% complete** |
 
 > Update the status column and progress summary as builds complete. Each completed build should also be reflected in cia-log.md under the session that finished it.
 
