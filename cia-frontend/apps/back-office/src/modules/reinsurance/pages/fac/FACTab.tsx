@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import {
   Badge, Button,
   DataTable, DataTableRowActions,
   EmptyState, PageSection, Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@cia/ui';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
+import CreateFACOfferSheet from './CreateFACOfferSheet';
+import AddInwardFACSheet   from './AddInwardFACSheet';
 
 // Outward FAC
 interface FacOutwardDto {
@@ -45,6 +48,8 @@ const outSt: Record<FacOutwardDto['status'], 'active'|'pending'|'rejected'|'draf
 const inSt:  Record<FacInwardDto['status'], 'active'|'pending'|'cancelled'> = { ACTIVE: 'active', RENEWED: 'pending', EXPIRED: 'cancelled' };
 
 export default function FACTab() {
+  const [facOfferOpen,  setFacOfferOpen]  = useState(false);
+  const [inwardFACOpen, setInwardFACOpen] = useState(false);
   const outColumns: ColumnDef<FacOutwardDto>[] = [
     { accessorKey: 'reference',    header: 'Reference',   cell: ({ getValue }) => <span className="font-mono text-xs text-primary">{getValue() as string}</span> },
     { accessorKey: 'policyNumber', header: 'Policy',      cell: ({ getValue }) => <span className="font-mono text-xs text-muted-foreground">{getValue() as string}</span> },
@@ -83,6 +88,7 @@ export default function FACTab() {
   ];
 
   return (
+    <>
     <Tabs defaultValue="outward">
       <TabsList>
         <TabsTrigger value="outward">Outward FAC ({mockOutward.length})</TabsTrigger>
@@ -93,7 +99,7 @@ export default function FACTab() {
         <PageSection
           title="Outward Facultative"
           description="Risks exceeding treaty capacity placed with reinsurers on a facultative basis."
-          actions={<Button size="sm">Create FAC Offer</Button>}
+          actions={<Button size="sm" onClick={() => setFacOfferOpen(true)}>Create FAC Offer</Button>}
         >
           {mockOutward.length === 0
             ? <EmptyState title="No outward FAC covers" description="Create when a risk exceeds treaty gross capacity." />
@@ -106,7 +112,7 @@ export default function FACTab() {
         <PageSection
           title="Inward Facultative"
           description="Facultative risks accepted from other ceding companies."
-          actions={<Button size="sm">Add Inward FAC</Button>}
+          actions={<Button size="sm" onClick={() => setInwardFACOpen(true)}>Add Inward FAC</Button>}
         >
           {mockInward.length === 0
             ? <EmptyState title="No inward FAC policies" />
@@ -115,5 +121,17 @@ export default function FACTab() {
         </PageSection>
       </TabsContent>
     </Tabs>
+
+    <CreateFACOfferSheet
+      open={facOfferOpen}
+      onOpenChange={setFacOfferOpen}
+      onSuccess={() => setFacOfferOpen(false)}
+    />
+    <AddInwardFACSheet
+      open={inwardFACOpen}
+      onOpenChange={setInwardFACOpen}
+      onSuccess={() => setInwardFACOpen(false)}
+    />
+    </>
   );
 }
