@@ -926,3 +926,18 @@ Tables: `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`.
 **TypeScript: ✅ 0 errors on `@cia/back-office` after all changes.**
 
 **Open questions:** None.
+
+---
+
+### Session 5b — Figma Gate 5 catchup: Setup module screens
+
+Two frames pushed to Figma file `Zaiu2K7NvEJ7Cjj6z1xt2D`, new page "Setup" (id: `54:2`):
+
+| Frame | Node ID | Represents |
+|---|---|---|
+| `Setup / Users` | `55:2` | Archetypal list view — AppShell + Setup secondary nav, DataTable with status badges |
+| `Setup / Company Settings` | `58:2` | Archetypal form view — Card sections, form fields, Save button |
+
+Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding to Build 3.
+
+**Open questions:** None.
