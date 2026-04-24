@@ -1000,11 +1000,11 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 | Status | Sub-page | Key features |
 |---|---|---|
-| `[ ]` | Create Quote | Customer selection, product/class selection, risk details form, premium calculation preview |
-| `[ ]` | Multi-risk Quote | Section-level risk items, section premiums, product-level discount |
-| `[ ]` | Bulk Upload | CSV upload for individual quotes or multi-risk items, validation errors display |
-| `[ ]` | Quote Detail | Version history timeline, edit/modify, coinsurance participants |
-| `[ ]` | Quote Approval | Submit for approval, approval/rejection flow, status badge |
+| `[x]` | Create Quote | SingleRiskQuoteSheet — customer, product, dates, sum insured, rate, discount, live premium preview |
+| `[x]` | Multi-risk Quote | MultiRiskQuoteSheet — useFieldArray risk items each with SI + rate, rolling total |
+| `[x]` | Bulk Upload | BulkUploadPage — drag-and-drop CSV, validation results, error row detail, template download |
+| `[x]` | Quote Detail | QuoteDetailPage — premium card, version history timeline (v-dot), status-conditional action buttons |
+| `[x]` | Quote Approval | Submit for Approval / Convert to Policy / Edit conditioned on status; status badge throughout |
 
 ---
 
@@ -1115,9 +1115,9 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 | Phase | Builds | Complete | Status |
 |---|---|---|---|
 | Phase 1 — Infrastructure | 5 | 5 | `[x]` Complete |
-| Phase 2 — Back Office Modules | 9 | 2 | `[~]` In progress |
+| Phase 2 — Back Office Modules | 9 | 3 | `[~]` In progress |
 | Phase 3 — Partner Portal | 5 | 0 | `[ ]` Not started |
-| **Total** | **19** | **7** | **37% complete** |
+| **Total** | **19** | **8** | **42% complete** |
 
 > Update the status column and progress summary as builds complete. Each completed build should also be reflected in cia-log.md under the session that finished it.
 
