@@ -466,8 +466,13 @@ Managed / self-hosted services:
 
 **Frontend deployment:**
 
-- Vercel: connect `cia-frontend/` subdirectory; auto-deploy on push to `main`.
-- `VITE_API_BASE_URL` and `VITE_KEYCLOAK_URL` set as Vercel environment variables per environment (dev / staging / prod).
+- Vercel project linked at `cia-frontend/` (monorepo root — NOT `apps/back-office/`). Vercel must upload the full workspace to resolve workspace packages during install.
+- `vercel.json` lives at `cia-frontend/`. Build: `pnpm --filter @cia/back-office build`. Output: `apps/back-office/dist`. SPA rewrite: `/* → /index.html`.
+- `.vercel/project.json` at `cia-frontend/`: `projectId: prj_d9m8fgnCZlKe0xTYjeRcnSMAQnHm`, `orgId: team_7FziB9JbVAXmjPfdIdf5aO19`.
+- Auto-deploy via `.github/workflows/vercel-deploy.yml` — preview on PR, production on push to `main`, filtered to `cia-frontend/**` changes.
+- **Production URL:** `back-office-blush-six.vercel.app`
+- GitHub secrets required: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` (back-office project ID).
+- `VITE_API_BASE_URL`, `VITE_KEYCLOAK_URL`, `VITE_KEYCLOAK_REALM`, `VITE_KEYCLOAK_CLIENT_ID` set as Vercel environment variables per environment (dev / staging / prod).
 
 ---
 

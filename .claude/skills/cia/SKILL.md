@@ -191,6 +191,8 @@ System-wide audit log viewer (filterable by entity type, entity ID, user, action
 - `layoutSizingVertical = 'HUG'` in Figma Plugin API must be set **after** all children are appended to a frame. Setting `primaryAxisSizingMode = 'AUTO'` at frame creation time has no effect until children exist.
 - Figma BackOffice design file: `Zaiu2K7NvEJ7Cjj6z1xt2D`. Designs are pushed to this file as each module is built using `use_figma` + `upload_assets` (for images). Always invoke the `figma:figma-use` skill before any `use_figma` call.
 - To upload PNG assets into Figma, use `mcp__claude_ai_Figma__upload_assets` with a `nodeId` to set the image directly as a fill — this bypasses the unreliable base64 `createImage()` approach.
+- **Vercel deployment:** Link and deploy from `cia-frontend/` (monorepo root), never from `apps/back-office/`. Linking from a subdirectory causes Vercel to upload only that directory (~254B), making workspace packages (`@cia/ui`, `@cia/auth`, `@cia/api-client`) unreachable during `pnpm install`. The `vercel.json` and `.vercel/project.json` both live at `cia-frontend/`. Production URL: `back-office-blush-six.vercel.app`.
+- **SESSION COMPLETION GATE** is enforced automatically via a Claude Code `Stop` hook in `.claude/settings.json`. It fires at the end of every response in this project — no manual trigger needed.
 
 ---
 

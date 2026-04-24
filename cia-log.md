@@ -825,3 +825,32 @@ Tables: `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`.
 - React Query DevTools icon (bottom-right in dev) is intentional — dev-only, not part of production UI.
 
 **Open questions:** None.
+
+---
+
+### Session 4d — CI/CD, Vercel Deploy & SESSION COMPLETION GATE Automation
+
+**Files created/modified:**
+
+| File | Change |
+|---|---|
+| `.claude/settings.json` | Stop hook updated to 8-gate SESSION COMPLETION GATE checklist |
+| `.claude/skills/cia/SKILL.md` | SESSION COMPLETION GATE expanded from 6 → 8 gates; frontend + Figma gates added |
+| `.github/workflows/ci.yml` | Frontend job enabled: pnpm v9, tsc on both apps, vite build, artifact upload |
+| `.github/workflows/vercel-deploy.yml` | New: Vercel preview on PR + production on push to main (cia-frontend/** filter) |
+| `cia-frontend/vercel.json` | Created at monorepo root; buildCommand + outputDirectory + SPA rewrite |
+| `cia-frontend/.vercel/project.json` | Vercel project link at monorepo root (projectId: prj_d9m8fgnCZlKe0xTYjeRcnSMAQnHm) |
+| `cia-frontend/apps/back-office/vercel.json` | Deleted — caused Vercel to only upload 254B instead of full workspace |
+| `CLAUDE.md` | Frontend deployment section updated with production URL |
+
+**Decisions made:**
+
+- Vercel MUST be linked from `cia-frontend/` (monorepo root) — linking from `apps/back-office/` causes Vercel to upload only that subdirectory (254B), leaving workspace packages unreachable during install.
+- `vercel.json` at `cia-frontend/` root. Build: `pnpm --filter @cia/back-office build`. Output: `apps/back-office/dist`.
+- First two deploy attempts failed: OOM SIGKILL (wrong root, cold turbo build) and exit 127 (vite not found at app-level node_modules). Fixed by deploying from monorepo root.
+- SESSION COMPLETION GATE enforced via Claude Code `Stop` hook — fires automatically at end of every session.
+- `VERCEL_PROJECT_ID` GitHub secret updated to back-office project (was previously cia-docs).
+
+**Production URL:** [back-office-blush-six.vercel.app](https://back-office-blush-six.vercel.app)
+
+**Open questions:** None.
