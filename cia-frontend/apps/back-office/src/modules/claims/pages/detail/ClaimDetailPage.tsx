@@ -105,6 +105,10 @@ export default function ClaimDetailPage() {
   const [addCommentOpen,      setAddCommentOpen]      = useState(false);
   const [uploadDoc,           setUploadDoc]           = useState<{ id: string; name: string } | null>(null);
   const [declineInspectOpen,  setDeclineInspectOpen]  = useState(false);
+  const [approveInspectOpen,  setApproveInspectOpen]  = useState(false);
+  const [overrideInspectOpen, setOverrideInspectOpen] = useState(false);
+  const [overrideReason,      setOverrideReason]      = useState('');
+  const [downloadReportOpen,  setDownloadReportOpen]  = useState(false);
 
   const missingDocs   = c.requiredDocs.filter(d => !d.received);
   const canEdit       = c.status === 'PROCESSING';   // reserve/expense/comment editable only while PROCESSING
@@ -373,7 +377,9 @@ export default function ClaimDetailPage() {
                   <Row label="Assigned Date" value="2026-03-12" />
                   <Row label="Report Status" value="Submitted — awaiting claim officer review" />
                   <div className="flex gap-2 mt-4 flex-wrap">
-                    <Button size="sm">Approve Inspection Report</Button>
+                    <Button size="sm" onClick={() => setApproveInspectOpen(true)}>
+                      Approve Inspection Report
+                    </Button>
                     <Button
                       size="sm"
                       variant="outline"
@@ -382,8 +388,12 @@ export default function ClaimDetailPage() {
                     >
                       Decline Report
                     </Button>
-                    <Button size="sm" variant="outline">Override Requirement</Button>
-                    <Button size="sm" variant="outline">Download Report</Button>
+                    <Button size="sm" variant="outline" onClick={() => setOverrideInspectOpen(true)}>
+                      Override Requirement
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setDownloadReportOpen(true)}>
+                      Download Report
+                    </Button>
                   </div>
                 </>
               ) : (
@@ -515,6 +525,159 @@ export default function ClaimDetailPage() {
         documentName={uploadDoc?.name ?? ''}
         onSuccess={() => setUploadDoc(null)}
       />
+
+      {/* ── Approve inspection report ─────────────────────────────────── */}
+      <Dialog open={approveInspectOpen} onOpenChange={setApproveInspectOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Approve Inspection Report</DialogTitle>
+            <DialogDescription>
+              Confirm that the report from{' '}
+              <span className="font-medium text-foreground">{c.surveyorName}</span> is
+              accurate and complete. This decision cannot be modified after the claim is
+              submitted for approval.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-lg border overflow-hidden">
+            <div className="bg-muted/40 px-4 py-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Inspection Details
+              </p>
+            </div>
+            <div className="px-4 pb-2 divide-y divide-border">
+              {[
+                { label: 'Claim',     value: c.claimNumber },
+                { label: 'Surveyor',  value: c.surveyorName ?? '—' },
+                { label: 'Assigned',  value: '2026-03-12' },
+                { label: 'Status',    value: 'Submitted — awaiting review' },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex items-start gap-4 py-2">
+                  <p className="w-28 shrink-0 text-sm text-muted-foreground">{label}</p>
+                  <p className="text-sm font-medium text-foreground">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-[var(--status-pending-bg)] px-4 py-3 space-y-1">
+            <p className="text-xs font-semibold text-[var(--status-pending-fg)]">Cannot be modified after submission</p>
+            <p className="text-xs text-[var(--status-pending-fg)]/80">
+              Once the claim is submitted for approval, the inspection approval decision is locked.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setApproveInspectOpen(false)}>Cancel</Button>
+            <Button onClick={() => {
+              // TODO: PATCH /api/v1/claims/{id}/inspection/approve
+              setApproveInspectOpen(false);
+            }}>
+              Approve Report
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Override inspection requirement ──────────────────────────────── */}
+      <Dialog open={overrideInspectOpen} onOpenChange={(v) => { if (!v) setOverrideReason(''); setOverrideInspectOpen(v); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Override Inspection Requirement</DialogTitle>
+            <DialogDescription>
+              Override the inspection requirement and proceed without a formal survey report.
+              A reason is required and cannot be changed after the claim is submitted for approval.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">Reason for override</label>
+            <textarea
+              value={overrideReason}
+              onChange={(e) => setOverrideReason(e.target.value)}
+              placeholder="e.g. Minor loss below survey threshold / Insured provided sufficient photographic evidence / Approved by senior claims manager"
+              rows={3}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+          </div>
+
+          <div className="rounded-lg bg-[var(--status-pending-bg)] px-4 py-3 space-y-1">
+            <p className="text-xs font-semibold text-[var(--status-pending-fg)]">Cannot be modified after submission</p>
+            <p className="text-xs text-[var(--status-pending-fg)]/80">
+              The override reason will be recorded in the audit trail. This decision is locked once the claim is submitted for approval.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setOverrideReason(''); setOverrideInspectOpen(false); }}>Cancel</Button>
+            <Button
+              disabled={overrideReason.trim().length < 10}
+              onClick={() => {
+                // TODO: PATCH /api/v1/claims/{id}/inspection/override
+                setOverrideReason('');
+                setOverrideInspectOpen(false);
+              }}
+            >
+              Confirm Override
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Download report ───────────────────────────────────────────────── */}
+      <Dialog open={downloadReportOpen} onOpenChange={setDownloadReportOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Download Inspection Reports</DialogTitle>
+            <DialogDescription>
+              All documents submitted by {c.surveyorName} for{' '}
+              <span className="font-medium text-foreground">{c.claimNumber}</span>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            {[
+              { name: 'Inspection Report — Vehicle Assessment',  size: '1.2 MB', type: 'PDF',  date: '2026-03-14', id: 'rpt1' },
+              { name: 'Repair Cost Estimate — Mercedes-Benz',    size: '340 KB', type: 'PDF',  date: '2026-03-14', id: 'rpt2' },
+              { name: 'Photo Evidence — Damage Documentation',   size: '8.4 MB', type: 'ZIP',  date: '2026-03-14', id: 'rpt3' },
+            ].map((doc) => (
+              <div
+                key={doc.id}
+                className="flex items-center justify-between rounded-lg border p-3"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted">
+                    <span className="text-[10px] font-bold text-muted-foreground">{doc.type}</span>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{doc.name}</p>
+                    <p className="text-xs text-muted-foreground">{doc.size} · {doc.date}</p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="ml-3 shrink-0 h-7 text-xs"
+                  onClick={() => {
+                    // TODO: GET /api/v1/claims/{id}/inspection/documents/{doc.id}
+                  }}
+                >
+                  Download
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDownloadReportOpen(false)}>Close</Button>
+            <Button onClick={() => {
+              // TODO: GET /api/v1/claims/{id}/inspection/documents/bundle
+            }}>
+              Download All
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Decline inspection report confirmation */}
       <Dialog open={declineInspectOpen} onOpenChange={setDeclineInspectOpen}>

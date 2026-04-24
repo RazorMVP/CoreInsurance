@@ -1315,3 +1315,27 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
 
 **Open questions:** None.
+
+---
+
+### Session 17 — Claims Inspection tab: Approve, Override, Download dialogs
+
+**File modified:** `apps/back-office/src/modules/claims/pages/detail/ClaimDetailPage.tsx`
+
+**Changes:**
+
+| Button | Before | After |
+|---|---|---|
+| Approve Inspection Report | Silent (no action) | Opens confirmation Dialog showing inspection details (claim, surveyor, assigned date, status) + amber "cannot be modified after submission" warning |
+| Override Requirement | Silent (no action) | Opens Dialog with mandatory reason textarea (min 10 chars to enable confirm) + amber "locked after submission" warning; reason recorded in audit trail |
+| Download Report | Silent (no action) | Opens Dialog listing all 3 inspection documents (Inspection Report PDF, Repair Cost Estimate PDF, Photo Evidence ZIP) each with individual Download button + "Download All" footer button |
+
+**Decisions made:**
+- Approve and Override dialogs both carry the amber "Cannot be modified after submission" banner — same pattern as the Decline dialog added in Session 16 — to reinforce the four-eyes principle consistently across all inspection decisions.
+- Override requires a reason ≥ 10 characters (longer than cancel claim's 5-char minimum) because an override waives a compliance control and must be auditable.
+- Download Report dialog shows all files as a list with PDF/ZIP type badges, file size, and date — this is a stub; actual file list will come from `GET /api/v1/claims/{id}/inspection/documents`. Individual Download + Download All buttons both have TODO backend calls.
+- All three dialogs are inline in ClaimDetailPage (no separate files) — they're specific to the inspection tab, have no reuse elsewhere, and two of them (Approve, Download) have no form state that warrants a separate component.
+
+**GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
+
+**Open questions:** None.
