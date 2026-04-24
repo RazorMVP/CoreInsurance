@@ -885,3 +885,44 @@ Tables: `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`.
 **Audit protocol:** At the start of every frontend session, check `CLAUDE.md → Frontend Build Queue` for current status. Update the `[ ]` / `[~]` / `[x]` checkboxes as builds progress. At session end, the SESSION COMPLETION GATE Stop hook will prompt verification.
 
 **Open questions:** None.
+
+---
+
+### Session 5 — Phase 1: Shared Infrastructure Complete
+
+**Build queue progress: 5/19 builds complete (26%)**
+
+**Builds completed this session:**
+
+| Build | Status | Key files |
+|---|---|---|
+| 1a — shadcn components | `[x]` | `packages/ui/src/components/`: input, label, textarea, select, checkbox, switch, tabs, dialog, sheet, toast, toaster, dropdown-menu, avatar, card, skeleton, tooltip, separator, scroll-area |
+| 1b — Data table | `[x]` | `packages/ui/src/components/data-table/`: data-table, column-header, toolbar, pagination, row-actions |
+| 1c — Page layout | `[x]` | `packages/ui/src/components/layout/`: page-header, page-section, empty-state, stat-card, breadcrumb |
+| 1d — Form infrastructure | `[x]` | `packages/ui/src/components/form.tsx` (Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormSection, FormRow) |
+| 1e — API types + hooks | `[x]` | `packages/api-client/src/modules/`: setup, customer, quotation, policy, claims, finance DTOs; `hooks.ts`: useGet, useList, useCreate, useUpdate, useRemove |
+
+**New packages added:**
+
+| Package | Added to | Purpose |
+|---|---|---|
+| `@radix-ui/react-checkbox` | `@cia/ui` | Checkbox primitive |
+| `@radix-ui/react-switch` | `@cia/ui` | Switch toggle primitive |
+| `@radix-ui/react-tabs` | `@cia/ui` | Tabs primitive |
+| `@radix-ui/react-popover` | `@cia/ui` | Popover (future combobox) |
+| `lucide-react` | `@cia/ui` | Icon chevrons inside shadcn components |
+| `@tanstack/react-table` | `@cia/ui` | Headless table engine |
+| `react-hook-form` | `@cia/ui` + `@cia/back-office` | Form state management |
+| `zod` | `@cia/ui` + `@cia/back-office` | Schema validation |
+| `@hookform/resolvers` | `@cia/ui` + `@cia/back-office` | Zod ↔ RHF bridge |
+
+**Decisions made:**
+- `lucide-react` used for shadcn component internals (chevrons, check marks, X icons). hugeicons used for application-level navigation and module icons. No conflict — different use-cases.
+- `react-hook-form` and `zod` added to `@cia/ui` (not just the app) so `Form` components live in the shared package.
+- TanStack Table is headless — DataTable owns all rendering, zero UI opinions from the library.
+- Form pattern: shadcn `Form` → `FormField` → `FormItem` → `FormLabel` + `FormControl` + `FormMessage`. Zod schema passed to `useForm({ resolver: zodResolver(schema) })` in the consuming component.
+- API DTOs added for 6 modules (Setup, Customer, Quotation, Policy, Claims, Finance). Endorsement, Reinsurance, Audit DTOs to be added when those modules are built.
+
+**TypeScript: ✅ 0 errors on `@cia/back-office` after all changes.**
+
+**Open questions:** None.

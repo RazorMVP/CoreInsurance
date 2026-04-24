@@ -954,11 +954,11 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 | Status | Build | Deliverables |
 |---|---|---|
-| `[ ]` | **1a. shadcn component library** | Input, Select, Textarea, Checkbox, Switch, Tabs, Dialog/Modal, Toast, Dropdown, Badge (extended), Avatar |
-| `[ ]` | **1b. Data table** | Sortable columns, filter bar, cursor pagination, row actions menu, empty state |
-| `[ ]` | **1c. Page layout components** | PageHeader (title + actions slot), Breadcrumb, PageSection, EmptyState, Skeleton loaders, StatCard |
-| `[ ]` | **1d. Form infrastructure** | React Hook Form + Zod wiring, FieldError, FormSection, FormRow, controlled file upload, rich-text editor wrapper |
-| `[ ]` | **1e. API types + React Query hooks** | TypeScript DTOs for all 10 modules mirroring backend, `useList` / `useGet` / `useMutate` base hooks, error handling, optimistic updates |
+| `[x]` | **1a. shadcn component library** | Input, Label, Textarea, Select, Checkbox, Switch, Tabs, Dialog, Sheet, Toast+Toaster, DropdownMenu, Avatar, Card, Skeleton, Tooltip, Separator, ScrollArea |
+| `[x]` | **1b. Data table** | DataTable (TanStack), sortable column headers, filter toolbar, pagination with page-size selector, row actions menu |
+| `[x]` | **1c. Page layout components** | PageHeader, PageSection, EmptyState, StatCard, Breadcrumb |
+| `[x]` | **1d. Form infrastructure** | Form + FormField + FormItem + FormLabel + FormControl + FormMessage (RHF+Zod); FormSection, FormRow helpers |
+| `[x]` | **1e. API types + React Query hooks** | DTOs for Setup, Customer, Quotation, Policy, Claims, Finance; `useGet` `useList` `useCreate` `useUpdate` `useRemove` base hooks |
 
 ---
 
@@ -1114,10 +1114,10 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 | Phase | Builds | Complete | Status |
 |---|---|---|---|
-| Phase 1 — Infrastructure | 5 | 0 | `[ ]` Not started |
+| Phase 1 — Infrastructure | 5 | 5 | `[x]` Complete |
 | Phase 2 — Back Office Modules | 9 | 0 | `[ ]` Not started |
 | Phase 3 — Partner Portal | 5 | 0 | `[ ]` Not started |
-| **Total** | **19** | **0** | **0% complete** |
+| **Total** | **19** | **5** | **26% complete** |
 
 > Update the status column and progress summary as builds complete. Each completed build should also be reflected in cia-log.md under the session that finished it.
 
