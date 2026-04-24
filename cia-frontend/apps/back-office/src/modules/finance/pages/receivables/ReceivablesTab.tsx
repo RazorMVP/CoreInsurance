@@ -5,28 +5,30 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import type { DebitNoteDto, ReceiptDto } from '@cia/api-client';
-import PostReceiptSheet from './PostReceiptSheet';
+import PostReceiptSheet         from './PostReceiptSheet';
+import DebitNoteDetailDialog    from './DebitNoteDetailDialog';
+import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
 
 // Debit notes — replace with useList('/api/v1/finance/debit-notes')
 const mockDebitNotes: DebitNoteDto[] = [
-  { id: 'dn1', number: 'DN-2026-00001', policyId: 'pol1', policyNumber: 'POL-2026-00001', customerId: 'c1', customerName: 'Chioma Okafor',     amount: 78_750,   status: 'OUTSTANDING',     dueDate: '2026-02-01', createdAt: '2026-02-01' },
-  { id: 'dn2', number: 'DN-2026-00002', policyId: 'pol2', policyNumber: 'POL-2026-00002', customerId: 'c2', customerName: 'Alaba Trading Co.', amount: 115_000,  status: 'OUTSTANDING',     dueDate: '2026-03-01', createdAt: '2026-02-05' },
-  { id: 'dn3', number: 'DN-2026-00003', policyId: 'pol3', policyNumber: 'POL-2025-00088', customerId: 'c5', customerName: 'Ngozi Adeyemi',     amount: 40_000,   status: 'SETTLED',         dueDate: '2025-03-01', createdAt: '2025-02-28' },
-  { id: 'dn4', number: 'DN-2026-00004', policyId: 'pol4', policyNumber: 'POL-2026-00004', customerId: 'c2', customerName: 'Alaba Trading Co.', amount: 60_000,   status: 'SETTLED',         dueDate: '2026-01-15', createdAt: '2026-01-15' },
-  { id: 'dn5', number: 'DN-2026-00005', policyId: 'pol5', policyNumber: 'POL-2026-00003', customerId: 'c3', customerName: 'Emeka Eze',         amount: 49_500,   status: 'OUTSTANDING',     dueDate: '2026-03-15', createdAt: '2026-02-10' },
+  { id: 'dn1', number: 'DN-2026-00001', policyId: 'pol1', policyNumber: 'POL-2026-00001', customerId: 'c1', customerName: 'Chioma Okafor',     amount: 78_750,  status: 'OUTSTANDING',   dueDate: '2026-02-01', createdAt: '2026-02-01' },
+  { id: 'dn2', number: 'DN-2026-00002', policyId: 'pol2', policyNumber: 'POL-2026-00002', customerId: 'c2', customerName: 'Alaba Trading Co.', amount: 115_000, status: 'OUTSTANDING',   dueDate: '2026-03-01', createdAt: '2026-02-05' },
+  { id: 'dn3', number: 'DN-2026-00003', policyId: 'pol3', policyNumber: 'POL-2025-00088', customerId: 'c5', customerName: 'Ngozi Adeyemi',     amount: 40_000,  status: 'SETTLED',       dueDate: '2025-03-01', createdAt: '2025-02-28' },
+  { id: 'dn4', number: 'DN-2026-00004', policyId: 'pol4', policyNumber: 'POL-2026-00004', customerId: 'c2', customerName: 'Alaba Trading Co.', amount: 60_000,  status: 'SETTLED',       dueDate: '2026-01-15', createdAt: '2026-01-15' },
+  { id: 'dn5', number: 'DN-2026-00005', policyId: 'pol5', policyNumber: 'POL-2026-00003', customerId: 'c3', customerName: 'Emeka Eze',         amount: 49_500,  status: 'OUTSTANDING',   dueDate: '2026-03-15', createdAt: '2026-02-10' },
 ];
 
 // Receipts — replace with useList('/api/v1/finance/receipts')
 const mockReceipts: ReceiptDto[] = [
-  { id: 'r1', receiptNumber: 'REC-2026-00001', debitNoteId: 'dn3', debitNoteNumber: 'DN-2026-00003', amount: 40_000,  paymentMethod: 'Bank Transfer', status: 'APPROVED', createdAt: '2025-03-01' },
-  { id: 'r2', receiptNumber: 'REC-2026-00002', debitNoteId: 'dn4', debitNoteNumber: 'DN-2026-00004', amount: 60_000,  paymentMethod: 'Cheque',        status: 'APPROVED', createdAt: '2026-01-15' },
-  { id: 'r3', receiptNumber: 'REC-2026-00003', debitNoteId: 'dn2', debitNoteNumber: 'DN-2026-00002', amount: 57_500,  paymentMethod: 'Bank Transfer', status: 'PENDING_APPROVAL', createdAt: '2026-02-10' },
+  { id: 'r1', receiptNumber: 'REC-2026-00001', debitNoteId: 'dn3', debitNoteNumber: 'DN-2026-00003', amount: 40_000, paymentMethod: 'Bank Transfer', status: 'APPROVED',         createdAt: '2025-03-01' },
+  { id: 'r2', receiptNumber: 'REC-2026-00002', debitNoteId: 'dn4', debitNoteNumber: 'DN-2026-00004', amount: 60_000, paymentMethod: 'Cheque',        status: 'APPROVED',         createdAt: '2026-01-15' },
+  { id: 'r3', receiptNumber: 'REC-2026-00003', debitNoteId: 'dn2', debitNoteNumber: 'DN-2026-00002', amount: 57_500, paymentMethod: 'Bank Transfer', status: 'PENDING_APPROVAL', createdAt: '2026-02-10' },
 ];
 
 const dnStatusVariant: Record<DebitNoteDto['status'], 'pending' | 'active' | 'draft'> = {
-  OUTSTANDING:      'pending',
-  PARTIALLY_PAID:   'draft',
-  SETTLED:          'active',
+  OUTSTANDING:    'pending',
+  PARTIALLY_PAID: 'draft',
+  SETTLED:        'active',
 };
 
 const rcStatusVariant: Record<ReceiptDto['status'], 'active' | 'pending' | 'rejected' | 'draft'> = {
@@ -37,15 +39,41 @@ const rcStatusVariant: Record<ReceiptDto['status'], 'active' | 'pending' | 'reje
 };
 
 export default function ReceivablesTab() {
+  // PostReceiptSheet state
   const [sheetOpen,   setSheetOpen]   = useState(false);
   const [selectedDns, setSelectedDns] = useState<string[]>([]);
   const [bulkMode,    setBulkMode]    = useState(false);
+
+  // Debit note detail dialog
+  const [dnDetail, setDnDetail] = useState<DebitNoteDto | null>(null);
+
+  // Reverse receipt dialog
+  const [reverseTarget, setReverseTarget] = useState<ReverseTarget | null>(null);
+
+  function openDetail(dn: DebitNoteDto) {
+    setDnDetail(dn);
+  }
+
+  function handlePostReceiptFromDialog(dn: DebitNoteDto) {
+    setDnDetail(null);
+    setSelectedDns([dn.id]);
+    setBulkMode(false);
+    setSheetOpen(true);
+  }
 
   const dnColumns: ColumnDef<DebitNoteDto>[] = [
     {
       accessorKey: 'number',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Debit Note" />,
-      cell: ({ getValue }) => <span className="font-mono text-xs text-primary">{getValue() as string}</span>,
+      cell: ({ row }) => (
+        <button
+          type="button"
+          className="font-mono text-xs text-primary hover:underline underline-offset-2"
+          onClick={() => openDetail(row.original)}
+        >
+          {row.original.number}
+        </button>
+      ),
     },
     {
       accessorKey: 'policyNumber',
@@ -83,8 +111,14 @@ export default function ReceivablesTab() {
         <DataTableRowActions
           row={row}
           actions={[
-            ...(row.original.status === 'OUTSTANDING' ? [{ label: 'Post Receipt', onClick: () => { setSelectedDns([row.original.id]); setBulkMode(false); setSheetOpen(true); } }] : []),
-            { label: 'View policy', onClick: () => {} },
+            ...(row.original.status === 'OUTSTANDING' ? [{
+              label: 'Post Receipt',
+              onClick: () => openDetail(row.original),
+            }] : []),
+            {
+              label: 'View policy',
+              onClick: () => openDetail(row.original),
+            },
           ]}
         />
       ),
@@ -133,8 +167,23 @@ export default function ReceivablesTab() {
         <DataTableRowActions
           row={row}
           actions={[
-            ...(row.original.status === 'PENDING_APPROVAL' ? [{ label: 'Approve receipt', onClick: () => {} }, { label: 'Reject', onClick: () => {} }] : []),
-            { label: 'Reverse',  onClick: () => {}, separator: row.original.status === 'APPROVED', className: 'text-destructive' },
+            ...(row.original.status === 'PENDING_APPROVAL' ? [
+              { label: 'Approve receipt', onClick: () => {} },
+              { label: 'Reject',          onClick: () => {} },
+            ] : []),
+            {
+              label:     'Reverse',
+              separator: row.original.status === 'APPROVED',
+              className: 'text-destructive',
+              onClick: () => setReverseTarget({
+                type:      'RECEIPT',
+                reference: row.original.receiptNumber,
+                linkedRef: row.original.debitNoteNumber,
+                amount:    row.original.amount,
+                method:    row.original.paymentMethod,
+                date:      row.original.createdAt,
+              }),
+            },
           ]}
         />
       ),
@@ -180,6 +229,7 @@ export default function ReceivablesTab() {
         />
       </PageSection>
 
+      {/* Post receipt sheet */}
       <PostReceiptSheet
         open={sheetOpen}
         onOpenChange={setSheetOpen}
@@ -187,6 +237,21 @@ export default function ReceivablesTab() {
         bulk={bulkMode}
         debitNotes={mockDebitNotes}
         onSuccess={() => setSheetOpen(false)}
+      />
+
+      {/* Debit note detail dialog */}
+      <DebitNoteDetailDialog
+        open={dnDetail !== null}
+        onOpenChange={(v) => { if (!v) setDnDetail(null); }}
+        debitNote={dnDetail}
+        onPostReceipt={handlePostReceiptFromDialog}
+      />
+
+      {/* Reverse receipt dialog */}
+      <ReverseTransactionDialog
+        open={reverseTarget !== null}
+        onOpenChange={(v) => { if (!v) setReverseTarget(null); }}
+        target={reverseTarget}
       />
     </div>
   );

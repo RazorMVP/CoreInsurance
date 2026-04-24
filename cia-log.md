@@ -1261,3 +1261,28 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** pending push | **Vercel:** auto-deploy will trigger after push
 
 **Open questions:** None.
+
+---
+
+### Session 15 — Finance: wire Receivables + Payables tab interactions
+
+**Files modified/created:**
+
+| File | Change |
+|---|---|
+| `pages/receivables/DebitNoteDetailDialog.tsx` | New — Dialog showing debit note + linked policy details (product, class, cover period). "Post Receipt" button hands off to PostReceiptSheet; "Close" available for SETTLED/read-only notes. Debit note number in table is also a clickable link that opens this dialog. |
+| `pages/receivables/ReceivablesTab.tsx` | Modified — "View policy" and "Post Receipt" row actions now both open DebitNoteDetailDialog (policy context before action); Debit note number cell is clickable; "Reverse" on approved receipts opens ReverseTransactionDialog with full receipt details + cannot-undo warning |
+| `pages/payables/CreditNoteDetailDialog.tsx` | New — Dialog showing credit note + source details (source type badge, reference, description, policy, beneficiary). "Process Payment" button hands off to ProcessPaymentSheet. Both "Process Payment" and "View source" row actions open this dialog. Credit note number is also a clickable link. |
+| `pages/payables/ProcessPaymentSheet.tsx` | New — Sheet form: amount (pre-filled from credit note), payment method (Bank Transfer/Cheque/Cash/Online), bank name, reference/transaction ID, notes. Confirms payment on submit. |
+| `pages/payables/PayablesTab.tsx` | Modified — "Process Payment" and "View source" both open CreditNoteDetailDialog; "Reverse" on approved payments opens ReverseTransactionDialog; credit note number cell clickable |
+| `pages/ReverseTransactionDialog.tsx` | New — Shared dialog for reversing both receipts and payments. Shows transaction details + "cannot be undone" warning banner. Confirm Reversal button (destructive). Accepts a `ReverseTarget` union covering both receipt and payment shapes. |
+
+**Decisions made:**
+- Both "View policy" and "Post Receipt" route through DebitNoteDetailDialog — the finance officer always sees context before committing. Dialog closes then PostReceiptSheet opens (no nested modals).
+- Same pattern in Payables: "View source" and "Process Payment" both open CreditNoteDetailDialog, which shows the source origin before processing.
+- ReverseTransactionDialog is shared at `pages/` level (not inside a tab subfolder) since it's used by both Receivables and Payables. Takes a `ReverseTarget` interface with `type: 'RECEIPT' | 'PAYMENT'` to adapt labels.
+- `z.enum([...])` params changed: dropped `required_error` which is not valid in Zod 4 — enum validation already produces a clear "invalid enum value" error.
+
+**GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
+
+**Open questions:** None.

@@ -1,29 +1,33 @@
+import { useState } from 'react';
 import {
   Badge, DataTable, DataTableColumnHeader, DataTableRowActions,
   PageSection, Separator,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import type { CreditNoteDto, PaymentDto } from '@cia/api-client';
+import CreditNoteDetailDialog   from './CreditNoteDetailDialog';
+import ProcessPaymentSheet      from './ProcessPaymentSheet';
+import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
 
 // Credit notes — replace with useList('/api/v1/finance/credit-notes')
 const mockCreditNotes: CreditNoteDto[] = [
-  { id: 'cn1', number: 'CN-2026-00001', sourceType: 'CLAIM',        sourceId: 'cl1', amount: 450_000, status: 'OUTSTANDING', createdAt: '2026-03-15' },
-  { id: 'cn2', number: 'CN-2026-00002', sourceType: 'ENDORSEMENT',  sourceId: 'end1',amount: 12_500,  status: 'PAID',        createdAt: '2026-02-20' },
-  { id: 'cn3', number: 'CN-2026-00003', sourceType: 'COMMISSION',   sourceId: 'pol1',amount: 9_844,   status: 'OUTSTANDING', createdAt: '2026-02-01' },
-  { id: 'cn4', number: 'CN-2026-00004', sourceType: 'REINSURANCE',  sourceId: 'ri1', amount: 28_000,  status: 'OUTSTANDING', createdAt: '2026-02-15' },
+  { id: 'cn1', number: 'CN-2026-00001', sourceType: 'CLAIM',       sourceId: 'cl1',  amount: 450_000, status: 'OUTSTANDING', createdAt: '2026-03-15' },
+  { id: 'cn2', number: 'CN-2026-00002', sourceType: 'ENDORSEMENT', sourceId: 'end1', amount: 12_500,  status: 'PAID',        createdAt: '2026-02-20' },
+  { id: 'cn3', number: 'CN-2026-00003', sourceType: 'COMMISSION',  sourceId: 'pol1', amount: 9_844,   status: 'OUTSTANDING', createdAt: '2026-02-01' },
+  { id: 'cn4', number: 'CN-2026-00004', sourceType: 'REINSURANCE', sourceId: 'ri1',  amount: 28_000,  status: 'OUTSTANDING', createdAt: '2026-02-15' },
 ];
 
 // Payments — replace with useList('/api/v1/finance/payments')
 const mockPayments: PaymentDto[] = [
-  { id: 'pay1', paymentNumber: 'PAY-2026-00001', creditNoteId: 'cn2', amount: 12_500, paymentMethod: 'Bank Transfer', status: 'APPROVED', createdAt: '2026-02-25' },
+  { id: 'pay1', paymentNumber: 'PAY-2026-00001', creditNoteId: 'cn2', amount: 12_500,  paymentMethod: 'Bank Transfer', status: 'APPROVED', createdAt: '2026-02-25' },
   { id: 'pay2', paymentNumber: 'PAY-2026-00002', creditNoteId: 'cn1', amount: 225_000, paymentMethod: 'Bank Transfer', status: 'PENDING',  createdAt: '2026-03-18' },
 ];
 
 const sourceLabels: Record<CreditNoteDto['sourceType'], string> = {
-  CLAIM:        'Claim DV',
-  ENDORSEMENT:  'Endorsement',
-  COMMISSION:   'Commission',
-  REINSURANCE:  'RI FAC',
+  CLAIM:       'Claim DV',
+  ENDORSEMENT: 'Endorsement',
+  COMMISSION:  'Commission',
+  REINSURANCE: 'RI FAC',
 };
 
 const cnStatusVariant: Record<CreditNoteDto['status'], 'pending' | 'active' | 'draft'> = {
@@ -32,18 +36,40 @@ const cnStatusVariant: Record<CreditNoteDto['status'], 'pending' | 'active' | 'd
 };
 
 const payStatusVariant: Record<PaymentDto['status'], 'active' | 'pending' | 'rejected'> = {
-  APPROVED:  'active',
-  PENDING:   'pending',
-  REVERSED:  'rejected',
-  PAID:      'active',
+  APPROVED: 'active',
+  PENDING:  'pending',
+  REVERSED: 'rejected',
+  PAID:     'active',
 };
 
 export default function PayablesTab() {
+  // Credit note detail dialog
+  const [cnDetail, setCnDetail] = useState<CreditNoteDto | null>(null);
+
+  // Process payment sheet
+  const [processPayTarget, setProcessPayTarget] = useState<CreditNoteDto | null>(null);
+
+  // Reverse payment dialog
+  const [reverseTarget, setReverseTarget] = useState<ReverseTarget | null>(null);
+
+  function handleProcessPaymentFromDialog(cn: CreditNoteDto) {
+    setCnDetail(null);
+    setProcessPayTarget(cn);
+  }
+
   const cnColumns: ColumnDef<CreditNoteDto>[] = [
     {
       accessorKey: 'number',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Credit Note" />,
-      cell: ({ getValue }) => <span className="font-mono text-xs text-primary">{getValue() as string}</span>,
+      cell: ({ row }) => (
+        <button
+          type="button"
+          className="font-mono text-xs text-primary hover:underline underline-offset-2"
+          onClick={() => setCnDetail(row.original)}
+        >
+          {row.original.number}
+        </button>
+      ),
     },
     {
       accessorKey: 'sourceType',
@@ -83,8 +109,14 @@ export default function PayablesTab() {
         <DataTableRowActions
           row={row}
           actions={[
-            ...(row.original.status === 'OUTSTANDING' ? [{ label: 'Process Payment', onClick: () => {} }] : []),
-            { label: 'View source', onClick: () => {} },
+            ...(row.original.status === 'OUTSTANDING' ? [{
+              label: 'Process Payment',
+              onClick: () => setCnDetail(row.original),
+            }] : []),
+            {
+              label: 'View source',
+              onClick: () => setCnDetail(row.original),
+            },
           ]}
         />
       ),
@@ -102,7 +134,7 @@ export default function PayablesTab() {
       header: 'Credit Note',
       cell: ({ getValue }) => {
         const cn = mockCreditNotes.find(c => c.id === getValue());
-        return <span className="font-mono text-xs text-muted-foreground">{cn?.number ?? getValue() as string}</span>;
+        return <span className="font-mono text-xs text-muted-foreground">{cn?.number ?? (getValue() as string)}</span>;
       },
     },
     {
@@ -127,15 +159,33 @@ export default function PayablesTab() {
     },
     {
       id: 'actions',
-      cell: ({ row }) => (
-        <DataTableRowActions
-          row={row}
-          actions={[
-            ...(row.original.status === 'PENDING' ? [{ label: 'Approve payment', onClick: () => {} }, { label: 'Reject', onClick: () => {}, className: 'text-destructive' }] : []),
-            { label: 'Reverse', onClick: () => {}, separator: row.original.status === 'APPROVED', className: 'text-destructive' },
-          ]}
-        />
-      ),
+      cell: ({ row }) => {
+        const linked = mockCreditNotes.find(c => c.id === row.original.creditNoteId);
+        return (
+          <DataTableRowActions
+            row={row}
+            actions={[
+              ...(row.original.status === 'PENDING' ? [
+                { label: 'Approve payment', onClick: () => {} },
+                { label: 'Reject',          onClick: () => {}, className: 'text-destructive' },
+              ] : []),
+              {
+                label:     'Reverse',
+                separator: row.original.status === 'APPROVED',
+                className: 'text-destructive',
+                onClick: () => setReverseTarget({
+                  type:      'PAYMENT',
+                  reference: row.original.paymentNumber,
+                  linkedRef: linked?.number ?? row.original.creditNoteId,
+                  amount:    row.original.amount,
+                  method:    row.original.paymentMethod,
+                  date:      row.original.createdAt,
+                }),
+              },
+            ]}
+          />
+        );
+      },
     },
   ];
 
@@ -163,6 +213,29 @@ export default function PayablesTab() {
           toolbar={{ searchColumn: 'paymentNumber', searchPlaceholder: 'Search payments…' }}
         />
       </PageSection>
+
+      {/* Credit note detail dialog */}
+      <CreditNoteDetailDialog
+        open={cnDetail !== null}
+        onOpenChange={(v) => { if (!v) setCnDetail(null); }}
+        creditNote={cnDetail}
+        onProcessPayment={handleProcessPaymentFromDialog}
+      />
+
+      {/* Process payment sheet */}
+      <ProcessPaymentSheet
+        open={processPayTarget !== null}
+        onOpenChange={(v) => { if (!v) setProcessPayTarget(null); }}
+        creditNote={processPayTarget}
+        onSuccess={() => setProcessPayTarget(null)}
+      />
+
+      {/* Reverse payment dialog */}
+      <ReverseTransactionDialog
+        open={reverseTarget !== null}
+        onOpenChange={(v) => { if (!v) setReverseTarget(null); }}
+        target={reverseTarget}
+      />
     </div>
   );
 }
