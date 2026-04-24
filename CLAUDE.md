@@ -1031,10 +1031,10 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 | Status | Sub-page | Key features |
 |---|---|---|
-| `[x]` | Receipts | ReceivablesTab — debit notes DataTable + PostReceiptSheet (single debit note, payment method/ref/bank/amount) |
+| `[x]` | Receipts | ReceivablesTab — debit note number clickable → DebitNoteDetailDialog (policy + debit note details); "View policy" + "Post Receipt" both open detail dialog → PostReceiptSheet; "Reverse" on approved receipts → ReverseTransactionDialog with cannot-undo warning |
 | `[x]` | Bulk Receipts | PostReceiptSheet opens in bulk mode with all outstanding DNs selected; shows total with per-note breakdown |
 | `[x]` | Receipt Approval | Receipts DataTable with approve/reject row actions on PENDING_APPROVAL rows |
-| `[x]` | Payables | PayablesTab — credit notes DataTable (Claim DV / Endorsement / Commission / RI FAC source badges); Process Payment action |
+| `[x]` | Payables | PayablesTab — credit note number clickable → CreditNoteDetailDialog (source type, reference, description, beneficiary, amount); "Process Payment" + "View source" both open detail dialog → ProcessPaymentSheet (amount, method, bank, ref); "Reverse" → ReverseTransactionDialog |
 | `[x]` | Payment Approval | Payments DataTable with Approve/Reject actions on PENDING rows |
 
 ---
@@ -1073,12 +1073,12 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 | Status | Sub-page | Key features |
 |---|---|---|
 | `[x]` | Peril Group Setup | Peril group config managed within TreatySheet (class of business select drives peril scope) |
-| `[x]` | Treaty Setup | TreatiesTab DataTable (Surplus/QS/XOL type chips) + TreatySheet (type, class, limits, year, useFieldArray reinsurers with share % running total; Save disabled until total = 100%) |
-| `[x]` | RI Allocation | AllocationsTab DataTable — retention/ceding amounts, treaty name + reinsurers, 4 status variants (auto-allocated/confirmed/approved/excess-capacity) |
-| `[x]` | RI Confirmation | Confirm/Approve/Reject row actions; "Confirm All" banner when pending items exist; Excess Capacity alert banner with Create FAC button |
-| `[x]` | Outward FAC | FACTab Outward sub-tab — offer slip status, reinsurer, premium rate; Generate Credit Note + Download Offer Slip actions |
-| `[x]` | Inward FAC | FACTab Inward sub-tab — ceding company, our share %, our premium; Renew/Extend actions on ACTIVE; Expired status variant |
-| `[x]` | Batch Reallocation | "Batch Reallocation" button on AllocationsTab (triggers reallocation workflow) |
+| `[x]` | Treaty Setup | TreatiesTab DataTable (Surplus/QS/XOL type chips) + TreatySheet (edit); "Batch reallocation" row action → BatchReallocationSheet scoped to that treaty's allocations; "Deactivate/Activate" → confirmation Dialog |
+| `[x]` | RI Allocation | AllocationsTab DataTable — retention/ceding amounts, treaty name + reinsurers, 4 status variants; policy number clickable → PolicyAllocationSheet (RI split bar, Confirm/Approve/Decline); "Batch Reallocation" button → BatchReallocationSheet |
+| `[x]` | RI Confirmation | "Confirm All" banner → Dialog listing all AUTO_ALLOCATED policies with ceding amounts; Excess Capacity banner "Create FAC" → CreateFACOfferSheet; row-level Confirm/Approve/Decline via PolicyAllocationSheet |
+| `[x]` | Outward FAC | FACTab Outward sub-tab; "Generate credit note" → FACCreditNoteDialog (gross/commission/net, Submit to Finance + Download PDF); "Download offer slip" → FACOfferSlipDialog; "Cancel FAC" → confirmation Dialog |
+| `[x]` | Inward FAC | FACTab Inward sub-tab; "Renew" → InwardFACActionSheet mode=RENEW (new period + amendable share%/rate, live financial preview); "Extend period" → same sheet mode=EXTEND; "Cancel" → confirmation Dialog |
+| `[x]` | Batch Reallocation | BatchReallocationSheet — checkbox multi-select of non-APPROVED allocations, new treaty select, effective date, reason; opened from both AllocationsTab and TreatiesTab |
 | `[x]` | Returns & Bordereaux | ReportsTab Bordereaux sub-tab: premium + claims tables with Export; Returns sub-tab: quarterly period list with Generate/Download |
 | `[x]` | RI Recoveries | ReportsTab Recoveries sub-tab: claim/treaty/gross paid/RI share/recovery amount/status |
 
