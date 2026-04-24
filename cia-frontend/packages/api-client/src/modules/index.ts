@@ -4,3 +4,4 @@ export * from './quotation';
 export * from './policy';
 export * from './claims';
 export * from './finance';
+export * from './endorsement';

@@ -1043,11 +1043,11 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 | Status | Sub-page | Key features |
 |---|---|---|
-| `[ ]` | Create Endorsement | Endorsement type selection (renewal/extension/cancellation/reversal/change), pro-rata premium preview |
-| `[ ]` | Increase/Decrease Sum Insured | Risk item update, premium recalculation |
-| `[ ]` | Add/Delete Insured Items | Risk item management on existing policy |
-| `[ ]` | Endorsement Approval | Submit → approve/reject flow |
-| `[ ]` | Debit Note Analysis Report | Endorsement premium movements report |
+| `[x]` | Create Endorsement | CreateEndorsementSheet — type-driven form: period fields for Renewal/Extension/Reduction/Change, SI field for Increase/Decrease with live pro-rata preview, item field for Add/Delete, cancel/reversal info banners |
+| `[x]` | Increase/Decrease Sum Insured | newSumInsured field + indicative pro-rata = (SI × rate / 365 × days) shown as debit or credit |
+| `[x]` | Add/Delete Insured Items | itemDescription field conditional on ADD_ITEMS / DELETE_ITEMS type |
+| `[x]` | Endorsement Approval | Submit/Approve/Reject buttons conditional on status; approval timeline with step indicators |
+| `[x]` | Debit Note Analysis Report | DebitNoteAnalysisPage — by period (monthly) and by endorsement type; StatCards + two tables |
 
 ---
 
@@ -1115,9 +1115,9 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 | Phase | Builds | Complete | Status |
 |---|---|---|---|
 | Phase 1 — Infrastructure | 5 | 5 | `[x]` Complete |
-| Phase 2 — Back Office Modules | 9 | 5 | `[~]` In progress |
+| Phase 2 — Back Office Modules | 9 | 6 | `[~]` In progress |
 | Phase 3 — Partner Portal | 5 | 0 | `[ ]` Not started |
-| **Total** | **19** | **10** | **53% complete** |
+| **Total** | **19** | **11** | **58% complete** |
 
 > Update the status column and progress summary as builds complete. Each completed build should also be reflected in cia-log.md under the session that finished it.
 
