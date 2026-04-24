@@ -209,6 +209,7 @@ Before marking any task complete or saying work is done, Claude MUST verify and 
 - Append a new entry under today's date (`## YYYY-MM-DD`).
 - List every file created or modified (path + one-line description of what changed).
 - List every decision made, question resolved, or design choice locked in.
+- If a **Build Queue item** was completed or progressed this session, note: which Build number, which sub-pages were completed, and which remain.
 - List any open questions raised during the session.
 
 ---
@@ -229,9 +230,43 @@ Update the relevant section if any of the following changed:
 - New shared package added → update monorepo diagram in Section 4
 - App name or branding changed → update Section 4 and note in cia-log.md
 
+**Frontend Build Queue (CLAUDE.md → "Frontend Build Queue"):**
+- Any Build or sub-page started → mark `[~]` in progress
+- Any sub-page completed → mark `[x]` complete
+- Any Build fully completed → mark `[x]` on the Build row AND update the **Build Progress Summary** table at the bottom of the section (Complete count + %)
+- Any significant change within an already-completed sub-page (e.g. adding inline class creation to ProductSheet) → update the sub-page description in the table to reflect the new capability
+
 ---
 
-### 3. SKILL.md (this file)
+### 3. Frontend Build Queue Audit (required after every frontend session)
+
+**This gate is mandatory any time frontend code was written, modified, or deleted.**
+
+Open `CLAUDE.md → "Frontend Build Queue"` and verify:
+
+1. **Sub-page status is accurate.** Each sub-page row in Phase 2 Builds must reflect the current state:
+   - `[ ]` — not started (no file exists)
+   - `[~]` — in progress (file exists but feature is partial)
+   - `[x]` — complete (file exists, all listed key features are implemented, tsc passes)
+
+2. **Build row status is accurate.** If ALL sub-pages under a Build are `[x]`, the Build itself must be `[x]`. If any are `[~]` or `[ ]`, the Build is `[~]`.
+
+3. **Progress Summary is current.** Update the bottom table:
+   - Count `[x]` Builds in Phase 1 + Phase 2 + Phase 3
+   - Recalculate percentage: `completed ÷ 19 × 100`
+
+4. **Sub-page descriptions are up to date.** If a sub-page was enhanced (e.g. inline create, extra tabs, new field), update its description in the table — do not leave stale one-liners.
+
+Example of what to check after a session that completed the Users sub-page and enhanced Products:
+```
+| [x] | Users | DataTable + UserSheet (create/edit, access group select)   ← was already [x], no change needed
+| [x] | Products | DataTable + ProductSheet (14 seed classes; inline + New Class Dialog) ← description updated
+```
+Then check the Progress Summary and recalculate if any Build flipped to `[x]`.
+
+---
+
+### 4. SKILL.md (this file)
 Update if any of the following changed:
 
 **Backend:**
