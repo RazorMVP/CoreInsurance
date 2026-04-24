@@ -1031,11 +1031,11 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 | Status | Sub-page | Key features |
 |---|---|---|
-| `[ ]` | Receipts | Post receipt against debit note, receipt list |
-| `[ ]` | Bulk Receipts | Select multiple debit notes, batch post |
-| `[ ]` | Receipt Approval | Submit/approve/reject receipts |
-| `[ ]` | Payables | Credit note list, payable detail view |
-| `[ ]` | Payment Approval | Submit payment against credit note, approval flow |
+| `[x]` | Receipts | ReceivablesTab — debit notes DataTable + PostReceiptSheet (single debit note, payment method/ref/bank/amount) |
+| `[x]` | Bulk Receipts | PostReceiptSheet opens in bulk mode with all outstanding DNs selected; shows total with per-note breakdown |
+| `[x]` | Receipt Approval | Receipts DataTable with approve/reject row actions on PENDING_APPROVAL rows |
+| `[x]` | Payables | PayablesTab — credit notes DataTable (Claim DV / Endorsement / Commission / RI FAC source badges); Process Payment action |
+| `[x]` | Payment Approval | Payments DataTable with Approve/Reject actions on PENDING rows |
 
 ---
 
@@ -1115,9 +1115,9 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 | Phase | Builds | Complete | Status |
 |---|---|---|---|
 | Phase 1 — Infrastructure | 5 | 5 | `[x]` Complete |
-| Phase 2 — Back Office Modules | 9 | 4 | `[~]` In progress |
+| Phase 2 — Back Office Modules | 9 | 5 | `[~]` In progress |
 | Phase 3 — Partner Portal | 5 | 0 | `[ ]` Not started |
-| **Total** | **19** | **9** | **47% complete** |
+| **Total** | **19** | **10** | **53% complete** |
 
 > Update the status column and progress summary as builds complete. Each completed build should also be reflected in cia-log.md under the session that finished it.
 
