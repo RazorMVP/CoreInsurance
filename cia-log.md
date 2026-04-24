@@ -1173,3 +1173,24 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** commit `c988d30` | **Vercel:** auto-deploy triggered via GitHub Actions
 
 **Open questions:** None.
+---
+
+### Session 12b — FAC Sheets: CreateFACOfferSheet + AddInwardFACSheet
+
+**Files created/modified:**
+
+| File | Change |
+|---|---|
+| `apps/back-office/src/modules/reinsurance/pages/fac/CreateFACOfferSheet.tsx` | New — Outward FAC form: excess policy select, SI split (total/retention/FAC with auto-compute), reinsurer, premium rate, commission, offer validity, cover period, live net premium preview |
+| `apps/back-office/src/modules/reinsurance/pages/fac/AddInwardFACSheet.tsx` | New — Inward FAC form: ceding company, their reference, class, risk description, our share %, premium rate, ceding commission, live financial position preview (our SI / gross premium / commission / net receivable), cover period, contact |
+| `apps/back-office/src/modules/reinsurance/pages/fac/FACTab.tsx` | Modified — wired both sheets via useState; "Create FAC Offer" and "Add Inward FAC" buttons now open the respective sheets |
+
+**Decisions made:**
+- `CreateFACOfferSheet` auto-computes `facSumInsured = totalSumInsured - retention` when the retention field changes, so the user doesn't have to manually enter the FAC SI.
+- `AddInwardFACSheet` shows a financial position card (our SI, gross premium, ceding commission deduction, net receivable) whenever totalSumInsured + ourShare + premiumRate are all filled — same live preview pattern as SingleRiskQuoteSheet.
+- Ceding companies in AddInwardFACSheet will eventually pull from `/api/v1/setup/organisations/reinsurers` (where inward FAC ceding companies are registered).
+- FAC sheets use `<> ... </>` fragment wrapper because the Tabs component plus the two Sheet portals must share a single JSX return root.
+
+**GitHub:** commit `0083c7f` | **Vercel:** auto-deploy triggered
+
+**Open questions:** None.
