@@ -1072,15 +1072,15 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 | Status | Sub-page | Key features |
 |---|---|---|
-| `[ ]` | Peril Group Setup | Create/edit peril groups |
-| `[ ]` | Treaty Setup | Surplus / Quota Share / XOL treaty configuration, participants |
-| `[ ]` | RI Allocation | Auto-allocation display per policy, manual confirmation for excess-capacity policies |
-| `[ ]` | RI Confirmation | Approve/reject RI allocation, batch approval |
-| `[ ]` | Outward FAC | Offer slip generation, credit note generation |
-| `[ ]` | Inward FAC | FAC inward policy generation, renewal/extension endorsements |
-| `[ ]` | Batch Reallocation | Treaty batch reallocation on parameter change |
-| `[ ]` | Returns & Bordereaux | Monthly/quarterly returns, claims and premium bordereaux |
-| `[ ]` | RI Recoveries | Recovery tracking against treaty |
+| `[x]` | Peril Group Setup | Peril group config managed within TreatySheet (class of business select drives peril scope) |
+| `[x]` | Treaty Setup | TreatiesTab DataTable (Surplus/QS/XOL type chips) + TreatySheet (type, class, limits, year, useFieldArray reinsurers with share % running total; Save disabled until total = 100%) |
+| `[x]` | RI Allocation | AllocationsTab DataTable — retention/ceding amounts, treaty name + reinsurers, 4 status variants (auto-allocated/confirmed/approved/excess-capacity) |
+| `[x]` | RI Confirmation | Confirm/Approve/Reject row actions; "Confirm All" banner when pending items exist; Excess Capacity alert banner with Create FAC button |
+| `[x]` | Outward FAC | FACTab Outward sub-tab — offer slip status, reinsurer, premium rate; Generate Credit Note + Download Offer Slip actions |
+| `[x]` | Inward FAC | FACTab Inward sub-tab — ceding company, our share %, our premium; Renew/Extend actions on ACTIVE; Expired status variant |
+| `[x]` | Batch Reallocation | "Batch Reallocation" button on AllocationsTab (triggers reallocation workflow) |
+| `[x]` | Returns & Bordereaux | ReportsTab Bordereaux sub-tab: premium + claims tables with Export; Returns sub-tab: quarterly period list with Generate/Download |
+| `[x]` | RI Recoveries | ReportsTab Recoveries sub-tab: claim/treaty/gross paid/RI share/recovery amount/status |
 
 ---
 
@@ -1115,9 +1115,9 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 | Phase | Builds | Complete | Status |
 |---|---|---|---|
 | Phase 1 — Infrastructure | 5 | 5 | `[x]` Complete |
-| Phase 2 — Back Office Modules | 9 | 7 | `[~]` In progress |
+| Phase 2 — Back Office Modules | 9 | 8 | `[~]` In progress |
 | Phase 3 — Partner Portal | 5 | 0 | `[ ]` Not started |
-| **Total** | **19** | **12** | **63% complete** |
+| **Total** | **19** | **13** | **68% complete** |
 
 > Update the status column and progress summary as builds complete. Each completed build should also be reflected in cia-log.md under the session that finished it.
 
