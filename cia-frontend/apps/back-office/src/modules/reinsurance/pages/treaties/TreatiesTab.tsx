@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import {
   Badge, Button, Card, CardContent, DataTable, DataTableColumnHeader,
-  DataTableRowActions, EmptyState, PageSection, Separator,
+  DataTableRowActions,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  EmptyState, PageSection, Separator,
 } from '@cia/ui';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
 import TreatySheet from './TreatySheet';
+import BatchReallocationSheet from '../allocations/BatchReallocationSheet';
 
 type TreatyType   = 'SURPLUS' | 'QUOTA_SHARE' | 'XOL';
 type TreatyStatus = 'ACTIVE' | 'INACTIVE' | 'EXPIRED';
@@ -21,6 +24,31 @@ interface TreatyDto {
   status:          TreatyStatus;
 }
 
+// Allocation shape expected by BatchReallocationSheet
+interface AllocationRow {
+  id:             string;
+  policyNumber:   string;
+  classOfBusiness:string;
+  sumInsured:     number;
+  treatyName:     string;
+  status:         string;
+}
+
+// Mock allocations per treaty — replace with useList(`/api/v1/reinsurance/allocations?treatyId=...`)
+const MOCK_TREATY_ALLOCATIONS: Record<string, AllocationRow[]> = {
+  t1: [
+    { id: 'a1', policyNumber: 'POL-2026-00001', classOfBusiness: 'Motor (Private)',  sumInsured: 3_500_000,  treatyName: 'Motor Surplus Treaty 2026', status: 'CONFIRMED' },
+    { id: 'a3', policyNumber: 'POL-2026-00003', classOfBusiness: 'Motor (Private)',  sumInsured: 2_200_000,  treatyName: 'Motor Surplus Treaty 2026', status: 'AUTO_ALLOCATED' },
+  ],
+  t2: [
+    { id: 'a2', policyNumber: 'POL-2026-00002', classOfBusiness: 'Fire & Burglary',  sumInsured: 15_000_000, treatyName: 'Fire QS Treaty 2026', status: 'APPROVED' },
+    { id: 'a5', policyNumber: 'POL-2026-00005', classOfBusiness: 'Fire & Burglary',  sumInsured: 35_000_000, treatyName: 'Fire QS Treaty 2026', status: 'EXCESS_CAPACITY' },
+  ],
+  t3: [
+    { id: 'a4', policyNumber: 'POL-2026-00004', classOfBusiness: 'Marine Cargo',     sumInsured: 8_000_000,  treatyName: 'Marine XOL Layer 1', status: 'AUTO_ALLOCATED' },
+  ],
+};
+
 const mockTreaties: TreatyDto[] = [
   {
     id: 't1', name: 'Motor Surplus Treaty 2026', type: 'SURPLUS',      classOfBusiness: 'Motor (Private)',  retentionLimit: 2_000_000, treatyLimit: 20_000_000,
@@ -32,7 +60,7 @@ const mockTreaties: TreatyDto[] = [
   },
   {
     id: 't3', name: 'Marine XOL Layer 1',         type: 'XOL',        classOfBusiness: 'Marine Cargo',      retentionLimit: 5_000_000, treatyLimit: 25_000_000,
-    reinsurers: [{ name: 'Lloyd\'s Syndicate', share: 100 }], year: 2026, status: 'ACTIVE',
+    reinsurers: [{ name: "Lloyd's Syndicate", share: 100 }], year: 2026, status: 'ACTIVE',
   },
   {
     id: 't4', name: 'Motor Surplus Treaty 2025',  type: 'SURPLUS',    classOfBusiness: 'Motor (Private)',   retentionLimit: 1_500_000, treatyLimit: 15_000_000,
@@ -46,11 +74,15 @@ const TYPE_COLORS: Record<TreatyType, string> = {
   QUOTA_SHARE: 'bg-[var(--status-pending-bg)] text-[var(--status-pending-fg)]',
   XOL:         'bg-[var(--status-draft-bg)] text-[var(--status-draft-fg)]',
 };
-const ST_VARIANT: Record<TreatyStatus, 'active'|'cancelled'|'draft'> = { ACTIVE: 'active', INACTIVE: 'draft', EXPIRED: 'cancelled' };
+const ST_VARIANT: Record<TreatyStatus, 'active'|'cancelled'|'draft'> = {
+  ACTIVE: 'active', INACTIVE: 'draft', EXPIRED: 'cancelled',
+};
 
 export default function TreatiesTab() {
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [editing,   setEditing]   = useState<TreatyDto | null>(null);
+  const [sheetOpen,        setSheetOpen]        = useState(false);
+  const [editing,          setEditing]          = useState<TreatyDto | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<TreatyDto | null>(null);
+  const [batchTarget,      setBatchTarget]      = useState<TreatyDto | null>(null);
 
   const columns: ColumnDef<TreatyDto>[] = [
     {
@@ -80,9 +112,7 @@ export default function TreatiesTab() {
       header: 'Retention',
       cell: ({ row }) => {
         const t = row.original;
-        if (t.type === 'QUOTA_SHARE') {
-          return <span className="text-sm text-muted-foreground">N/A (% split)</span>;
-        }
+        if (t.type === 'QUOTA_SHARE') return <span className="text-sm text-muted-foreground">N/A (% split)</span>;
         return <span className="text-sm tabular-nums">₦{t.retentionLimit.toLocaleString()}</span>;
       },
     },
@@ -121,9 +151,20 @@ export default function TreatiesTab() {
         <DataTableRowActions
           row={row as Row<TreatyDto>}
           actions={[
-            { label: 'Edit treaty',          onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
-            { label: 'Batch reallocation',   onClick: () => {} },
-            { label: row.original.status === 'ACTIVE' ? 'Deactivate' : 'Activate', onClick: () => {}, separator: true },
+            {
+              label: 'Edit treaty',
+              onClick: (r) => { setEditing(r.original); setSheetOpen(true); },
+            },
+            {
+              label: 'Batch reallocation',
+              onClick: (r) => setBatchTarget(r.original),
+            },
+            {
+              label: row.original.status === 'ACTIVE' ? 'Deactivate' : 'Activate',
+              onClick: (r) => setDeactivateTarget(r.original),
+              separator: true,
+              ...(row.original.status === 'ACTIVE' ? { className: 'text-destructive' } : {}),
+            },
           ]}
         />
       ),
@@ -153,9 +194,9 @@ export default function TreatiesTab() {
       <PageSection title="Treaty Summary" description="Current year capacity by treaty type.">
         <div className="grid grid-cols-3 gap-4">
           {[
-            { type: 'SURPLUS',      label: 'Surplus Treaties',     treaties: 1, capacity: '₦20M' },
-            { type: 'QUOTA_SHARE',  label: 'Quota Share Treaties',  treaties: 1, capacity: '% split' },
-            { type: 'XOL',          label: 'XOL Layers',            treaties: 1, capacity: '₦25M xs ₦5M' },
+            { type: 'SURPLUS',      label: 'Surplus Treaties',    treaties: 1, capacity: '₦20M' },
+            { type: 'QUOTA_SHARE',  label: 'Quota Share Treaties', treaties: 1, capacity: '% split' },
+            { type: 'XOL',          label: 'XOL Layers',           treaties: 1, capacity: '₦25M xs ₦5M' },
           ].map(s => (
             <Card key={s.type}>
               <CardContent className="p-4 space-y-1">
@@ -170,7 +211,51 @@ export default function TreatiesTab() {
         </div>
       </PageSection>
 
-      <TreatySheet open={sheetOpen} onOpenChange={setSheetOpen} treaty={editing} onSuccess={() => setSheetOpen(false)} />
+      {/* Edit / create treaty sheet */}
+      <TreatySheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        treaty={editing}
+        onSuccess={() => setSheetOpen(false)}
+      />
+
+      {/* Batch reallocation sheet — scoped to the selected treaty */}
+      <BatchReallocationSheet
+        open={batchTarget !== null}
+        onOpenChange={(v) => { if (!v) setBatchTarget(null); }}
+        allocations={batchTarget ? (MOCK_TREATY_ALLOCATIONS[batchTarget.id] ?? []) : []}
+        onSuccess={() => setBatchTarget(null)}
+      />
+
+      {/* Deactivate / Activate confirmation dialog */}
+      <Dialog open={deactivateTarget !== null} onOpenChange={(v) => { if (!v) setDeactivateTarget(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {deactivateTarget?.status === 'ACTIVE' ? 'Deactivate Treaty' : 'Activate Treaty'}
+            </DialogTitle>
+            <DialogDescription>
+              {deactivateTarget && (
+                deactivateTarget.status === 'ACTIVE'
+                  ? <>Deactivating <span className="font-medium text-foreground">{deactivateTarget.name}</span> will prevent new policies from being allocated to it. Existing allocations are not affected.</>
+                  : <>Activating <span className="font-medium text-foreground">{deactivateTarget.name}</span> will allow new policies to be allocated to this treaty.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeactivateTarget(null)}>Cancel</Button>
+            <Button
+              variant={deactivateTarget?.status === 'ACTIVE' ? 'destructive' : 'default'}
+              onClick={() => {
+                // TODO: PATCH /api/v1/reinsurance/treaties/{id}/status
+                setDeactivateTarget(null);
+              }}
+            >
+              {deactivateTarget?.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

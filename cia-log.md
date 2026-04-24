@@ -1236,3 +1236,28 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
 
 **Open questions:** None.
+
+---
+
+### Session 14 — Reinsurance: wire Treaties + FAC tab interactions
+
+**Files modified/created:**
+
+| File | Change |
+|---|---|
+| `apps/back-office/src/modules/reinsurance/pages/treaties/TreatiesTab.tsx` | Modified — "Batch reallocation" row action now opens `BatchReallocationSheet` scoped to the selected treaty's allocations; "Deactivate/Activate" row action now opens an inline confirmation Dialog with context-appropriate wording and button variant |
+| `apps/back-office/src/modules/reinsurance/pages/fac/FACTab.tsx` | Modified — wired all 5 previously silent row actions: Generate Credit Note → `FACCreditNoteDialog`; Download Offer Slip → `FACOfferSlipDialog`; Cancel FAC → inline confirm Dialog; Renew → `InwardFACActionSheet` mode=RENEW; Extend Period → `InwardFACActionSheet` mode=EXTEND; Cancel (inward) → inline confirm Dialog |
+| `apps/back-office/src/modules/reinsurance/pages/fac/FACCreditNoteDialog.tsx` | New — Dialog showing full credit note breakdown: FAC reference, policy, reinsurer, gross premium, commission (5% placeholder), net premium due; Submit to Finance + Download PDF actions |
+| `apps/back-office/src/modules/reinsurance/pages/fac/FACOfferSlipDialog.tsx` | New — Dialog showing offer slip summary: policy, reinsurer, SI, premium rate, gross premium, offer date, status badge; Download PDF action |
+| `apps/back-office/src/modules/reinsurance/pages/fac/InwardFACActionSheet.tsx` | New — Single sheet handling both RENEW and EXTEND modes via `mode` prop. Shows current cover summary (read-only), then amendable fields: new period dates (both for RENEW, end date only for EXTEND), our share %, premium rate with live financial preview. `useEffect` resets form defaults whenever `open+fac+mode` changes. |
+
+**Decisions made:**
+- Single `InwardFACActionSheet` with `mode: 'RENEW' | 'EXTEND'` prop avoids duplicating near-identical forms. Title, description, and visible date fields change per mode.
+- `useEffect([open, fac?.id, mode])` pattern resets RHF form when a different record is selected; `impliedRate()` back-calculates the premium rate from the existing ourPremium/ourShare so the form is pre-filled with meaningful values.
+- TreatiesTab stores `MOCK_TREATY_ALLOCATIONS` keyed by treaty ID so BatchReallocationSheet shows only the allocations belonging to the selected treaty (not all allocations).
+- Deactivate confirmation Dialog uses `variant="destructive"` for the confirm button when deactivating ACTIVE treaties, and `variant="default"` for reactivating — matching the severity of the action.
+- Cancel FAC and Cancel Inward FAC are also handled with inline confirmation Dialogs (not a separate file) since they need no form input.
+
+**GitHub:** pending push | **Vercel:** auto-deploy will trigger after push
+
+**Open questions:** None.
