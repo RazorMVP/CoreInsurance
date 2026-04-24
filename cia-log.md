@@ -1029,3 +1029,31 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** commit `0ff5f66` | **Vercel:** Ready (latest production: `back-office-9dsx0cqzx`) ✅
 
 **Open questions:** None.
+---
+
+### Session 8 — Build 5: Policy module complete
+
+**Build queue progress: 9/19 builds complete (47%)**
+
+**Files created:**
+
+| File | Description |
+|---|---|
+| `apps/back-office/src/modules/policy/index.tsx` | Module routing: list + detail (/:id) |
+| `apps/back-office/src/modules/policy/pages/PolicyListPage.tsx` | DataTable with policy number (teal), customer, product/class, ₦ SI + net premium, 6 status variants, NAICOM UID column (UID or PENDING badge), expiry; "New Policy ▾" dropdown with status-conditional row actions |
+| `apps/back-office/src/modules/policy/pages/create/CreatePolicySheet.tsx` | Two-tab sheet: "From Approved Quote" (quote select, business type, payment terms) and "Direct Entry" (customer, product, dates, SI, rate, discount, live premium preview) |
+| `apps/back-office/src/modules/policy/pages/detail/PolicyDetailPage.tsx` | 5-tab layout: Details (2-column cards), Document (clause bank, template, send/acknowledge), Financial (debit note, Post Receipt), Survey (threshold-conditional, surveyor, override), NAICOM (UID status, upload log, manual trigger) |
+
+**Figma:** Policies page created (id: `72:2`)
+- `Policies / List` (node `72:3`): all 5 rows, status badges, NAICOM UID column (2 PENDING, 3 with UIDs)
+
+**Decisions made:**
+- NAICOM UID column shows the actual UID string when present, or an amber "PENDING" badge when not yet uploaded. This makes the regulatory status immediately scannable without navigating to the detail page.
+- CreatePolicySheet uses a Tabs component to host both creation flows in one sheet, avoiding two separate Sheet components.
+- PolicyDetailPage `MockPolicy` type defined explicitly (not `Partial<PolicyDto>`) to avoid TypeScript literal type narrowing issues on status comparisons — same pattern established in QuoteDetailPage.
+- Survey tab is conditionally rendered: when `surveyRequired = false`, it shows "no survey needed" with option to request one. When `surveyRequired = true`, shows the full workflow.
+- `clauses` array on the mock policy represents the clause bank — the basis for the Document tab's editable clause list.
+
+**GitHub:** commit `fa4078f` | **Vercel:** auto-deploy triggered via GitHub Actions
+
+**Open questions:** None.
