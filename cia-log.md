@@ -1498,3 +1498,27 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 - Audit main: `114:2` | Policy Detail: `121:2` | Customer Detail: `122:2`
 
 **Open questions:** None.
+
+---
+
+### Session 24 — Fix Finance, Claims, Reinsurance Figma screens
+
+**Figma file:** `Zaiu2K7NvEJ7Cjj6z1xt2D`
+
+**Diagnosis:**
+| Screen | Issues found |
+|---|---|
+| Finance (111:2) | Missing Receivables/Payables tab bar, missing stat cards, no section subheader |
+| Claims (112:2) | Missing 3 stat cards, Description column text overflowed into Reserve column (Figma text has no native overflow clipping) |
+| Reinsurance (112:190) | Missing "Add Treaty" action button in page header |
+| All three | Stale duplicate frames (75:3, 84:3, 87:3) stacked at same position (80,80); orphaned fragments (116:8 "pc", 116:99 "tp", 116:105 "tp") at (0,0) |
+
+**Fixes applied:**
+- Deleted 6 stale/orphaned frames across all three pages
+- **Finance**: Rebuilt Content with Receivables/Payables tab bar, 3 stat cards (Total Outstanding, Receipts Pending, Outstanding Credit Notes), "Outstanding Debit Notes" section subheader + "Bulk Receipt (3)" button
+- **Claims**: Rebuilt Content with 3 stat cards (Open Claims 4, Total Reserve ₦2,375,000, Total Paid YTD ₦265,000), rebuilt table with Description cells as CLIPPING FRAMES (`clipsContent=true`) to prevent text overflow into Reserve column, shorter description strings, three-dot action column
+- **Reinsurance**: Rebuilt Content with "Add Treaty" button in page header, tab bar (Treaties/RI Allocations/FAC Outward/FAC Inward/Reports), treaty type coloured pills (Surplus=green, Quota Share=amber, XOL=gray), status badges
+
+**Key lesson:** Figma text nodes never clip automatically regardless of container size. When using `layoutMode='NONE'` (absolute positioning), long text overflows into adjacent columns. Fix: wrap the text node in a fixed-size frame with `clipsContent=true`. Applied to the Description column in the Claims table.
+
+**Open questions:** None.
