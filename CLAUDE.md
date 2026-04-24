@@ -1055,16 +1055,16 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 | Status | Sub-page | Key features |
 |---|---|---|
-| `[ ]` | Claim Notification | First notification of loss form, timeline tracking |
-| `[ ]` | Claim Registration | Full registration, document checklist, missing document tracking |
-| `[ ]` | Bulk Claim Registration | CSV upload for individual or single claim with multiple items |
-| `[ ]` | Claim Dashboard | Open claims, pending approvals, reserve summary |
-| `[ ]` | Claim Detail | Edit/cancel, status timeline, linked policy, risk details |
-| `[ ]` | Claim Processing | Reserves, expenses, allocation (treaty-based), comments, recovery |
-| `[ ]` | Loss Inspection | Assign internal/external surveyor, inspection approval |
-| `[ ]` | Claim Approval | Submit → approve/reject, DV generation |
-| `[ ]` | DV Generation | Own damage / third party / ex-gratia DV types |
-| `[ ]` | DV Execution | Online portal execution, process executed DV, close claim |
+| `[x]` | Claim Notification | RegisterClaimSheet — incident date, notification date, nature/cause of loss, location, description, estimated loss, contact |
+| `[x]` | Claim Registration | Full form with validation; status flow: REGISTERED → PROCESSING → PENDING_APPROVAL → APPROVED → SETTLED |
+| `[x]` | Bulk Claim Registration | BulkClaimPage — CSV drag-and-drop, validation results with error row detail, template download |
+| `[x]` | Claim Dashboard | ClaimsListPage — StatCard row: Open Claims, Total Reserve (₦), Total Paid YTD |
+| `[x]` | Claim Detail | ClaimDetailPage 5-tab layout (Summary, Processing, Documents, Inspection, DV); missing docs badge on header + Processing tab |
+| `[x]` | Claim Processing | Processing tab: Reserves table (add/total), Expenses table (approve/reject), Comments feed (add) |
+| `[x]` | Loss Inspection | Inspection tab: assign internal/external surveyor, approve report, override requirement |
+| `[x]` | Claim Approval | Submit/Approve/Reject buttons conditional on status; status badge + missing docs count in header |
+| `[x]` | DV Generation | DV tab: Own Damage / Third Party / Ex-gratia type selection cards; DV amount input; Generate DV button |
+| `[x]` | DV Execution | Execute DV button (Online Portal), Download DV, process after execution flow |
 
 ---
 
@@ -1115,9 +1115,9 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 | Phase | Builds | Complete | Status |
 |---|---|---|---|
 | Phase 1 — Infrastructure | 5 | 5 | `[x]` Complete |
-| Phase 2 — Back Office Modules | 9 | 6 | `[~]` In progress |
+| Phase 2 — Back Office Modules | 9 | 7 | `[~]` In progress |
 | Phase 3 — Partner Portal | 5 | 0 | `[ ]` Not started |
-| **Total** | **19** | **11** | **58% complete** |
+| **Total** | **19** | **12** | **63% complete** |
 
 > Update the status column and progress summary as builds complete. Each completed build should also be reflected in cia-log.md under the session that finished it.
 
