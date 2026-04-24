@@ -1462,3 +1462,39 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
 
 **Open questions:** None.
+
+---
+
+### Session 23 — Figma sync: all module screens, dialogs, and sheets
+
+**Figma file:** `Zaiu2K7NvEJ7Cjj6z1xt2D` (BackOffice design file)
+
+**Pages updated / created:**
+
+| Page | Frames added |
+|---|---|
+| Dashboard | Pre-existing `BackOffice / Dashboard` — verified, looks correct |
+| Setup | `BackOffice / Setup` — Users management DataTable, status badges, active sidebar state |
+| Customers | `BackOffice / Customers` — Customer list with KYC status badges; `BackOffice / Customer / Chioma Okafor / Summary` — customer detail with summary card + policy history |
+| Quotation | `BackOffice / Quotation` — Quote list with version info, status, premium |
+| Policies | `BackOffice / Policies` — Policy list; `BackOffice / Policy / POL-2026-00001 / Summary` — policy detail with 5-tab nav, policy details + financial summary cards; `Sheet: Create Policy` — tab toggle (From Quote / Direct Entry) + form fields |
+| Finance | `BackOffice / Finance` — Receivables tab with debit notes; `Dialog: Debit Note Detail` — policy info + amount due + Post Receipt CTA; `Sheet: Post Receipt` — amount, method, bank, reference |
+| Endorsements | `BackOffice / Endorsements` — Endorsements list with types, pro-rata amounts; `Sheet: Create Endorsement` — type select, new SI, effective date, pro-rata preview card |
+| Claims | `BackOffice / Claims` — List with 3 stat cards; `BackOffice / Claims / Detail — Processing` — Processing tab with reserves table, advisory banner, comments feed; `Sheet: Register Claim`; `Dialog: Submit for Approval`; `Dialog: Add Reserve` |
+| Reinsurance | `BackOffice / Reinsurance` — Treaties tab with sub-tab bar; `Sheet: Treaty Setup` — treaty form + reinsurer share rows; `Dialog: FAC Credit Note` — gross/commission/net breakdown; `Sheet: Policy Allocation Detail` — policy info + retention/ceding split bar + Approve/Decline actions |
+| Audit | `BackOffice / Audit` — Stat cards + 4-tab layout + audit log table; `Sheet: Audit Event Detail` — event metadata card + side-by-side Before/After JSON diff panels; `Dialog: Alert Config` — thresholds, business hours, retention, email toggle |
+| Audit (new page) | Created the Audit Figma page (was missing entirely) |
+
+**Key technical decisions:**
+- Initial auto-layout approach caused text overflow and overlap when `clipsContent=false` and frames exceeded their parent bounds. Fixed by switching to `layoutMode='NONE'` (absolute positioning) + `clipsContent=true` for all Sheet and Dialog frames. This gives pixel-precise layout without overflow.
+- `String.prototype.sub()` bug: `cell?.sub` was truthy for ALL strings (because strings have a `sub()` method). Fixed by guarding with `typeof cell === 'object' && cell !== null && 'sub' in cell`.
+- Each frame positioned with explicit `x`/`y` relative to parent frame (absolute layout) rather than auto-layout spacing chains, which avoids the common Figma API overflow issue.
+
+**Figma node IDs created (key screens):**
+- Setup main: `107:2` | Customers main: `107:162`
+- Quotation: `109:2` | Policies: `109:184`
+- Finance: `111:2` | Endorsements: `111:162`
+- Claims list: `112:2` | Claims detail: `118:2` | Reinsurance: `112:190`
+- Audit main: `114:2` | Policy Detail: `121:2` | Customer Detail: `122:2`
+
+**Open questions:** None.
