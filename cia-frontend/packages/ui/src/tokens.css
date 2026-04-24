@@ -1,0 +1,121 @@
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Geist:wght@100..900&family=Noto+Sans:wght@400;500;600&display=swap');
+/* ₦ (U+20A6) glyph fix — Bricolage Grotesque and Geist lack this character.
+   NairaFallback is scoped only to U+20A6, so Arial renders ₦ while all other
+   characters still use the primary display/body fonts. */
+@font-face {
+  font-family: 'NairaFallback';
+  src: local('Arial'), local('Helvetica Neue'), local('Liberation Sans'), local('DejaVu Sans');
+  unicode-range: U+20A6;
+}
+
+/* ─── Nubeero / CIAGB Design Tokens ─────────────────────────────────────── */
+
+:root {
+  /* Fonts — NairaFallback listed first so ₦ always resolves before the display/body fonts */
+  --font-display: 'NairaFallback', 'Bricolage Grotesque', 'Noto Sans', system-ui, sans-serif;
+  --font-body: 'NairaFallback', 'Geist', 'Noto Sans', system-ui, sans-serif;
+
+  /* Brand palette — teal */
+  --cia-teal-50:  oklch(0.97 0.022 197);
+  --cia-teal-100: oklch(0.93 0.052 197);
+  --cia-teal-200: oklch(0.87 0.082 197);
+  --cia-teal-300: oklch(0.79 0.108 197);
+  --cia-teal-400: oklch(0.72 0.122 197);
+  --cia-teal-500: oklch(0.65 0.130 197);   /* primary interactive */
+  --cia-teal-600: oklch(0.58 0.128 197);
+  --cia-teal-700: oklch(0.50 0.118 197);
+  --cia-teal-800: oklch(0.40 0.098 197);
+  --cia-teal-900: oklch(0.28 0.068 197);
+
+  /* Brand palette — charcoal */
+  --cia-charcoal-50:  oklch(0.97 0.003 240);
+  --cia-charcoal-100: oklch(0.94 0.005 240);
+  --cia-charcoal-200: oklch(0.89 0.007 240);
+  --cia-charcoal-300: oklch(0.77 0.008 240);
+  --cia-charcoal-400: oklch(0.62 0.009 240);
+  --cia-charcoal-500: oklch(0.50 0.010 240);
+  --cia-charcoal-600: oklch(0.38 0.011 240);
+  --cia-charcoal-700: oklch(0.28 0.011 240);
+  --cia-charcoal-800: oklch(0.20 0.012 240);
+  --cia-charcoal-900: oklch(0.14 0.012 240);
+
+  /* ── shadcn/ui semantic tokens — LIGHT (Back Office) ── */
+  --background:           oklch(0.985 0.003 197);
+  --foreground:           oklch(0.18 0.012 240);
+  --card:                 oklch(1 0 0);
+  --card-foreground:      oklch(0.18 0.012 240);
+  --popover:              oklch(1 0 0);
+  --popover-foreground:   oklch(0.18 0.012 240);
+  --primary:              oklch(0.65 0.130 197);
+  --primary-foreground:   oklch(0.99 0 0);
+  --secondary:            oklch(0.95 0.005 197);
+  --secondary-foreground: oklch(0.18 0.012 240);
+  --muted:                oklch(0.95 0.005 197);
+  --muted-foreground:     oklch(0.52 0.008 240);
+  --accent:               oklch(0.65 0.130 197);
+  --accent-foreground:    oklch(0.99 0 0);
+  --destructive:          oklch(0.60 0.220 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border:               oklch(0.90 0.006 197);
+  --input:                oklch(0.90 0.006 197);
+  --ring:                 oklch(0.65 0.130 197);
+  --radius:               0.375rem;
+
+  /* ── Status semantic tokens ── */
+  --status-active-bg:     oklch(0.96 0.060 145);
+  --status-active-fg:     oklch(0.38 0.140 145);
+  --status-pending-bg:    oklch(0.97 0.070 75);
+  --status-pending-fg:    oklch(0.42 0.150 75);
+  --status-rejected-bg:   oklch(0.97 0.050 25);
+  --status-rejected-fg:   oklch(0.42 0.200 25);
+  --status-draft-bg:      oklch(0.95 0.005 240);
+  --status-draft-fg:      oklch(0.45 0.008 240);
+  --status-cancelled-bg:  oklch(0.94 0.040 25);
+  --status-cancelled-fg:  oklch(0.40 0.120 25);
+
+  /* ── Sidebar ── */
+  --sidebar-width: 256px;
+  --topbar-height: 60px;
+}
+
+/* ── DARK theme (Partner Portal) ────────────────────────────────────────── */
+.dark {
+  --background:           oklch(0.15 0.012 240);
+  --foreground:           oklch(0.97 0.003 197);
+  --card:                 oklch(0.18 0.012 240);
+  --card-foreground:      oklch(0.97 0.003 197);
+  --popover:              oklch(0.20 0.012 240);
+  --popover-foreground:   oklch(0.97 0.003 197);
+  --primary:              oklch(0.68 0.130 197);
+  --primary-foreground:   oklch(0.15 0.012 240);
+  --secondary:            oklch(0.22 0.012 240);
+  --secondary-foreground: oklch(0.97 0.003 197);
+  --muted:                oklch(0.22 0.012 240);
+  --muted-foreground:     oklch(0.65 0.008 240);
+  --accent:               oklch(0.68 0.130 197);
+  --accent-foreground:    oklch(0.15 0.012 240);
+  --destructive:          oklch(0.55 0.220 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border:               oklch(0.28 0.012 240);
+  --input:                oklch(0.28 0.012 240);
+  --ring:                 oklch(0.68 0.130 197);
+}
+
+/* ── Base resets ─────────────────────────────────────────────────────────── */
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}

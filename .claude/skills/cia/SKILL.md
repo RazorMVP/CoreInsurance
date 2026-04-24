@@ -177,13 +177,30 @@ System-wide audit log viewer (filterable by entity type, entity ID, user, action
 - `/api/v1/auth/login/failed` is a **public endpoint** (no JWT required) because it records authentication failures before a valid token exists.
 - Lombok must be at `1.18.46` or later. Earlier versions (≤1.18.36) fail with `TypeTag :: UNKNOWN` on JDK 24+.
 
+### Frontend Conventions (`cia-frontend/`)
+
+- The frontend is a **pnpm workspace + Turborepo** monorepo. Run from `cia-frontend/`. Two apps: `@cia/back-office` (port 5173, light mode) and `@cia/partner` (port 5174, dark mode). Three shared packages: `@cia/ui`, `@cia/api-client`, `@cia/auth`.
+- The Back Office app is branded **NubSure** — this is the product name shown to end users. The codebase remains CIAGB internally.
+- Design tokens are OKLCH (full `oklch(L C H)` values in CSS vars, not channels). Primary accent: `oklch(0.65 0.13 197)` (Nubeero teal). Token file: `packages/ui/src/tokens.css`.
+- Fonts: **Bricolage Grotesque** (headings/display) + **Geist** (body/UI). Both loaded via Google Fonts. A scoped `@font-face { family: 'NairaFallback'; src: local('Arial'),...; unicode-range: U+20A6 }` is declared first in each font stack so the ₦ Naira sign always resolves to a system font that has the glyph — Bricolage Grotesque and Geist both lack U+20A6.
+- Icons: **hugeicons** v1.1.6. Use `HugeiconsIcon` from `@hugeicons/react` with icon data from `@hugeicons/core-free-icons`. Pattern: `<HugeiconsIcon icon={DashboardSquare01Icon} size={18} color="currentColor" strokeWidth={1.75} />`.
+- Module icon mapping: Dashboard→`DashboardSquare01Icon`, Customers→`UserGroupIcon`, Quotation→`NoteEditIcon`, Policies→`Shield01Icon`, Endorsements→`FileEditIcon`, Claims→`AlertCircleIcon`, Finance→`Money01Icon`, Reinsurance→`RepeatIcon`, Setup→`Setting06Icon`, Audit→`Audit01Icon`.
+- Keycloak: `onLoad: 'login-required'` in production. In dev (`import.meta.env.DEV`), `main.tsx` uses `DevAuthProvider` from `@cia/auth` — a mock context that provides a fake user without any Keycloak round-trip. This lets the UI render locally without the auth stack running.
+- `DevAuthProvider` is exported from `@cia/auth` and uses the same `AuthContext` as `AuthProvider`, so all `useAuth()` calls work identically in both modes.
+- The Tailwind config in each app imports the shared base via a **relative path** (`../../packages/ui/tailwind.config`) — never via the package name (`@cia/ui/tailwind.config`). Tailwind's PostCSS loader uses CJS `require()` which does not honour the `exports` field.
+- `layoutSizingVertical = 'HUG'` in Figma Plugin API must be set **after** all children are appended to a frame. Setting `primaryAxisSizingMode = 'AUTO'` at frame creation time has no effect until children exist.
+- Figma BackOffice design file: `Zaiu2K7NvEJ7Cjj6z1xt2D`. Designs are pushed to this file as each module is built using `use_figma` + `upload_assets` (for images). Always invoke the `figma:figma-use` skill before any `use_figma` call.
+- To upload PNG assets into Figma, use `mcp__claude_ai_Figma__upload_assets` with a `nodeId` to set the image directly as a fill — this bypasses the unreliable base64 `createImage()` approach.
+
 ---
 
 ## SESSION COMPLETION GATE
 
 **Mandatory before ending any working session on this project.**
 
-Before marking any task complete or saying work is done, Claude MUST verify and complete each item below. No exceptions.
+Before marking any task complete or saying work is done, Claude MUST verify and complete each item below. No exceptions. Skip sections that are not relevant to the current session (e.g. skip frontend checks if only backend was touched).
+
+---
 
 ### 1. cia-log.md
 - Append a new entry under today's date (`## YYYY-MM-DD`).
@@ -191,23 +208,76 @@ Before marking any task complete or saying work is done, Claude MUST verify and 
 - List every decision made, question resolved, or design choice locked in.
 - List any open questions raised during the session.
 
+---
+
 ### 2. CLAUDE.md
 Update the relevant section if any of the following changed:
+
+**Backend:**
 - New module added or feature count changed → update Module Summary table
 - New Maven module added → update Backend Module Inventory and Dependency Graph
 - New architectural decision → update System Architecture section
-- New environment variable required → update Environment Variables table
+- New environment variable required → update Environment Variables table (backend section)
 - New business rule established → update Key Business Rules section
+
+**Frontend:**
+- Frontend monorepo structure changed → update Section 4 (Frontend Architecture)
+- New VITE_ environment variable → update Environment Variables table (frontend section)
+- New shared package added → update monorepo diagram in Section 4
+- App name or branding changed → update Section 4 and note in cia-log.md
+
+---
 
 ### 3. SKILL.md (this file)
 Update if any of the following changed:
+
+**Backend:**
 - Module count or feature count changed → update frontmatter description + Module Inventory header
 - New module → add module section
 - New business rule → add under Key Cross-Cutting Business Rules
 - New entity → add to Data Model Highlights
-- New development convention → add under Development Conventions
+- New backend development convention → add under Development Conventions
 
-### 4. OpenAPI Annotations (required when writing backend controller code)
+**Frontend:**
+- New frontend pattern established → add under Development Conventions → Frontend Conventions subsection
+- New icon mapping added → update icon mapping list in Frontend Conventions
+- New design token decision → update Frontend Conventions (font, colour, spacing)
+- Figma BackOffice file key changed → update in Frontend Conventions
+
+---
+
+### 4. Frontend Verification (required when writing frontend code)
+
+Run before declaring any frontend task complete:
+
+```bash
+# From cia-frontend/
+pnpm --filter @cia/back-office typecheck   # Must exit 0
+pnpm --filter @cia/partner typecheck       # Must exit 0
+```
+
+Additional checks:
+- Tailwind config imports use **relative paths** (`../../packages/ui/tailwind.config`), never the package name.
+- All sidebar nav items use `HugeiconsIcon` from `@hugeicons/core-free-icons` — no raw SVG placeholders.
+- Currency amounts displayed in the UI use `₦` (U+20A6). The `NairaFallback` @font-face in `tokens.css` handles rendering — do NOT substitute "NGN" or "N" as a workaround.
+- `DevAuthProvider` is only used via `import.meta.env.DEV` conditional — never shipped to production.
+- The app is branded **NubSure** in all user-facing strings (sidebar, page title, index.html). The codebase directories and package names remain `back-office` / `@cia/back-office`.
+
+---
+
+### 5. Figma Sync (required when adding or changing a screen)
+
+For every new or significantly changed screen in the Back Office app:
+- Push the corresponding frame to the BackOffice Figma file (`Zaiu2K7NvEJ7Cjj6z1xt2D`) using `use_figma`.
+- Always invoke the `figma:figma-use` skill BEFORE any `use_figma` call.
+- To upload PNG/image assets into Figma, use `mcp__claude_ai_Figma__upload_assets` with `nodeId` — never use `figma.createImage()` with base64 (unreliable in API/screenshot context).
+- For the ₦ character in Figma text nodes, apply `setRangeFontName(i, i+1, { family: 'Noto Sans', style: 'Regular' })` to each ₦ character — Bricolage Grotesque and Geist lack this glyph.
+- Take a `get_screenshot` after major changes to verify the frame renders correctly.
+- Note in cia-log.md: which Figma node IDs were created or mutated.
+
+---
+
+### 6. OpenAPI Annotations (required when writing backend controller code)
 Every new or modified endpoint in `cia-partner-api` MUST have all of:
 ```java
 @Operation(summary = "...", description = "...", tags = {"resource-name"})
@@ -225,13 +295,17 @@ Every DTO used in a partner API response MUST have:
 @Schema(description = "...", example = "...")  // on every field
 ```
 
-### 5. Postman Collection
+---
+
+### 7. Postman Collection
 If any `/partner/v1/` endpoint was added, removed, or its request/response shape changed:
 - Note in cia-log.md: "Postman collection regeneration required."
 - Regeneration command (run after build): `mvn generate-sources -pl cia-partner-api -Popenapi-gen`
 - Output: `cia-partner-api/docs/postman_collection.json`
 
-### 6. Backend API Consistency
+---
+
+### 8. Backend API Consistency
 If any service interface method was added or modified:
 - Ensure the method signature, parameter names, and return type clearly express the contract.
 - If the change affects a module's feature count in CLAUDE.md or SKILL.md, update those counts.

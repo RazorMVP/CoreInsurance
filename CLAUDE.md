@@ -172,33 +172,87 @@ cia-backend/
 
 ### 4. Frontend Architecture
 
+#### Monorepo Structure
+
+The frontend is a **pnpm workspace + Turborepo** monorepo under `cia-frontend/`.
+
 ```
 cia-frontend/
-├── src/
-│   ├── modules/              # One directory per business module
-│   │   ├── setup/
-│   │   ├── customers/
-│   │   ├── quotation/
-│   │   ├── policy/
-│   │   ├── endorsements/
-│   │   ├── claims/
-│   │   ├── reinsurance/
-│   │   └── finance/
-│   ├── shared/
-│   │   ├── components/       # shadcn/ui wrappers and domain components
-│   │   ├── hooks/            # React Query hooks, auth hooks, pagination
-│   │   ├── api/              # Axios instance (JWT attach, X-Tenant-ID), query client
-│   │   └── auth/             # Keycloak JS adapter, AuthProvider, useAuth hook
-│   └── app/                  # React Router v6, layout shell, providers
+├── apps/
+│   ├── back-office/          # NubSure Back Office — port 5173, light mode
+│   │   ├── public/
+│   │   │   └── logo.png      # Nubeero circular "n" logo (PNG, 3726×3726 RGBA)
+│   │   ├── src/
+│   │   │   ├── app/
+│   │   │   │   ├── layout/   # AppShell, Sidebar, Topbar
+│   │   │   │   ├── router.tsx
+│   │   │   │   └── globals.css
+│   │   │   ├── modules/      # One directory per business module (lazy-loaded)
+│   │   │   │   ├── dashboard/
+│   │   │   │   ├── setup/
+│   │   │   │   ├── customers/
+│   │   │   │   ├── quotation/
+│   │   │   │   ├── policy/
+│   │   │   │   ├── endorsements/
+│   │   │   │   ├── claims/
+│   │   │   │   ├── reinsurance/
+│   │   │   │   ├── finance/
+│   │   │   │   └── audit/
+│   │   │   ├── main.tsx
+│   │   │   └── App.tsx
+│   │   ├── tailwind.config.ts
+│   │   └── vite.config.ts
+│   └── partner/              # Partner Portal — port 5174, dark mode
+├── packages/
+│   ├── ui/                   # @cia/ui — design tokens, shadcn components, cn()
+│   ├── api-client/           # @cia/api-client — Axios factory, React Query types
+│   └── auth/                 # @cia/auth — Keycloak adapter, AuthProvider, DevAuthProvider
+├── pnpm-workspace.yaml
+├── turbo.json
+└── tsconfig.base.json
+```
+
+**Turborepo pipeline:** `build` depends on `^build` — `@cia/ui` always builds before apps.
+
+#### Design System
+
+| Token | Value |
+|---|---|
+| Primary accent | `oklch(0.65 0.13 197)` — Nubeero teal |
+| Background (Back Office) | `oklch(0.985 0.003 197)` — warm off-white |
+| Background (Partner) | `oklch(0.15 0.012 240)` — dark charcoal |
+| Display font | Bricolage Grotesque + `NairaFallback` (unicode-range U+20A6) |
+| Body/UI font | Geist + `NairaFallback` (unicode-range U+20A6) |
+| Icon library | hugeicons v1.1.6 (`@hugeicons/react` + `@hugeicons/core-free-icons`) |
+| Token format | OKLCH (full `oklch(L C H)` values in CSS vars — not channels) |
+
+**Naira sign (₦):** Bricolage Grotesque and Geist do not include U+20A6. A scoped `@font-face { font-family: 'NairaFallback'; src: local('Arial'), ...; unicode-range: U+20A6; }` is declared in `tokens.css` and placed first in both font stacks so the ₦ glyph always resolves to a system font that has it.
+
+#### Layout Shell (Back Office)
+
+```
+AppShell
+├── <aside> (width: 256px collapsed→64px, transition: 220ms ease-out)
+│   └── Sidebar
+│       ├── Logo row: [Nubeero logo 28px] [NubSure] [≡ hamburger toggle]
+│       ├── Nav groups (OPERATIONS / FINANCE & RI / ADMINISTRATION)
+│       │   └── NavLink with hugeicons icon + label (hidden when collapsed)
+│       └── User row: avatar + name/email + logout
+└── Right panel
+    ├── Topbar: [Page title] [Search bar — flex-1] [🔔 notification] [? help]
+    └── <main> (lazy Suspense outlet)
 ```
 
 **Frontend patterns:**
 
 - React Query for all server state — no Redux for remote data.
-- Keycloak JS adapter in silent SSO mode; token auto-refreshed before expiry.
-- `X-Tenant-ID` header injected by Axios interceptor from Keycloak JWT claim.
-- Lazy-loaded module routes — each module chunk loaded on first visit.
-- shadcn/ui components extended (never patched at source) to maintain upgrade path.
+- Keycloak JS adapter; `onLoad: 'login-required'` in production, `'check-sso'` in dev.
+- Token auto-refreshed every 30 seconds; 401 responses dispatch `cia:unauthorized` custom event.
+- `X-Tenant-ID` resolved from Keycloak JWT at the `@cia/api-client` Axios interceptor.
+- Lazy-loaded module routes — each module chunk loaded on first visit; skeleton fallback via `Suspense`.
+- shadcn/ui extended via CVA variants (never patched at source) to maintain upgrade path.
+- Sidebar collapses to 64px icon-only mode; toggle button lives in the sidebar logo row.
+- `DevAuthProvider` in `@cia/auth` provides mock user context for local dev without Keycloak running. Used via `import.meta.env.DEV` conditional in `main.tsx`.
 
 ---
 
@@ -867,6 +921,17 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 | `PARTNER_API_RATE_LIMIT_STORE` | `redis` / `in-memory` for bucket4j | env |
 | `REDIS_URL` | Redis connection (partner rate limiting) | env / vault |
 | `WEBHOOK_SIGNING_SECRET` | Default HMAC-SHA256 key for webhook payloads | env / vault |
+
+**Frontend environment variables (Vite — prefix `VITE_`):**
+
+| Variable | Purpose | Default (dev) |
+|---|---|---|
+| `VITE_API_BASE_URL` | Spring Boot API base URL | `http://localhost:8080` |
+| `VITE_KEYCLOAK_URL` | Keycloak server URL | `http://localhost:8180` |
+| `VITE_KEYCLOAK_REALM` | Keycloak realm name | `cia-dev` |
+| `VITE_KEYCLOAK_CLIENT_ID` | Keycloak client for back office | `cia-back-office` |
+
+**Local dev note:** When `import.meta.env.DEV` is true, `main.tsx` uses `DevAuthProvider` (mock user, no Keycloak) instead of `AuthProvider`. All `VITE_KEYCLOAK_*` vars are ignored in dev mode.
 
 ---
 

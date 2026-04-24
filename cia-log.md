@@ -704,3 +704,124 @@ Tables: `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`.
 - System Auditor role (`AUDIT_VIEW`) is strictly read-only; only System Admin (`SETUP_UPDATE`) can modify alert config.
 
 **Open questions:** None.
+
+---
+
+## 2026-04-24
+
+### Session 4 — Frontend Monorepo Scaffold
+
+**Files created:**
+
+| File | Description |
+|---|---|
+| `cia-frontend/package.json` | pnpm workspace root; Turborepo + TypeScript devDeps |
+| `cia-frontend/pnpm-workspace.yaml` | Declares `apps/*` and `packages/*` workspaces |
+| `cia-frontend/turbo.json` | Pipeline: build, dev, lint, typecheck with `^build` dependency |
+| `cia-frontend/tsconfig.base.json` | Shared TS config: ES2022, bundler moduleResolution, strict |
+| `cia-frontend/.impeccable.md` | Design context: users, brand, aesthetic, font selection, principles |
+| `packages/ui/src/tokens.css` | Full OKLCH design token file: Nubeero teal/charcoal palette, shadcn semantic tokens, status tokens, dark mode |
+| `packages/ui/tailwind.config.ts` | Shared Tailwind config mapping CSS vars to Tailwind utilities |
+| `packages/ui/src/components/button.tsx` | shadcn Button with CIA brand variants |
+| `packages/ui/src/components/badge.tsx` | Status Badge: active/pending/rejected/draft/cancelled variants |
+| `packages/api-client/src/client.ts` | `createApiClient()` + `initApiClient()` + `setTokenGetter()` — env-agnostic |
+| `packages/api-client/src/types.ts` | `ApiResponse<T>`, `PageResponse<T>`, `ApiMeta`, `ApiError` |
+| `packages/auth/src/keycloak.ts` | Keycloak instance + `configureKeycloak()` + init/refresh helpers |
+| `packages/auth/src/AuthProvider.tsx` | React context: user, token, roles, `hasRole()`, `logout()` |
+| `apps/back-office/src/app/layout/AppShell.tsx` | Sidebar + Topbar + `<Outlet />` |
+| `apps/back-office/src/app/layout/Sidebar.tsx` | Three nav groups; teal active state; user profile + logout |
+| `apps/back-office/src/app/layout/Topbar.tsx` | Route-aware page title + notification icon |
+| `apps/back-office/src/app/router.tsx` | Lazy-loaded module routes + skeleton fallback |
+| `apps/back-office/src/modules/dashboard/DashboardPage.tsx` | Stats grid + recent activity |
+| `apps/back-office/src/modules/*/index.tsx` | Stub entry points for 9 business modules |
+| `apps/partner/` | Dark-mode portal skeleton; port 5174 |
+
+**Decisions made:**
+
+- pnpm + Turborepo selected; `^build` chain ensures `@cia/ui` builds before apps.
+- Two apps: `@cia/back-office` (light, port 5173) and `@cia/partner` (dark, port 5174).
+- Three shared packages: `@cia/ui`, `@cia/api-client`, `@cia/auth`.
+- OKLCH color tokens stored as full `oklch(L C H)` values (not channels) for devtools readability.
+- Fonts: Bricolage Grotesque (headings) + Geist (body) via Google Fonts.
+- Icon library: hugeicons v1.1.6 (`@hugeicons/react`).
+- Shared packages are Vite env-agnostic; apps call `configureKeycloak()` and `initApiClient()` at startup.
+- Figma BackOffice file (fileKey: `Zaiu2K7NvEJ7Cjj6z1xt2D`) currently empty — designs stubbed as modules are built.
+- `tsc --noEmit` passes with zero errors on `@cia/back-office`.
+
+**Open questions:**
+
+- Partner portal auth flow: needs OAuth2 Client Credentials (machine-to-machine), not Keycloak human login.
+- Figma `get_design_context` requires Figma desktop app open with node selected (desktop plugin mode).
+
+---
+
+### Session 4b — UI Housecleaning (NubSure rebrand + topbar/sidebar enhancements)
+
+**Files modified:**
+
+| File | Change |
+|---|---|
+| `apps/back-office/index.html` | Title + description updated to "NubSure"; favicon set to `/logo.png` |
+| `apps/back-office/public/logo.png` | Nubeero PNG logo copied from `/Users/razormvp/Documents/Nubeero_Images/nubeeroLogo/` |
+| `apps/back-office/src/app/layout/AppShell.tsx` | Added `collapsed` state; passes to `Sidebar` and `Topbar`; sidebar `<aside>` uses `width` + `transition` for smooth collapse |
+| `apps/back-office/src/app/layout/Sidebar.tsx` | Full rewrite: logo PNG, "NubSure" name, hugeicons for all 10 modules, font 13→15px, collapsible (icon-only at 64px), `title` tooltip on collapsed items |
+| `apps/back-office/src/app/layout/Topbar.tsx` | Added hamburger toggle (left), search bar (flex-1, always visible), notification + help icons (right); accepts `collapsed` + `onToggle` props |
+| `packages/ui/package.json` & `apps/back-office/package.json` | Added `@hugeicons/core-free-icons@^4.1.1` dependency |
+
+**Decisions made:**
+
+- App name: **NubSure** (replaces CIAGB everywhere in frontend)
+- Logo: PNG asset at `/public/logo.png` (28×28px in sidebar)
+- Sidebar collapse trigger: **hamburger button in topbar** (best practice — stays visible when sidebar is collapsed)
+- Collapsed state: 64px wide, icon-only with native `title` tooltips
+- Collapse animation: `width 220ms cubic-bezier(0.16, 1, 0.3, 1)` CSS transition on `<aside>` in AppShell
+- hugeicons API: `HugeiconsIcon` renderer from `@hugeicons/react` + icon data from `@hugeicons/core-free-icons`
+- Icon mapping: Dashboard→`DashboardSquare01Icon`, Customers→`UserGroupIcon`, Quotation→`NoteEditIcon`, Policies→`Shield01Icon`, Endorsements→`FileEditIcon`, Claims→`AlertCircleIcon`, Finance→`Money01Icon`, Reinsurance→`RepeatIcon`, Setup→`Setting06Icon`, Audit→`Audit01Icon`
+- `tsc --noEmit` passes with zero errors after all changes
+
+**Open questions:** None.
+
+---
+
+### Session 4c — UI Polish, Figma Completion & Dev Tooling
+
+**Files modified:**
+
+| File | Change |
+|---|---|
+| `packages/ui/src/tokens.css` | Added `NairaFallback` @font-face (unicode-range U+20A6 → local Arial); added Noto Sans to Google Fonts import; `NairaFallback` placed first in `--font-display` and `--font-body` stacks |
+| `packages/auth/src/AuthProvider.tsx` | Added `DevAuthProvider` — mock context using same `AuthContext`, provides fake admin user; added `.catch()` to Keycloak init for graceful failure |
+| `packages/auth/src/keycloak.ts` | `onLoad: 'login-required'` in prod, `'check-sso'` in dev |
+| `packages/auth/src/index.ts` | Exports `DevAuthProvider` |
+| `apps/back-office/src/main.tsx` | Uses `DevAuthProvider` when `import.meta.env.DEV` — no Keycloak required for local dev |
+| `apps/back-office/tailwind.config.ts` | Changed import from `@cia/ui/tailwind.config` (package export) to `../../packages/ui/tailwind.config` (relative path) — fixes Tailwind PostCSS CJS loader |
+| `apps/partner/tailwind.config.ts` | Same relative path fix |
+| `packages/ui/package.json` | Added `"./tailwind.config": "./tailwind.config.ts"` to exports (belt-and-suspenders) |
+| `apps/back-office/src/app/layout/Sidebar.tsx` | Added `onToggle` prop; hamburger (`Menu01Icon`) moved to sidebar logo row (right side); sidebar group headings 10→11px; collapsed state: logo only + centered hamburger |
+| `apps/back-office/src/app/layout/Topbar.tsx` | Removed hamburger toggle (now in sidebar); Topbar is stateless — no props needed |
+| `apps/back-office/src/app/layout/AppShell.tsx` | Passes `onToggle` to `Sidebar`; `Topbar` receives no props |
+| `CLAUDE.md` | Frontend Architecture section replaced with actual monorepo structure; design system table; layout shell diagram; frontend patterns; VITE_ env vars table added |
+| `.claude/skills/cia/SKILL.md` | Frontend Conventions section added (14 conventions) |
+
+**Figma changes (file: `Zaiu2K7NvEJ7Cjj6z1xt2D`):**
+
+| Node | Change |
+|---|---|
+| Sidebar logo row | Real Nubeero PNG applied via `upload_assets` (not base64 decoding) — imageHash `48e815d859429d722f18ad2e1ce1dcedeab4a8b9` |
+| Sidebar logo row | Hamburger (≡) added to right side of logo row; removed from topbar |
+| Sidebar nav items | 10 placeholder squares replaced with proper SVG stroke-path vectors for each module |
+| Sidebar group labels | Font size 10→11px |
+| Topbar | Rebuilt: title + search bar + bell + ? icons; no hamburger |
+| Search bar | Height 36→37px |
+| Premiums (MTD) stat | ₦ character in `₦84.2M`, `vs ₦71.5M last month`, and activity row set to `Noto Sans Regular` via `setRangeFontName(i, i+1, ...)` |
+
+**Decisions made:**
+
+- Hamburger toggle lives in the **sidebar logo row** (right-aligned), not the topbar. Sidebar manages its own collapse trigger.
+- `DevAuthProvider` in `@cia/auth` (not in the app) so `useAuth()` works identically in both real and dev modes — same `AuthContext`.
+- Tailwind config shared via **relative path import only** — never via package name, because Tailwind's PostCSS plugin uses CJS `require()` which ignores `package.json` `exports`.
+- Naira sign ₦ (U+20A6): fixed at the CSS level via `unicode-range` scoped `@font-face` pointing to local Arial; fixed in Figma via `setRangeFontName` to Noto Sans per-character.
+- Figma image uploads use `mcp__claude_ai_Figma__upload_assets` + curl POST (not `figma.createImage()` with base64) — the latter silently fails in API/screenshot contexts.
+- React Query DevTools icon (bottom-right in dev) is intentional — dev-only, not part of production UI.
+
+**Open questions:** None.
