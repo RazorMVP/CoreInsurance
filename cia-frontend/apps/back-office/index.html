@@ -6,6 +6,21 @@
     <meta name="description" content="NubSure Back Office" />
     <link rel="icon" href="/logo.png" />
     <title>NubSure</title>
+
+    <!-- Preconnect to Google Fonts origins so DNS + TLS happen during HTML parse,
+         before the browser has seen any CSS. The second preconnect (gstatic) must
+         carry crossorigin because the woff2 fetch uses CORS mode. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- Load font stylesheet non-blocking. display=swap means text is immediately
+         visible with a system fallback while woff2 files download. Loading this
+         here (not via @import in CSS) means the font stylesheet fetch runs in
+         parallel with the main CSS bundle, not after it. -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Geist:wght@100..900&display=swap"
+    />
   </head>
   <body>
     <div id="root"></div>

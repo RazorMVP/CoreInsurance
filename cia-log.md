@@ -1362,3 +1362,32 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
 
 **Open questions:** None.
+
+---
+
+### Session 19 — Performance: fix 8s/5s load times
+
+**Root cause (diagnosed):** Five compounding issues caused slow loads:
+
+1. **`@import` in CSS** (biggest): `tokens.css` had `@import url('https://fonts.googleapis.com/...')`. CSS `@import` is render-blocking and sequential: browser parsed HTML → fetched CSS → then fetched the Google Fonts CSS → then fetched the actual woff2 files. 3-hop chain, all blocking render.
+2. **No Vercel cache headers**: Every revisit re-downloaded all JS/CSS. `Cache-Control` was absent, so Vercel defaulted to short caches.
+3. **Single monolithic vendor bundle**: All node_modules in one chunk. Any dependency update busted the entire vendor cache. Large parse cost per visit.
+4. **ReactQueryDevtools in production bundle**: ~60-80KB of devtools code shipped to prod users.
+5. **No browser preconnect**: Browser didn't pre-warm DNS + TLS to Google Fonts origins.
+
+**Fixes applied:**
+
+| Fix | File | Expected gain |
+|---|---|---|
+| Remove `@import`, load Google Fonts via `<link rel="stylesheet">` in HTML + `preconnect` hints | `tokens.css`, `index.html` | Fonts load in parallel with main CSS (not after); eliminates 3-hop blocking chain; ~3-4s first-paint improvement |
+| `Cache-Control: public, max-age=31536000, immutable` on `/assets/**` and `/fonts/**` | `vercel.json` | Repeat visits serve all JS/CSS from disk cache; ~4-5s improvement on return visits |
+| `Cache-Control: max-age=0, must-revalidate` on `/index.html` | `vercel.json` | Ensures index.html always revalidates (new deploy = new asset hashes) |
+| Manual chunk splitting: vendor-react, vendor-router, vendor-tanstack, vendor-radix, vendor-icons, vendor-forms, vendor-misc | `vite.config.ts` | React/Radix/icons each cache independently; partial deploys don't bust unrelated chunks |
+| Tree-shake ReactQueryDevtools from prod bundle via lazy import + compile-time `import.meta.env.DEV` guard | `main.tsx` | Removes ~60-80KB from prod bundle; devtools still work in dev |
+| Fix tsconfig.node.json: add `"types": ["node"]` and `"DOM"` to lib | `tsconfig.node.json`, `package.json` | Required for `path`/`__dirname` in vite.config.ts manualChunks; was a pre-existing bug exposed by the chunk config |
+
+**Note on font strategy:** The agent initially wrote self-hosted `@font-face` pointing to `/public/fonts/` (correct long-term approach) but those woff2 files don't exist yet. Adjusted to the `<link rel="stylesheet">` + `preconnect` approach — same render-unblocking benefit, no font files required. Self-hosting can be added later as an incremental improvement.
+
+**GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
+
+**Open questions:** None.

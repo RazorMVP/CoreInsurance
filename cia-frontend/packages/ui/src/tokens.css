@@ -1,4 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Geist:wght@100..900&family=Noto+Sans:wght@400;500;600&display=swap');
+/* ─── Fonts loaded via <link rel="stylesheet"> in index.html ────────────────
+   Bricolage Grotesque and Geist are loaded from Google Fonts with preconnect
+   hints so the stylesheet and woff2 fetches start during HTML parse rather
+   than after CSS is parsed. font-display=swap is requested via the URL param
+   so text is immediately visible with a system fallback while fonts load.
+   @import was removed — it serialises the fetch chain and is render-blocking. */
+
 /* ₦ (U+20A6) glyph fix — Bricolage Grotesque and Geist lack this character.
    NairaFallback is scoped only to U+20A6, so Arial renders ₦ while all other
    characters still use the primary display/body fonts. */
