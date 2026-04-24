@@ -1,0 +1,9 @@
+{
+  "buildCommand": "pnpm --filter @cia/back-office build",
+  "outputDirectory": "apps/back-office/dist",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
