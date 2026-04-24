@@ -940,6 +940,189 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 ---
 
+## Frontend Build Queue
+
+**Purpose:** Authoritative ordered build list for `cia-frontend/`. Update status as each build is completed. Use this section for ongoing audit of frontend progress.
+
+**Status legend:** `[ ]` not started · `[~]` in progress · `[x]` complete
+
+---
+
+### Phase 1 — Shared Infrastructure (`packages/ui` + `packages/api-client`)
+
+> Must be completed before any module UI. All 10 modules depend on these.
+
+| Status | Build | Deliverables |
+|---|---|---|
+| `[ ]` | **1a. shadcn component library** | Input, Select, Textarea, Checkbox, Switch, Tabs, Dialog/Modal, Toast, Dropdown, Badge (extended), Avatar |
+| `[ ]` | **1b. Data table** | Sortable columns, filter bar, cursor pagination, row actions menu, empty state |
+| `[ ]` | **1c. Page layout components** | PageHeader (title + actions slot), Breadcrumb, PageSection, EmptyState, Skeleton loaders, StatCard |
+| `[ ]` | **1d. Form infrastructure** | React Hook Form + Zod wiring, FieldError, FormSection, FormRow, controlled file upload, rich-text editor wrapper |
+| `[ ]` | **1e. API types + React Query hooks** | TypeScript DTOs for all 10 modules mirroring backend, `useList` / `useGet` / `useMutate` base hooks, error handling, optimistic updates |
+
+---
+
+### Phase 2 — Back Office Module Builds (in recommended order)
+
+#### Build 2 — Module 1: Setup & Administration (35 features) 🔴 Highest priority — unlocks all other modules
+
+| Status | Sub-page | Key features |
+|---|---|---|
+| `[ ]` | Company Settings | Company profile, logo upload, password policy, system defaults |
+| `[ ]` | User Management | User list, create/edit user, role assignment, access group assignment, password reset |
+| `[ ]` | Access Groups | Create/edit group, assign permissions per module |
+| `[ ]` | Approval Groups | Single-level and multi-level config, amount ranges, approver assignment |
+| `[ ]` | Classes of Business | List, create/edit, link to products |
+| `[ ]` | Products | Single-risk and multi-risk product setup, sections, commission setup, policy spec, number format, survey thresholds |
+| `[ ]` | Policy Specifications | Clause bank, template upload/management |
+| `[ ]` | Claims Setup | Reserve categories, notification timelines, required documents, nature/cause of loss |
+| `[ ]` | Organisations | Broker, Reinsurance Company, Insurance Company, Branch, SBU, RM, Surveyor — all with create/edit/soft-delete |
+| `[ ]` | Vehicle Registry | Makes, models, types — used for motor class |
+| `[ ]` | Partner App Management | Create/revoke partner apps, configure scopes, rate limits, webhook secrets, usage dashboard |
+
+---
+
+#### Build 3 — Module 7: Customer Onboarding (10 features) 🟠
+
+| Status | Sub-page | Key features |
+|---|---|---|
+| `[ ]` | Individual Onboarding | Form + KYC document upload, ID type selection, KYC status display |
+| `[ ]` | Corporate Onboarding | Company details, director management (add/remove/verify), RC Number KYC |
+| `[ ]` | Broker-enabled flows | Onboarding via broker with broker reference |
+| `[ ]` | KYC Update | Re-submit KYC documents, update verification |
+| `[ ]` | Customer Summary | Profile, KYC status, contact details, linked broker |
+| `[ ]` | Customer History | Policy history tab, claim history tab |
+| `[ ]` | Reports | Loss ratio report, active customers report |
+
+---
+
+#### Build 4 — Module 2: Quotation (5 features) 🟡
+
+| Status | Sub-page | Key features |
+|---|---|---|
+| `[ ]` | Create Quote | Customer selection, product/class selection, risk details form, premium calculation preview |
+| `[ ]` | Multi-risk Quote | Section-level risk items, section premiums, product-level discount |
+| `[ ]` | Bulk Upload | CSV upload for individual quotes or multi-risk items, validation errors display |
+| `[ ]` | Quote Detail | Version history timeline, edit/modify, coinsurance participants |
+| `[ ]` | Quote Approval | Submit for approval, approval/rejection flow, status badge |
+
+---
+
+#### Build 5 — Module 3: Policy (23 features) 🟡
+
+| Status | Sub-page | Key features |
+|---|---|---|
+| `[ ]` | Convert Quote to Policy | Business type selection (Direct / Direct with Coinsurance / Inward Coinsurance), risk carry-over |
+| `[ ]` | Create Policy Without Quote | Full policy form from scratch |
+| `[ ]` | Risk Details | Manual entry + bulk upload, risk item list |
+| `[ ]` | Policy Specifications | Clause bank editor, editable rich-text template, signature append |
+| `[ ]` | Payment + Commission | Debit note preview, payment terms, commission setup |
+| `[ ]` | Coinsurance | Participant list, share percentages (must sum to 100%) |
+| `[ ]` | Policy Approval Flow | Submit → approval/rejection → NAICOM upload status indicator |
+| `[ ]` | Policy Document | Send document, document acknowledgement tracking |
+| `[ ]` | Debit Note | View generated debit note, link to finance |
+| `[ ]` | Survey Process | Pre-loss survey trigger, internal/external, override, approval |
+| `[ ]` | Policy Details Page | Full policy view, status timeline, linked endorsements/claims |
+| `[ ]` | Renewal Notice | Renewal schedule display, manual trigger |
+
+---
+
+#### Build 6 — Module 8: Finance (5 features) 🟢
+
+| Status | Sub-page | Key features |
+|---|---|---|
+| `[ ]` | Receipts | Post receipt against debit note, receipt list |
+| `[ ]` | Bulk Receipts | Select multiple debit notes, batch post |
+| `[ ]` | Receipt Approval | Submit/approve/reject receipts |
+| `[ ]` | Payables | Credit note list, payable detail view |
+| `[ ]` | Payment Approval | Submit payment against credit note, approval flow |
+
+---
+
+#### Build 7 — Module 4: Endorsements (10 features) 🔵
+
+| Status | Sub-page | Key features |
+|---|---|---|
+| `[ ]` | Create Endorsement | Endorsement type selection (renewal/extension/cancellation/reversal/change), pro-rata premium preview |
+| `[ ]` | Increase/Decrease Sum Insured | Risk item update, premium recalculation |
+| `[ ]` | Add/Delete Insured Items | Risk item management on existing policy |
+| `[ ]` | Endorsement Approval | Submit → approve/reject flow |
+| `[ ]` | Debit Note Analysis Report | Endorsement premium movements report |
+
+---
+
+#### Build 8 — Module 5: Claims (23 features) 🔵
+
+| Status | Sub-page | Key features |
+|---|---|---|
+| `[ ]` | Claim Notification | First notification of loss form, timeline tracking |
+| `[ ]` | Claim Registration | Full registration, document checklist, missing document tracking |
+| `[ ]` | Bulk Claim Registration | CSV upload for individual or single claim with multiple items |
+| `[ ]` | Claim Dashboard | Open claims, pending approvals, reserve summary |
+| `[ ]` | Claim Detail | Edit/cancel, status timeline, linked policy, risk details |
+| `[ ]` | Claim Processing | Reserves, expenses, allocation (treaty-based), comments, recovery |
+| `[ ]` | Loss Inspection | Assign internal/external surveyor, inspection approval |
+| `[ ]` | Claim Approval | Submit → approve/reject, DV generation |
+| `[ ]` | DV Generation | Own damage / third party / ex-gratia DV types |
+| `[ ]` | DV Execution | Online portal execution, process executed DV, close claim |
+
+---
+
+#### Build 9 — Module 6: Reinsurance (17 features) 🟣
+
+| Status | Sub-page | Key features |
+|---|---|---|
+| `[ ]` | Peril Group Setup | Create/edit peril groups |
+| `[ ]` | Treaty Setup | Surplus / Quota Share / XOL treaty configuration, participants |
+| `[ ]` | RI Allocation | Auto-allocation display per policy, manual confirmation for excess-capacity policies |
+| `[ ]` | RI Confirmation | Approve/reject RI allocation, batch approval |
+| `[ ]` | Outward FAC | Offer slip generation, credit note generation |
+| `[ ]` | Inward FAC | FAC inward policy generation, renewal/extension endorsements |
+| `[ ]` | Batch Reallocation | Treaty batch reallocation on parameter change |
+| `[ ]` | Returns & Bordereaux | Monthly/quarterly returns, claims and premium bordereaux |
+| `[ ]` | RI Recoveries | Recovery tracking against treaty |
+
+---
+
+#### Build 10 — Module 10: Audit & Compliance (15 features) ⚪ Can run in parallel with Builds 8–9
+
+| Status | Sub-page | Key features |
+|---|---|---|
+| `[ ]` | Audit Log Viewer | Filter by entity type, entity ID, user, action, date range; before/after JSONB diff view |
+| `[ ]` | Login & Session Log | LOGIN/LOGOUT/LOGIN_FAILED/PASSWORD_RESET/ACCOUNT_LOCKED events |
+| `[ ]` | CSV Export | Export filtered audit logs |
+| `[ ]` | 6 Pre-built Reports | Actions by user, actions by module, approval audit trail, data change history, login security, ranked user activity |
+| `[ ]` | Real-time Alerts | Alert list, acknowledge flow, alert configuration (thresholds, business hours, retention) |
+
+---
+
+### Phase 3 — Partner Portal (`apps/partner`)
+
+> Start after Phase 2 Builds 2–6 are complete (core insurance workflow live).
+
+| Status | Build | Deliverables |
+|---|---|---|
+| `[ ]` | **P1. Authentication** | OAuth2 client credentials display, token test flow, scope overview |
+| `[ ]` | **P2. API Explorer** | Interactive API documentation, request builder, response viewer |
+| `[ ]` | **P3. Webhook Management** | Register/list/delete webhooks, delivery log, retry status, signing secret display |
+| `[ ]` | **P4. Sandbox** | Sandbox mode toggle, sandbox data indicator, test credential management |
+| `[ ]` | **P5. Usage Dashboard** | Request counts, error rates, rate limit tier display |
+
+---
+
+### Build Progress Summary
+
+| Phase | Builds | Complete | Status |
+|---|---|---|---|
+| Phase 1 — Infrastructure | 5 | 0 | `[ ]` Not started |
+| Phase 2 — Back Office Modules | 9 | 0 | `[ ]` Not started |
+| Phase 3 — Partner Portal | 5 | 0 | `[ ]` Not started |
+| **Total** | **19** | **0** | **0% complete** |
+
+> Update the status column and progress summary as builds complete. Each completed build should also be reflected in cia-log.md under the session that finished it.
+
+---
+
 ## Open Questions (Resolve Before Building Affected Modules)
 
 1. ~~**KYC Provider**~~ — **Resolved: provider-agnostic abstraction** (`KycVerificationService` interface; implementations per provider injected via config).

@@ -854,3 +854,34 @@ Tables: `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`.
 **Production URL:** [back-office-blush-six.vercel.app](https://back-office-blush-six.vercel.app)
 
 **Open questions:** None.
+
+---
+
+### Session 4e — Frontend Build Queue Established
+
+**Decision:** A comprehensive, ordered frontend build queue has been saved in `CLAUDE.md` under the section **"Frontend Build Queue"**. This section is the authoritative tracker for all frontend work and must be kept up to date throughout the build.
+
+**Build queue summary:**
+
+| Phase | Builds | Description |
+|---|---|---|
+| Phase 1 | 1a–1e | Shared infrastructure (shadcn components, data table, page layout, form infrastructure, API types + hooks) |
+| Phase 2 | Builds 2–10 | All 9 back-office modules in build order |
+| Phase 3 | P1–P5 | Partner portal (auth, API explorer, webhooks, sandbox, usage dashboard) |
+| **Total** | **19 builds** | **0% complete as of 2026-04-24** |
+
+**Build order (Phase 2):**
+
+1. Module 1 — Setup & Administration (35 features) — unlocks all other modules
+2. Module 7 — Customer Onboarding (10 features)
+3. Module 2 — Quotation (5 features)
+4. Module 3 — Policy (23 features)
+5. Module 8 — Finance (5 features)
+6. Module 4 — Endorsements (10 features)
+7. Module 5 — Claims (23 features)
+8. Module 6 — Reinsurance (17 features)
+9. Module 10 — Audit & Compliance (15 features) — can run parallel with Builds 8–9
+
+**Audit protocol:** At the start of every frontend session, check `CLAUDE.md → Frontend Build Queue` for current status. Update the `[ ]` / `[~]` / `[x]` checkboxes as builds progress. At session end, the SESSION COMPLETION GATE Stop hook will prompt verification.
+
+**Open questions:** None.
