@@ -1085,3 +1085,33 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** commit `f12aa22` | **Vercel:** auto-deploy triggered via GitHub Actions
 
 **Open questions:** None.
+---
+
+### Session 10 — Build 7: Endorsements module complete
+
+**Build queue progress: 11/19 builds complete (58%)**
+
+**Files created:**
+
+| File | Description |
+|---|---|
+| `apps/back-office/src/modules/endorsements/index.tsx` | Module routing: list, detail (/:id), Debit Note Analysis report |
+| `apps/back-office/src/modules/endorsements/pages/EndorsementsListPage.tsx` | DataTable with type badge (blue, all 10 types), pro-rata (red when negative), status variants, Debit Note Analysis + New Endorsement buttons |
+| `apps/back-office/src/modules/endorsements/pages/create/CreateEndorsementSheet.tsx` | Type-driven form: type selection reshapes fields — period dates / new SI with indicative pro-rata / item description / info banners for cancellation and reversal |
+| `apps/back-office/src/modules/endorsements/pages/detail/EndorsementDetailPage.tsx` | 2-column cards (details + premium impact), approval timeline with step indicators, debit/credit note generation note |
+| `apps/back-office/src/modules/endorsements/pages/reports/DebitNoteAnalysisPage.tsx` | By period + by type tables; StatCards; Export CSV button |
+| `packages/api-client/src/modules/endorsement.ts` | `EndorsementDto`, `EndorsementStatus`, `EndorsementType` (10 values) |
+
+**Figma:** Endorsements page created (id: `81:2`)
+- `Endorsements / List` (node `81:3`): blue type badges, red negative pro-rata values, all 4 status variants
+
+**Decisions made:**
+- `EndorsementDto` was missing from `@cia/api-client` — added `endorsement.ts` and exported it from `modules/index.ts`.
+- CreateEndorsementSheet uses conditional rendering (not tabs) to reshape fields based on type: `showPeriodFields`, `showSIFields`, `showItemFields`, `showCancelFields`, `showReversalNote` derived from `endorsementType` watch.
+- Pro-rata premium for Decrease SI shown as a credit (red, negative) in the premium impact card on EndorsementDetailPage.
+- `calcProRata()` function uses `(annualPremium / 365) × daysAffected` — indicative only; final calculation on the server.
+- Figma connection timed out on first attempt (script too long); fixed by reducing verbosity and loading all fonts upfront.
+
+**GitHub:** commit `03d0234` | **Vercel:** auto-deploy triggered via GitHub Actions
+
+**Open questions:** None.
