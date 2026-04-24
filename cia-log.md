@@ -1143,3 +1143,33 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** commit `8b5633b` | **Vercel:** auto-deploy triggered via GitHub Actions
 
 **Open questions:** None.
+---
+
+### Session 12 — Build 9: Reinsurance module complete
+
+**Build queue progress: 13/19 builds complete (68%)**
+
+**Files created:**
+
+| File | Description |
+|---|---|
+| `apps/back-office/src/modules/reinsurance/index.tsx` | Module routing — single ReinsurancePage |
+| `apps/back-office/src/modules/reinsurance/pages/ReinsurancePage.tsx` | 4-tab layout: Treaties, Allocations, Facultative, Returns & Reports |
+| `apps/back-office/src/modules/reinsurance/pages/treaties/TreatiesTab.tsx` | Treaty DataTable (colour-coded Surplus/QS/XOL chips, retention, capacity, reinsurer shares) + treaty summary cards + Batch Reallocation button |
+| `apps/back-office/src/modules/reinsurance/pages/treaties/TreatySheet.tsx` | Type-driven form: limits hidden for QS; useFieldArray reinsurers with running total; Save disabled until total = 100% |
+| `apps/back-office/src/modules/reinsurance/pages/allocations/AllocationsTab.tsx` | Allocations DataTable (4 status variants); conditional alert banners for pending confirmation and excess capacity |
+| `apps/back-office/src/modules/reinsurance/pages/fac/FACTab.tsx` | Outward FAC sub-tab (offer status, credit note action) + Inward FAC sub-tab (ceding company, our share, renew/extend) |
+| `apps/back-office/src/modules/reinsurance/pages/reports/ReportsTab.tsx` | Bordereaux (premium + claims tables), Recoveries, and Returns (quarterly list) sub-tabs |
+
+**Figma:** Reinsurance page created (id: `87:2`)
+- `Reinsurance / Treaties` (node `87:3`): treaty list with Surplus/QS/XOL type chips, 4-tab header
+
+**Decisions made:**
+- TreatySheet Save button is disabled when reinsurer shares don't sum to 100% — enforced in the UI before the API call so users can't accidentally create an underweight or overweight treaty.
+- AllocationsTab shows alert banners conditionally: "pending confirmation" banner only when `AUTO_ALLOCATED` count > 0; "excess capacity" banner only when `EXCESS_CAPACITY` count > 0. No noise when everything is clean.
+- FACTab uses Tabs within the main Reinsurance Tabs (nested tabs) — this is intentional since Outward and Inward FAC are distinct enough to warrant separation.
+- Figma screenshot API returned a remote URL instead of inline image this session — frame was created successfully (confirmed by non-null pageId/shellId).
+
+**GitHub:** commit `c988d30` | **Vercel:** auto-deploy triggered via GitHub Actions
+
+**Open questions:** None.
