@@ -39,6 +39,14 @@
             "type": "command",
             "command": "python3 -c \"import json; print(json.dumps({'systemMessage': '── CIA SESSION COMPLETION GATE ─────────────────────────────────\\n\\n  [1] cia-log.md      -- date heading + files changed + decisions + build progress\\n  [2] CLAUDE.md       -- frontend arch / env vars / modules / business rules changed?\\n  [3] BUILD QUEUE     -- CLAUDE.md Frontend Build Queue status updated?\\n                      -- sub-pages: [ ] not started | [~] in progress | [x] complete\\n                      -- Build row: [x] only when ALL sub-pages are [x]\\n                      -- Progress Summary: count + % recalculated?\\n                      -- Sub-page descriptions updated if feature was enhanced?\\n  [4] SKILL.md        -- module count / frontend conventions / icon mapping changed?\\n  [5] Frontend        -- pnpm --filter @cia/back-office typecheck  (must exit 0)\\n                      -- Tailwind imports use relative paths, not package name\\n                      -- NairaFallback @font-face present in tokens.css\\n                      -- DevAuthProvider only behind import.meta.env.DEV\\n  [6] Figma Sync      -- new/changed screen pushed to Zaiu2K7NvEJ7Cjj6z1xt2D?\\n                      -- use_figma skill loaded before every use_figma call\\n                      -- Naira sign: setRangeFontName(i,i+1,Noto Sans) per char\\n  [7] OpenAPI         -- /partner/v1/ endpoints: @Operation @ApiResponse @Schema\\n  [8] Postman         -- noted in cia-log.md if endpoint shape changed\\n  [9] Backend APIs    -- service interfaces + DTOs match business rules\\n\\nComplete any incomplete items before closing.\\n──────────────────────────────────────────────────────────────'}))\"",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash /Users/razormvp/CoreInsurance/.claude/hooks/check-session-gate.sh",
+            "asyncRewake": true,
+            "timeout": 15,
+            "rewakeMessage": "⚠️ SESSION GATE INCOMPLETE — fix these before closing:",
+            "rewakeSummary": "Session gate check — items still missing"
           }
         ]
       }
