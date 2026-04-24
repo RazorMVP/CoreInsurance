@@ -1427,3 +1427,38 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **Open questions:** None.
 
 **Outcome confirmed:** App loaded in under 2 seconds after deploying `408af8a`. The `manualChunks` was causing a browser-side module initialization ordering issue — confirmed by the fact that reverting it immediately fixed the blank page. The remaining 3 performance improvements (font loading, devtools tree-shake, Vercel cache headers) are working and producing the measurable improvement.
+
+---
+
+## 2026-04-24 (continued)
+
+### Session 22 — Build 10: Audit & Compliance module
+
+**Files created/modified:**
+
+| File | Change |
+|---|---|
+| `modules/audit/index.tsx` | Updated — replaced placeholder with `export { default } from './pages/AuditPage'` |
+| `modules/audit/pages/AuditPage.tsx` | New — main page: PageHeader + 4 StatCards (Events Today, Failed Logins 24h, Open Alerts, Data Changes 7d) + Tabs (Audit Log \| Login & Sessions \| Reports \| Alerts with open-alert count badge) |
+| `modules/audit/pages/audit-log/AuditLogTab.tsx` | New — filter bar (entity type, action, user, entity ref, date from/to); 15 mock entries across POLICY/CLAIM/CUSTOMER/ENDORSEMENT/QUOTE/RECEIPT/PAYMENT/USER/REINSURANCE/PARTNER_APP; entity ref column is clickable → AuditEventDetailSheet; client-side CSV export via Blob + createObjectURL; filtered count shown on Export button |
+| `modules/audit/pages/audit-log/AuditEventDetailSheet.tsx` | New — full event details (entity type, ref, action, user, IP, session ID, timestamp) + side-by-side before/after JSON panels in scrollable pre blocks |
+| `modules/audit/pages/login-log/LoginLogTab.tsx` | New — filter by event type (ALL/LOGIN/LOGOUT/LOGIN_FAILED/PASSWORD_RESET/ACCOUNT_LOCKED), user/email, date range; 12 mock entries including 3 consecutive failed logins + account lock; CSV export |
+| `modules/audit/pages/reports/ReportsTab.tsx` | New — 6 sub-tabs: Actions by User (ranked by total), Actions by Module (with today/week/month counts), Approval Audit Trail, Data Change History (field-level old→new), Login Security (with Low/Medium/High risk badge), User Activity Summary (activity score); Export CSV button on each |
+| `modules/audit/pages/alerts/AlertsTab.tsx` | New — DataTable of alerts (OPEN/ACKNOWLEDGED) with severity badges; open-alerts banner; Acknowledge confirmation Dialog; alert threshold summary cards; Configure Alerts button → AlertConfigDialog |
+| `modules/audit/pages/alerts/AlertConfigDialog.tsx` | New — RHF+Zod form: failed login threshold, bulk delete threshold, large approval threshold (₦), business hours start/end, retention years, email alert toggle + recipients; System Admin only |
+
+**Decisions made:**
+- CSV export is client-side (Blob + createObjectURL) — no backend round-trip needed for the stub. Both AuditLogTab and LoginLogTab export filtered rows only, with today's date in the filename.
+- Entity ref cells in AuditLogTab are `<button>` elements that open the detail Sheet — the standard pattern used throughout (policy number in PolicyListPage, debit note in ReceivablesTab, etc.).
+- `onRowClick` does NOT exist on `DataTable` — row drill-down is always via a clickable cell or row-actions menu.
+- The before/after JSON diff shows both panels side-by-side even when one is null (shows "No data" placeholder). Full JSON is in a scrollable `max-h-64` `pre` block.
+- AlertConfigDialog resets to defaults on cancel/close — prevents stale form state if the dialog is reopened.
+
+**Build Queue update:**
+- Build 10 (Audit & Compliance) → all 5 sub-pages marked `[x]`
+- Phase 2 count: 9/9 complete
+- Progress Summary: 14/19 (74%)
+
+**GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
+
+**Open questions:** None.

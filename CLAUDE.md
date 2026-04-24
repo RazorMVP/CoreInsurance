@@ -1084,15 +1084,15 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 ---
 
-#### Build 10 — Module 10: Audit & Compliance (15 features) ⚪ Can run in parallel with Builds 8–9
+#### Build 10 — Module 10: Audit & Compliance (15 features) ✅
 
 | Status | Sub-page | Key features |
 |---|---|---|
-| `[ ]` | Audit Log Viewer | Filter by entity type, entity ID, user, action, date range; before/after JSONB diff view |
-| `[ ]` | Login & Session Log | LOGIN/LOGOUT/LOGIN_FAILED/PASSWORD_RESET/ACCOUNT_LOCKED events |
-| `[ ]` | CSV Export | Export filtered audit logs |
-| `[ ]` | 6 Pre-built Reports | Actions by user, actions by module, approval audit trail, data change history, login security, ranked user activity |
-| `[ ]` | Real-time Alerts | Alert list, acknowledge flow, alert configuration (thresholds, business hours, retention) |
+| `[x]` | Audit Log Viewer | AuditLogTab — filter bar (entity type, action, user, entity ref, date range); DataTable with 15 mock entries; entity ref cells clickable → AuditEventDetailSheet (before/after JSON panels side-by-side); client-side CSV export |
+| `[x]` | Login & Session Log | LoginLogTab — filter by event type, user, date; DataTable with 12 entries; LOGIN/LOGOUT/LOGIN_FAILED/PASSWORD_RESET/ACCOUNT_LOCKED event type badges; CSV export |
+| `[x]` | CSV Export | Integrated into AuditLogTab and LoginLogTab — `exportCSV()` uses Blob + createObjectURL; filename includes today's date; exports filtered rows only |
+| `[x]` | 6 Pre-built Reports | ReportsTab — 6 sub-tabs: Actions by User (ranked), Actions by Module, Approval Audit Trail, Data Change History, Login Security Report (with risk badge), User Activity Summary (activity score); Export CSV button on each |
+| `[x]` | Real-time Alerts | AlertsTab — alert list DataTable (OPEN/ACKNOWLEDGED) with severity badges; Acknowledge confirmation Dialog; alert threshold summary cards; AlertConfigDialog (failed login threshold, bulk delete threshold, large approval ₦ threshold, business hours, retention years, email alert toggle + recipients) |
 
 ---
 
@@ -1115,9 +1115,9 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 | Phase | Builds | Complete | Status |
 |---|---|---|---|
 | Phase 1 — Infrastructure | 5 | 5 | `[x]` Complete |
-| Phase 2 — Back Office Modules | 9 | 8 | `[~]` In progress |
+| Phase 2 — Back Office Modules | 9 | 9 | `[x]` Complete |
 | Phase 3 — Partner Portal | 5 | 0 | `[ ]` Not started |
-| **Total** | **19** | **13** | **68% complete** |
+| **Total** | **19** | **14** | **74% complete** |
 
 > Update the status column and progress summary as builds complete. Each completed build should also be reflected in cia-log.md under the session that finished it.
 
