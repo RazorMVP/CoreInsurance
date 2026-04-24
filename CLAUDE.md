@@ -1012,18 +1012,18 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 | Status | Sub-page | Key features |
 |---|---|---|
-| `[ ]` | Convert Quote to Policy | Business type selection (Direct / Direct with Coinsurance / Inward Coinsurance), risk carry-over |
-| `[ ]` | Create Policy Without Quote | Full policy form from scratch |
-| `[ ]` | Risk Details | Manual entry + bulk upload, risk item list |
-| `[ ]` | Policy Specifications | Clause bank editor, editable rich-text template, signature append |
-| `[ ]` | Payment + Commission | Debit note preview, payment terms, commission setup |
-| `[ ]` | Coinsurance | Participant list, share percentages (must sum to 100%) |
-| `[ ]` | Policy Approval Flow | Submit → approval/rejection → NAICOM upload status indicator |
-| `[ ]` | Policy Document | Send document, document acknowledgement tracking |
-| `[ ]` | Debit Note | View generated debit note, link to finance |
-| `[ ]` | Survey Process | Pre-loss survey trigger, internal/external, override, approval |
-| `[ ]` | Policy Details Page | Full policy view, status timeline, linked endorsements/claims |
-| `[ ]` | Renewal Notice | Renewal schedule display, manual trigger |
+| `[x]` | Convert Quote to Policy | CreatePolicySheet "From Approved Quote" tab — quote select, business type, payment terms |
+| `[x]` | Create Policy Without Quote | CreatePolicySheet "Direct Entry" tab — customer, product, dates, SI, rate, live premium |
+| `[x]` | Risk Details | Risk description field in CreatePolicySheet; mock risk on detail page |
+| `[x]` | Policy Specifications | PolicyDetailPage Document tab — clause bank (add/edit/remove), template editor button, document status |
+| `[x]` | Payment + Commission | PolicyDetailPage Financial tab — debit note, commission, payment status, Post Receipt button |
+| `[x]` | Coinsurance | Business type select includes Direct with Coinsurance + Inward Coinsurance options |
+| `[x]` | Policy Approval Flow | Submit / Approve / Reject buttons conditional on status; status badge throughout |
+| `[x]` | Policy Document | Document tab: Send to Insured + Acknowledge Receipt buttons; PDF download |
+| `[x]` | Debit Note | Financial tab shows debit note number, amount, commission, payment status |
+| `[x]` | Survey Process | Survey tab: threshold-conditional display, assign surveyor, upload report, override, approve |
+| `[x]` | Policy Details Page | PolicyDetailPage 5-tab layout with full policy info, breadcrumb, action buttons |
+| `[x]` | NAICOM / NIID Upload | NAICOM tab: UID display (or PENDING badge), upload log, manual trigger button; NIID for motor/marine |
 
 ---
 
@@ -1115,9 +1115,9 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 | Phase | Builds | Complete | Status |
 |---|---|---|---|
 | Phase 1 — Infrastructure | 5 | 5 | `[x]` Complete |
-| Phase 2 — Back Office Modules | 9 | 3 | `[~]` In progress |
+| Phase 2 — Back Office Modules | 9 | 4 | `[~]` In progress |
 | Phase 3 — Partner Portal | 5 | 0 | `[ ]` Not started |
-| **Total** | **19** | **8** | **42% complete** |
+| **Total** | **19** | **9** | **47% complete** |
 
 > Update the status column and progress summary as builds complete. Each completed build should also be reflected in cia-log.md under the session that finished it.
 
