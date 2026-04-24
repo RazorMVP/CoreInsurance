@@ -1115,3 +1115,31 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** commit `03d0234` | **Vercel:** auto-deploy triggered via GitHub Actions
 
 **Open questions:** None.
+---
+
+### Session 11 — Build 8: Claims module complete
+
+**Build queue progress: 12/19 builds complete (63%)**
+
+**Files created:**
+
+| File | Description |
+|---|---|
+| `apps/back-office/src/modules/claims/index.tsx` | Module routing: list, detail (/:id), bulk |
+| `apps/back-office/src/modules/claims/pages/ClaimsListPage.tsx` | StatCard row (Open/Reserve/Paid YTD) + DataTable with 6 status variants, reserve + paid columns, status-conditional row actions |
+| `apps/back-office/src/modules/claims/pages/register/RegisterClaimSheet.tsx` | Full claim registration: policy, dates, nature/cause selects, location, description, estimated loss, contact |
+| `apps/back-office/src/modules/claims/pages/detail/ClaimDetailPage.tsx` | 5-tab layout: Summary (incident + financial cards), Processing (reserves/expenses/comments), Documents (checklist + upload), Inspection (assign/approve/override), DV (Own Damage/Third Party/Ex-gratia type selection, amount, generate, execute) |
+| `apps/back-office/src/modules/claims/pages/bulk/BulkClaimPage.tsx` | CSV drag-and-drop, validation results, template download |
+
+**Figma:** Claims page created (id: `84:2`)
+- `Claims / List` (node `84:3`): 3 StatCards, DataTable with all status variants, paid amount in teal for settled claim
+
+**Decisions made:**
+- StatCard row on ClaimsListPage gives financial overview without navigating — underwriters and claims officers need reserve totals at a glance.
+- Missing docs count shown in two places: page header badge AND Processing tab trigger — ensuring the missing document state is impossible to miss.
+- DV generation uses local state (`dvGenerated`, `dvType`, `dvAmount`) to simulate the generate → execute flow. When backend is wired, Generate DV posts to `/api/v1/claims/:id/dv` and Execute DV updates the DV record to EXECUTED.
+- `canGenDv` variable removed (unused after status check was inlined) — TypeScript strict mode catches this.
+
+**GitHub:** commit `8b5633b` | **Vercel:** auto-deploy triggered via GitHub Actions
+
+**Open questions:** None.
