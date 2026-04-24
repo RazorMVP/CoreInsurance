@@ -1212,3 +1212,27 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** commit `cb5d9db` | **Vercel:** auto-deploy triggered
 
 **Open questions:** None.
+---
+
+## 2026-04-23
+
+### Session 13 — AllocationsTab: Fix 4 broken interaction buttons
+
+**Files modified/created:**
+
+| File | Change |
+|---|---|
+| `apps/back-office/src/modules/reinsurance/pages/allocations/AllocationsTab.tsx` | Modified — wired all 4 interactions via local useState; policy numbers now open PolicyAllocationSheet; "Confirm All" opens Dialog with list of pending allocations; "Create FAC" banner button and row action open CreateFACOfferSheet; "Batch Reallocation" opens BatchReallocationSheet |
+| `apps/back-office/src/modules/reinsurance/pages/allocations/PolicyAllocationSheet.tsx` | New — right-side Sheet showing policy detail card + RI allocation with visual retention/ceding split bar; Confirm button (AUTO_ALLOCATED), Approve + Decline buttons (CONFIRMED), FAC info banner (EXCESS_CAPACITY) |
+| `apps/back-office/src/modules/reinsurance/pages/allocations/BatchReallocationSheet.tsx` | New — multi-select checkbox list of reallocatable policies (non-APPROVED), "Select all (N)" shortcut, new treaty select, effective date, reason field; submit button disabled until at least one policy selected, label shows count |
+
+**Decisions made:**
+- Policy number cell in the table is a clickable `<button>` that opens PolicyAllocationSheet — consistent with the "click row to drill down" pattern used in Claims and Policy modules.
+- `pendingConfirmation` and `excessCapacity` are now arrays (not counts) so the "Confirm All" dialog can render the full list of affected policies inline.
+- PolicyAllocationSheet gets `allocation: Allocation | null` — returns null when nothing selected; the Sheet `open` prop derives from `viewAllocation !== null`, keeping the guard clean.
+- BatchReallocationSheet filters `allocations.filter(a => a.status !== 'APPROVED')` — APPROVED allocations cannot be reallocated without a reversal first.
+- Added `treatyYear: number` to PolicyAllocationSheet's `Allocation` interface (was missing, caused TS2551 on line 104).
+
+**GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
+
+**Open questions:** None.

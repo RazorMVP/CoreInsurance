@@ -1,8 +1,13 @@
+import { useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
   PageSection,
 } from '@cia/ui';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
+import PolicyAllocationSheet  from './PolicyAllocationSheet';
+import BatchReallocationSheet from './BatchReallocationSheet';
+import CreateFACOfferSheet    from '../fac/CreateFACOfferSheet';
 
 type AllocStatus = 'AUTO_ALLOCATED' | 'CONFIRMED' | 'APPROVED' | 'EXCESS_CAPACITY';
 
@@ -43,14 +48,27 @@ const stLabel: Record<AllocStatus, string> = {
 };
 
 export default function AllocationsTab() {
-  const pendingConfirmation = mockAllocations.filter(a => a.status === 'AUTO_ALLOCATED').length;
-  const excessCapacity      = mockAllocations.filter(a => a.status === 'EXCESS_CAPACITY').length;
+  const [viewAllocation, setViewAllocation] = useState<AllocationDto | null>(null);
+  const [batchRealloc,   setBatchRealloc]   = useState(false);
+  const [confirmAllOpen, setConfirmAllOpen] = useState(false);
+  const [facOpen,        setFacOpen]        = useState(false);
+
+  const pendingConfirmation = mockAllocations.filter(a => a.status === 'AUTO_ALLOCATED');
+  const excessCapacity      = mockAllocations.filter(a => a.status === 'EXCESS_CAPACITY');
 
   const columns: ColumnDef<AllocationDto>[] = [
     {
       accessorKey: 'policyNumber',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Policy" />,
-      cell: ({ getValue }) => <span className="font-mono text-xs text-primary">{getValue() as string}</span>,
+      cell: ({ row }) => (
+        <button
+          type="button"
+          className="font-mono text-xs text-primary hover:underline underline-offset-2"
+          onClick={() => setViewAllocation(row.original)}
+        >
+          {row.original.policyNumber}
+        </button>
+      ),
     },
     {
       accessorKey: 'classOfBusiness',
@@ -96,10 +114,10 @@ export default function AllocationsTab() {
         <DataTableRowActions
           row={row as Row<AllocationDto>}
           actions={[
-            ...(row.original.status === 'AUTO_ALLOCATED'  ? [{ label: 'Confirm allocation', onClick: () => {} }] : []),
-            ...(row.original.status === 'CONFIRMED'       ? [{ label: 'Approve',            onClick: () => {} }, { label: 'Reject', onClick: () => {}, className: 'text-destructive' }] : []),
-            ...(row.original.status === 'EXCESS_CAPACITY' ? [{ label: 'Create FAC cover',   onClick: () => {} }] : []),
-            { label: 'View policy', onClick: () => {} },
+            ...(row.original.status === 'AUTO_ALLOCATED'  ? [{ label: 'Confirm allocation', onClick: () => setViewAllocation(row.original) }] : []),
+            ...(row.original.status === 'CONFIRMED'       ? [{ label: 'Approve', onClick: () => setViewAllocation(row.original) }, { label: 'Reject', onClick: () => setViewAllocation(row.original), className: 'text-destructive' }] : []),
+            ...(row.original.status === 'EXCESS_CAPACITY' ? [{ label: 'Create FAC cover', onClick: () => setFacOpen(true) }] : []),
+            { label: 'View details', onClick: () => setViewAllocation(row.original) },
           ]}
         />
       ),
@@ -107,40 +125,105 @@ export default function AllocationsTab() {
   ];
 
   return (
-    <div className="space-y-5">
-      {/* Alert banners */}
-      {(pendingConfirmation > 0 || excessCapacity > 0) && (
-        <div className="flex gap-3 flex-wrap">
-          {pendingConfirmation > 0 && (
-            <div className="flex items-center gap-3 rounded-lg border bg-[var(--status-draft-bg)] px-4 py-3 flex-1 min-w-[280px]">
-              <Badge variant="draft" className="text-[10px] shrink-0">{pendingConfirmation}</Badge>
-              <p className="text-sm text-foreground">allocations awaiting confirmation</p>
-              <Button size="sm" className="ml-auto shrink-0">Confirm All</Button>
-            </div>
-          )}
-          {excessCapacity > 0 && (
-            <div className="flex items-center gap-3 rounded-lg border bg-[var(--status-rejected-bg)] px-4 py-3 flex-1 min-w-[280px]">
-              <Badge variant="rejected" className="text-[10px] shrink-0">{excessCapacity}</Badge>
-              <p className="text-sm text-foreground">policies exceed gross treaty capacity — FAC required</p>
-              <Button size="sm" variant="outline" className="ml-auto shrink-0">Create FAC</Button>
-            </div>
-          )}
-        </div>
-      )}
+    <>
+      <div className="space-y-5">
+        {/* Alert banners */}
+        {(pendingConfirmation.length > 0 || excessCapacity.length > 0) && (
+          <div className="flex gap-3 flex-wrap">
+            {pendingConfirmation.length > 0 && (
+              <div className="flex items-center gap-3 rounded-lg border bg-[var(--status-draft-bg)] px-4 py-3 flex-1 min-w-[280px]">
+                <Badge variant="draft" className="text-[10px] shrink-0">{pendingConfirmation.length}</Badge>
+                <p className="text-sm text-foreground">allocations awaiting confirmation</p>
+                <Button size="sm" className="ml-auto shrink-0" onClick={() => setConfirmAllOpen(true)}>
+                  Confirm All
+                </Button>
+              </div>
+            )}
+            {excessCapacity.length > 0 && (
+              <div className="flex items-center gap-3 rounded-lg border bg-[var(--status-rejected-bg)] px-4 py-3 flex-1 min-w-[280px]">
+                <Badge variant="rejected" className="text-[10px] shrink-0">{excessCapacity.length}</Badge>
+                <p className="text-sm text-foreground">policies exceed gross treaty capacity — FAC required</p>
+                <Button size="sm" variant="outline" className="ml-auto shrink-0" onClick={() => setFacOpen(true)}>
+                  Create FAC
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
 
-      <PageSection
-        title="RI Allocations"
-        description="Automatic treaty allocations per policy. Confirm auto-allocated items and approve for booking."
-        actions={
-          <Button variant="outline" size="sm">Batch Reallocation</Button>
-        }
-      >
-        <DataTable
-          columns={columns}
-          data={mockAllocations}
-          toolbar={{ searchColumn: 'policyNumber', searchPlaceholder: 'Search by policy…' }}
-        />
-      </PageSection>
-    </div>
+        <PageSection
+          title="RI Allocations"
+          description="Automatic treaty allocations per policy. Confirm auto-allocated items and approve for booking."
+          actions={
+            <Button variant="outline" size="sm" onClick={() => setBatchRealloc(true)}>
+              Batch Reallocation
+            </Button>
+          }
+        >
+          <DataTable
+            columns={columns}
+            data={mockAllocations}
+            toolbar={{ searchColumn: 'policyNumber', searchPlaceholder: 'Search by policy…' }}
+          />
+        </PageSection>
+      </div>
+
+      {/* Policy / allocation detail sheet */}
+      <PolicyAllocationSheet
+        open={viewAllocation !== null}
+        onOpenChange={(v) => { if (!v) setViewAllocation(null); }}
+        allocation={viewAllocation}
+        onConfirm={() => setViewAllocation(null)}
+        onApprove={() => setViewAllocation(null)}
+        onReject={() => setViewAllocation(null)}
+      />
+
+      {/* Batch reallocation sheet */}
+      <BatchReallocationSheet
+        open={batchRealloc}
+        onOpenChange={setBatchRealloc}
+        allocations={mockAllocations}
+        onSuccess={() => setBatchRealloc(false)}
+      />
+
+      {/* Create FAC offer sheet */}
+      <CreateFACOfferSheet
+        open={facOpen}
+        onOpenChange={setFacOpen}
+        onSuccess={() => setFacOpen(false)}
+      />
+
+      {/* Confirm All dialog */}
+      <Dialog open={confirmAllOpen} onOpenChange={setConfirmAllOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm All Allocations</DialogTitle>
+            <DialogDescription>
+              The following {pendingConfirmation.length} auto-allocated polic{pendingConfirmation.length === 1 ? 'y' : 'ies'} will be marked as Confirmed and sent for approval.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-56 overflow-y-auto py-1">
+            {pendingConfirmation.map(a => (
+              <div key={a.id} className="flex items-center justify-between rounded-md border px-3 py-2">
+                <div>
+                  <p className="font-mono text-xs text-primary">{a.policyNumber}</p>
+                  <p className="text-xs text-muted-foreground">{a.classOfBusiness} · {a.treatyName}</p>
+                </div>
+                <span className="text-xs tabular-nums text-muted-foreground">₦{a.cedingAmount.toLocaleString()} ceded</span>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmAllOpen(false)}>Cancel</Button>
+            <Button onClick={() => {
+              // TODO: PATCH /api/v1/reinsurance/allocations/confirm-batch
+              setConfirmAllOpen(false);
+            }}>
+              Confirm {pendingConfirmation.length} Allocation{pendingConfirmation.length !== 1 ? 's' : ''}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
