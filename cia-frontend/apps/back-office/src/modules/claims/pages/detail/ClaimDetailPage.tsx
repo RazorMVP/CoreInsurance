@@ -626,7 +626,7 @@ export default function ClaimDetailPage() {
 
       {/* ── Download report ───────────────────────────────────────────────── */}
       <Dialog open={downloadReportOpen} onOpenChange={setDownloadReportOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Download Inspection Reports</DialogTitle>
             <DialogDescription>
@@ -635,29 +635,24 @@ export default function ClaimDetailPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-2">
+          <div className="rounded-lg border overflow-hidden divide-y divide-border">
             {[
-              { name: 'Inspection Report — Vehicle Assessment',  size: '1.2 MB', type: 'PDF',  date: '2026-03-14', id: 'rpt1' },
-              { name: 'Repair Cost Estimate — Mercedes-Benz',    size: '340 KB', type: 'PDF',  date: '2026-03-14', id: 'rpt2' },
-              { name: 'Photo Evidence — Damage Documentation',   size: '8.4 MB', type: 'ZIP',  date: '2026-03-14', id: 'rpt3' },
+              { name: 'Inspection Report — Vehicle Assessment', size: '1.2 MB', type: 'PDF', date: '2026-03-14', id: 'rpt1' },
+              { name: 'Repair Cost Estimate — Mercedes-Benz',   size: '340 KB', type: 'PDF', date: '2026-03-14', id: 'rpt2' },
+              { name: 'Photo Evidence — Damage Documentation',  size: '8.4 MB', type: 'ZIP', date: '2026-03-14', id: 'rpt3' },
             ].map((doc) => (
-              <div
-                key={doc.id}
-                className="flex items-center justify-between rounded-lg border p-3"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted">
-                    <span className="text-[10px] font-bold text-muted-foreground">{doc.type}</span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{doc.name}</p>
-                    <p className="text-xs text-muted-foreground">{doc.size} · {doc.date}</p>
-                  </div>
+              <div key={doc.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
+                  <span className="text-[10px] font-bold text-muted-foreground">{doc.type}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{doc.name}</p>
+                  <p className="text-xs text-muted-foreground">{doc.size} · {doc.date}</p>
                 </div>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="ml-3 shrink-0 h-7 text-xs"
+                  className="shrink-0"
                   onClick={() => {
                     // TODO: GET /api/v1/claims/{id}/inspection/documents/{doc.id}
                   }}

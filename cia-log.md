@@ -1339,3 +1339,26 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
 
 **Open questions:** None.
+
+---
+
+### Session 18 — Fix Download Report dialog alignment
+
+**File modified:** `apps/back-office/src/modules/claims/pages/detail/ClaimDetailPage.tsx`
+
+**Change:** Fixed misaligned layout in the Download Inspection Reports dialog.
+
+**Root cause:** The left text group had `min-w-0` but no `flex-1`, so it couldn't consume available horizontal space. Combined with `justify-between` on the parent, the Download button had no reliable anchor point, causing it to stack or misalign when filenames are long on the `sm:max-w-md` (448px) dialog.
+
+**Fix:**
+- Dialog width: `sm:max-w-md` → `sm:max-w-lg` (512px, more breathing room)
+- Row layout: removed `justify-between`; switched to a flat `flex items-center gap-3 px-4 py-3` row
+- Text area: `min-w-0` → `flex-1 min-w-0` — allows the text to consume remaining space, enabling reliable truncation
+- Button: removed `ml-3`; spacing handled by parent `gap-3`; kept `shrink-0`
+- Container: replaced separate bordered cards (`space-y-2` + `border`) with a single `rounded-lg border overflow-hidden divide-y divide-border` block — cleaner visual hierarchy and eliminates the border-gap-border stacking
+
+**Confirmed intact:** BulkClaimPage validation results (validating spinner → done card with valid/error badge counts, error detail row, Re-upload + Register 8 Claims buttons) were not deleted in Session 16 and remain fully functional as stub state for backend wiring.
+
+**GitHub:** pending commit | **Vercel:** auto-deploy will trigger after push
+
+**Open questions:** None.
