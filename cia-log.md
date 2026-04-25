@@ -1855,3 +1855,28 @@ Added `.env.local` to `cia-frontend/apps/back-office/.gitignore` so the dev-only
 - `cia-backend/cia-reports/src/.../service/ReportQueryBuilder.java` — added 3 helper methods + `utilisation_pct` case
 
 **Open questions:** None.
+
+---
+
+### Session 33 — Module 11 polish: Clone & Edit + real access groups (audit I2 + I3)
+
+**Files modified:**
+
+| File | Change |
+|---|---|
+| `modules/reports/hooks/useReportDefinitions.ts` | Added `useCloneReport` mutation — calls `POST /api/v1/reports/definitions/:id/clone`, invalidates definitions cache on success |
+| `modules/reports/pages/library/ReportLibraryPage.tsx` | Refactored `LibraryCard` to accept `onClone`/`cloning` props; `ReportLibraryPage` holds the `useCloneReport` mutation + `cloningId` state; on success navigates to `/reports/custom/:clonedId` |
+| `modules/reports/pages/builder/CustomReportBuilderPage.tsx` | Added `useReportDefinition(id)` fetch when `id` in params; `useEffect` seeds `BuilderState` from fetched definition (only on first load via `seeded` flag); shows skeleton while loading; added `stateFromDefinition()` mapping helper |
+| `modules/reports/pages/setup/ReportAccessSetupPage.tsx` | Replaced fabricated UUID mock groups with same IDs/names as `AccessGroupsPage` (`ag1`–`ag5`: System Admin, Underwriter, Claims Officer, Finance Officer, System Auditor) |
+
+**Decisions:**
+- `useEffect` + `seeded` flag pattern for async-seeded forms: seeds state once when definition loads, never overwrites user edits on re-renders
+- `stateFromDefinition()` extracted as a pure mapping helper — keeps the component clean and testable
+- `cloningId` tracks which specific card is cloning so only that button shows "Cloning…" (not all buttons)
+- Access groups remain mock (consistent with all other Setup module pages) — will all move to real API together in a future session
+
+**Typecheck:** exits 0.
+
+**Audit items resolved:** I2 (Clone & Edit), I3 (consistent mock groups)
+
+**Open questions:** None.

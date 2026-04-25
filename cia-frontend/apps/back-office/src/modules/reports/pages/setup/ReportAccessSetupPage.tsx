@@ -7,11 +7,13 @@ import type { ReportCategory } from '../../types/report.types';
 
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as ReportCategory[];
 
+// Same IDs as AccessGroupsPage mock data — consistent until real API is wired
 const MOCK_GROUPS = [
-  { id: '00000000-0000-0000-0000-000000000001', name: 'Underwriters' },
-  { id: '00000000-0000-0000-0000-000000000002', name: 'Claims Officers' },
-  { id: '00000000-0000-0000-0000-000000000003', name: 'Finance Officers' },
-  { id: '00000000-0000-0000-0000-000000000004', name: 'Management' },
+  { id: 'ag1', name: 'System Admin' },
+  { id: 'ag2', name: 'Underwriter' },
+  { id: 'ag3', name: 'Claims Officer' },
+  { id: 'ag4', name: 'Finance Officer' },
+  { id: 'ag5', name: 'System Auditor' },
 ];
 
 interface CategoryRowProps {

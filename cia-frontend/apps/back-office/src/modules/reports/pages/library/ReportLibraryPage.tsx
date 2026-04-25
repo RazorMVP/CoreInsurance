@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Badge, Button, Card, CardContent, Input, PageHeader, Skeleton, Tabs, TabsList, TabsTrigger } from '@cia/ui';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { BarChartIcon, Clock01Icon, Search01Icon } from '@hugeicons/core-free-icons';
-import { useReportDefinitions } from '../../hooks/useReportDefinitions';
+import { useReportDefinitions, useCloneReport } from '../../hooks/useReportDefinitions';
 import { CATEGORY_COLORS, CATEGORY_LABELS } from '../../types/report.types';
 import type { ReportCategory, ReportDefinition } from '../../types/report.types';
 
@@ -17,7 +17,13 @@ const ALL_CATEGORIES: Array<{ value: ReportCategory | 'ALL'; label: string }> = 
   { value: 'REGULATORY',   label: 'Regulatory' },
 ];
 
-function LibraryCard({ report }: { report: ReportDefinition }) {
+interface LibraryCardProps {
+  report: ReportDefinition;
+  onClone: (id: string) => void;
+  cloning: boolean;
+}
+
+function LibraryCard({ report, onClone, cloning }: LibraryCardProps) {
   return (
     <Card className="group hover:shadow-md hover:border-primary/30 transition-all">
       <CardContent className="p-4 flex items-start gap-3">
@@ -49,11 +55,15 @@ function LibraryCard({ report }: { report: ReportDefinition }) {
               </Button>
             </Link>
             {report.type === 'SYSTEM' && (
-              <Link to={`/reports/custom`}>
-                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground">
-                  Clone &amp; Edit
-                </Button>
-              </Link>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs text-muted-foreground"
+                onClick={() => onClone(report.id)}
+                disabled={cloning}
+              >
+                {cloning ? 'Cloning…' : 'Clone & Edit'}
+              </Button>
             )}
           </div>
         </div>
@@ -68,13 +78,16 @@ function LibraryCard({ report }: { report: ReportDefinition }) {
 
 export default function ReportLibraryPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const initialCategory = (searchParams.get('category') ?? 'ALL') as ReportCategory | 'ALL';
   const [activeCategory, setActiveCategory] = useState<ReportCategory | 'ALL'>(initialCategory);
   const [search, setSearch] = useState('');
+  const [cloningId, setCloningId] = useState<string | null>(null);
 
   const { data: reports = [], isLoading } = useReportDefinitions(
     activeCategory === 'ALL' ? undefined : activeCategory
   );
+  const cloneReport = useCloneReport();
 
   const filtered = search.trim()
     ? reports.filter(
@@ -83,6 +96,20 @@ export default function ReportLibraryPage() {
           r.description?.toLowerCase().includes(search.toLowerCase())
       )
     : reports;
+
+  function handleClone(id: string) {
+    setCloningId(id);
+    cloneReport.mutate(
+      { id },
+      {
+        onSuccess: (cloned) => {
+          setCloningId(null);
+          navigate(`/reports/custom/${cloned.id}`);
+        },
+        onError: () => setCloningId(null),
+      }
+    );
+  }
 
   return (
     <div className="p-6 space-y-5">
@@ -132,7 +159,14 @@ export default function ReportLibraryPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((r) => <LibraryCard key={r.id} report={r} />)}
+          {filtered.map((r) => (
+            <LibraryCard
+              key={r.id}
+              report={r}
+              onClone={handleClone}
+              cloning={cloningId === r.id}
+            />
+          ))}
         </div>
       )}
     </div>

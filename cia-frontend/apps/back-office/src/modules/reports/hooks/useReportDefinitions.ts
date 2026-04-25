@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@cia/api-client';
 import type { ReportCategory, ReportDefinition } from '../types/report.types';
 
@@ -26,5 +26,21 @@ export function useReportDefinition(id: string | undefined) {
       return res.data.data;
     },
     enabled: !!id,
+  });
+}
+
+export function useCloneReport() {
+  const queryClient = useQueryClient();
+  return useMutation<ReportDefinition, Error, { id: string; name?: string }>({
+    mutationFn: async ({ id, name }) => {
+      const params = name ? `?name=${encodeURIComponent(name)}` : '';
+      const res = await apiClient.post<{ data: ReportDefinition }>(
+        `/api/v1/reports/definitions/${id}/clone${params}`
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reports', 'definitions'] });
+    },
   });
 }

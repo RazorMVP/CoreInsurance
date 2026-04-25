@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, CardContent, PageHeader } from '@cia/ui';
+import { Button, Card, CardContent, PageHeader, Skeleton } from '@cia/ui';
 import { cn } from '@cia/ui';
 import { apiClient } from '@cia/api-client';
+import { useReportDefinition } from '../../hooks/useReportDefinitions';
 import type { ChartType, DataSource, ReportCategory, ReportDefinition, ReportField, ReportFilter } from '../../types/report.types';
 import Step1DataSource from './steps/Step1DataSource';
 import Step2FieldsFilters from './steps/Step2FieldsFilters';
@@ -20,20 +21,47 @@ interface BuilderState {
   chart: { type: ChartType; xAxis: string; yAxis: string };
 }
 
+const EMPTY_STATE: BuilderState = {
+  dataSource: '',
+  fields: [],
+  filters: [],
+  name: '',
+  category: '',
+  chart: { type: 'TABLE_ONLY', xAxis: '', yAxis: '' },
+};
+
+function stateFromDefinition(def: ReportDefinition): BuilderState {
+  const cfg = def.config;
+  return {
+    dataSource: def.dataSource,
+    fields: cfg.fields ?? [],
+    filters: cfg.filters ?? [],
+    name: def.name,
+    category: def.category,
+    chart: cfg.chart
+      ? { type: cfg.chart.type, xAxis: cfg.chart.xAxis ?? '', yAxis: cfg.chart.yAxis ?? '' }
+      : { type: 'TABLE_ONLY', xAxis: '', yAxis: '' },
+  };
+}
+
 export default function CustomReportBuilderPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [step, setStep] = useState(0);
+  const [seeded, setSeeded] = useState(false);
+  const [state, setState] = useState<BuilderState>(EMPTY_STATE);
 
-  const [state, setState] = useState<BuilderState>({
-    dataSource: '',
-    fields: [],
-    filters: [],
-    name: '',
-    category: '',
-    chart: { type: 'TABLE_ONLY', xAxis: '', yAxis: '' },
-  });
+  // Fetch existing definition when editing a cloned report
+  const { data: definition, isLoading: loadingDef } = useReportDefinition(id);
+
+  // Seed form state once the definition loads (runs only on first load, not on re-renders)
+  useEffect(() => {
+    if (definition && !seeded) {
+      setState(stateFromDefinition(definition));
+      setSeeded(true);
+    }
+  }, [definition, seeded]);
 
   const saveReport = useMutation<ReportDefinition, Error, BuilderState>({
     mutationFn: async (s) => {
@@ -65,6 +93,17 @@ export default function CustomReportBuilderPage() {
     if (step === 1) return state.fields.length > 0;
     if (step === 2) return !!state.name && !!state.category;
     return false;
+  }
+
+  // Show skeleton while loading the definition in edit mode
+  if (id && loadingDef) {
+    return (
+      <div className="p-6 space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-4 w-72" />
+        <Skeleton className="h-64 w-full rounded-lg" />
+      </div>
+    );
   }
 
   return (
