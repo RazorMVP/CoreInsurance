@@ -55,25 +55,25 @@ export default function TemplatesTab() {
   const activeCount = visible.filter(t => t.status === 'ACTIVE').length;
 
   function handleUpload(values: { name: string; type: TemplateType; file: File; replaceId?: string }) {
-    const prod = product!;
-    if (values.replaceId) {
-      setTemplates(prev => prev.map(t =>
-        t.id === values.replaceId ? { ...t, status: 'ARCHIVED' as const } : t,
-      ));
-    }
-    setTemplates(prev => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        productId:   prod.id,
-        productName: prod.name,
-        name:        values.name,
-        filename:    values.file.name,
-        type:        values.type,
-        status:      'ACTIVE',
-        uploadedAt:  new Date().toISOString().slice(0, 10),
-      },
-    ]);
+    if (!product) return;
+    setTemplates(prev => {
+      const updated = values.replaceId
+        ? prev.map(t => t.id === values.replaceId ? { ...t, status: 'ARCHIVED' as const } : t)
+        : prev;
+      return [
+        ...updated,
+        {
+          id: crypto.randomUUID(),
+          productId:   product.id,
+          productName: product.name,
+          name:        values.name,
+          filename:    values.file.name,
+          type:        values.type,
+          status:      'ACTIVE' as const,
+          uploadedAt:  new Date().toISOString().slice(0, 10),
+        },
+      ];
+    });
     setReplaceTarget(null);
   }
 
