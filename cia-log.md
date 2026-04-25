@@ -1522,3 +1522,33 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **Key lesson:** Figma text nodes never clip automatically regardless of container size. When using `layoutMode='NONE'` (absolute positioning), long text overflows into adjacent columns. Fix: wrap the text node in a fixed-size frame with `clipsContent=true`. Applied to the Description column in the Claims table.
 
 **Open questions:** None.
+
+---
+
+### Session 25 — Build 2 complete: Policy Specifications (Setup module)
+
+**Files created:**
+- `cia-frontend/apps/back-office/src/modules/setup/pages/policy-specs/PolicySpecificationsPage.tsx` — page shell: PageHeader + two Tabs (Clause Bank, Templates)
+- `cia-frontend/apps/back-office/src/modules/setup/pages/policy-specs/clause-types.ts` — shared types: ClauseRow, ClauseType, ClauseApplicability, ClauseSavePayload, PRODUCTS, CLAUSE_TYPES (extracted to avoid circular import between ClauseSheet and ClauseBankTab)
+- `cia-frontend/apps/back-office/src/modules/setup/pages/policy-specs/ClauseBankTab.tsx` — Clause Bank tab: DataTable + hand-rolled toolbar (search + product filter + type filter), 8 mock clauses covering all 4 types and both applicability values, ClauseSheet CRUD, delete confirm dialog
+- `cia-frontend/apps/back-office/src/modules/setup/pages/policy-specs/ClauseSheet.tsx` — create/edit clause drawer: react-hook-form + Zod, Switch for mandatory/optional toggle, FormField-wrapped Checkbox list for multi-product selection
+- `cia-frontend/apps/back-office/src/modules/setup/pages/policy-specs/template-types.ts` — shared types: TemplateRow, TemplateType, TEMPLATE_TYPES (6 types)
+- `cia-frontend/apps/back-office/src/modules/setup/pages/policy-specs/TemplatesTab.tsx` — Templates tab: product selector, custom grid card list, archive/delete/replace confirm dialogs, DropdownMenu row actions
+- `cia-frontend/apps/back-office/src/modules/setup/pages/policy-specs/TemplateUploadSheet.tsx` — upload drawer: drag-and-drop zone, file validation (.docx/.pdf, 10 MB max), Replace mode locks type field
+
+**Files modified:**
+- `cia-frontend/apps/back-office/src/modules/setup/layout/SetupLayout.tsx` — added "Policy Specifications" nav item under Products group
+- `cia-frontend/apps/back-office/src/modules/setup/index.tsx` — added lazy import + route for `/setup/policy-specifications`
+- `CLAUDE.md` — marked Policy Specifications `[x]`, Build 2 fully `[x]`, Build Progress Summary updated
+
+**Decisions made:**
+- Clause types: Standard / Exclusion / Special Condition / Warranty
+- Mandatory clauses auto-apply to new policies; Optional available in picker on Policy Detail Document tab
+- Template types: Policy Document / Certificate / Schedule / Debit Note / Endorsement / Other
+- Multiple templates per product; each has type + Active/Archived status
+- Replacing a template archives the previous version atomically (single setTemplates call)
+- Shared types in clause-types.ts and template-types.ts to avoid circular imports
+- DataTable toolbar hand-rolled (not built-in toolbar prop) — three coordinated filters need unified state
+- columns wrapped in useMemo; type filter derived from CLAUSE_TYPES constant
+
+**Open questions:** None.

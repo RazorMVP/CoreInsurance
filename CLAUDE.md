@@ -974,7 +974,7 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 | `[x]` | Approval Groups | Card-based multi-level display + ApprovalGroupSheet with useFieldArray |
 | `[x]` | Classes of Business | DataTable list + ClassSheet (create/edit) |
 | `[x]` | Products | DataTable list + ProductSheet (single/multi-risk, commission rate, 14 seed classes); inline `+ New Class of Business` via Dialog inside Sheet |
-| `[ ]` | Policy Specifications | Clause bank, template upload/management |
+| `[x]` | Policy Specifications | Clause bank DataTable (search, product/type filter, mandatory/optional, CRUD); template manager (per-product, type-coloured badges, upload/replace/archive/delete) |
 | `[x]` | Claims Setup | Tabbed: Reserve Categories, Notification Timelines, Documents, Loss Types (skeleton tabs ready) |
 | `[x]` | Organisations | Tabbed: Brokers (full CRUD + BrokerSheet), Reinsurers/Insurers/Branches/SBUs/Surveyors (skeleton) |
 | `[x]` | Vehicle Registry | Tabbed: Makes, Models, Types (skeleton tabs ready) |
