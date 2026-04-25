@@ -1609,3 +1609,108 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **Issue fixed:** Previous session had non-deterministic parallel curl ordering that mis-assigned imageHashes to frames (e.g. Finance/Receivables frame was showing Post Receipt Sheet content). Fixed by uploading images sequentially (no background `&`) so hash order matches file order.
 
 **Open questions:** None.
+
+---
+
+### Session 27 — Build 11: Reports & Analytics module (backend + frontend)
+
+**Build completed:** Build 11 — Module 11: Reports & Analytics
+
+---
+
+**Backend files created (`cia-backend/cia-reports/`):**
+
+| File | Purpose |
+|---|---|
+| `pom.xml` | Maven module — depends on cia-common, cia-auth; adds PDFBox, commons-csv, JFreeChart |
+| `domain/ReportCategory.java` | Enum: UNDERWRITING, CLAIMS, FINANCE, REINSURANCE, CUSTOMER, REGULATORY |
+| `domain/ReportType.java` | Enum: SYSTEM, CUSTOM |
+| `domain/DataSource.java` | Enum: POLICIES, CLAIMS, FINANCE, REINSURANCE, CUSTOMERS, ENDORSEMENTS |
+| `domain/ReportField.java` | POJO: key, label, type, computed flag |
+| `domain/ReportFilter.java` | POJO: key, label, type, required flag |
+| `domain/ReportChart.java` | POJO: type (BAR/LINE/PIE/TABLE_ONLY), xAxis, yAxis |
+| `domain/ReportConfig.java` | Root JSONB POJO: fields, filters, groupBy, sortBy, sortDir, chart |
+| `domain/ReportConfigConverter.java` | JPA AttributeConverter — serializes ReportConfig ↔ JSONB string |
+| `domain/ReportDefinition.java` | JPA entity — extends BaseEntity; config column uses ReportConfigConverter |
+| `domain/ReportPin.java` | JPA entity — user ↔ report pin with display_order |
+| `domain/ReportAccessPolicy.java` | JPA entity — category-level or report-level access per access group |
+| `repository/ReportDefinitionRepository.java` | JpaRepository + JpaSpecificationExecutor |
+| `repository/ReportPinRepository.java` | Pin CRUD + findByUserIdOrderByDisplayOrderAsc |
+| `repository/ReportAccessPolicyRepository.java` | Category-level and report-level policy lookup |
+| `service/ReportAccessService.java` | Resolves effective permissions: report-level > category-level > deny |
+| `service/ReportDefinitionService.java` | CRUD + clone (SYSTEM → CUSTOM); delete blocked for SYSTEM type |
+| `service/ReportQueryBuilder.java` | Builds + executes native SQL from ReportConfig; post-processes computed fields (loss_ratio, combined_ratio, etc.); sanitizes ORDER BY with whitelist |
+| `service/ReportCsvRenderer.java` | Streams RFC 4180 CSV via StreamingResponseBody; UTF-8 BOM for Excel |
+| `service/ReportPdfRenderer.java` | PDFBox 3.x branded PDF — header, subtitle, zebra-striped table, footer; never throws |
+| `service/ReportRunnerService.java` | Orchestrates run → JSON/CSV/PDF; pin management |
+| `controller/dto/ReportDefinitionDto.java` | Response DTO with from() factory |
+| `controller/dto/ReportRunRequest.java` | { reportId, filters Map, format } |
+| `controller/dto/ReportResultDto.java` | { columns, rows, totalRows } |
+| `controller/dto/CreateReportRequest.java` | Create/update payload |
+| `controller/dto/AccessPolicyUpdateRequest.java` | Upsert access policy payload |
+| `controller/ReportController.java` | 14 REST endpoints under /api/v1/reports/ |
+
+**Backend files modified:**
+
+| File | Change |
+|---|---|
+| `cia-backend/pom.xml` | Added `cia-reports` to `<modules>` and `<dependencyManagement>` |
+| `cia-backend/cia-api/pom.xml` | Added `cia-reports` dependency |
+
+**Flyway migrations created:**
+
+| File | Purpose |
+|---|---|
+| `V17__create_reports_tables.sql` | Creates report_definition, report_pin, report_access_policy + indexes |
+| `V18__seed_system_report_definitions.sql` | Inserts all 55 SYSTEM report definitions (12+13+9+8+5+8) |
+
+---
+
+**Frontend files created (`cia-frontend/apps/back-office/src/modules/reports/`):**
+
+| File | Purpose |
+|---|---|
+| `types/report.types.ts` | All TypeScript types + CATEGORY_LABELS + CATEGORY_COLORS + DATA_SOURCE_OPTIONS |
+| `hooks/useReportDefinitions.ts` | useReportDefinitions(category?) + useReportDefinition(id) |
+| `hooks/useRunReport.ts` | useRunReport + useExportCsv + useExportPdf (blob download) |
+| `hooks/useReportPins.ts` | useReportPins + usePinReport + useUnpinReport |
+| `hooks/useReportAccessPolicies.ts` | useReportAccessPolicies + useUpsertAccessPolicy |
+| `pages/home/ReportsHomePage.tsx` | Pinned row, recently run, quick-access grid by category (6 × 4 cards) |
+| `pages/library/ReportLibraryPage.tsx` | Search + category tab filter + card list with Run / Clone & Edit actions |
+| `pages/viewer/ReportViewerPage.tsx` | Breadcrumb, dynamic filter form, result table + chart, export bar |
+| `pages/viewer/ReportFilterForm.tsx` | Dynamic form built from config.filters — date inputs, required validation |
+| `pages/viewer/ReportResultTable.tsx` | Plain HTML table — ₦ money formatting, % formatting, date formatting |
+| `pages/viewer/ReportChart.tsx` | Recharts wrapper — BAR/LINE/PIE driven by config.chart; returns null for TABLE_ONLY |
+| `pages/viewer/ReportExportBar.tsx` | Export CSV + Export PDF + Pin/Unpin (Bookmark01Icon / BookmarkRemove01Icon) |
+| `pages/builder/CustomReportBuilderPage.tsx` | 3-step stepper shell + save mutation → navigate to viewer |
+| `pages/builder/steps/Step1DataSource.tsx` | Data source card selector (6 options) |
+| `pages/builder/steps/Step2FieldsFilters.tsx` | Field picker checkboxes + computed badge + date filter toggles |
+| `pages/builder/steps/Step3Visualisation.tsx` | Chart type cards + axis selects + report name + category |
+| `pages/setup/ReportAccessSetupPage.tsx` | Access group selector + expandable category/report permission matrix |
+| `index.tsx` | Module routes: / library custom custom/:id run/:id setup |
+
+**Frontend files modified:**
+
+| File | Change |
+|---|---|
+| `app/router.tsx` | Added ReportsModule lazy import + `/reports/*` route |
+| `app/layout/Sidebar.tsx` | Added BarChartIcon import + REPORTS nav group |
+| `apps/back-office/package.json` | Added recharts ^3.8.1 |
+
+---
+
+**Key decisions:**
+- `cia-reports` has zero dependency on any business module — `ReportQueryBuilder` uses `EntityManager.createNativeQuery()` directly. Adding a new pre-built report is a Flyway data migration, not a code change.
+- `ReportConfig` stored as JSONB via `AttributeConverter<ReportConfig, String>` — avoids Hibernate Types library dependency.
+- Computed fields (loss_ratio, combined_ratio, etc.) are post-processed in Java after raw SQL returns — keeps SQL simple while supporting formulas.
+- ORDER BY in `ReportQueryBuilder` uses a whitelist sanitizer (`replaceAll("[^a-zA-Z0-9_.]", "")`) to prevent SQL injection on the sort column.
+- Badge `"secondary"` is not a valid variant in `@cia/ui` — valid values are: default, outline, active, pending, rejected, draft, cancelled.
+- `Pin01Icon` does not exist in hugeicons v4.1.1 — use `Bookmark01Icon` / `BookmarkRemove01Icon`.
+- `Breadcrumb` in `@cia/ui` takes `items: BreadcrumbItem[]` prop — not sub-components.
+- `Table`/`TableBody`/etc. are not exported from `@cia/ui` — use plain HTML `<table>` with Tailwind classes.
+
+**Typecheck:** `pnpm --filter @cia/back-office typecheck` exits 0.
+
+**Build Queue update:** Build 11 (Reports & Analytics) marked `[x]` complete. Phase 2 now 10/10 complete. Total 15/20 (75%).
+
+**Open questions:** None.

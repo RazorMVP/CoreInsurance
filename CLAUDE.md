@@ -118,6 +118,7 @@ cia-backend/
 ├── cia-finance/         # Module 8: Finance (5 features)
 ├── cia-partner-api/     # Module 9: Partner Open API (Insurtech connectivity, webhooks, docs)
 ├── cia-audit/           # Module 10: Audit & Compliance (trail, login logs, reports, alerts)
+├── cia-reports/         # Module 11: Reports & Analytics (55 pre-built reports, custom builder, CSV/PDF export)
 └── cia-api/             # Assembly: main app, REST controllers, Flyway, application.yml
 ```
 
@@ -157,6 +158,8 @@ cia-backend/
 **`cia-partner-api` depends on:** `cia-common`, `cia-auth` (JWT filter + scope enforcement), `cia-storage` (DocumentStorageService — PDF download streaming), `cia-setup` (ProductService, ClassOfBusinessService), `cia-customer`, `cia-quotation`, `cia-policy`, `cia-claims`, `cia-workflow` (webhook dispatch), `cia-notifications`.
 
 **`cia-audit` depends on:** `cia-common` (AuditLog, AuditLogRepository, AuditService, AuditLogCreatedEvent), `cia-notifications` (alert delivery via NotificationService). No dependency on any business module — business modules publish events; `cia-audit` consumes them through Spring's ApplicationEvent bus.
+
+**`cia-reports` depends on:** `cia-common` (TenantContext, BaseEntity, ApiResponse), `cia-auth` (JWT, access group resolution). No dependency on any business module — `ReportQueryBuilder` uses `EntityManager.createNativeQuery()` directly against the tenant schema. Adding a new pre-built report is a Flyway data migration (V18+), not a code change.
 
 **Cross-module wiring within business modules:**
 
@@ -782,6 +785,7 @@ Each tenant can optionally enable a **sandbox mode** for Insurtechs to test inte
 | 8 | Finance | 5 | Receipts, payments, settled/outstanding tracking |
 | 9 | Partner Open API | 15 | OAuth2 client management, REST partner API, webhooks, OpenAPI docs, Postman collection |
 | 10 | Audit & Compliance | 15 | Full audit trail, login logs, 6 reports, CSV export, real-time alerts, System Auditor role |
+| 11 | Reports & Analytics | 20 | 55 pre-built reports, custom report builder, CSV/PDF export, pin management, access control |
 
 ---
 
@@ -1096,6 +1100,20 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 ---
 
+#### Build 11 — Module 11: Reports & Analytics (20 features) ✅
+
+| Status | Sub-page | Key features |
+|---|---|---|
+| `[x]` | Reports Home | ReportsHomePage — pinned reports row (Bookmark01Icon), quick-access grid by category (6 categories × 4 cards), recently run section, empty pin state with Browse Library CTA |
+| `[x]` | Report Library | ReportLibraryPage — search bar, category filter tabs (All + 6 categories), card list with Run / Clone & Edit actions |
+| `[x]` | Report Viewer | ReportViewerPage — dynamic filter form (ReportFilterForm), results table (ReportResultTable with ₦ / % / date formatting), Recharts chart (BAR/LINE/PIE/TABLE_ONLY), export bar (CSV + PDF + Pin/Unpin) |
+| `[x]` | Custom Report Builder | CustomReportBuilderPage — 3-step stepper: Step1DataSource (6 data sources), Step2FieldsFilters (field picker + computed field badges + date filter toggles), Step3Visualisation (chart type cards + axis selectors + name + category); Save & Run navigates to viewer |
+| `[x]` | Report Access Setup | ReportAccessSetupPage — access group selector, expandable category/report permission matrix (View / Export CSV / Export PDF checkboxes), category-level and report-level override |
+| `[x]` | Backend: cia-reports module | Maven module: domain entities (ReportDefinition, ReportPin, ReportAccessPolicy) + JSONB config (ReportConfig + AttributeConverter) + repositories + services (ReportRunnerService, ReportQueryBuilder, ReportCsvRenderer, ReportPdfRenderer) + ReportController (14 endpoints) |
+| `[x]` | Flyway V17 + V18 | V17 creates report_definition, report_pin, report_access_policy tables; V18 seeds all 55 SYSTEM report definitions (12 Underwriting + 13 Claims + 9 Finance + 8 Reinsurance + 5 Customer + 8 Regulatory) |
+
+---
+
 ### Phase 3 — Partner Portal (`apps/partner`)
 
 > Start after Phase 2 Builds 2–6 are complete (core insurance workflow live).
@@ -1115,9 +1133,9 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 | Phase | Builds | Complete | Status |
 |---|---|---|---|
 | Phase 1 — Infrastructure | 5 | 5 | `[x]` Complete |
-| Phase 2 — Back Office Modules | 9 | 9 | `[x]` Complete |
+| Phase 2 — Back Office Modules | 10 | 10 | `[x]` Complete |
 | Phase 3 — Partner Portal | 5 | 0 | `[ ]` Not started |
-| **Total** | **19** | **14** | **74% complete** |
+| **Total** | **20** | **15** | **75% complete** |
 
 > Update the status column and progress summary as builds complete. Each completed build should also be reflected in cia-log.md under the session that finished it.
 

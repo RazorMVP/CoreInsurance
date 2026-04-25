@@ -88,6 +88,10 @@
       <groupId>com.nubeero.cia</groupId>
       <artifactId>cia-audit</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-reports</artifactId>
+    </dependency>
 
     <!-- ── Spring Boot runtime ────────────────────────────────────── -->
     <dependency>

@@ -12,6 +12,7 @@ const ClaimsModule      = lazy(() => import('../modules/claims'));
 const ReinsuranceModule = lazy(() => import('../modules/reinsurance'));
 const FinanceModule     = lazy(() => import('../modules/finance'));
 const AuditModule       = lazy(() => import('../modules/audit'));
+const ReportsModule     = lazy(() => import('../modules/reports'));
 
 function Deferred({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>;
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
       { path: 'reinsurance/*',    element: <Deferred><ReinsuranceModule /></Deferred> },
       { path: 'finance/*',        element: <Deferred><FinanceModule /></Deferred> },
       { path: 'audit/*',          element: <Deferred><AuditModule /></Deferred> },
+      { path: 'reports/*',        element: <Deferred><ReportsModule /></Deferred> },
     ],
   },
 ]);

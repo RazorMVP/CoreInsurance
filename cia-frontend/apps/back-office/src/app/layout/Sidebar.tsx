@@ -11,6 +11,7 @@ import {
   RepeatIcon,
   Setting06Icon,
   Audit01Icon,
+  BarChartIcon,
   Logout01Icon,
   Menu01Icon,
 } from '@hugeicons/core-free-icons';
@@ -53,6 +54,12 @@ const navGroups: NavGroup[] = [
     items: [
       { label: 'Finance',     path: '/finance',     icon: Money01Icon },
       { label: 'Reinsurance', path: '/reinsurance', icon: RepeatIcon },
+    ],
+  },
+  {
+    label: 'Reports',
+    items: [
+      { label: 'Reports', path: '/reports', icon: BarChartIcon },
     ],
   },
   {
