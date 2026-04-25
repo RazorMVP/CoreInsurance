@@ -1819,3 +1819,9 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **Verification:** `localhost:5173/reports/library` shows "55 reports available" with all category badges, descriptions, Run Report and Clone & Edit actions.
 
 **Open questions:** None.
+
+---
+
+### Session 31 (addendum) — Add .env.local to .gitignore
+
+Added `.env.local` to `cia-frontend/apps/back-office/.gitignore` so the dev-only `VITE_API_BASE_URL=` override is never accidentally committed to the repo.
