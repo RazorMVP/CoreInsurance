@@ -88,23 +88,31 @@ public class ReportQueryBuilder {
 
                 switch (filter.getKey()) {
                     case "date_from" -> {
-                        sql.append(" AND p.created_at >= ?").append(paramIdx++);
+                        sql.append(" AND ").append(createdAtCol(definition.getDataSource()))
+                           .append(" >= ?").append(paramIdx++);
                         params.add(LocalDate.parse(value).atStartOfDay());
                     }
                     case "date_to" -> {
-                        sql.append(" AND p.created_at < ?").append(paramIdx++);
+                        sql.append(" AND ").append(createdAtCol(definition.getDataSource()))
+                           .append(" < ?").append(paramIdx++);
                         params.add(LocalDate.parse(value).plusDays(1).atStartOfDay());
                     }
                     case "class_of_business_id" -> {
-                        sql.append(" AND cob.id = ?").append(paramIdx++);
-                        params.add(UUID.fromString(value));
+                        // Only datasources that JOIN class_of_business support this filter
+                        if (hasCobJoin(definition.getDataSource())) {
+                            sql.append(" AND cob.id = ?").append(paramIdx++);
+                            params.add(UUID.fromString(value));
+                        }
                     }
                     case "product_id" -> {
-                        sql.append(" AND pr.id = ?").append(paramIdx++);
-                        params.add(UUID.fromString(value));
+                        if (definition.getDataSource() == DataSource.POLICIES) {
+                            sql.append(" AND pr.id = ?").append(paramIdx++);
+                            params.add(UUID.fromString(value));
+                        }
                     }
                     case "status" -> {
-                        sql.append(" AND p.status = ?").append(paramIdx++);
+                        sql.append(" AND ").append(statusCol(definition.getDataSource()))
+                           .append(" = ?").append(paramIdx++);
                         params.add(value);
                     }
                     default -> log.debug("Unhandled filter key: {}", filter.getKey());
@@ -156,6 +164,8 @@ public class ReportQueryBuilder {
                             computeRatio(map, "ceded_si", "gross_si"));
                     case "conversion_pct" -> map.put("conversion_pct",
                             computeRatio(map, "bound_quotes", "total_quotes"));
+                    case "utilisation_pct" -> map.put("utilisation_pct",
+                            computeRatio(map, "ceded_amount", "retained_amount"));
                     default -> log.debug("Unknown computed field: {}", f.getKey());
                 }
             }
@@ -197,6 +207,36 @@ public class ReportQueryBuilder {
         if (val instanceof BigDecimal bd) return bd;
         if (val instanceof Number n) return BigDecimal.valueOf(n.doubleValue());
         return new BigDecimal(val.toString());
+    }
+
+    /** Maps each datasource to its primary table's created_at column alias. */
+    private String createdAtCol(DataSource ds) {
+        return switch (ds) {
+            case POLICIES     -> "p.created_at";
+            case CLAIMS       -> "cl.created_at";
+            case FINANCE      -> "dn.created_at";
+            case REINSURANCE  -> "ria.created_at";
+            case CUSTOMERS    -> "c.created_at";
+            case ENDORSEMENTS -> "e.created_at";
+        };
+    }
+
+    /** Maps each datasource to its status column alias. */
+    private String statusCol(DataSource ds) {
+        return switch (ds) {
+            case POLICIES     -> "p.status";
+            case CLAIMS       -> "cl.status";
+            case FINANCE      -> "dn.status";
+            case REINSURANCE  -> "ria.status";
+            case CUSTOMERS    -> "c.kyc_status";
+            case ENDORSEMENTS -> "e.status";
+        };
+    }
+
+    /** Returns true only for datasources whose base query JOINs class_of_business. */
+    private boolean hasCobJoin(DataSource ds) {
+        return ds == DataSource.POLICIES || ds == DataSource.CLAIMS
+                || ds == DataSource.ENDORSEMENTS;
     }
 
     /** Whitelist-based column name sanitizer — prevents SQL injection in ORDER BY. */

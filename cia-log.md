@@ -1825,3 +1825,33 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 ### Session 31 (addendum) — Add .env.local to .gitignore
 
 Added `.env.local` to `cia-frontend/apps/back-office/.gitignore` so the dev-only `VITE_API_BASE_URL=` override is never accidentally committed to the repo.
+
+---
+
+### Session 32 — Audit + fix: ReportQueryBuilder critical issues
+
+**Audit findings (superpowers:code-reviewer):**
+- **2 Critical**, 4 Important, 4 Minor issues found across the full build.
+
+**Critical fixes applied (both in `ReportQueryBuilder.java`):**
+
+1. **Datasource-aware filter aliases** — `date_from`/`date_to` filter clauses were unconditionally using `p.created_at` (POLICIES alias). For CUSTOMERS, CLAIMS, FINANCE, REINSURANCE, and ENDORSEMENTS datasources, the `p` alias either does not exist or refers to a joined table, causing a PostgreSQL runtime error. Fixed by adding `createdAtCol(DataSource)`, `statusCol(DataSource)`, and `hasCobJoin(DataSource)` helpers that dispatch to the correct table alias per datasource. Running `Active Customers` or `KYC Status Report` with a date filter would have returned 500 before this fix.
+
+2. **Missing `utilisation_pct` computed field** — The `Treaty Utilisation` SYSTEM report (R03) defines `utilisation_pct` as a computed field, but the switch in `applyComputedFields()` had no case for it. Every row showed null for the Utilisation % column. Fixed by adding `case "utilisation_pct"` using `computeRatio(map, "ceded_amount", "retained_amount")`.
+
+**Important issues noted (not fixed this session — tracked for future):**
+- No row limit on JSON endpoint (could OOM on large tenants)
+- `Clone & Edit` navigates to blank builder instead of pre-populated clone
+- `ReportAccessSetupPage` uses hardcoded mock access groups
+- No unit tests in `cia-reports` module
+
+**Minor issues noted:**
+- `recentlyRun` is hardcoded to empty array
+- V18 idempotency comment is misleading
+- `MULTI_SELECT` filter renders as plain text input
+- JPA positional parameter syntax (`?1`, `?2`) — valid but unusual
+
+**File modified:**
+- `cia-backend/cia-reports/src/.../service/ReportQueryBuilder.java` — added 3 helper methods + `utilisation_pct` case
+
+**Open questions:** None.
