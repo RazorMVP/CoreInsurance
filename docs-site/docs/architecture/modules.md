@@ -29,7 +29,8 @@ cia-backend/
 ├── cia-finance/         # Module 8: Finance
 ├── cia-partner-api/     # Module 9: Partner Open API
 ├── cia-audit/           # Module 10: Audit & Compliance
-└── cia-api/             # Assembly: main app, REST controllers, Flyway, config
+├── cia-reports/         # Module 11: Reports & Analytics (55 pre-built reports, custom builder, CSV/PDF export)
+└── cia-api/             # Assembly: main app, REST controllers, Flyway, config + Dashboard API
 ```
 
 ## Dependency Rules
@@ -49,7 +50,8 @@ cia-backend/
 | `cia-quotation` | `cia-workflow` |
 | `cia-partner-api` | `cia-common`, `cia-auth`, `cia-storage`, `cia-setup`, `cia-customer`, `cia-quotation`, `cia-policy`, `cia-claims`, `cia-workflow`, `cia-notifications` |
 | `cia-audit` | `cia-common`, `cia-notifications` |
-| `cia-api` | All modules |
+| `cia-reports` | `cia-common`, `cia-auth` — **no business module dependency** (uses `EntityManager.createNativeQuery()` directly) |
+| `cia-api` | All modules — also owns the Dashboard API (`/api/v1/dashboard/*`) |
 
 ## Package Conventions
 

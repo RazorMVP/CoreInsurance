@@ -8,6 +8,7 @@ const sidebars: SidebarsConfig = {
       items: [
         "architecture/overview",
         "architecture/modules",
+        "architecture/reports-module",
         "architecture/multi-tenancy",
         "architecture/security",
         "architecture/workflows",

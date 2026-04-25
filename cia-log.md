@@ -2028,3 +2028,20 @@ BackOffice / Dashboard (6:2) · reports-home (223:2) · reports-library (224:2) 
 **Next action:** Update `modules.md`, add Module 11 docs page, update `internal-api.json` with dashboard endpoints, and trigger docs redeployment.
 
 **Open questions:** None — work approved by user, pending execution.
+
+---
+
+### Session 39 — 2026-04-26: Update docs site — Module 11 + Dashboard API
+
+**Files modified in `docs-site/`:**
+
+| File | Change |
+|---|---|
+| `docs/architecture/modules.md` | Added `cia-reports/` to module inventory tree + dependency table row |
+| `docs/architecture/reports-module.md` | New page — full Module 11 architecture: design decisions, package layout, 14 REST endpoints, ReportConfig JSONB shape, computed fields table, 55-report catalogue, access control resolution, Flyway migrations, dev conventions |
+| `static/internal-api.json` | Added 6 Dashboard API paths (stats, approval-queue, loss-ratio, renewals-due, recent-activity, search) + 6 new schemas (DashboardStats, ApprovalQueue, LossRatioMonth, RenewalDay, RecentActivity, SearchResult). Total paths: 15 → 21. |
+| `sidebars.ts` | Added `architecture/reports-module` to the Architecture sidebar category |
+
+**Deployment trigger:** Committing to `docs-site/**` triggers `docs-deploy.yml` → builds Docusaurus → deploys to `https://cia-docs.vercel.app/`.
+
+**Open questions:** None.

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "CIA Internal API",
-    "description": "Internal REST API for the Core Insurance Application — staff, System Auditors, and system-to-system use. Authentication via Keycloak JWT (Bearer token).",
+    "description": "Internal REST API for the Core Insurance Application \u2014 staff, System Auditors, and system-to-system use. Authentication via Keycloak JWT (Bearer token).",
     "version": "1.0.0",
     "contact": {
       "name": "Nubeero Engineering",
@@ -10,11 +10,19 @@
     }
   },
   "servers": [
-    { "url": "https://api.cia.app/api/v1", "description": "Production" },
-    { "url": "http://localhost:8090/api/v1", "description": "Local development" }
+    {
+      "url": "https://api.cia.app/api/v1",
+      "description": "Production"
+    },
+    {
+      "url": "http://localhost:8090/api/v1",
+      "description": "Local development"
+    }
   ],
   "security": [
-    { "bearerJwt": [] }
+    {
+      "bearerJwt": []
+    }
   ],
   "components": {
     "securitySchemes": {
@@ -29,121 +37,567 @@
       "ApiMeta": {
         "type": "object",
         "properties": {
-          "total": { "type": "integer", "format": "int64", "example": 142 },
-          "page": { "type": "integer", "example": 0 },
-          "size": { "type": "integer", "example": 20 }
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "example": 142
+          },
+          "page": {
+            "type": "integer",
+            "example": 0
+          },
+          "size": {
+            "type": "integer",
+            "example": 20
+          }
         }
       },
       "AuditLogResponse": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "entityType": { "type": "string", "example": "Policy" },
-          "entityId": { "type": "string", "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6" },
-          "action": { "type": "string", "enum": ["CREATE","UPDATE","DELETE","APPROVE","REJECT","SUBMIT","SEND","CANCEL","REVERSE","EXECUTE"] },
-          "userId": { "type": "string", "example": "auth0|abc123" },
-          "userName": { "type": "string", "example": "chidi.okonkwo" },
-          "timestamp": { "type": "string", "format": "date-time" },
-          "ipAddress": { "type": "string", "example": "197.210.64.1" },
-          "oldValue": { "type": "object", "description": "JSON snapshot before change" },
-          "newValue": { "type": "object", "description": "JSON snapshot after change" },
-          "approvalAmount": { "type": "number", "format": "double", "example": 75000000.00 }
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "entityType": {
+            "type": "string",
+            "example": "Policy"
+          },
+          "entityId": {
+            "type": "string",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "CREATE",
+              "UPDATE",
+              "DELETE",
+              "APPROVE",
+              "REJECT",
+              "SUBMIT",
+              "SEND",
+              "CANCEL",
+              "REVERSE",
+              "EXECUTE"
+            ]
+          },
+          "userId": {
+            "type": "string",
+            "example": "auth0|abc123"
+          },
+          "userName": {
+            "type": "string",
+            "example": "chidi.okonkwo"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ipAddress": {
+            "type": "string",
+            "example": "197.210.64.1"
+          },
+          "oldValue": {
+            "type": "object",
+            "description": "JSON snapshot before change"
+          },
+          "newValue": {
+            "type": "object",
+            "description": "JSON snapshot after change"
+          },
+          "approvalAmount": {
+            "type": "number",
+            "format": "double",
+            "example": 75000000.0
+          }
         }
       },
       "LoginAuditLogResponse": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "eventType": { "type": "string", "enum": ["LOGIN","LOGOUT","LOGIN_FAILED","PASSWORD_RESET","ACCOUNT_LOCKED"] },
-          "userId": { "type": "string" },
-          "userName": { "type": "string" },
-          "ipAddress": { "type": "string" },
-          "userAgent": { "type": "string" },
-          "timestamp": { "type": "string", "format": "date-time" },
-          "success": { "type": "boolean" },
-          "failureReason": { "type": "string" }
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "eventType": {
+            "type": "string",
+            "enum": [
+              "LOGIN",
+              "LOGOUT",
+              "LOGIN_FAILED",
+              "PASSWORD_RESET",
+              "ACCOUNT_LOCKED"
+            ]
+          },
+          "userId": {
+            "type": "string"
+          },
+          "userName": {
+            "type": "string"
+          },
+          "ipAddress": {
+            "type": "string"
+          },
+          "userAgent": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "failureReason": {
+            "type": "string"
+          }
         }
       },
       "AuditAlertResponse": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "alertType": { "type": "string", "enum": ["FAILED_LOGIN","BULK_DELETE","OFF_HOURS_ACTIVITY","LARGE_FINANCIAL_APPROVAL"] },
-          "severity": { "type": "string", "example": "WARNING" },
-          "userId": { "type": "string" },
-          "userName": { "type": "string" },
-          "description": { "type": "string" },
-          "triggeredAt": { "type": "string", "format": "date-time" },
-          "acknowledged": { "type": "boolean" },
-          "acknowledgedBy": { "type": "string" },
-          "acknowledgedAt": { "type": "string", "format": "date-time" }
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "alertType": {
+            "type": "string",
+            "enum": [
+              "FAILED_LOGIN",
+              "BULK_DELETE",
+              "OFF_HOURS_ACTIVITY",
+              "LARGE_FINANCIAL_APPROVAL"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "example": "WARNING"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "userName": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "triggeredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acknowledged": {
+            "type": "boolean"
+          },
+          "acknowledgedBy": {
+            "type": "string"
+          },
+          "acknowledgedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "AuditAlertConfigResponse": {
         "type": "object",
         "properties": {
-          "businessHoursStart": { "type": "string", "example": "08:00" },
-          "businessHoursEnd": { "type": "string", "example": "18:00" },
-          "businessDays": { "type": "string", "example": "MON,TUE,WED,THU,FRI" },
-          "largeApprovalThreshold": { "type": "number", "example": 50000000 },
-          "maxFailedLoginAttempts": { "type": "integer", "example": 3 },
-          "bulkDeleteCount": { "type": "integer", "example": 5 },
-          "bulkDeleteWindowMinutes": { "type": "integer", "example": 5 },
-          "retentionYears": { "type": "integer", "example": 7 }
+          "businessHoursStart": {
+            "type": "string",
+            "example": "08:00"
+          },
+          "businessHoursEnd": {
+            "type": "string",
+            "example": "18:00"
+          },
+          "businessDays": {
+            "type": "string",
+            "example": "MON,TUE,WED,THU,FRI"
+          },
+          "largeApprovalThreshold": {
+            "type": "number",
+            "example": 50000000
+          },
+          "maxFailedLoginAttempts": {
+            "type": "integer",
+            "example": 3
+          },
+          "bulkDeleteCount": {
+            "type": "integer",
+            "example": 5
+          },
+          "bulkDeleteWindowMinutes": {
+            "type": "integer",
+            "example": 5
+          },
+          "retentionYears": {
+            "type": "integer",
+            "example": 7
+          }
         }
       },
       "AuditAlertConfigRequest": {
         "type": "object",
         "properties": {
-          "businessHoursStart": { "type": "string", "example": "08:00" },
-          "businessHoursEnd": { "type": "string", "example": "18:00" },
-          "businessDays": { "type": "string", "example": "MON,TUE,WED,THU,FRI" },
-          "largeApprovalThreshold": { "type": "number", "example": 50000000 },
-          "maxFailedLoginAttempts": { "type": "integer", "example": 3 },
-          "bulkDeleteCount": { "type": "integer", "example": 5 },
-          "bulkDeleteWindowMinutes": { "type": "integer", "example": 5 },
-          "retentionYears": { "type": "integer", "example": 7 }
+          "businessHoursStart": {
+            "type": "string",
+            "example": "08:00"
+          },
+          "businessHoursEnd": {
+            "type": "string",
+            "example": "18:00"
+          },
+          "businessDays": {
+            "type": "string",
+            "example": "MON,TUE,WED,THU,FRI"
+          },
+          "largeApprovalThreshold": {
+            "type": "number",
+            "example": 50000000
+          },
+          "maxFailedLoginAttempts": {
+            "type": "integer",
+            "example": 3
+          },
+          "bulkDeleteCount": {
+            "type": "integer",
+            "example": 5
+          },
+          "bulkDeleteWindowMinutes": {
+            "type": "integer",
+            "example": 5
+          },
+          "retentionYears": {
+            "type": "integer",
+            "example": 7
+          }
         }
       },
       "UserActivitySummary": {
         "type": "object",
         "properties": {
-          "userId": { "type": "string" },
-          "userName": { "type": "string" },
-          "actionCount": { "type": "integer", "format": "int64", "example": 284 }
+          "userId": {
+            "type": "string"
+          },
+          "userName": {
+            "type": "string"
+          },
+          "actionCount": {
+            "type": "integer",
+            "format": "int64",
+            "example": 284
+          }
+        }
+      },
+      "DashboardStats": {
+        "type": "object",
+        "properties": {
+          "activePolicies": {
+            "type": "integer",
+            "example": 142
+          },
+          "openClaims": {
+            "type": "integer",
+            "example": 23
+          },
+          "pendingApprovals": {
+            "type": "integer",
+            "example": 7
+          },
+          "premiumsMtd": {
+            "type": "number",
+            "format": "double",
+            "example": 45600000.0
+          },
+          "claimsReserveTotal": {
+            "type": "number",
+            "format": "double",
+            "example": 12300000.0
+          },
+          "renewalsDue30Days": {
+            "type": "integer",
+            "example": 18
+          },
+          "outstandingPremium": {
+            "type": "number",
+            "format": "double",
+            "example": 8750000.0
+          },
+          "riUtilisationPct": {
+            "type": "number",
+            "format": "double",
+            "example": 67.3
+          }
+        }
+      },
+      "ApprovalQueue": {
+        "type": "object",
+        "properties": {
+          "policies": {
+            "type": "integer",
+            "example": 3
+          },
+          "quotes": {
+            "type": "integer",
+            "example": 2
+          },
+          "endorsements": {
+            "type": "integer",
+            "example": 1
+          },
+          "claims": {
+            "type": "integer",
+            "example": 0
+          },
+          "receipts": {
+            "type": "integer",
+            "example": 1
+          },
+          "payments": {
+            "type": "integer",
+            "example": 0
+          }
+        }
+      },
+      "LossRatioMonth": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string",
+            "example": "Apr 26"
+          },
+          "premium": {
+            "type": "number",
+            "format": "double",
+            "example": 15000000.0
+          },
+          "claims": {
+            "type": "number",
+            "format": "double",
+            "example": 9500000.0
+          },
+          "lossRatioPct": {
+            "type": "number",
+            "format": "double",
+            "example": 63.3
+          }
+        }
+      },
+      "RenewalDay": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-04-26"
+          },
+          "label": {
+            "type": "string",
+            "example": "Sun"
+          },
+          "count": {
+            "type": "integer",
+            "example": 4
+          }
+        }
+      },
+      "RecentActivity": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "entityType": {
+            "type": "string",
+            "example": "Policy"
+          },
+          "entityId": {
+            "type": "string",
+            "example": "POL-2026-00041"
+          },
+          "action": {
+            "type": "string",
+            "example": "APPROVE"
+          },
+          "userName": {
+            "type": "string",
+            "example": "chidi.okonkwo"
+          },
+          "timeAgo": {
+            "type": "string",
+            "example": "2m ago"
+          },
+          "statusGroup": {
+            "type": "string",
+            "enum": [
+              "active",
+              "pending",
+              "rejected"
+            ]
+          }
+        }
+      },
+      "SearchResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "Policy",
+              "Claim",
+              "Customer",
+              "Quote"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "example": "POL-2026-00041"
+          },
+          "sub": {
+            "type": "string",
+            "example": "Active"
+          },
+          "path": {
+            "type": "string",
+            "example": "/policies/3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          }
         }
       }
     }
   },
   "tags": [
-    { "name": "Audit Logs", "description": "Search and view the full system audit trail across all modules" },
-    { "name": "Login & Session Logs", "description": "Login, logout, and failed authentication event recording and retrieval" },
-    { "name": "Audit Alerts", "description": "Real-time anomaly alerts — failed logins, bulk deletes, off-hours activity, large approvals" },
-    { "name": "Audit Configuration", "description": "Alert thresholds and data retention settings (System Admin only for writes)" },
-    { "name": "Audit Export", "description": "Export audit logs as CSV" },
-    { "name": "Audit Reports", "description": "Six pre-built compliance reports" }
+    {
+      "name": "Audit Logs",
+      "description": "Search and view the full system audit trail across all modules"
+    },
+    {
+      "name": "Login & Session Logs",
+      "description": "Login, logout, and failed authentication event recording and retrieval"
+    },
+    {
+      "name": "Audit Alerts",
+      "description": "Real-time anomaly alerts \u2014 failed logins, bulk deletes, off-hours activity, large approvals"
+    },
+    {
+      "name": "Audit Configuration",
+      "description": "Alert thresholds and data retention settings (System Admin only for writes)"
+    },
+    {
+      "name": "Audit Export",
+      "description": "Export audit logs as CSV"
+    },
+    {
+      "name": "Audit Reports",
+      "description": "Six pre-built compliance reports"
+    }
   ],
   "paths": {
     "/audit/logs": {
       "get": {
         "summary": "Search audit logs",
         "operationId": "searchAuditLogs",
-        "tags": ["Audit Logs"],
+        "tags": [
+          "Audit Logs"
+        ],
         "description": "Paginated, filterable audit trail. Filter by entityType, entityId, userId, action, or date range.",
         "parameters": [
-          { "name": "entityType", "in": "query", "schema": { "type": "string" }, "example": "Policy" },
-          { "name": "entityId", "in": "query", "schema": { "type": "string", "format": "uuid" } },
-          { "name": "userId", "in": "query", "schema": { "type": "string" } },
-          { "name": "action", "in": "query", "schema": { "type": "string", "enum": ["CREATE","UPDATE","DELETE","APPROVE","REJECT","SUBMIT","SEND","CANCEL","REVERSE","EXECUTE"] } },
-          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date-time" } },
-          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date-time" } },
-          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 0 } },
-          { "name": "size", "in": "query", "schema": { "type": "integer", "default": 20 } }
+          {
+            "name": "entityType",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "example": "Policy"
+          },
+          {
+            "name": "entityId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "CREATE",
+                "UPDATE",
+                "DELETE",
+                "APPROVE",
+                "REJECT",
+                "SUBMIT",
+                "SEND",
+                "CANCEL",
+                "REVERSE",
+                "EXECUTE"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Paginated audit log entries", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuditLogResponse" } } } },
-          "401": { "description": "Unauthorized" },
-          "403": { "description": "Insufficient role — requires AUDIT_VIEW or SETUP_UPDATE" }
+          "200": {
+            "description": "Paginated audit log entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLogResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Insufficient role \u2014 requires AUDIT_VIEW or SETUP_UPDATE"
+          }
         }
       }
     },
@@ -151,19 +605,68 @@
       "get": {
         "summary": "List login & session logs",
         "operationId": "listLoginLogs",
-        "tags": ["Login & Session Logs"],
+        "tags": [
+          "Login & Session Logs"
+        ],
         "description": "Filterable by userId or date range. Requires AUDIT_VIEW or SETUP_UPDATE role.",
         "parameters": [
-          { "name": "userId", "in": "query", "schema": { "type": "string" } },
-          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date-time" } },
-          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date-time" } },
-          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 0 } },
-          { "name": "size", "in": "query", "schema": { "type": "integer", "default": 20 } }
+          {
+            "name": "userId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Paginated login log entries", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginAuditLogResponse" } } } },
-          "401": { "description": "Unauthorized" },
-          "403": { "description": "Insufficient role" }
+          "200": {
+            "description": "Paginated login log entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginAuditLogResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
         }
       }
     },
@@ -171,11 +674,17 @@
       "post": {
         "summary": "Record login event",
         "operationId": "sessionStart",
-        "tags": ["Login & Session Logs"],
+        "tags": [
+          "Login & Session Logs"
+        ],
         "description": "Called by the frontend after successful Keycloak authentication. Requires a valid JWT.",
         "responses": {
-          "200": { "description": "Login event recorded" },
-          "401": { "description": "Unauthorized" }
+          "200": {
+            "description": "Login event recorded"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
         }
       }
     },
@@ -183,11 +692,17 @@
       "post": {
         "summary": "Record logout event",
         "operationId": "sessionEnd",
-        "tags": ["Login & Session Logs"],
+        "tags": [
+          "Login & Session Logs"
+        ],
         "description": "Called by the frontend on logout. Requires a valid JWT.",
         "responses": {
-          "200": { "description": "Logout event recorded" },
-          "401": { "description": "Unauthorized" }
+          "200": {
+            "description": "Logout event recorded"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
         }
       }
     },
@@ -195,15 +710,32 @@
       "post": {
         "summary": "Record failed login attempt",
         "operationId": "loginFailed",
-        "tags": ["Login & Session Logs"],
-        "description": "**Public endpoint — no JWT required.** Called when JWT validation fails for a known user. Triggers failed-login alert detection.",
+        "tags": [
+          "Login & Session Logs"
+        ],
+        "description": "**Public endpoint \u2014 no JWT required.** Called when JWT validation fails for a known user. Triggers failed-login alert detection.",
         "security": [],
         "parameters": [
-          { "name": "userId", "in": "query", "required": true, "schema": { "type": "string" } },
-          { "name": "userName", "in": "query", "schema": { "type": "string" } }
+          {
+            "name": "userId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userName",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Failure event recorded" }
+          "200": {
+            "description": "Failure event recorded"
+          }
         }
       }
     },
@@ -211,17 +743,53 @@
       "get": {
         "summary": "List audit alerts",
         "operationId": "listAlerts",
-        "tags": ["Audit Alerts"],
+        "tags": [
+          "Audit Alerts"
+        ],
         "description": "Returns all alerts or unacknowledged-only when `unacknowledgedOnly=true`. Ordered newest first.",
         "parameters": [
-          { "name": "unacknowledgedOnly", "in": "query", "schema": { "type": "boolean", "default": false } },
-          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 0 } },
-          { "name": "size", "in": "query", "schema": { "type": "integer", "default": 20 } }
+          {
+            "name": "unacknowledgedOnly",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Paginated alert list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuditAlertResponse" } } } },
-          "401": { "description": "Unauthorized" },
-          "403": { "description": "Insufficient role" }
+          "200": {
+            "description": "Paginated alert list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditAlertResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
         }
       }
     },
@@ -229,15 +797,38 @@
       "post": {
         "summary": "Acknowledge an alert",
         "operationId": "acknowledgeAlert",
-        "tags": ["Audit Alerts"],
+        "tags": [
+          "Audit Alerts"
+        ],
         "description": "Marks the alert as acknowledged. The acknowledging user is recorded.",
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Alert acknowledged", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuditAlertResponse" } } } },
-          "404": { "description": "Alert not found" },
-          "401": { "description": "Unauthorized" }
+          "200": {
+            "description": "Alert acknowledged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditAlertResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Alert not found"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
         }
       }
     },
@@ -245,26 +836,60 @@
       "get": {
         "summary": "Get audit alert configuration",
         "operationId": "getAuditConfig",
-        "tags": ["Audit Configuration"],
+        "tags": [
+          "Audit Configuration"
+        ],
         "description": "Returns the current alert thresholds and retention policy for this tenant. Requires AUDIT_VIEW or SETUP_UPDATE.",
         "responses": {
-          "200": { "description": "Current config", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuditAlertConfigResponse" } } } },
-          "401": { "description": "Unauthorized" }
+          "200": {
+            "description": "Current config",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditAlertConfigResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
         }
       },
       "put": {
         "summary": "Update audit alert configuration",
         "operationId": "updateAuditConfig",
-        "tags": ["Audit Configuration"],
+        "tags": [
+          "Audit Configuration"
+        ],
         "description": "Updates alert thresholds and retention period. **Requires SETUP_UPDATE role (System Admin only).**",
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuditAlertConfigRequest" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuditAlertConfigRequest"
+              }
+            }
+          }
         },
         "responses": {
-          "200": { "description": "Config updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuditAlertConfigResponse" } } } },
-          "400": { "description": "Validation error" },
-          "403": { "description": "Forbidden — requires SETUP_UPDATE" }
+          "200": {
+            "description": "Config updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditAlertConfigResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "403": {
+            "description": "Forbidden \u2014 requires SETUP_UPDATE"
+          }
         }
       }
     },
@@ -272,128 +897,603 @@
       "get": {
         "summary": "Export audit logs as CSV",
         "operationId": "exportAuditCsv",
-        "tags": ["Audit Export"],
+        "tags": [
+          "Audit Export"
+        ],
         "description": "Streams a CSV file containing audit log entries matching the supplied filters. All filters are optional.",
         "parameters": [
-          { "name": "entityType", "in": "query", "schema": { "type": "string" } },
-          { "name": "entityId", "in": "query", "schema": { "type": "string" } },
-          { "name": "userId", "in": "query", "schema": { "type": "string" } },
-          { "name": "action", "in": "query", "schema": { "type": "string" } },
-          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date-time" } },
-          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date-time" } }
+          {
+            "name": "entityType",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "CSV file stream", "content": { "text/csv": { "schema": { "type": "string", "format": "binary" } } } },
-          "401": { "description": "Unauthorized" },
-          "403": { "description": "Insufficient role" }
+          "200": {
+            "description": "CSV file stream",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Insufficient role"
+          }
         }
       }
     },
     "/audit/reports/actions-by-user": {
       "get": {
-        "summary": "Report 1 — Actions by user",
+        "summary": "Report 1 \u2014 Actions by user",
         "operationId": "reportActionsByUser",
-        "tags": ["Audit Reports"],
+        "tags": [
+          "Audit Reports"
+        ],
         "description": "All audit events performed by a specific user in a date range.",
         "parameters": [
-          { "name": "userId", "in": "query", "required": true, "schema": { "type": "string" } },
-          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date-time" } },
-          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date-time" } },
-          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 0 } },
-          { "name": "size", "in": "query", "schema": { "type": "integer", "default": 20 } }
+          {
+            "name": "userId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Paginated audit events for user" },
-          "401": { "description": "Unauthorized" }
+          "200": {
+            "description": "Paginated audit events for user"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
         }
       }
     },
     "/audit/reports/actions-by-module": {
       "get": {
-        "summary": "Report 2 — Actions by module",
+        "summary": "Report 2 \u2014 Actions by module",
         "operationId": "reportActionsByModule",
-        "tags": ["Audit Reports"],
+        "tags": [
+          "Audit Reports"
+        ],
         "description": "All audit events for a specific entity type (module) in a date range.",
         "parameters": [
-          { "name": "entityType", "in": "query", "required": true, "schema": { "type": "string" }, "example": "Policy" },
-          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date-time" } },
-          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date-time" } },
-          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 0 } },
-          { "name": "size", "in": "query", "schema": { "type": "integer", "default": 20 } }
+          {
+            "name": "entityType",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "Policy"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Paginated audit events for module" },
-          "401": { "description": "Unauthorized" }
+          "200": {
+            "description": "Paginated audit events for module"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
         }
       }
     },
     "/audit/reports/approvals": {
       "get": {
-        "summary": "Report 3 — Approval audit trail",
+        "summary": "Report 3 \u2014 Approval audit trail",
         "operationId": "reportApprovals",
-        "tags": ["Audit Reports"],
+        "tags": [
+          "Audit Reports"
+        ],
         "description": "All APPROVE and REJECT events across every module in a date range.",
         "parameters": [
-          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date-time" } },
-          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date-time" } },
-          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 0 } },
-          { "name": "size", "in": "query", "schema": { "type": "integer", "default": 20 } }
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Paginated approval events" },
-          "401": { "description": "Unauthorized" }
+          "200": {
+            "description": "Paginated approval events"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
         }
       }
     },
     "/audit/reports/data-changes": {
       "get": {
-        "summary": "Report 4 — Data change history",
+        "summary": "Report 4 \u2014 Data change history",
         "operationId": "reportDataChanges",
-        "tags": ["Audit Reports"],
+        "tags": [
+          "Audit Reports"
+        ],
         "description": "Full before/after change history for a specific entity. Returns old_value and new_value JSONB snapshots.",
         "parameters": [
-          { "name": "entityType", "in": "query", "required": true, "schema": { "type": "string" } },
-          { "name": "entityId", "in": "query", "required": true, "schema": { "type": "string" } },
-          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 0 } },
-          { "name": "size", "in": "query", "schema": { "type": "integer", "default": 20 } }
+          {
+            "name": "entityType",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Paginated change events with before/after snapshots" },
-          "401": { "description": "Unauthorized" }
+          "200": {
+            "description": "Paginated change events with before/after snapshots"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
         }
       }
     },
     "/audit/reports/login-security": {
       "get": {
-        "summary": "Report 5 — Login & security events",
+        "summary": "Report 5 \u2014 Login & security events",
         "operationId": "reportLoginSecurity",
-        "tags": ["Audit Reports"],
+        "tags": [
+          "Audit Reports"
+        ],
         "description": "Login, logout, and failed authentication events in a date range.",
         "parameters": [
-          { "name": "from", "in": "query", "required": true, "schema": { "type": "string", "format": "date-time" } },
-          { "name": "to", "in": "query", "required": true, "schema": { "type": "string", "format": "date-time" } },
-          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 0 } },
-          { "name": "size", "in": "query", "schema": { "type": "integer", "default": 20 } }
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Paginated login events" },
-          "401": { "description": "Unauthorized" }
+          "200": {
+            "description": "Paginated login events"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
         }
       }
     },
     "/audit/reports/user-activity": {
       "get": {
-        "summary": "Report 6 — User activity summary",
+        "summary": "Report 6 \u2014 User activity summary",
         "operationId": "reportUserActivity",
-        "tags": ["Audit Reports"],
+        "tags": [
+          "Audit Reports"
+        ],
         "description": "Ranked list of all users by total action count in a date range.",
         "parameters": [
-          { "name": "from", "in": "query", "required": true, "schema": { "type": "string", "format": "date-time" } },
-          { "name": "to", "in": "query", "required": true, "schema": { "type": "string", "format": "date-time" } }
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Ranked user activity list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserActivitySummary" } } } },
-          "401": { "description": "Unauthorized" }
+          "200": {
+            "description": "Ranked user activity list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserActivitySummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/dashboard/stats": {
+      "get": {
+        "summary": "Dashboard KPI statistics",
+        "operationId": "getDashboardStats",
+        "tags": [
+          "Dashboard"
+        ],
+        "description": "Returns 8 aggregated KPIs for the back-office home screen: active policies, open claims, pending approvals, premiums MTD, claims reserve total, renewals due in 30 days, outstanding premium, and RI utilisation %.",
+        "responses": {
+          "200": {
+            "description": "8 KPI stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DashboardStats"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or expired JWT"
+          }
+        }
+      }
+    },
+    "/dashboard/approval-queue": {
+      "get": {
+        "summary": "Pending approval counts by entity type",
+        "operationId": "getDashboardApprovalQueue",
+        "tags": [
+          "Dashboard"
+        ],
+        "description": "Returns the count of items in PENDING_APPROVAL status for each entity type across all modules.",
+        "responses": {
+          "200": {
+            "description": "Pending approval counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ApprovalQueue"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or expired JWT"
+          }
+        }
+      }
+    },
+    "/dashboard/loss-ratio": {
+      "get": {
+        "summary": "Loss ratio trend \u2014 last 6 months",
+        "operationId": "getDashboardLossRatio",
+        "tags": [
+          "Dashboard"
+        ],
+        "description": "Returns monthly premium written and claims incurred for the last 6 months, plus a computed loss ratio percentage per month. Used for the dashboard sparkline chart.",
+        "responses": {
+          "200": {
+            "description": "6-month loss ratio trend",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/LossRatioMonth"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or expired JWT"
+          }
+        }
+      }
+    },
+    "/dashboard/renewals-due": {
+      "get": {
+        "summary": "Policies expiring in the next 7 days",
+        "operationId": "getDashboardRenewalsDue",
+        "tags": [
+          "Dashboard"
+        ],
+        "description": "Returns one entry per day for the next 7 days, each with the count of ACTIVE policies whose end date falls on that day. Always returns exactly 7 entries; days with no renewals have count = 0.",
+        "responses": {
+          "200": {
+            "description": "7-day renewals due strip",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RenewalDay"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or expired JWT"
+          }
+        }
+      }
+    },
+    "/dashboard/recent-activity": {
+      "get": {
+        "summary": "Last 10 audit log entries across all modules",
+        "operationId": "getDashboardRecentActivity",
+        "tags": [
+          "Dashboard"
+        ],
+        "description": "Returns the 10 most recent audit log entries from the system-wide audit trail, ordered by timestamp descending. Used for the Recent Activity feed on the dashboard.",
+        "responses": {
+          "200": {
+            "description": "Last 10 audit log entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RecentActivity"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or expired JWT"
+          }
+        }
+      }
+    },
+    "/dashboard/search": {
+      "get": {
+        "summary": "Global search across policies, claims, customers, and quotes",
+        "operationId": "globalSearch",
+        "tags": [
+          "Dashboard"
+        ],
+        "description": "Case-insensitive ILIKE search across policies (by policy_number), claims (by claim_number), customers (by name), and quotes (by quote_number). Returns up to 5 results per entity type, capped at 20 total. Minimum query length is 2 characters.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "Search term (minimum 2 characters)",
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "example": "POL-2026"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SearchResult"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or expired JWT"
+          }
         }
       }
     }
