@@ -1922,3 +1922,26 @@ Added `.env.local` to `cia-frontend/apps/back-office/.gitignore` so the dev-only
 **Typecheck:** `tsc --noEmit` exits 0.
 
 **Open questions:** None.
+
+---
+
+### Session 35 — Figma sync: Enhanced Dashboard screen
+
+**Figma file:** `Zaiu2K7NvEJ7Cjj6z1xt2D` (BackOffice design file)
+
+**Page updated:** Dashboard (no existing frames deleted)
+
+**New frame added:**
+
+| Node ID | Frame name | Screen |
+|---|---|---|
+| `236:2` | BackOffice / Dashboard — Enhanced | New dashboard — 8 stat cards, approval queue widget, loss ratio 6-month sparkline, renewals due 7-day strip |
+
+**Position:** x=80, y=1060 — directly below the original `BackOffice / Dashboard` (6:2) at y=80.
+
+**Method:** `npx playwright screenshot` → `upload_assets` → `use_figma` IMAGE fill. Auto-placed duplicate frame (235:2) removed.
+
+**All existing 6 frames on the Dashboard page preserved:**
+BackOffice / Dashboard (6:2) · reports-home (223:2) · reports-library (224:2) · reports-builder-step1 (226:2) · reports-builder-step2 (227:2) · reports-access-setup (228:2)
+
+**Open questions:** None.
