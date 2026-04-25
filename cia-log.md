@@ -1880,3 +1880,45 @@ Added `.env.local` to `cia-frontend/apps/back-office/.gitignore` so the dev-only
 **Audit items resolved:** I2 (Clone & Edit), I3 (consistent mock groups)
 
 **Open questions:** None.
+
+---
+
+### Session 34 — Dashboard enhancement: 8 stat cards, approval queue, loss ratio, renewals strip
+
+**Backend files created (`cia-backend/cia-api/src/main/java/com/nubeero/cia/dashboard/`):**
+
+| File | Purpose |
+|---|---|
+| `DashboardStatsDto.java` | 8 KPI fields: activePolicies, openClaims, pendingApprovals, premiumsMtd, claimsReserveTotal, renewalsDue30Days, outstandingPremium, riUtilisationPct |
+| `ApprovalQueueDto.java` | Count by entity type: policies, quotes, endorsements, claims, receipts, payments; `total()` helper |
+| `LossRatioMonthDto.java` | Per-month: month label, premium, claims, lossRatioPct |
+| `RenewalDayDto.java` | Per-day for 7-day strip: date, day label, count |
+| `DashboardService.java` | Native SQL aggregations against tenant schema; `sanitize()` whitelist for table/column names; `generate_series` CTE for loss ratio; always returns 7 days for renewals strip (fills 0 for empty days); individual try/catch on each stat so one failure never blocks the others |
+| `DashboardController.java` | 4 GET endpoints under `/api/v1/dashboard/` — stats, approval-queue, loss-ratio, renewals-due; `isAuthenticated()` guard |
+
+**Bug fixed during verification:** `DashboardService.lossRatioTrend()` used `p.premium` — `policies` table has `total_premium` not `premium` (which lives on `policy_risks`). Fixed to `p.total_premium`.
+
+**Frontend files created:**
+
+| File | Purpose |
+|---|---|
+| `hooks/useDashboard.ts` | 4 React Query hooks: `useDashboardStats`, `useApprovalQueue`, `useLossRatioTrend`, `useRenewalsDue`; staleTime 1 min |
+| `components/StatCardRow.tsx` | 8 cards in 2×4 grid (2-col mobile, 4-col desktop); each has icon badge with colour-coded accent; Skeleton loading state; `formatNaira()` for B/M/K suffixes |
+| `components/ApprovalQueueWidget.tsx` | 6 rows (Policies, Quotes, Endorsements, Claims, Receipts, Payments); each is a `<Link>` to the relevant module; pending badge count; empty state when all clear |
+| `components/LossRatioSparkline.tsx` | Recharts `BarChart` with colour-coded bars (teal <75%, amber 75-99%, red ≥100%); reference lines at 75% and 100%; custom tooltip; skeleton loading |
+| `components/RenewalsDueStrip.tsx` | 7-day horizontal grid; today's column highlighted red if policies expiring; urgency colours (amber if >5, blue if any, gray if 0); each day links to `/policies?expiry=YYYY-MM-DD` |
+
+**Files modified:**
+- `DashboardPage.tsx` — fully replaced; now fetches all 4 data sets in parallel and renders all components
+
+**Bug fixed:** `Receipt01Icon` doesn't exist in hugeicons v4.1.1 — replaced with `Invoice01Icon`.
+
+**API verification (all 200 OK with empty tenant data):**
+- `GET /api/v1/dashboard/stats` ✅
+- `GET /api/v1/dashboard/approval-queue` ✅
+- `GET /api/v1/dashboard/loss-ratio` ✅ (returns 6 months, 0-value rows for empty tenant)
+- `GET /api/v1/dashboard/renewals-due` ✅ (returns 7 days)
+
+**Typecheck:** `tsc --noEmit` exits 0.
+
+**Open questions:** None.
