@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -48,12 +48,16 @@ export default function ClauseBankTab() {
 
   // ── Actions ────────────────────────────────────────────────────────────────
   function openCreate() { setEditing(null); setSheetOpen(true); }
-  function openEdit(c: ClauseRow) { setEditing(c); setSheetOpen(true); }
 
-  function openDuplicate(c: ClauseRow) {
+  const openEdit = useCallback((c: ClauseRow) => {
+    setEditing(c);
+    setSheetOpen(true);
+  }, []);
+
+  const openDuplicate = useCallback((c: ClauseRow) => {
     setEditing({ ...c, id: '', title: `Copy of ${c.title}` });
     setSheetOpen(true);
-  }
+  }, []);
 
   function handleSave(values: ClauseSavePayload) {
     const productNames = PRODUCTS.filter(p => values.productIds.includes(p.id)).map(p => p.name);

@@ -44,7 +44,11 @@ export default function TemplateUploadSheet({
   });
 
   useEffect(() => {
-    if (!open) { setFile(null); setFileError(''); }
+    if (!open) {
+      setFile(null);
+      setFileError('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
     form.reset({
       name: '',
       type: replaceTemplate?.type ?? 'POLICY_DOCUMENT',
