@@ -8,6 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -142,6 +144,141 @@ public class DashboardService {
                     .build());
         }
         return result;
+    }
+
+    // ── 5. Global search ───────────────────────────────────────────────────
+
+    @SuppressWarnings("unchecked")
+    @Transactional(readOnly = true)
+    public List<SearchResultDto> search(String term) {
+        if (term == null || term.isBlank() || term.length() < 2) return List.of();
+        String like = "%" + term.toLowerCase() + "%";
+
+        String sql = """
+            (SELECT id::text, 'Policy' AS type, policy_number AS label, status AS sub
+             FROM policies
+             WHERE deleted_at IS NULL AND LOWER(policy_number) LIKE ?
+             ORDER BY created_at DESC LIMIT 5)
+            UNION ALL
+            (SELECT id::text, 'Claim' AS type, claim_number AS label, status AS sub
+             FROM claims
+             WHERE deleted_at IS NULL AND LOWER(claim_number) LIKE ?
+             ORDER BY created_at DESC LIMIT 5)
+            UNION ALL
+            (SELECT id::text, 'Customer' AS type,
+                    COALESCE(company_name, TRIM(first_name || ' ' || COALESCE(last_name, ''))) AS label,
+                    customer_type AS sub
+             FROM customers
+             WHERE deleted_at IS NULL
+               AND (LOWER(COALESCE(company_name,'')) LIKE ?
+                    OR LOWER(COALESCE(first_name,'') || ' ' || COALESCE(last_name,'')) LIKE ?)
+             ORDER BY created_at DESC LIMIT 5)
+            UNION ALL
+            (SELECT id::text, 'Quote' AS type, quote_number AS label, status AS sub
+             FROM quotes
+             WHERE deleted_at IS NULL AND LOWER(quote_number) LIKE ?
+             ORDER BY created_at DESC LIMIT 5)
+            LIMIT 20
+            """;
+
+        List<Object[]> rows;
+        try {
+            rows = em.createNativeQuery(sql)
+                    .setParameter(1, like)   // policy_number
+                    .setParameter(2, like)   // claim_number
+                    .setParameter(3, like)   // company_name
+                    .setParameter(4, like)   // first_name + last_name
+                    .setParameter(5, like)   // quote_number
+                    .getResultList();
+        } catch (Exception e) {
+            log.warn("Search query failed for term '{}': {}", term, e.getMessage());
+            return List.of();
+        }
+
+        return rows.stream().map(row -> {
+            String type = (String) row[1];
+            String id   = (String) row[0];
+            return SearchResultDto.builder()
+                    .id(id)
+                    .type(type)
+                    .label((String) row[2])
+                    .sub(row[3] != null ? capitalize((String) row[3]) : "")
+                    .path(typeToPath(type, id))
+                    .build();
+        }).toList();
+    }
+
+    private String typeToPath(String type, String id) {
+        return switch (type) {
+            case "Policy"   -> "/policies/" + id;
+            case "Claim"    -> "/claims/" + id;
+            case "Customer" -> "/customers/" + id;
+            case "Quote"    -> "/quotation/" + id;
+            default         -> "/dashboard";
+        };
+    }
+
+    private String capitalize(String s) {
+        if (s == null || s.isEmpty()) return s;
+        return s.substring(0, 1).toUpperCase() + s.substring(1).toLowerCase().replace("_", " ");
+    }
+
+    // ── 6. Recent activity — last 10 audit log entries ─────────────────────
+
+    @SuppressWarnings("unchecked")
+    @Transactional(readOnly = true)
+    public List<RecentActivityDto> recentActivity() {
+        String sql = """
+            SELECT id::text, entity_type, entity_id, action, user_name, timestamp
+            FROM audit_log
+            ORDER BY timestamp DESC
+            LIMIT 10
+            """;
+
+        List<Object[]> rows;
+        try {
+            rows = em.createNativeQuery(sql).getResultList();
+        } catch (Exception e) {
+            log.warn("Recent activity query failed: {}", e.getMessage());
+            return List.of();
+        }
+
+        return rows.stream().map(row -> {
+            String action = (String) row[3];
+            return RecentActivityDto.builder()
+                    .id((String) row[0])
+                    .entityType(formatEntityType((String) row[1]))
+                    .entityId((String) row[2])
+                    .action(action)
+                    .userName(row[4] != null ? (String) row[4] : "System")
+                    .timeAgo(timeAgo((Instant) row[5]))
+                    .statusGroup(actionToStatus(action))
+                    .build();
+        }).toList();
+    }
+
+    private String formatEntityType(String raw) {
+        if (raw == null) return "System";
+        // e.g. "POLICY" → "Policy", "CLAIM" → "Claim"
+        return raw.substring(0, 1).toUpperCase() + raw.substring(1).toLowerCase().replace("_", " ");
+    }
+
+    private String actionToStatus(String action) {
+        if (action == null) return "pending";
+        return switch (action) {
+            case "APPROVE", "CREATE", "SEND", "EXECUTE" -> "active";
+            case "REJECT", "CANCEL", "DELETE", "REVERSE" -> "rejected";
+            default -> "pending";
+        };
+    }
+
+    private String timeAgo(Instant ts) {
+        if (ts == null) return "—";
+        Duration d = Duration.between(ts, Instant.now());
+        if (d.toMinutes() < 1)  return "just now";
+        if (d.toMinutes() < 60) return d.toMinutes() + "m ago";
+        if (d.toHours()   < 24) return d.toHours()   + "h ago";
+        return d.toDays() + "d ago";
     }
 
     // ── Private helpers ────────────────────────────────────────────────────

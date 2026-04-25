@@ -34,6 +34,16 @@ export interface RenewalDay {
   count: number;
 }
 
+export interface RecentActivity {
+  id: string;
+  entityType: string;
+  entityId: string;
+  action: string;
+  userName: string;
+  timeAgo: string;
+  statusGroup: 'active' | 'pending' | 'rejected';
+}
+
 const STALE = 60 * 1000; // 1 minute
 
 export function useDashboardStats() {
@@ -77,5 +87,16 @@ export function useRenewalsDue() {
       return res.data.data;
     },
     staleTime: STALE,
+  });
+}
+
+export function useRecentActivity() {
+  return useQuery<RecentActivity[]>({
+    queryKey: ['dashboard', 'recent-activity'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: RecentActivity[] }>('/api/v1/dashboard/recent-activity');
+      return res.data.data;
+    },
+    staleTime: 30 * 1000, // 30s — activity changes more frequently
   });
 }

@@ -47,4 +47,19 @@ public class DashboardController {
     public ResponseEntity<ApiResponse<List<RenewalDayDto>>> renewalsDue() {
         return ResponseEntity.ok(ApiResponse.success(dashboardService.renewalsDue()));
     }
+
+    @GetMapping("/recent-activity")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Last 10 audit log entries across all modules")
+    public ResponseEntity<ApiResponse<List<RecentActivityDto>>> recentActivity() {
+        return ResponseEntity.ok(ApiResponse.success(dashboardService.recentActivity()));
+    }
+
+    @GetMapping("/search")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Global search across policies, claims, customers, and quotes")
+    public ResponseEntity<ApiResponse<List<SearchResultDto>>> search(
+            @org.springframework.web.bind.annotation.RequestParam String q) {
+        return ResponseEntity.ok(ApiResponse.success(dashboardService.search(q)));
+    }
 }

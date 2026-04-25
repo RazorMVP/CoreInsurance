@@ -1945,3 +1945,36 @@ Added `.env.local` to `cia-frontend/apps/back-office/.gitignore` so the dev-only
 BackOffice / Dashboard (6:2) · reports-home (223:2) · reports-library (224:2) · reports-builder-step1 (226:2) · reports-builder-step2 (227:2) · reports-access-setup (228:2)
 
 **Open questions:** None.
+
+---
+
+### Session 36 — Dashboard fixes: topbar labels, notification badge, help link, recent activity, global search
+
+**All 5 dashboard items from the connectivity audit addressed:**
+
+**Files modified/created:**
+
+| File | Change |
+|---|---|
+| `app/layout/Topbar.tsx` | Added `reports: 'Reports & Analytics'` to routeLabels; replaced static search input with `<SearchBar />`; help icon now links to Confluence PRD; notification bell wired to `useApprovalQueue` with badge count + dropdown panel listing pending counts by entity type |
+| `app/layout/SearchBar.tsx` | New component — debounced input (300ms), React Query `useQuery` against `/api/v1/dashboard/search?q=`, floating dropdown with typed results (Policy/Claim/Customer/Quote) and coloured icons, keyboard Escape to close, `useClickOutside` to dismiss |
+| `hooks/useClickOutside.ts` | New shared hook — mousedown + touchstart listener, cleans up on unmount |
+| `modules/dashboard/hooks/useDashboard.ts` | Added `RecentActivity` type + `useRecentActivity` hook (`/api/v1/dashboard/recent-activity`, staleTime 30s) |
+| `modules/dashboard/components/RecentActivityFeed.tsx` | New component — renders last 10 audit log entries; Badge variant derived from action (APPROVE/CREATE→active, REJECT/DELETE→rejected, else pending); skeleton loading state; empty state |
+| `modules/dashboard/DashboardPage.tsx` | Restored Recent Activity feed section (section 4) |
+| `cia-api/dashboard/RecentActivityDto.java` | New DTO: entityType, entityId, action, userName, timeAgo, statusGroup |
+| `cia-api/dashboard/SearchResultDto.java` | New DTO: id, type, label, sub, path |
+| `cia-api/dashboard/DashboardService.java` | Added `search(term)` — UNION ALL across policies/claims/customers/quotes, 5 params, catches SQL exceptions; added `recentActivity()` — native SQL on audit_log ORDER BY timestamp DESC LIMIT 10; `timeAgo()` helper; `actionToStatus()` helper |
+| `cia-api/dashboard/DashboardController.java` | Added `GET /api/v1/dashboard/recent-activity` and `GET /api/v1/dashboard/search?q=` endpoints |
+
+**Bugs fixed during verification:**
+- Search SQL used `customer` (wrong) → corrected to `customers`
+- Search SQL used `full_name` (wrong) → corrected to `COALESCE(company_name, first_name || ' ' || last_name)`
+- Import paths in Topbar used `../../../` (3 levels up) instead of `../../` (2 levels up from `src/app/layout/`)
+
+**All 6 dashboard API endpoints verified 200 OK:**
+`stats` · `approval-queue` · `loss-ratio` · `renewals-due` · `recent-activity` · `search?q=POL`
+
+**Typecheck:** `tsc --noEmit` exits 0.
+
+**Open questions:** None.
