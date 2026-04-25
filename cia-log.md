@@ -1553,4 +1553,10 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 - `openEdit` and `openDuplicate` wrapped in `useCallback` so useMemo empty-dep-array columns captures stable references
 - File input value explicitly reset (`fileInputRef.current.value = ''`) on sheet close to prevent same-file reselection edge case
 
+**Figma sync:** Policy Specifications screens created in file `Zaiu2K7NvEJ7Cjj6z1xt2D` (Setup page)
+
+- `137:2` — "BackOffice / Policy Specifications" — Clause Bank tab active; full toolbar (search + product filter + type filter + Add Clause button); 8-row DataTable with Mandatory/Optional badges; all 4 clause types represented; paginator strip
+- `141:2` — "Sheet: Add Clause" — right-side drawer; Title, Clause Text, Type, Applicability toggle (Mandatory helper text), multi-product checkbox list with chip previews
+- `143:2` — "BackOffice / Policy Specifications / Templates" — Templates tab active; product selector showing "Private Motor Comprehensive"; 2-active-templates hint; Upload Template button; 3-row custom card list (Policy Document blue, Certificate amber, Schedule neutral/archived at 55% opacity)
+
 **Open questions:** None.
