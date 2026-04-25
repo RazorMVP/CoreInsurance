@@ -31,7 +31,7 @@ interface Props {
 }
 
 export default function TemplateUploadSheet({
-  open, onOpenChange, productName, replaceTemplate, onSave,
+  open, onOpenChange, productId: _productId, productName, replaceTemplate, onSave,
 }: Props) {
   const [file,     setFile]     = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
