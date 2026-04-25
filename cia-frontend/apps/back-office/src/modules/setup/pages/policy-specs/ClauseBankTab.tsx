@@ -7,7 +7,7 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import type { ClauseRow, ClauseType, ClauseApplicability, ClauseSavePayload } from './clause-types';
-import { PRODUCTS } from './clause-types';
+import { PRODUCTS, CLAUSE_TYPES } from './clause-types';
 import ClauseSheet from './ClauseSheet';
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
@@ -56,7 +56,7 @@ export default function ClauseBankTab() {
   }
 
   function handleSave(values: ClauseSavePayload) {
-    const productNames = ([...PRODUCTS] as { id: string; name: string }[]).filter(p => values.productIds.includes(p.id)).map(p => p.name);
+    const productNames = PRODUCTS.filter(p => values.productIds.includes(p.id)).map(p => p.name);
     if (values.id) {
       setClauses(prev => prev.map(c => c.id === values.id ? { ...values, id: values.id, productNames } : c));
     } else {
@@ -72,7 +72,7 @@ export default function ClauseBankTab() {
   }
 
   // ── Columns ────────────────────────────────────────────────────────────────
-  const columns: ColumnDef<ClauseRow>[] = [
+  const columns: ColumnDef<ClauseRow>[] = useMemo(() => [
     {
       accessorKey: 'title',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Clause Title" />,
@@ -132,7 +132,7 @@ export default function ClauseBankTab() {
         />
       ),
     },
-  ];
+  ], []);
 
   return (
     <>
@@ -150,7 +150,7 @@ export default function ClauseBankTab() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Products</SelectItem>
-            {([...PRODUCTS] as { id: string; name: string }[]).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+            {PRODUCTS.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
@@ -159,10 +159,7 @@ export default function ClauseBankTab() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="STANDARD">Standard</SelectItem>
-            <SelectItem value="EXCLUSION">Exclusion</SelectItem>
-            <SelectItem value="SPECIAL_CONDITION">Special Condition</SelectItem>
-            <SelectItem value="WARRANTY">Warranty</SelectItem>
+            {CLAUSE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
           </SelectContent>
         </Select>
         <div className="flex-1" />

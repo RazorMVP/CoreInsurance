@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect } from 'react';
-import { useForm, useController } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import {
   Button,
@@ -45,16 +45,7 @@ export default function ClauseSheet({ open, onOpenChange, clause, onSave }: Prop
         ? { title: clause.title, text: clause.text, type: clause.type, applicability: clause.applicability, productIds: clause.productIds }
         : { title: '', text: '', type: 'STANDARD', applicability: 'OPTIONAL', productIds: [] },
     );
-  }, [clause, open]);
-
-  const { field: productIdsField } = useController({ name: 'productIds', control: form.control });
-
-  function toggleProduct(id: string) {
-    const current: string[] = productIdsField.value ?? [];
-    productIdsField.onChange(
-      current.includes(id) ? current.filter(p => p !== id) : [...current, id],
-    );
-  }
+  }, [clause, open, form]);
 
   function onSubmit(values: ClauseFormValues) {
     onSave({ title: values.title, text: values.text, type: values.type, applicability: values.applicability, productIds: values.productIds, id: clause?.id ?? undefined });
@@ -141,49 +132,55 @@ export default function ClauseSheet({ open, onOpenChange, clause, onSave }: Prop
             )} />
 
             {/* Products multi-select */}
-            <FormItem>
-              <FormLabel>Products</FormLabel>
-              {/* Selected chips */}
-              {productIdsField.value.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {PRODUCTS.filter(p => productIdsField.value.includes(p.id)).map(p => (
-                    <span
-                      key={p.id}
-                      className="inline-flex items-center gap-1 rounded-md bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700"
-                    >
-                      {p.name}
-                      <button
-                        type="button"
-                        onClick={() => toggleProduct(p.id)}
-                        className="hover:text-teal-900"
+            <FormField control={form.control} name="productIds" render={({ field: productsField }) => (
+              <FormItem>
+                <FormLabel>Products</FormLabel>
+                {/* Selected chips */}
+                {(productsField.value as string[]).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {PRODUCTS.filter(p => (productsField.value as string[]).includes(p.id)).map(p => (
+                      <span
+                        key={p.id}
+                        className="inline-flex items-center gap-1 rounded-md bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700"
                       >
-                        ✕
-                      </button>
-                    </span>
+                        {p.name}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = productsField.value as string[];
+                            productsField.onChange(current.filter(id => id !== p.id));
+                          }}
+                          className="hover:text-teal-900"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {/* Checkbox list */}
+                <div className="rounded-md border divide-y max-h-[160px] overflow-y-auto">
+                  {PRODUCTS.map(p => (
+                    <label
+                      key={p.id}
+                      className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-secondary"
+                    >
+                      <Checkbox
+                        checked={(productsField.value as string[]).includes(p.id)}
+                        onCheckedChange={() => {
+                          const current = productsField.value as string[];
+                          productsField.onChange(
+                            current.includes(p.id) ? current.filter(id => id !== p.id) : [...current, p.id],
+                          );
+                        }}
+                      />
+                      <span className="text-sm">{p.name}</span>
+                    </label>
                   ))}
                 </div>
-              )}
-              {/* Checkbox list */}
-              <div className="rounded-md border divide-y max-h-[160px] overflow-y-auto">
-                {PRODUCTS.map(p => (
-                  <label
-                    key={p.id}
-                    className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-secondary"
-                  >
-                    <Checkbox
-                      checked={productIdsField.value.includes(p.id)}
-                      onCheckedChange={() => toggleProduct(p.id)}
-                    />
-                    <span className="text-sm">{p.name}</span>
-                  </label>
-                ))}
-              </div>
-              {form.formState.errors.productIds && (
-                <p className="text-sm font-medium text-destructive">
-                  {form.formState.errors.productIds.message}
-                </p>
-              )}
-            </FormItem>
+                <FormMessage />
+              </FormItem>
+            )} />
 
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

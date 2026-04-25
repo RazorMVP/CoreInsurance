@@ -16,7 +16,7 @@ export const PRODUCTS = [
   { id: '2', name: 'Commercial Vehicle' },
   { id: '3', name: 'Fire & Burglary Standard' },
   { id: '4', name: 'Marine Cargo Open Cover' },
-] as const;
+];
 
 export const CLAUSE_TYPES = [
   { value: 'STANDARD' as const,          label: 'Standard' },
