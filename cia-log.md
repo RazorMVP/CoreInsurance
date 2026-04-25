@@ -1550,5 +1550,7 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 - Shared types in clause-types.ts and template-types.ts to avoid circular imports
 - DataTable toolbar hand-rolled (not built-in toolbar prop) — three coordinated filters need unified state
 - columns wrapped in useMemo; type filter derived from CLAUSE_TYPES constant
+- `openEdit` and `openDuplicate` wrapped in `useCallback` so useMemo empty-dep-array columns captures stable references
+- File input value explicitly reset (`fileInputRef.current.value = ''`) on sheet close to prevent same-file reselection edge case
 
 **Open questions:** None.
