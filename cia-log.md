@@ -1741,3 +1741,34 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 - `### Reports API Design (cia-reports specific)` section with 12 actionable conventions covering: zero-dependency rule, adding reports via migration, SYSTEM report immutability, computed fields pattern, ORDER BY SQL injection prevention, access resolution (invisible not denied), DB constraint rules, pin uniqueness, regulatory report `is_pinnable=false`, chart TABLE_ONLY handling
 
 **Open questions:** None.
+
+---
+
+### Session 29 — Figma sync: Module 11 Reports & Analytics screens
+
+**Figma file:** `Zaiu2K7NvEJ7Cjj6z1xt2D` (BackOffice design file)
+
+**Pre-sync:**
+- Confirmed 5 commits were not pushed to GitHub remote
+- Pushed to `origin/main` → triggered GitHub Actions (`Vercel Deploy — NubSure Back Office`)
+- Run ID `24936225992` completed with `success`
+- Latest Vercel deployment (3m ago): `back-office-60plichri-razormvps-projects.vercel.app` — `● Ready` (Production)
+- Screenshots taken from local dev server (localhost:5173) using DevAuthProvider — backend not required
+
+**New Figma page created:** `Reports` (node `229:2`)
+
+**Frames created:**
+
+| Node ID | Frame name | Screen |
+|---|---|---|
+| `229:3` | BackOffice / Reports / Home | Reports home — Quick Access grid (6 categories with colour labels), empty pin state, New Custom Report CTA |
+| `229:4` | BackOffice / Reports / Library | Report Library — search bar, category tab row (All + 6 categories), empty state |
+| `229:5` | BackOffice / Reports / Builder — Step 1 Data Source | 3-step stepper, Step 1 active (teal), 6 data source cards with descriptions |
+| `229:6` | BackOffice / Reports / Builder — Step 2 Fields | Step 2 active, field picker checkboxes (11 fields inc. computed badges), Date Filters row |
+| `229:7` | BackOffice / Reports / Access Setup | Report Access Control — group selector, empty state before group selected |
+
+**Upload method:** `upload_assets` (single file per call, sequential) → multipart curl → `imageHash` → `use_figma` IMAGE fill. All 5 uploads successful.
+
+**Note:** Report Viewer (`/reports/run/:id`) was not synced — renders blank without a live backend to resolve the report definition. Will be captured in a future session once backend integration is complete.
+
+**Open questions:** None.
