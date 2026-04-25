@@ -497,3 +497,30 @@ If any service interface method was added or modified:
 - Ensure the method signature, parameter names, and return type clearly express the contract.
 - If the change affects a module's feature count in CLAUDE.md or SKILL.md, update those counts.
 - If a new internal REST endpoint was added to `cia-api`, note the route and purpose in cia-log.md.
+
+---
+
+### 9. Docs Site (https://cia-docs.vercel.app/) — required after every backend or architecture change
+
+**Mandatory when any of the following changed this session:**
+
+| Change | Docs update required |
+|---|---|
+| New Maven module added (e.g. `cia-reports`) | Update `docs-site/docs/architecture/modules.md` — add to inventory tree and dependency table |
+| New module architecture | Create `docs-site/docs/architecture/<module-name>.md` + add to `docs-site/sidebars.ts` |
+| New internal REST endpoints (`/api/v1/...`) | Add paths + schemas to `docs-site/static/internal-api.json` |
+| Partner API changes (`/partner/v1/...`) | `cia-backend/cia-partner-api/docs/openapi.json` is auto-synced to docs on deploy — ensure it is updated first |
+| New environment variables | Update `docs-site/docs/guides/environment-variables.md` |
+| New Flyway migrations | Update `docs-site/docs/guides/database-migrations.md` |
+| Security or auth changes | Update `docs-site/docs/architecture/security.md` |
+
+**Deployment trigger:** Committing any file under `docs-site/**` or `cia-backend/cia-partner-api/docs/openapi.json` to `main` automatically triggers `docs-deploy.yml` → builds Docusaurus → deploys to `https://cia-docs.vercel.app/`.
+
+**Critical — project ID:** `docs-deploy.yml` hardcodes `VERCEL_PROJECT_ID: prj_KgaDZ7fSkBNu3r6GEdiV8vAoZyAC` (the cia-docs project). Do NOT change this to `${{ secrets.VERCEL_PROJECT_ID }}` — that secret points to back-office and would silently deploy docs content to the wrong project.
+
+**Verification checklist:**
+- [ ] `docs-site/docs/architecture/modules.md` lists all current Maven modules
+- [ ] `docs-site/static/internal-api.json` has entries for all `/api/v1/` endpoints introduced this session
+- [ ] `docs-site/static/openapi.json` matches `cia-backend/cia-partner-api/docs/openapi.json` (auto-synced on deploy)
+- [ ] GitHub Actions run for `docs-deploy.yml` shows `Deploying razormvps-projects/cia-docs` (NOT back-office)
+- [ ] `vercel ls` from `docs-site/` shows a deployment timestamped within the last few minutes

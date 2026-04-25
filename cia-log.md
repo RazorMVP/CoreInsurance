@@ -2045,3 +2045,26 @@ BackOffice / Dashboard (6:2) · reports-home (223:2) · reports-library (224:2) 
 **Deployment trigger:** Committing to `docs-site/**` triggers `docs-deploy.yml` → builds Docusaurus → deploys to `https://cia-docs.vercel.app/`.
 
 **Open questions:** None.
+
+---
+
+### Session 40 — 2026-04-26: Add Gate 9 (Docs Site) to SESSION COMPLETION GATE
+
+**File modified:** `.claude/skills/cia/SKILL.md`
+
+**Change:** Added **Gate 9 — Docs Site (`https://cia-docs.vercel.app/`)** as a mandatory gate item in the SESSION COMPLETION GATE. This gate fires whenever a session introduces backend or architecture changes.
+
+**Gate 9 covers:**
+- New Maven module → update `docs-site/docs/architecture/modules.md`
+- New module architecture → create module doc page + sidebar entry
+- New internal REST endpoints → add to `docs-site/static/internal-api.json`
+- Partner API changes → ensure `cia-partner-api/docs/openapi.json` is updated (auto-synced on deploy)
+- New env vars → update environment-variables.md
+- New Flyway migrations → update database-migrations.md
+- Security/auth changes → update security.md
+
+**Critical note documented:** `docs-deploy.yml` hardcodes `VERCEL_PROJECT_ID: prj_KgaDZ7fSkBNu3r6GEdiV8vAoZyAC` (cia-docs project). The shared `VERCEL_PROJECT_ID` secret points to back-office — using it silently deploys docs content to the wrong project (root cause of the April 23–April 26 gap discovered in Session 38–39).
+
+**Also fixed in same session:** `docs-deploy.yml` workflow — corrected the cia-docs project ID issue and confirmed `https://cia-docs.vercel.app/` deployed successfully with Module 11 docs and Dashboard API spec.
+
+**Open questions:** None.
