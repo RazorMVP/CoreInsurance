@@ -1714,3 +1714,30 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **Build Queue update:** Build 11 (Reports & Analytics) marked `[x]` complete. Phase 2 now 10/10 complete. Total 15/20 (75%).
 
 **Open questions:** None.
+
+---
+
+### Session 28 — Docs: Module 11 architecture diagram in SKILL.md + CLAUDE.md update
+
+**Files modified:**
+
+| File | Change |
+|---|---|
+| `.claude/skills/cia/SKILL.md` | Added full Module 11 architecture section, updated module/feature counts, extended Data Model and Development Conventions |
+| `CLAUDE.md` | Added `cia-reports` API Design section under Development Standards; fixed Phase 1 note "10 modules" → "11 modules" |
+| `cia-log.md` | This entry |
+
+**What was added to SKILL.md:**
+- Module inventory description for Module 11 (20 features)
+- Feature count: 158 → 178 features across 11 modules
+- Module description count: 10 → 11 modules in frontmatter
+- New `## Module 11 Architecture — Reports & Analytics` section covering:
+  - Backend: full `ReportController` endpoint map (14 endpoints + required authorities), `ReportRunnerService` pipeline, `ReportQueryBuilder` SQL construction + computed field post-processing, `ReportAccessService` resolution rules, `ReportConfig` JSONB shape, computed fields formula table, 55 SYSTEM report catalogue summary by category with IDs
+  - Frontend: route tree with component hierarchy, React Query hooks table (10 hooks)
+- Data Model additions: `report_definition`, `report_pin`, `report_access_policy` entities; 2 new key relationships
+- Development Conventions: `cia-reports` isolation rule + access resolution rule (invisible-not-denied pattern)
+
+**What was added to CLAUDE.md:**
+- `### Reports API Design (cia-reports specific)` section with 12 actionable conventions covering: zero-dependency rule, adding reports via migration, SYSTEM report immutability, computed fields pattern, ORDER BY SQL injection prevention, access resolution (invisible not denied), DB constraint rules, pin uniqueness, regulatory report `is_pinnable=false`, chart TABLE_ONLY handling
+
+**Open questions:** None.

@@ -891,6 +891,20 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 - `@Schema` annotations (class-level and field-level with `example`) belong **exclusively** on `cia-partner-api` DTOs. Business modules (`cia-policy`, `cia-quotation`, `cia-customer`, `cia-setup`, etc.) must not import or use swagger-annotations — they are a presentation concern.
 - Every `@RestController` method in `cia-partner-api` must have `@ApiResponses` covering all applicable codes: 200/201, 400, 401, 403, 404 (where applicable), 429.
 
+### Reports API Design (cia-reports specific)
+
+- `cia-reports` has **zero dependency on any business module**. `ReportQueryBuilder` uses `EntityManager.createNativeQuery()` directly against the tenant schema. Never add a business module dependency to `cia-reports`.
+- Adding a new pre-built report is a **Flyway data migration** (`V18+` INSERT into `report_definition`) — it is not a code change. The `ReportRunnerService` interprets the JSONB config at runtime.
+- `ReportConfig` is stored as JSONB via `ReportConfigConverter` (`AttributeConverter<ReportConfig, String>`) on the `config` column of `report_definition`. Never use Hibernate Types for this — the converter is self-contained.
+- `SYSTEM` reports (seeded by Flyway) **cannot be deleted or edited**. `ReportDefinitionService` throws `IllegalStateException` on any mutating operation against a SYSTEM report. They can only be cloned into `CUSTOM` reports.
+- Computed fields (`loss_ratio`, `combined_ratio`, `retention_pct`, etc.) are post-processed in Java inside `ReportQueryBuilder.applyComputedFields()` — they are not computed in SQL. This keeps the base queries simple and avoids aggregation conflicts.
+- `ORDER BY` in `ReportQueryBuilder` uses a whitelist sanitizer (`replaceAll("[^a-zA-Z0-9_.]", "")`) to prevent SQL injection on the sort column. Never interpolate raw strings into the ORDER BY clause.
+- Report access resolution in `ReportAccessService`: report-level policy beats category-level policy; if neither exists the user cannot see the report. The frontend must **never show an "access denied" state** for reports — absent policy means the report is invisible, not blocked.
+- `report_access_policy` has a DB constraint: `category IS NOT NULL OR report_id IS NOT NULL` — exactly one must be present per row (category-level XOR report-level).
+- The `report_pin` table has a `UNIQUE(user_id, report_id)` constraint. `ReportRunnerService.pin()` checks `existsByUserIdAndReportId` before inserting to avoid duplicate key exceptions.
+- Regulatory reports (`REGULATORY` category, N01–N08) have `is_pinnable = FALSE`. `ReportViewerPage` must not render the Pin button for these reports.
+- Chart types: `BAR | LINE | PIE | TABLE_ONLY`. When `config.chart.type = TABLE_ONLY`, `ReportChart` returns `null` — no chart space is reserved. Both backend seed SQL and frontend `ReportChart` must handle this case.
+
 ### Testing Requirements
 - Backend: unit tests for all business logic; integration tests for all repository methods (Testcontainers); API tests for all controllers.
 - Frontend: unit tests for all utility functions and hooks; component tests for critical flows.
@@ -954,7 +968,7 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 ### Phase 1 — Shared Infrastructure (`packages/ui` + `packages/api-client`)
 
-> Must be completed before any module UI. All 10 modules depend on these.
+> Must be completed before any module UI. All 11 modules depend on these.
 
 | Status | Build | Deliverables |
 |---|---|---|
