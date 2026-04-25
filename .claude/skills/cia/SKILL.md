@@ -1,6 +1,6 @@
 ---
 name: cia
-description: Core Insurance Application — General Business (CIAGB) domain expert. Use when building, designing, debugging, or discussing any part of the CIAGB system. Covers all 10 modules (Setup & Admin, Customer Onboarding, Quotation, Policy, Endorsements, Claims, Reinsurance, Finance, Partner Open API, Audit & Compliance), the agreed tech stack, multi-tenant SaaS architecture, Nigerian regulatory integrations (NAICOM, NIID, NDPR), cross-cutting business rules, and the Insurtech Open API platform. Activate for any task involving insurance domain logic, data models, module flows, compliance requirements, or partner API integration.
+description: Core Insurance Application — General Business (CIAGB) domain expert. Use when building, designing, debugging, or discussing any part of the CIAGB system. Covers all 11 modules (Setup & Admin, Customer Onboarding, Quotation, Policy, Endorsements, Claims, Reinsurance, Finance, Partner Open API, Audit & Compliance, Reports & Analytics), the agreed tech stack, multi-tenant SaaS architecture, Nigerian regulatory integrations (NAICOM, NIID, NDPR), cross-cutting business rules, and the Insurtech Open API platform. Activate for any task involving insurance domain logic, data models, module flows, compliance requirements, or partner API integration.
 ---
 
 # Core Insurance Application — General Business (CIAGB)
@@ -41,7 +41,7 @@ description: Core Insurance Application — General Business (CIAGB) domain expe
 
 ---
 
-## Module Inventory (158 features across 10 modules)
+## Module Inventory (178 features across 11 modules)
 
 ### Module 1 — Setup & Administration (35 features)
 Company setup, password policy, bank/currency setup, access groups, user management, password reset, signature/profile uploads, approval group setup (single-level and multi-level), class of business, product setup (single-risk and multi-risk), commission setup, policy specifications, policy number naming convention, required document setup for claims, claim notification timelines, nature/cause of loss, SBU/branch/broker/relationship manager/surveyor/insurance company/reinsurance company setup, vehicle makes/models/types, pre-loss and loss inspection survey thresholds, claim reserve setup, partner app management (create/revoke Insurtech OAuth2 clients, configure scopes, rate limits, webhook secrets, usage dashboard).
@@ -72,6 +72,151 @@ Insurtech partner app registration and credential management, OAuth2 Client Cred
 
 ### Module 10 — Audit & Compliance (15 features)
 System-wide audit log viewer (filterable by entity type, entity ID, user, action, date range), event detail view (before/after JSONB snapshots), login and session log viewer (LOGIN, LOGOUT, LOGIN_FAILED, PASSWORD_RESET, ACCOUNT_LOCKED events), CSV export of audit logs with applied filters, 6 pre-built reports (actions by user, actions by module, approval audit trail, data change history, login security report, ranked user activity summary), real-time alert detection (failed logins ≥3, bulk deletes ≥5 in 5 min, off-hours activity, large financial approvals ≥₦50M), alert acknowledgement workflow, alert configuration (System Admin only — thresholds, business hours, retention period), in-app + email alert notifications, 7-year default retention (configurable per tenant), System Auditor role (AUDIT_VIEW — read-only, separate from System Admin).
+
+### Module 11 — Reports & Analytics (20 features)
+55 pre-built SYSTEM reports across 6 categories (Underwriting × 12, Claims × 13, Finance × 9, Reinsurance × 8, Customer × 5, Regulatory/NAICOM × 8), custom report builder (3-step: data source → fields/filters → visualisation), report library (searchable, category-filtered), report viewer with dynamic filter form, data table with typed formatting (₦ MONEY, % PERCENT, DATE), Recharts visualisation (BAR/LINE/PIE/TABLE\_ONLY driven by ReportConfig.chart), CSV export (streaming RFC 4180), PDF export (Apache PDFBox branded, server-side), pin management (per-user pinned reports on home page), category-level and per-report access control (View / Export CSV / Export PDF per access group), report cloning (SYSTEM → CUSTOM), SYSTEM reports are immutable (seeded by Flyway, cannot be deleted or edited), custom reports fully CRUD-able by their creator.
+
+---
+
+## Module 11 Architecture — Reports & Analytics
+
+### Backend: `cia-reports`
+
+```
+HTTP Request (Bearer JWT)
+  └── ReportController  (/api/v1/reports/)
+        │
+        ├── GET  /definitions[?category=]     → ReportDefinitionService.listAll/ByCategory()
+        ├── GET  /definitions/:id             → ReportDefinitionService.get()
+        ├── POST /definitions                 → ReportDefinitionService.create()        [reports:create_custom]
+        ├── PUT  /definitions/:id             → ReportDefinitionService.update()        [reports:create_custom]
+        ├── DEL  /definitions/:id             → ReportDefinitionService.delete()        [reports:create_custom]
+        ├── POST /definitions/:id/clone       → ReportDefinitionService.clone()         [reports:create_custom]
+        │
+        ├── POST /run                         → ReportRunnerService.run()               [reports:view]
+        ├── POST /run/csv                     → ReportRunnerService.runCsv()            [reports:export_csv]
+        ├── POST /run/pdf                     → ReportRunnerService.runPdf()            [reports:export_pdf]
+        │
+        ├── GET  /pins                        → ReportRunnerService.listPinned()        [reports:view]
+        ├── POST /pins/:id                    → ReportRunnerService.pin()               [reports:view]
+        ├── DEL  /pins/:id                    → ReportRunnerService.unpin()             [reports:view]
+        │
+        ├── GET  /access-policies             → ReportAccessService.listByGroup()       [reports:manage_access]
+        └── PUT  /access-policies             → ReportAccessService.upsert()            [reports:manage_access]
+
+ReportRunnerService
+  ├── load: ReportDefinitionService.get(reportId)
+  ├── execute: ReportQueryBuilder.execute(definition, filterValues)
+  │     ├── BASE_QUERIES map (one native SQL per DataSource)
+  │     ├── dynamic WHERE clauses from config.filters + user-supplied values
+  │     ├── sanitised ORDER BY (whitelist: [a-zA-Z0-9_.] only)
+  │     └── post-processing: computed fields (loss_ratio, combined_ratio, etc.)
+  └── render:
+        ├── JSON  → ReportResultDto { columns, rows, totalRows }
+        ├── CSV   → ReportCsvRenderer (StreamingResponseBody, UTF-8 BOM, RFC 4180)
+        └── PDF   → ReportPdfRenderer (PDFBox 3.x — header/table/footer; never throws)
+
+ReportAccessService (permission resolution)
+  ├── report-level policy  → most specific, wins over category
+  └── category-level policy → fallback
+  → deny if neither exists
+
+Domain (tenant schema)
+  ├── report_definition   (JSONB config via ReportConfigConverter)
+  │     └── config shape: { fields[], filters[], groupBy, sortBy, sortDir, chart{type,xAxis,yAxis} }
+  ├── report_pin          (user_id + report_id + display_order; UNIQUE per user+report)
+  └── report_access_policy (access_group_id + category? + report_id? + can_view + can_export_csv + can_export_pdf)
+```
+
+**Key architectural constraint:** `cia-reports` has **zero dependency on any business module**. `ReportQueryBuilder` uses `EntityManager.createNativeQuery()` directly against the tenant schema. Adding a new pre-built report is a Flyway data migration (`V18+`), not a code change.
+
+**ReportConfig JSONB shape:**
+```json
+{
+  "fields":  [{ "key": "loss_ratio", "label": "Loss Ratio %", "type": "PERCENT", "computed": true }],
+  "filters": [{ "key": "date_from",  "label": "Date From",    "type": "DATE",    "required": true }],
+  "groupBy": "class_of_business",
+  "sortBy":  "loss_ratio",
+  "sortDir": "DESC",
+  "chart":   { "type": "BAR", "xAxis": "class_of_business", "yAxis": "loss_ratio" }
+}
+```
+
+**Field types:** `STRING | MONEY | PERCENT | DATE | NUMBER | INTEGER`
+**Filter types:** `DATE | DATE_RANGE | SELECT | MULTI_SELECT | TEXT | NUMBER`
+**Chart types:** `BAR | LINE | PIE | TABLE_ONLY`
+
+**Computed fields (post-processed in Java, not SQL):**
+
+| Key | Formula |
+|---|---|
+| `loss_ratio` | `claims_incurred / premium_earned × 100` |
+| `combined_ratio` | `(claims_incurred + expenses) / premium_earned × 100` |
+| `expense_ratio` | `expenses / premium_earned × 100` |
+| `retention_pct` | `retained_si / gross_si × 100` |
+| `cession_pct` | `ceded_si / gross_si × 100` |
+| `utilisation_pct` | `capacity_used / total_capacity × 100` |
+| `conversion_pct` | `bound_quotes / total_quotes × 100` |
+
+**55 SYSTEM report catalogue summary:**
+
+| Category | Count | IDs | Notable |
+|---|---|---|---|
+| Underwriting | 12 | U01–U12 | GWP, NWP, Policy Register, Renewal Due, Quote-to-Bind |
+| Claims | 13 | C01–C13 | Loss Ratio, Claims Ageing, Large Loss, Reserve Movement |
+| Finance | 9 | F01–F09 | Receivables Ageing, Collections, Commission Statement, Combined Ratio |
+| Reinsurance | 8 | R01–R08 | RI Bordereaux, Treaty Utilisation, Cession Statement |
+| Customer | 5 | K01–K05 | Active Customers, Customer Loss Ratio, Broker Performance |
+| Regulatory | 8 | N01–N08 | NAICOM Annual Revenue, Prudential Return, Premium/Claims Bordereaux; `is_pinnable=false` |
+
+---
+
+### Frontend: `modules/reports/`
+
+```
+/reports                    ReportsHomePage
+│   ├── Pinned row          (Bookmark01Icon; max 6; from GET /pins)
+│   ├── Quick-access grid   (6 categories × 4 cards; from GET /definitions?category=X)
+│   └── Empty pin state     (Browse Library CTA)
+│
+├── /library                ReportLibraryPage
+│   ├── Search bar          (client-side filter on name/description)
+│   ├── Category tabs       (All + 6 categories → re-fetches with ?category=)
+│   └── Card list           (Run Report → /run/:id  |  Clone & Edit → /custom)
+│
+├── /run/:id                ReportViewerPage
+│   ├── Breadcrumb          (items[] prop — Reports → Category → Report name)
+│   ├── ReportFilterForm    (dynamic from config.filters; required* validated by RHF)
+│   ├── ReportResultTable   (plain HTML <table>; ₦ MONEY / % PERCENT / DATE formatting)
+│   ├── ReportChart         (Recharts wrapper; BAR/LINE/PIE; returns null for TABLE_ONLY)
+│   └── ReportExportBar     (Export CSV | Export PDF | Pin/Unpin)
+│
+├── /custom                 CustomReportBuilderPage (new)
+├── /custom/:id             CustomReportBuilderPage (edit)
+│   ├── Step 1  DataSource  (6 card selectors)
+│   ├── Step 2  Fields      (checkbox field picker + computed badge + date filter toggles)
+│   └── Step 3  Visualise   (chart type cards + axis selects + name + category + Save & Run)
+│
+└── /setup                  ReportAccessSetupPage
+    ├── Access group select (mock groups; production: GET /api/v1/setup/access-groups)
+    └── Permission matrix   (expandable category rows → per-report overrides)
+                            (View / Export CSV / Export PDF checkboxes per row)
+```
+
+**React Query hooks:**
+
+| Hook | Endpoint | Notes |
+|---|---|---|
+| `useReportDefinitions(category?)` | `GET /definitions` | staleTime 5 min |
+| `useReportDefinition(id)` | `GET /definitions/:id` | enabled only when id present |
+| `useRunReport()` | `POST /run` | mutation |
+| `useExportCsv()` | `POST /run/csv` | mutation; triggers browser download |
+| `useExportPdf()` | `POST /run/pdf` | mutation; triggers browser download |
+| `useReportPins()` | `GET /pins` | |
+| `usePinReport()` | `POST /pins/:id` | invalidates pins on success |
+| `useUnpinReport()` | `DELETE /pins/:id` | invalidates pins on success |
+| `useReportAccessPolicies(groupId)` | `GET /access-policies?accessGroupId=` | enabled only when groupId present |
+| `useUpsertAccessPolicy()` | `PUT /access-policies` | invalidates policies on success |
 
 ---
 
@@ -128,7 +273,7 @@ System-wide audit log viewer (filterable by entity type, entity ID, user, action
 ## Data Model Highlights
 
 ### Core entities (per tenant schema)
-`customers`, `policies`, `quotes`, `endorsements`, `claims`, `claim_reserves`, `claim_expenses`, `reinsurance_treaties`, `ri_allocations`, `debit_notes`, `credit_notes`, `receipts`, `payments`, `products`, `classes_of_business`, `brokers`, `users`, `access_groups`, `approval_groups`, `document_templates`, `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`, `audit_log`, `login_audit_log`, `audit_alert`, `audit_alert_config`.
+`customers`, `policies`, `quotes`, `endorsements`, `claims`, `claim_reserves`, `claim_expenses`, `reinsurance_treaties`, `ri_allocations`, `debit_notes`, `credit_notes`, `receipts`, `payments`, `products`, `classes_of_business`, `brokers`, `users`, `access_groups`, `approval_groups`, `document_templates`, `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`, `audit_log`, `login_audit_log`, `audit_alert`, `audit_alert_config`, `report_definition`, `report_pin`, `report_access_policy`.
 
 ### Key relationships
 - `policies` → `customers` (many-to-one)
@@ -142,6 +287,8 @@ System-wide audit log viewer (filterable by entity type, entity ID, user, action
 - `payments` → `credit_notes`
 - `webhook_registrations` → `partner_apps` (many-to-one)
 - `webhook_deliveries` → `webhook_registrations` (many-to-one; tracks every dispatch attempt)
+- `report_pin` → `report_definition` (many-to-one; UNIQUE per user_id+report_id)
+- `report_access_policy` → `report_definition` (nullable many-to-one; NULL = category-level policy)
 
 ---
 
@@ -172,6 +319,8 @@ System-wide audit log viewer (filterable by entity type, entity ID, user, action
 - `ClaimSettledEvent` is published by `ClaimService.markSettled()` — consumed by cia-partner-api for webhook fanout.
 - `AuditService.log()` publishes `AuditLogCreatedEvent` after every save. `AlertDetectionService` listens with `@Async @EventListener` so alert detection never blocks the calling request thread.
 - `cia-audit` depends only on `cia-common` and `cia-notifications`. It does not depend on any business module — business modules publish events; cia-audit consumes them through Spring's event bus.
+- `cia-reports` depends only on `cia-common` and `cia-auth`. It does not depend on any business module — `ReportQueryBuilder` uses `EntityManager.createNativeQuery()` directly against the tenant schema. Adding a new pre-built report is a Flyway data migration (`V18+`), not a code change. SYSTEM reports are seeded by Flyway and cannot be deleted or edited; they can only be cloned into CUSTOM reports.
+- Report permission resolution in `ReportAccessService`: report-level policy beats category-level policy; if neither exists the user cannot see the report (invisible, not "access denied"). Never show an access-denied state in the UI for reports — absent policies mean the report should not appear in the library or home page at all.
 - `audit_alert_config` is a singleton-per-tenant table (one row only, seeded by V16 migration). `AuditAlertConfigService.loadConfig()` always calls `findFirstByOrderByCreatedAtAsc()`.
 - Login events (`LoginAuditLog`) are separate from general audit events (`AuditLog`). Login tracking uses `LoginEventType` (LOGIN, LOGOUT, LOGIN_FAILED, PASSWORD_RESET, ACCOUNT_LOCKED); off-hours login detection is triggered directly from `LoginAuditController.loginFailed()` rather than through `AuditLogCreatedEvent`.
 - `/api/v1/auth/login/failed` is a **public endpoint** (no JWT required) because it records authentication failures before a valid token exists.
