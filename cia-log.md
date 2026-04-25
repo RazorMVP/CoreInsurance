@@ -1772,3 +1772,29 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 **Note:** Report Viewer (`/reports/run/:id`) was not synced — renders blank without a live backend to resolve the report definition. Will be captured in a future session once backend integration is complete.
 
 **Open questions:** None.
+
+---
+
+### Session 30 — Fix dev stack: Vite proxy port + DevSecurityConfig
+
+**Files modified:**
+
+| File | Change |
+|---|---|
+| `cia-frontend/apps/back-office/vite.config.ts` | Corrected Vite proxy target from `localhost:8080` to `localhost:8090` to match the Spring Boot default port in `application.yml` |
+| `cia-backend/cia-auth/src/main/java/com/nubeero/cia/auth/DevSecurityConfig.java` | New `@Profile("dev") @Order(1)` security chain that permits all requests without JWT validation |
+
+**Why:**
+- Backend was already running on port 8090 (default in `application.yml`); Vite proxy was pointing to 8080 causing all API calls to fail silently
+- `DevAuthProvider` in the frontend sends no JWT token, so the backend's `SecurityConfig` returned 401 on every request
+- `DevSecurityConfig` bypasses JWT validation in dev mode — safe because `TenantIdentifierResolver` already defaults to `"public"` schema when no tenant ID is present, and the `report_definition` table (V17/V18) lives in `public`
+
+**Result:** After rebuilding the backend and restarting both servers, `localhost:5173/reports/library` will show all 55 pre-built SYSTEM report definitions.
+
+**Restart steps (for reference):**
+1. Stop current backend (Ctrl+C)
+2. `cd cia-backend && mvn install -DskipTests -q`
+3. `mvn spring-boot:run -pl cia-api -Pdev -q`
+4. Restart Vite: `pnpm --filter @cia/back-office dev`
+
+**Open questions:** None.
