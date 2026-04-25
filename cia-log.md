@@ -1978,3 +1978,23 @@ BackOffice / Dashboard (6:2) · reports-home (223:2) · reports-library (224:2) 
 **Typecheck:** `tsc --noEmit` exits 0.
 
 **Open questions:** None.
+
+---
+
+### Session 37 — Topbar: VITE_HELP_URL env var for configurable help link
+
+**Files modified:**
+
+| File | Change |
+|---|---|
+| `cia-frontend/apps/back-office/src/app/layout/Topbar.tsx` | Help icon `href` now reads `import.meta.env.VITE_HELP_URL ?? '...confluence-fallback...'` |
+| `cia-frontend/apps/back-office/src/vite-env.d.ts` | Added full `ImportMetaEnv` type declarations for all `VITE_*` variables; `VITE_HELP_URL` typed as `optional string` |
+| `cia-frontend/apps/back-office/.env.local` | Added `VITE_HELP_URL` set to current Confluence PRD URL as local default |
+
+**Why:** Help URL should be changeable without a source code commit or Vercel build. Setting `VITE_HELP_URL` as a Vercel environment variable and redeploying is sufficient — no code change required.
+
+**Fallback:** If `VITE_HELP_URL` is unset, the Confluence PRD URL is used automatically.
+
+**Typecheck:** exits 0.
+
+**Open questions:** None.
