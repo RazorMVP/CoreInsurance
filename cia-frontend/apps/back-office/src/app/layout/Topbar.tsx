@@ -135,13 +135,13 @@ export default function Topbar() {
           )}
         </div>
 
-        {/* Help — links to Confluence PRD */}
+        {/* Help — URL controlled by VITE_HELP_URL env var; falls back to Confluence PRD */}
         <a
-          href="https://akinwalenubeero.atlassian.net/wiki/spaces/CIAGB/overview"
+          href={import.meta.env.VITE_HELP_URL ?? 'https://akinwalenubeero.atlassian.net/wiki/spaces/CIAGB/overview'}
           target="_blank"
           rel="noopener noreferrer"
           className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          aria-label="Help — opens PRD documentation"
+          aria-label="Help & Documentation"
           title="Help & Documentation"
         >
           <HugeiconsIcon icon={HelpCircleIcon} size={18} color="currentColor" strokeWidth={1.75} />
