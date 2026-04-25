@@ -1798,3 +1798,24 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 4. Restart Vite: `pnpm --filter @cia/back-office dev`
 
 **Open questions:** None.
+
+---
+
+### Session 31 — Fix: 55 pre-built reports loading in browser
+
+**Root cause chain:**
+1. **Jackson deserialization error (500):** `ReportChart.xAxis`/`yAxis` fields — Lombok getter `getXAxis()` + `Introspector.decapitalize("XAxis")` produced property name `XAxis`, not `xAxis`, so Jackson couldn't match the JSON stored in V18 migration. Fixed with `@JsonProperty("xAxis")` and `@JsonProperty("yAxis")`.
+2. **ObjectMapper resilience:** Added `DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES=false` to `ReportConfigConverter` so future JSON schema additions never cause hard crashes.
+3. **Browser calling wrong port:** `apiClient` was initialized with absolute base URL `http://localhost:8080` (the `main.tsx` default). Created `.env.local` with `VITE_API_BASE_URL=` (empty) so `apiClient` uses relative paths that go through the Vite proxy (`/api` → `localhost:8090`). Proxy config was already updated to 8090 in Session 30.
+
+**Files modified:**
+
+| File | Change |
+|---|---|
+| `cia-backend/cia-reports/src/.../domain/ReportChart.java` | Added `@JsonProperty("xAxis")` and `@JsonProperty("yAxis")` |
+| `cia-backend/cia-reports/src/.../domain/ReportConfigConverter.java` | Added `FAIL_ON_UNKNOWN_PROPERTIES=false` to ObjectMapper |
+| `cia-frontend/apps/back-office/.env.local` | Created: `VITE_API_BASE_URL=` (empty, dev-only, gitignored) |
+
+**Verification:** `localhost:5173/reports/library` shows "55 reports available" with all category badges, descriptions, Run Report and Clone & Edit actions.
+
+**Open questions:** None.
