@@ -1998,3 +1998,33 @@ BackOffice / Dashboard (6:2) · reports-home (223:2) · reports-library (224:2) 
 **Typecheck:** exits 0.
 
 **Open questions:** None.
+
+---
+
+### Session 38 — 2026-04-26: Docs site currency audit
+
+**Question asked:** Is `https://cia-docs.vercel.app/` up to date with all recent changes including Swagger docs?
+
+**Findings:**
+
+**Last docs deployment:** 23 April 2026 (commit `feat(docs): replace internal Scalar explorer with static markdown API…`)
+**Trigger:** `docs-deploy.yml` only fires when `docs-site/**` or `cia-backend/cia-partner-api/docs/openapi.json` changes are pushed. Neither changed since April 23 despite 20+ feature commits since then.
+
+**What is out of date:**
+1. `cia-reports` module (Module 11) missing entirely from `docs/architecture/modules.md` — only 10 modules listed
+2. 6 new Dashboard API endpoints missing from `docs-site/static/internal-api.json`:
+   - `GET /api/v1/dashboard/stats`
+   - `GET /api/v1/dashboard/approval-queue`
+   - `GET /api/v1/dashboard/loss-ratio`
+   - `GET /api/v1/dashboard/renewals-due`
+   - `GET /api/v1/dashboard/recent-activity`
+   - `GET /api/v1/dashboard/search`
+3. No Module 11 architecture page exists in `docs/`
+
+**What is current:**
+- Partner API Swagger (`openapi.json`) — 15 paths in source match 15 paths in docs-site static exactly ✅
+- Audit module docs (Module 10) — added April 23 ✅
+
+**Next action:** Update `modules.md`, add Module 11 docs page, update `internal-api.json` with dashboard endpoints, and trigger docs redeployment.
+
+**Open questions:** None — work approved by user, pending execution.
