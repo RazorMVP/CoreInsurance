@@ -1560,3 +1560,52 @@ Gate 5 (Figma Sync) was missed in Session 5 and corrected here before proceeding
 - `143:2` — "BackOffice / Policy Specifications / Templates" — Templates tab active; product selector showing "Private Motor Comprehensive"; 2-active-templates hint; Upload Template button; 3-row custom card list (Policy Document blue, Certificate amber, Schedule neutral/archived at 55% opacity)
 
 **Open questions:** None.
+
+---
+
+### Session 26 — Figma re-sync: Finance, Claims, Reinsurance (pixel-perfect screenshots)
+
+**Context:** Sessions 24 deleted the old programmatic Figma frames for Finance, Claims, and Reinsurance due to alignment/overlap/placement issues. This session re-captured all screens as pixel-perfect screenshots from the live app (localhost:5173) and created new named frames — one frame per view — across the three module pages.
+
+**Figma file:** `Zaiu2K7NvEJ7Cjj6z1xt2D`
+
+**Upload pattern used:** `upload_assets` (count N) → multipart/form-data sequential curl → get `imageHash` per file → `use_figma` applies hash as `IMAGE` fill to named frame → auto-created frames deleted.
+
+**Finance page (node 75:2) — 4 frames:**
+
+| Node ID | Frame name | Screen |
+|---|---|---|
+| `146:2` | BackOffice / Finance / Receivables | Receivables tab — Outstanding Debit Notes table + Receipts section |
+| `146:3` | BackOffice / Finance / Payables | Payables tab — Outstanding Credit Notes table + Payments section |
+| `146:4` | Sheet: Post Receipt | Post Receipt sheet — payment method, bank, amount, reference |
+| `146:5` | Sheet: Process Payment | Process Payment sheet — bank details, amount, reference |
+
+**Claims page (node 84:2) — 7 frames:**
+
+| Node ID | Frame name | Screen |
+|---|---|---|
+| `153:2` | BackOffice / Claims / List | Claims list — 3 stat cards + DataTable with 5 mock claims |
+| `153:3` | BackOffice / Claims / Detail / Summary | Claim detail: Summary tab — claim info, policy link, contact |
+| `153:4` | BackOffice / Claims / Detail / Processing | Processing tab — Reserves table, Expenses table, Comments feed |
+| `153:5` | BackOffice / Claims / Detail / Documents | Documents tab — missing docs badge, document checklist |
+| `153:6` | BackOffice / Claims / Detail / Inspection | Inspection tab — assign surveyor, report upload, override |
+| `153:7` | BackOffice / Claims / Detail / DV | DV tab — claim type cards (Own Damage / Third Party / Ex-gratia), Generate DV |
+| `153:8` | Sheet: Register Claim | Register Claim sheet — policy select, incident date, loss details, contact |
+
+**Reinsurance page (node 87:2) — 9 frames:**
+
+| Node ID | Frame name | Screen |
+|---|---|---|
+| `162:2` | BackOffice / Reinsurance / Treaties | Treaties tab — treaty DataTable with Surplus/QS/XOL type chips + Treaty Summary cards |
+| `162:3` | BackOffice / Reinsurance / Allocations | Allocations tab — RI Allocations table, confirm banner, excess capacity banner |
+| `162:4` | BackOffice / Reinsurance / FAC / Outward | Facultative tab → Outward sub-tab |
+| `162:5` | BackOffice / Reinsurance / FAC / Inward | Facultative tab → Inward sub-tab |
+| `162:6` | BackOffice / Reinsurance / Reports / Bordereaux | Returns & Reports tab → Bordereaux sub-tab |
+| `162:7` | BackOffice / Reinsurance / Reports / Recoveries | Returns & Reports tab → Recoveries sub-tab |
+| `162:8` | BackOffice / Reinsurance / Reports / Returns | Returns & Reports tab → Returns sub-tab |
+| `162:9` | Sheet: Add Treaty | Add Treaty sheet — treaty type, class, retention, capacity, reinsurers |
+| `162:10` | Sheet: Batch Reallocation | Batch Reallocation sheet — multi-select allocations, new treaty, effective date |
+
+**Issue fixed:** Previous session had non-deterministic parallel curl ordering that mis-assigned imageHashes to frames (e.g. Finance/Receivables frame was showing Post Receipt Sheet content). Fixed by uploading images sequentially (no background `&`) so hash order matches file order.
+
+**Open questions:** None.
