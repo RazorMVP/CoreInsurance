@@ -4,6 +4,16 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-27 — Session 45e: Hide customer-level KYC section for corporate customers
+
+### Change
+- `EditCustomerSheet.tsx` — wrapped the "KYC Identity Document" block (Separator, ID Type, ID Number, expiry date, document upload, reason block) in `{!isCorporate && <>...</>}`. Corporate customer KYC is entirely handled through the directors section; showing a customer-level ID section is not applicable.
+
+### Git Commit
+`c1fe3cf` fix(customers): hide customer-level KYC section for corporate customers
+
+---
+
 ## 2026-04-27 — Session 45d: Corporate Director Management in Edit Customer Sheet
 
 ### Files Created
