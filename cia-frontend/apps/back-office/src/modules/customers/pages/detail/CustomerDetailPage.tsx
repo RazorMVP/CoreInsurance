@@ -35,6 +35,7 @@ interface MockCustomer {
   industry?: string;
   contactPerson?: string;
   directorName?: string;
+  directors?: { id: string; firstName: string; lastName: string; dateOfBirth?: string; idType?: string; idNumber?: string; idExpiryDate?: string }[];
 }
 
 const MOCK_CUSTOMERS: MockCustomer[] = [
@@ -53,6 +54,10 @@ const MOCK_CUSTOMERS: MockCustomer[] = [
     brokerName: 'Leadway Brokers',
     companyName: 'Alaba Trading Co.', rcNumber: 'RC-123456', industry: 'Trading',
     contactPerson: 'Tunde Alaba', directorName: 'Tunde Alaba / Bisi Alaba',
+    directors: [
+      { id: 'd1', firstName: 'Tunde', lastName: 'Alaba', dateOfBirth: '1975-04-10', idType: 'NIN',      idNumber: '22334455667' },
+      { id: 'd2', firstName: 'Bisi',  lastName: 'Alaba', dateOfBirth: '1978-09-22', idType: 'PASSPORT', idNumber: 'B98765432', idExpiryDate: '2030-06-15' },
+    ],
   },
   {
     id: 'c3', customerNumber: 'CUST/2026/IND/00000002', customerType: 'INDIVIDUAL',
@@ -68,6 +73,10 @@ const MOCK_CUSTOMERS: MockCustomer[] = [
     address: '5 Industrial Layout, Trans-Amadi, Port Harcourt', createdAt: '2026-02-10',
     companyName: 'Danforth Logistics Ltd', rcNumber: 'RC-789012', industry: 'Logistics',
     contactPerson: 'David Danforth', directorName: 'David Danforth',
+    directors: [
+      { id: 'd3', firstName: 'David',   lastName: 'Danforth', dateOfBirth: '1980-01-15', idType: 'DRIVERS_LICENSE', idNumber: 'DL-NG-0055123', idExpiryDate: '2028-03-20' },
+      { id: 'd4', firstName: 'Chidera', lastName: 'Obi',      dateOfBirth: '1983-07-30', idType: 'NIN',             idNumber: '33445566778' },
+    ],
   },
   {
     id: 'c5', customerNumber: 'CUST/2026/IND/00000003', customerType: 'INDIVIDUAL',
@@ -296,6 +305,7 @@ export default function CustomerDetailPage() {
         idType:        c.idType,
         idNumber:      c.idNumber,
         idExpiryDate:  c.idExpiryDate,
+        directors:     c.directors,
       }}
       onSuccess={() => setEditOpen(false)}
     />

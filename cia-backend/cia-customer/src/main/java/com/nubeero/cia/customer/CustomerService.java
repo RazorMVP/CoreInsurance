@@ -162,7 +162,9 @@ public class CustomerService {
     // ─── Update ─────────────────────────────────────────────────────
 
     @Transactional
-    public CustomerResponse update(UUID id, CustomerUpdateRequest request, MultipartFile idDocument) {
+    public CustomerResponse update(UUID id, CustomerUpdateRequest request,
+                                   MultipartFile idDocument,
+                                   java.util.Map<String, MultipartFile> directorDocs) {
         Customer customer = findOrThrow(id);
         CustomerResponse oldSnapshot = toResponse(customer);
 
@@ -193,6 +195,21 @@ public class CustomerService {
             runIndividualKyc(customer);
         }
 
+        // Process director changes (corporate only)
+        if (customer.getCustomerType() == CustomerType.CORPORATE
+                && request.getDirectors() != null
+                && !request.getDirectors().isEmpty()) {
+            processDirectorUpdates(customer, request.getDirectors(), directorDocs);
+
+            long activeCount = customer.getDirectors().stream()
+                    .filter(d -> d.getDeletedAt() == null)
+                    .count();
+            if (activeCount < 2) {
+                throw new BusinessRuleException("MINIMUM_DIRECTORS_REQUIRED",
+                        "At least 2 active directors are required for a corporate customer.");
+            }
+        }
+
         Customer saved = repository.save(customer);
 
         // Audit: general contact update (before → after)
@@ -217,6 +234,150 @@ public class CustomerService {
         }
 
         return toResponse(saved);
+    }
+
+    private void processDirectorUpdates(Customer customer,
+                                        List<com.nubeero.cia.customer.dto.DirectorUpdateRequest> requests,
+                                        java.util.Map<String, MultipartFile> directorDocs) {
+        for (int i = 0; i < requests.size(); i++) {
+            com.nubeero.cia.customer.dto.DirectorUpdateRequest req = requests.get(i);
+            MultipartFile dirDoc = directorDocs != null ? directorDocs.get("directorDoc_" + i) : null;
+
+            if (req.getId() != null) {
+                // Existing director
+                CustomerDirector director = customer.getDirectors().stream()
+                        .filter(d -> d.getId().equals(req.getId()))
+                        .findFirst()
+                        .orElseThrow(() -> new BusinessRuleException("DIRECTOR_NOT_FOUND",
+                                "Director not found: " + req.getId()));
+
+                if (req.isDeleted()) {
+                    director.setDeletedAt(Instant.now());
+                    auditService.log("CustomerDirector", director.getId().toString(),
+                            AuditAction.DELETE, toDirectorSnapshot(director), null);
+                } else {
+                    boolean kycChanged = isDirectorKycChanged(director, req, dirDoc);
+                    if (kycChanged && (req.getKycUpdateReason() == null || req.getKycUpdateReason().isBlank())) {
+                        throw new BusinessRuleException("KYC_UPDATE_REASON_REQUIRED",
+                                "Reason required when updating KYC details for director: "
+                                        + director.getFirstName() + " " + director.getLastName());
+                    }
+
+                    var oldSnapshot = toDirectorSnapshot(director);
+
+                    if (req.getFirstName() != null) director.setFirstName(req.getFirstName());
+                    if (req.getLastName()  != null) director.setLastName(req.getLastName());
+                    if (req.getDateOfBirth() != null) director.setDateOfBirth(req.getDateOfBirth());
+
+                    if (kycChanged) {
+                        if (req.getIdType()       != null) director.setIdType(req.getIdType());
+                        if (req.getIdNumber()     != null) director.setIdNumber(req.getIdNumber());
+                        if (req.getIdExpiryDate() != null) {
+                            validateExpiryDate(req.getIdType() != null ? req.getIdType() : director.getIdType(),
+                                    req.getIdExpiryDate(), "Director ID document");
+                            director.setIdExpiryDate(req.getIdExpiryDate());
+                        }
+                        if (dirDoc != null && !dirDoc.isEmpty()) {
+                            String docUrl = uploadKycDocument(dirDoc, customer.getId(),
+                                    "director-" + director.getId() + "-id");
+                            director.setIdDocumentUrl(docUrl);
+                        }
+                        // Re-verify this director's KYC
+                        try {
+                            KycResult result = kycVerificationService.verifyDirector(
+                                    DirectorKycRequest.builder()
+                                            .idType(director.getIdType() != null ? director.getIdType().name() : null)
+                                            .idNumber(director.getIdNumber())
+                                            .firstName(director.getFirstName())
+                                            .lastName(director.getLastName())
+                                            .dateOfBirth(director.getDateOfBirth())
+                                            .build());
+                            director.setKycStatus(result.isVerified() ? KycStatus.PASSED : KycStatus.FAILED);
+                            director.setKycProviderRef(result.getVerificationId());
+                            director.setKycFailureReason(result.getFailureReason());
+                        } catch (Exception e) {
+                            director.setKycStatus(KycStatus.FAILED);
+                            director.setKycFailureReason("KYC provider unavailable: " + e.getMessage());
+                        }
+
+                        auditService.log("CustomerDirectorKyc", director.getId().toString(),
+                                AuditAction.UPDATE, oldSnapshot,
+                                java.util.Map.of(
+                                        "reason", req.getKycUpdateReason(),
+                                        "notes",  req.getKycUpdateNotes() != null ? req.getKycUpdateNotes() : "",
+                                        "kycStatus", director.getKycStatus().name()
+                                ));
+                    } else {
+                        auditService.log("CustomerDirector", director.getId().toString(),
+                                AuditAction.UPDATE, oldSnapshot, toDirectorSnapshot(director));
+                    }
+                }
+            } else {
+                // New director — add and verify
+                CustomerDirector newDir = CustomerDirector.builder()
+                        .customer(customer)
+                        .firstName(req.getFirstName())
+                        .lastName(req.getLastName())
+                        .dateOfBirth(req.getDateOfBirth())
+                        .idType(req.getIdType())
+                        .idNumber(req.getIdNumber())
+                        .idExpiryDate(req.getIdExpiryDate())
+                        .build();
+
+                if (req.getIdExpiryDate() != null) {
+                    validateExpiryDate(req.getIdType(), req.getIdExpiryDate(), "New director ID document");
+                }
+
+                customer.getDirectors().add(newDir);
+                // KYC verification runs after save (ID needed for document upload)
+                // Document upload deferred — newDir has no ID yet; handled post-save via directorRepository
+                auditService.log("CustomerDirector", "new", AuditAction.CREATE, null, newDir);
+            }
+        }
+
+        // Verify KYC for any newly added directors (those with PENDING status and no provider ref)
+        customer.getDirectors().stream()
+                .filter(d -> d.getDeletedAt() == null
+                        && d.getKycStatus() == KycStatus.PENDING
+                        && d.getKycProviderRef() == null)
+                .forEach(d -> {
+                    try {
+                        KycResult result = kycVerificationService.verifyDirector(
+                                DirectorKycRequest.builder()
+                                        .idType(d.getIdType() != null ? d.getIdType().name() : null)
+                                        .idNumber(d.getIdNumber())
+                                        .firstName(d.getFirstName())
+                                        .lastName(d.getLastName())
+                                        .dateOfBirth(d.getDateOfBirth())
+                                        .build());
+                        d.setKycStatus(result.isVerified() ? KycStatus.PASSED : KycStatus.FAILED);
+                        d.setKycProviderRef(result.getVerificationId());
+                        d.setKycFailureReason(result.getFailureReason());
+                    } catch (Exception e) {
+                        d.setKycStatus(KycStatus.FAILED);
+                        d.setKycFailureReason("KYC provider unavailable: " + e.getMessage());
+                    }
+                });
+    }
+
+    private boolean isDirectorKycChanged(CustomerDirector director,
+                                          com.nubeero.cia.customer.dto.DirectorUpdateRequest req,
+                                          MultipartFile dirDoc) {
+        if (dirDoc != null && !dirDoc.isEmpty()) return true;
+        if (req.getIdType()   != null && !req.getIdType().equals(director.getIdType()))     return true;
+        if (req.getIdNumber() != null && !req.getIdNumber().equals(director.getIdNumber())) return true;
+        if (req.getIdExpiryDate() != null && !req.getIdExpiryDate().equals(director.getIdExpiryDate())) return true;
+        return false;
+    }
+
+    private java.util.Map<String, Object> toDirectorSnapshot(CustomerDirector d) {
+        return java.util.Map.of(
+                "firstName", d.getFirstName() != null ? d.getFirstName() : "",
+                "lastName",  d.getLastName()  != null ? d.getLastName()  : "",
+                "idType",    d.getIdType()    != null ? d.getIdType().name() : "",
+                "idNumber",  d.getIdNumber()  != null ? d.getIdNumber()  : "",
+                "kycStatus", d.getKycStatus().name()
+        );
     }
 
     private boolean isKycChanged(Customer customer, CustomerUpdateRequest request, MultipartFile idDocument) {

@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Email;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -44,6 +45,9 @@ public class CustomerUpdateRequest {
     // idDocumentUrl is set from the uploaded file — not accepted from client
 
     // ── KYC update reason (required when any KYC field changes) ──────
-    private String kycUpdateReason;   // one of the predefined dropdown values
-    private String kycUpdateNotes;    // optional free-text
+    private String kycUpdateReason;
+    private String kycUpdateNotes;
+
+    /** Corporate only — director add / edit / delete operations. */
+    private List<DirectorUpdateRequest> directors;
 }

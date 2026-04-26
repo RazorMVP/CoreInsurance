@@ -12,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.MultipartRequest;
 
 import java.util.List;
 import java.util.UUID;
@@ -65,13 +66,26 @@ public class CustomerController {
         return ApiResponse.success(service.createCorporate(request, cacCertificate, directorIdDocuments));
     }
 
-    @PutMapping(value = "/{id}", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE, MediaType.APPLICATION_FORM_URLENCODED_VALUE, MediaType.APPLICATION_JSON_VALUE})
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('CUSTOMER_UPDATE')")
     public ApiResponse<CustomerResponse> update(
             @PathVariable UUID id,
             @Valid @ModelAttribute CustomerUpdateRequest request,
-            @RequestPart(value = "idDocument", required = false) MultipartFile idDocument) {
-        return ApiResponse.success(service.update(id, request, idDocument));
+            MultipartRequest multipartRequest) {
+
+        MultipartFile idDocument = multipartRequest.getFile("idDocument");
+
+        // Collect per-director documents keyed as directorDoc_{index}
+        java.util.Map<String, MultipartFile> directorDocs = new java.util.HashMap<>();
+        java.util.Iterator<String> fileNames = multipartRequest.getFileNames();
+        while (fileNames.hasNext()) {
+            String name = fileNames.next();
+            if (name.startsWith("directorDoc_")) {
+                directorDocs.put(name, multipartRequest.getFile(name));
+            }
+        }
+
+        return ApiResponse.success(service.update(id, request, idDocument, directorDocs));
     }
 
     @PostMapping("/{id}/retrigger-kyc")
