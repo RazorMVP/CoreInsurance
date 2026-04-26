@@ -1,43 +1,128 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Badge, Button, Card, CardContent, CardHeader, CardTitle,
-  PageHeader, Tabs, TabsContent, TabsList, TabsTrigger,
+  EmptyState, PageHeader, Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@cia/ui';
 
-const mockCustomer = {
-  id: 'c1', customerNumber: 'CUST/2026/IND/00000001',
-  customerType: 'INDIVIDUAL' as const, displayName: 'Chioma Okafor',
-  email: 'chioma@email.ng', phone: '+234 803 111 0001',
-  kycStatus: 'VERIFIED' as const, status: 'ACTIVE' as const,
-  brokerId: undefined, brokerName: undefined, createdAt: '2026-01-15',
-  dateOfBirth: '1990-05-12', idType: 'NIN', idNumber: '12345678901',
-  address: '14 Adeola Odeku Street, Victoria Island, Lagos', occupation: 'Software Engineer',
+type KycStatus    = 'VERIFIED' | 'PENDING' | 'FAILED' | 'RESUBMIT';
+type CustomerStatus = 'ACTIVE' | 'INACTIVE' | 'BLACKLISTED';
+type CustomerType = 'INDIVIDUAL' | 'CORPORATE';
+
+interface MockCustomer {
+  id: string;
+  customerNumber: string;
+  customerType: CustomerType;
+  displayName: string;
+  kycStatus: KycStatus;
+  status: CustomerStatus;
+  // contact
+  email: string;
+  phone: string;
+  address: string;
+  createdAt: string;
+  brokerName?: string;
+  // individual
+  dateOfBirth?: string;
+  idType?: string;
+  idNumber?: string;
+  occupation?: string;
+  // corporate
+  companyName?: string;
+  rcNumber?: string;
+  industry?: string;
+  contactPerson?: string;
+  directorName?: string;
+}
+
+const MOCK_CUSTOMERS: MockCustomer[] = [
+  {
+    id: 'c1', customerNumber: 'CUST/2026/IND/00000001', customerType: 'INDIVIDUAL',
+    displayName: 'Chioma Okafor', kycStatus: 'VERIFIED', status: 'ACTIVE',
+    email: 'chioma@email.ng', phone: '+234 803 111 0001',
+    address: '14 Adeola Odeku Street, Victoria Island, Lagos', createdAt: '2026-01-15',
+    dateOfBirth: '1990-05-12', idType: 'NIN', idNumber: '12345678901', occupation: 'Software Engineer',
+  },
+  {
+    id: 'c2', customerNumber: 'CUST/2026/CORP/00000001', customerType: 'CORPORATE',
+    displayName: 'Alaba Trading Co.', kycStatus: 'VERIFIED', status: 'ACTIVE',
+    email: 'info@alaba.ng', phone: '+234 701 222 0002',
+    address: '7 Commerce Road, Apapa, Lagos', createdAt: '2026-01-20',
+    brokerName: 'Leadway Brokers',
+    companyName: 'Alaba Trading Co.', rcNumber: 'RC-123456', industry: 'Trading',
+    contactPerson: 'Tunde Alaba', directorName: 'Tunde Alaba / Bisi Alaba',
+  },
+  {
+    id: 'c3', customerNumber: 'CUST/2026/IND/00000002', customerType: 'INDIVIDUAL',
+    displayName: 'Emeka Eze', kycStatus: 'PENDING', status: 'ACTIVE',
+    email: 'emeka@email.ng', phone: '+234 805 333 0003',
+    address: '22 Enugu Road, GRA, Enugu', createdAt: '2026-02-01',
+    dateOfBirth: '1985-11-20', idType: 'PASSPORT', idNumber: 'A12345678', occupation: 'Civil Servant',
+  },
+  {
+    id: 'c4', customerNumber: 'CUST/2026/CORP/00000002', customerType: 'CORPORATE',
+    displayName: 'Danforth Logistics', kycStatus: 'FAILED', status: 'ACTIVE',
+    email: 'ops@danforth.ng', phone: '+234 809 444 0004',
+    address: '5 Industrial Layout, Trans-Amadi, Port Harcourt', createdAt: '2026-02-10',
+    companyName: 'Danforth Logistics Ltd', rcNumber: 'RC-789012', industry: 'Logistics',
+    contactPerson: 'David Danforth', directorName: 'David Danforth',
+  },
+  {
+    id: 'c5', customerNumber: 'CUST/2026/IND/00000003', customerType: 'INDIVIDUAL',
+    displayName: 'Ngozi Adeyemi', kycStatus: 'VERIFIED', status: 'INACTIVE',
+    email: 'ngozi@email.ng', phone: '+234 706 555 0005',
+    address: '8 Awolowo Avenue, Bodija, Ibadan', createdAt: '2026-02-15',
+    brokerName: 'Stanbic Brokers',
+    dateOfBirth: '1992-03-08', idType: 'DRIVERS_LICENSE', idNumber: 'DL-NG-0099871', occupation: 'Pharmacist',
+  },
+];
+
+const mockPoliciesByCustomer: Record<string, { id: string; policyNumber: string; product: string; status: string; premium: number; startDate: string; endDate: string }[]> = {
+  c1: [
+    { id: 'p1', policyNumber: 'POL-2026-00012', product: 'Private Motor Comprehensive', status: 'ACTIVE',  premium: 285000, startDate: '2026-02-01', endDate: '2027-02-01' },
+    { id: 'p2', policyNumber: 'POL-2025-00088', product: 'Fire & Burglary Standard',    status: 'EXPIRED', premium: 120000, startDate: '2025-03-01', endDate: '2026-03-01' },
+  ],
+  c2: [
+    { id: 'p3', policyNumber: 'POL-2026-00031', product: 'Commercial Property', status: 'ACTIVE', premium: 750000, startDate: '2026-01-15', endDate: '2027-01-15' },
+  ],
+  c3: [], c4: [], c5: [],
 };
 
-const mockPolicies = [
-  { id: 'p1', policyNumber: 'POL-2026-00012', product: 'Private Motor Comprehensive', status: 'ACTIVE',  premium: 285000, startDate: '2026-02-01', endDate: '2027-02-01' },
-  { id: 'p2', policyNumber: 'POL-2025-00088', product: 'Fire & Burglary Standard',    status: 'EXPIRED', premium: 120000, startDate: '2025-03-01', endDate: '2026-03-01' },
-];
+const mockClaimsByCustomer: Record<string, { id: string; claimNumber: string; policyNumber: string; status: string; amount: number; date: string }[]> = {
+  c1: [{ id: 'cl1', claimNumber: 'CLM-2026-00003', policyNumber: 'POL-2026-00012', status: 'PROCESSING', amount: 450000, date: '2026-03-10' }],
+  c2: [], c3: [], c4: [], c5: [],
+};
 
-const mockClaims = [
-  { id: 'cl1', claimNumber: 'CLM-2026-00003', policyNumber: 'POL-2026-00012', status: 'PROCESSING', amount: 450000, date: '2026-03-10' },
-];
-
-const kycV: Record<string, 'active'|'pending'|'rejected'> = { VERIFIED:'active', PENDING:'pending', FAILED:'rejected', RESUBMIT:'pending' };
-const stV:  Record<string, 'active'|'draft'|'rejected'>   = { ACTIVE:'active', INACTIVE:'draft', BLACKLISTED:'rejected' };
+const kycV: Record<string, 'active' | 'pending' | 'rejected'> = { VERIFIED: 'active', PENDING: 'pending', FAILED: 'rejected', RESUBMIT: 'pending' };
+const stV:  Record<string, 'active' | 'draft'   | 'rejected'> = { ACTIVE: 'active', INACTIVE: 'draft', BLACKLISTED: 'rejected' };
 
 function Row({ label, value }: { label: string; value?: string }) {
   return (
     <div className="flex items-start gap-4 py-2.5" style={{ boxShadow: '0 1px 0 var(--border)' }}>
-      <p className="w-36 shrink-0 text-sm text-muted-foreground">{label}</p>
+      <p className="w-40 shrink-0 text-sm text-muted-foreground">{label}</p>
       <p className="text-sm font-medium text-foreground">{value ?? '—'}</p>
     </div>
   );
 }
 
 export default function CustomerDetailPage() {
-  const navigate = useNavigate();
-  const c = mockCustomer;
+  const navigate   = useNavigate();
+  const { id }     = useParams<{ id: string }>();
+  const c          = MOCK_CUSTOMERS.find(x => x.id === id);
+
+  if (!c) {
+    return (
+      <div className="p-6">
+        <EmptyState
+          title="Customer not found"
+          description="This customer record doesn't exist or has been removed."
+          action={<Button onClick={() => navigate('/customers')}>← Back to Customers</Button>}
+        />
+      </div>
+    );
+  }
+
+  const policies = mockPoliciesByCustomer[c.id] ?? [];
+  const claims   = mockClaimsByCustomer[c.id]   ?? [];
 
   return (
     <div className="p-6 space-y-5 max-w-4xl">
@@ -59,26 +144,44 @@ export default function CustomerDetailPage() {
         <TabsList>
           <TabsTrigger value="summary">Summary</TabsTrigger>
           <TabsTrigger value="kyc">KYC</TabsTrigger>
-          <TabsTrigger value="policies">Policies <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{mockPolicies.length}</span></TabsTrigger>
-          <TabsTrigger value="claims">Claims <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{mockClaims.length}</span></TabsTrigger>
+          <TabsTrigger value="policies">
+            Policies <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{policies.length}</span>
+          </TabsTrigger>
+          <TabsTrigger value="claims">
+            Claims <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{claims.length}</span>
+          </TabsTrigger>
         </TabsList>
 
+        {/* Summary */}
         <TabsContent value="summary" className="mt-4">
           <Card>
             <CardHeader><CardTitle>Contact Details</CardTitle></CardHeader>
             <CardContent>
               <Row label="Customer ID"   value={c.customerNumber} />
+              <Row label="Customer Type" value={c.customerType === 'INDIVIDUAL' ? 'Individual' : 'Corporate'} />
               <Row label="Email"         value={c.email} />
               <Row label="Phone"         value={c.phone} />
               <Row label="Address"       value={c.address} />
-              <Row label="Date of Birth" value={c.dateOfBirth} />
-              <Row label="Occupation"    value={c.occupation} />
-              <Row label="Broker"        value={c.brokerName ?? 'Direct'} />
-              <Row label="Created"       value={c.createdAt} />
+              {c.customerType === 'INDIVIDUAL' ? (
+                <>
+                  <Row label="Date of Birth" value={c.dateOfBirth} />
+                  <Row label="Occupation"    value={c.occupation} />
+                </>
+              ) : (
+                <>
+                  <Row label="RC Number"      value={c.rcNumber} />
+                  <Row label="Industry"       value={c.industry} />
+                  <Row label="Contact Person" value={c.contactPerson} />
+                  <Row label="Directors"      value={c.directorName} />
+                </>
+              )}
+              <Row label="Channel" value={c.brokerName ?? 'Direct'} />
+              <Row label="Created" value={c.createdAt} />
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* KYC */}
         <TabsContent value="kyc" className="mt-4">
           <Card>
             <CardHeader>
@@ -88,59 +191,79 @@ export default function CustomerDetailPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <Row label="ID Type"  value={c.idType.replace('_', ' ')} />
-              <Row label="ID Number" value={c.idNumber} />
+              {c.customerType === 'INDIVIDUAL' ? (
+                <>
+                  <Row label="ID Type"   value={c.idType?.replace(/_/g, ' ')} />
+                  <Row label="ID Number" value={c.idNumber} />
+                </>
+              ) : (
+                <>
+                  <Row label="RC Number"    value={c.rcNumber} />
+                  <Row label="Company Name" value={c.companyName} />
+                  <Row label="Directors"    value={c.directorName} />
+                </>
+              )}
               <div className="mt-4"><Button variant="outline" size="sm">Re-submit KYC</Button></div>
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* Policies */}
         <TabsContent value="policies" className="mt-4">
           <Card>
             <CardContent className="p-0">
-              <table className="w-full text-sm">
-                <thead><tr className="border-b bg-muted/40">
-                  {['Policy No.','Product','Status','Premium (₦)','Period'].map(h=>(
-                    <th key={h} className="h-10 px-4 text-left text-xs font-semibold text-muted-foreground">{h}</th>
-                  ))}
-                </tr></thead>
-                <tbody>
-                  {mockPolicies.map((p,i)=>(
-                    <tr key={p.id} className={i<mockPolicies.length-1?'border-b':''}>
-                      <td className="px-4 py-3 font-mono text-xs text-primary">{p.policyNumber}</td>
-                      <td className="px-4 py-3 text-sm">{p.product}</td>
-                      <td className="px-4 py-3"><Badge variant={p.status==='ACTIVE'?'active':'draft'} className="text-[10px]">{p.status.toLowerCase()}</Badge></td>
-                      <td className="px-4 py-3 text-sm">₦{p.premium.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{p.startDate} → {p.endDate}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {policies.length === 0 ? (
+                <p className="p-6 text-sm text-muted-foreground">No policies on record for this customer.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b bg-muted/40">
+                    {['Policy No.', 'Product', 'Status', 'Premium (₦)', 'Period'].map(h => (
+                      <th key={h} className="h-10 px-4 text-left text-xs font-semibold text-muted-foreground">{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {policies.map((p, i) => (
+                      <tr key={p.id} className={i < policies.length - 1 ? 'border-b' : ''}>
+                        <td className="px-4 py-3 font-mono text-xs text-primary">{p.policyNumber}</td>
+                        <td className="px-4 py-3 text-sm">{p.product}</td>
+                        <td className="px-4 py-3"><Badge variant={p.status === 'ACTIVE' ? 'active' : 'draft'} className="text-[10px]">{p.status.toLowerCase()}</Badge></td>
+                        <td className="px-4 py-3 text-sm">₦{p.premium.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{p.startDate} → {p.endDate}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* Claims */}
         <TabsContent value="claims" className="mt-4">
           <Card>
             <CardContent className="p-0">
-              <table className="w-full text-sm">
-                <thead><tr className="border-b bg-muted/40">
-                  {['Claim No.','Policy','Status','Amount (₦)','Date'].map(h=>(
-                    <th key={h} className="h-10 px-4 text-left text-xs font-semibold text-muted-foreground">{h}</th>
-                  ))}
-                </tr></thead>
-                <tbody>
-                  {mockClaims.map((c,i)=>(
-                    <tr key={c.id} className={i<mockClaims.length-1?'border-b':''}>
-                      <td className="px-4 py-3 font-mono text-xs text-primary">{c.claimNumber}</td>
-                      <td className="px-4 py-3 font-mono text-xs">{c.policyNumber}</td>
-                      <td className="px-4 py-3"><Badge variant="pending" className="text-[10px]">{c.status.toLowerCase()}</Badge></td>
-                      <td className="px-4 py-3 text-sm">₦{c.amount.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{c.date}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {claims.length === 0 ? (
+                <p className="p-6 text-sm text-muted-foreground">No claims on record for this customer.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b bg-muted/40">
+                    {['Claim No.', 'Policy', 'Status', 'Amount (₦)', 'Date'].map(h => (
+                      <th key={h} className="h-10 px-4 text-left text-xs font-semibold text-muted-foreground">{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {claims.map((cl, i) => (
+                      <tr key={cl.id} className={i < claims.length - 1 ? 'border-b' : ''}>
+                        <td className="px-4 py-3 font-mono text-xs text-primary">{cl.claimNumber}</td>
+                        <td className="px-4 py-3 font-mono text-xs">{cl.policyNumber}</td>
+                        <td className="px-4 py-3"><Badge variant="pending" className="text-[10px]">{cl.status.toLowerCase()}</Badge></td>
+                        <td className="px-4 py-3 text-sm">₦{cl.amount.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{cl.date}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
