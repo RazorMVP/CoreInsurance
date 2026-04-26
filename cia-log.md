@@ -4,6 +4,36 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-27 — Session 45: KYC Update Flow — Requirements Clarification (in progress)
+
+### Status
+Requirements gathering only — no code written this session. Implementation pending.
+
+### Feature Agreed
+**Edit Customer Sheet** replaces the inactive "Update KYC" button on the customer detail page.
+
+**What changes:**
+- "Update KYC" button → renamed to "Edit Customer"
+- Standalone "Re-submit KYC" button removed from the KYC tab
+- New `EditCustomerSheet` side sheet with contact + KYC sections
+
+**Individual editable fields:** Email, Phone, Address, Channel (broker), ID type, ID number, expiry date, document upload
+
+**Corporate editable fields:** Email, Phone, Address, Contact Person, Channel (broker), ID type, ID number, expiry date, document upload
+
+**KYC reason section** — conditionally rendered only when ID type, ID number, expiry date, or document changes. Reason = dropdown (Document expired / Incorrect details submitted / Name mismatch / Customer request / ID type change / Other) + optional notes field.
+
+**On save:**
+- Contact changes → saved to customer record, audit logged
+- If any KYC field changed → new KYC details saved to customer record (shown on KYC tab), old KYC details preserved in audit log as before/after snapshot, reason logged, auto re-submitted to KYC provider, KYC status updated on customer record based on provider response
+
+**KYC tab** → always shows current record only; history visible only in audit log
+
+### Open Questions
+None — requirements fully confirmed by user. Ready to implement next session.
+
+---
+
 ## 2026-04-26 — Session 44c: Fix customer detail page navigation
 
 ### Bug
