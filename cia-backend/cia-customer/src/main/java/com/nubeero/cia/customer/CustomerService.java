@@ -162,16 +162,69 @@ public class CustomerService {
     // ─── Update ─────────────────────────────────────────────────────
 
     @Transactional
-    public CustomerResponse update(UUID id, CustomerUpdateRequest request) {
+    public CustomerResponse update(UUID id, CustomerUpdateRequest request, MultipartFile idDocument) {
         Customer customer = findOrThrow(id);
+        CustomerResponse oldSnapshot = toResponse(customer);
+
+        boolean kycChanged = isKycChanged(customer, request, idDocument);
+
+        if (kycChanged && (request.getKycUpdateReason() == null || request.getKycUpdateReason().isBlank())) {
+            throw new BusinessRuleException("KYC_UPDATE_REASON_REQUIRED",
+                    "A reason must be provided when updating KYC details.");
+        }
+
         if (customer.getCustomerType() == CustomerType.INDIVIDUAL) {
             applyIndividualUpdate(customer, request);
         } else {
             applyCorporateUpdate(customer, request);
         }
+
+        if (kycChanged) {
+            if (request.getIdType() != null)       customer.setIdType(request.getIdType());
+            if (request.getIdNumber() != null)     customer.setIdNumber(request.getIdNumber());
+            if (request.getIdExpiryDate() != null) customer.setIdExpiryDate(request.getIdExpiryDate());
+
+            if (idDocument != null && !idDocument.isEmpty()) {
+                String docUrl = uploadKycDocument(idDocument, customer.getId(), "kyc-id");
+                customer.setIdDocumentUrl(docUrl);
+            }
+
+            validateExpiryDate(customer.getIdType(), customer.getIdExpiryDate(), "ID document");
+            runIndividualKyc(customer);
+        }
+
         Customer saved = repository.save(customer);
-        auditService.log("Customer", id.toString(), AuditAction.UPDATE, null, saved);
+
+        // Audit: general contact update (before → after)
+        auditService.log("Customer", id.toString(), AuditAction.UPDATE, oldSnapshot, toResponse(saved));
+
+        // Audit: dedicated KYC update entry with reason
+        if (kycChanged) {
+            var kycAudit = java.util.Map.of(
+                    "reason", request.getKycUpdateReason(),
+                    "notes",  request.getKycUpdateNotes() != null ? request.getKycUpdateNotes() : "",
+                    "newIdType",   saved.getIdType() != null ? saved.getIdType().name() : "",
+                    "newIdNumber", saved.getIdNumber() != null ? saved.getIdNumber() : "",
+                    "kycStatus",   saved.getKycStatus().name()
+            );
+            auditService.log("CustomerKyc", id.toString(), AuditAction.UPDATE,
+                    java.util.Map.of(
+                            "idType",   oldSnapshot.getIdType() != null ? oldSnapshot.getIdType().name() : "",
+                            "idNumber", oldSnapshot.getIdNumber() != null ? oldSnapshot.getIdNumber() : "",
+                            "kycStatus", oldSnapshot.getKycStatus().name()
+                    ),
+                    kycAudit);
+        }
+
         return toResponse(saved);
+    }
+
+    private boolean isKycChanged(Customer customer, CustomerUpdateRequest request, MultipartFile idDocument) {
+        if (idDocument != null && !idDocument.isEmpty()) return true;
+        if (request.getIdType() != null   && !request.getIdType().equals(customer.getIdType()))     return true;
+        if (request.getIdNumber() != null && !request.getIdNumber().equals(customer.getIdNumber())) return true;
+        if (request.getIdExpiryDate() != null && !request.getIdExpiryDate().equals(customer.getIdExpiryDate())) return true;
+        return false;
     }
 
     // ─── KYC ────────────────────────────────────────────────────────

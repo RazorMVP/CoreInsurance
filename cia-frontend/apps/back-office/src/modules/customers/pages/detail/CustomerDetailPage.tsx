@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Badge, Button, Card, CardContent, CardHeader, CardTitle,
   EmptyState, PageHeader, Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@cia/ui';
+import EditCustomerSheet from './EditCustomerSheet';
 
 type KycStatus    = 'VERIFIED' | 'PENDING' | 'FAILED' | 'RESUBMIT';
 type CustomerStatus = 'ACTIVE' | 'INACTIVE' | 'BLACKLISTED';
@@ -25,6 +27,7 @@ interface MockCustomer {
   dateOfBirth?: string;
   idType?: string;
   idNumber?: string;
+  idExpiryDate?: string;
   occupation?: string;
   // corporate
   companyName?: string;
@@ -56,7 +59,7 @@ const MOCK_CUSTOMERS: MockCustomer[] = [
     displayName: 'Emeka Eze', kycStatus: 'PENDING', status: 'ACTIVE',
     email: 'emeka@email.ng', phone: '+234 805 333 0003',
     address: '22 Enugu Road, GRA, Enugu', createdAt: '2026-02-01',
-    dateOfBirth: '1985-11-20', idType: 'PASSPORT', idNumber: 'A12345678', occupation: 'Civil Servant',
+    dateOfBirth: '1985-11-20', idType: 'PASSPORT', idNumber: 'A12345678', idExpiryDate: '2029-03-15', occupation: 'Civil Servant',
   },
   {
     id: 'c4', customerNumber: 'CUST/2026/CORP/00000002', customerType: 'CORPORATE',
@@ -72,7 +75,7 @@ const MOCK_CUSTOMERS: MockCustomer[] = [
     email: 'ngozi@email.ng', phone: '+234 706 555 0005',
     address: '8 Awolowo Avenue, Bodija, Ibadan', createdAt: '2026-02-15',
     brokerName: 'Stanbic Brokers',
-    dateOfBirth: '1992-03-08', idType: 'DRIVERS_LICENSE', idNumber: 'DL-NG-0099871', occupation: 'Pharmacist',
+    dateOfBirth: '1992-03-08', idType: 'DRIVERS_LICENSE', idNumber: 'DL-NG-0099871', idExpiryDate: '2027-11-30', occupation: 'Pharmacist',
   },
 ];
 
@@ -105,9 +108,10 @@ function Row({ label, value }: { label: string; value?: string }) {
 }
 
 export default function CustomerDetailPage() {
-  const navigate   = useNavigate();
-  const { id }     = useParams<{ id: string }>();
-  const c          = MOCK_CUSTOMERS.find(x => x.id === id);
+  const navigate    = useNavigate();
+  const { id }      = useParams<{ id: string }>();
+  const [editOpen, setEditOpen] = useState(false);
+  const c           = MOCK_CUSTOMERS.find(x => x.id === id);
 
   if (!c) {
     return (
@@ -125,6 +129,7 @@ export default function CustomerDetailPage() {
   const claims   = mockClaimsByCustomer[c.id]   ?? [];
 
   return (
+    <>
     <div className="p-6 space-y-5 max-w-4xl">
       <PageHeader
         title={c.displayName}
@@ -134,7 +139,7 @@ export default function CustomerDetailPage() {
           <div className="flex gap-2">
             <Badge variant={kycV[c.kycStatus]}>{c.kycStatus.toLowerCase()}</Badge>
             <Badge variant={stV[c.status]}>{c.status.toLowerCase()}</Badge>
-            <Button variant="outline" size="sm">Update KYC</Button>
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>Edit Customer</Button>
             <Button size="sm">New Policy</Button>
           </div>
         }
@@ -195,15 +200,21 @@ export default function CustomerDetailPage() {
                 <>
                   <Row label="ID Type"   value={c.idType?.replace(/_/g, ' ')} />
                   <Row label="ID Number" value={c.idNumber} />
+                  {c.idExpiryDate && <Row label="ID Expiry Date" value={c.idExpiryDate} />}
                 </>
               ) : (
                 <>
                   <Row label="RC Number"    value={c.rcNumber} />
                   <Row label="Company Name" value={c.companyName} />
                   <Row label="Directors"    value={c.directorName} />
+                  {c.idNumber && <Row label="Director ID" value={c.idNumber} />}
                 </>
               )}
-              <div className="mt-4"><Button variant="outline" size="sm">Re-submit KYC</Button></div>
+              <div className="mt-4">
+                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                  Edit Customer / Update KYC
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -269,5 +280,25 @@ export default function CustomerDetailPage() {
         </TabsContent>
       </Tabs>
     </div>
+
+    <EditCustomerSheet
+      open={editOpen}
+      onOpenChange={setEditOpen}
+      customer={{
+        id:            c.id,
+        customerType:  c.customerType,
+        email:         c.email,
+        phone:         c.phone,
+        address:       c.address,
+        contactPerson: c.contactPerson,
+        brokerName:    c.brokerName,
+        brokerId:      undefined,
+        idType:        c.idType,
+        idNumber:      c.idNumber,
+        idExpiryDate:  c.idExpiryDate,
+      }}
+      onSuccess={() => setEditOpen(false)}
+    />
+    </>
   );
 }

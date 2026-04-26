@@ -65,12 +65,13 @@ public class CustomerController {
         return ApiResponse.success(service.createCorporate(request, cacCertificate, directorIdDocuments));
     }
 
-    @PutMapping("/{id}")
+    @PutMapping(value = "/{id}", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE, MediaType.APPLICATION_FORM_URLENCODED_VALUE, MediaType.APPLICATION_JSON_VALUE})
     @PreAuthorize("hasRole('CUSTOMER_UPDATE')")
     public ApiResponse<CustomerResponse> update(
             @PathVariable UUID id,
-            @Valid @RequestBody CustomerUpdateRequest request) {
-        return ApiResponse.success(service.update(id, request));
+            @Valid @ModelAttribute CustomerUpdateRequest request,
+            @RequestPart(value = "idDocument", required = false) MultipartFile idDocument) {
+        return ApiResponse.success(service.update(id, request, idDocument));
     }
 
     @PostMapping("/{id}/retrigger-kyc")
