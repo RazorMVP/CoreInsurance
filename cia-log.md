@@ -4,6 +4,25 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-27 — Session 45b: Edit Customer Sheet with KYC Update Flow
+
+### Files Created
+- `cia-frontend/apps/back-office/src/modules/customers/pages/detail/EditCustomerSheet.tsx` — side sheet with contact section (email, phone, address, contactPerson for corporate, channel/broker) + KYC section (ID type, ID number, expiry date, document upload); KYC reason block (dropdown + notes textarea) conditionally rendered only when any KYC field changes; reason required validation enforced client-side before submit
+
+### Files Modified
+- `cia-backend/cia-customer/src/main/java/com/nubeero/cia/customer/dto/CustomerUpdateRequest.java` — added idType, idNumber, idExpiryDate, brokerId, kycUpdateReason, kycUpdateNotes fields
+- `cia-backend/cia-customer/src/main/java/com/nubeero/cia/customer/CustomerService.java` — update() now accepts MultipartFile idDocument; isKycChanged() detects field-level KYC changes; if changed: validates reason, applies KYC fields, uploads new document, re-runs KYC verification, logs two audit entries (general UPDATE with before/after snapshot + dedicated CustomerKyc UPDATE with reason/notes/kycStatus)
+- `cia-backend/cia-customer/src/main/java/com/nubeero/cia/customer/CustomerController.java` — PUT /{id} switched to multipart/form-data to accept optional idDocument file
+- `cia-frontend/apps/back-office/src/modules/customers/pages/detail/CustomerDetailPage.tsx` — "Update KYC" renamed to "Edit Customer"; standalone "Re-submit KYC" removed from KYC tab; KYC tab shows "Edit Customer / Update KYC" button instead; EditCustomerSheet wired with customer snapshot; idExpiryDate added to MockCustomer type; Passport/DL records populated with expiry dates
+
+### KYC Reason Dropdown Options
+Document expired · Incorrect details submitted · Name mismatch · Customer request · ID type change · Other
+
+### Git Commit
+`4407ce0` feat(customers): Edit Customer sheet with KYC update flow
+
+---
+
 ## 2026-04-27 — Session 45: KYC Update Flow — Requirements Clarification (in progress)
 
 ### Status
