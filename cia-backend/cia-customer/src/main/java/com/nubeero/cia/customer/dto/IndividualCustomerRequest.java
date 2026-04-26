@@ -31,6 +31,9 @@ public class IndividualCustomerRequest {
     @NotBlank
     private String idNumber;
 
+    /** Required when idType is DRIVERS_LICENSE or PASSPORT. Must not be in the past. */
+    private LocalDate idExpiryDate;
+
     @Email
     private String email;
 

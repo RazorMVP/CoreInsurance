@@ -18,6 +18,9 @@ public class CorporateCustomerRequest {
     @NotBlank
     private String rcNumber;
 
+    /** CAC certificate issue date — required. */
+    private LocalDate cacIssuedDate;
+
     private LocalDate incorporationDate;
     private String industry;
 

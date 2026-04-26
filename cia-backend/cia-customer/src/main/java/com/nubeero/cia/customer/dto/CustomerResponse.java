@@ -32,10 +32,14 @@ public class CustomerResponse {
     private String maritalStatus;
     private IdType idType;
     private String idNumber;
+    private String idDocumentUrl;
+    private LocalDate idExpiryDate;
 
     // Corporate
     private String companyName;
     private String rcNumber;
+    private String cacCertificateUrl;
+    private LocalDate cacIssuedDate;
     private LocalDate incorporationDate;
     private String industry;
     private String contactPerson;

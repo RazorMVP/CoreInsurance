@@ -25,6 +25,10 @@
       <artifactId>cia-integrations</artifactId>
     </dependency>
     <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-storage</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.mapstruct</groupId>
       <artifactId>mapstruct</artifactId>
     </dependency>

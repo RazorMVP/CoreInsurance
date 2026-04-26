@@ -17,6 +17,8 @@ public class CustomerDirectorResponse {
     private LocalDate dateOfBirth;
     private IdType idType;
     private String idNumber;
+    private String idDocumentUrl;
+    private LocalDate idExpiryDate;
     private KycStatus kycStatus;
     private String kycFailureReason;
 }

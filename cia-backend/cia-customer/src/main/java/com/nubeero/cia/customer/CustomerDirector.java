@@ -35,6 +35,12 @@ public class CustomerDirector extends BaseEntity {
     @Column(name = "id_number", length = 50)
     private String idNumber;
 
+    @Column(name = "id_document_url", length = 500)
+    private String idDocumentUrl;
+
+    @Column(name = "id_expiry_date")
+    private LocalDate idExpiryDate;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "kyc_status", nullable = false, length = 20)
     @Builder.Default

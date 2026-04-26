@@ -2068,3 +2068,47 @@ BackOffice / Dashboard (6:2) · reports-home (223:2) · reports-library (224:2) 
 **Also fixed in same session:** `docs-deploy.yml` workflow — corrected the cia-docs project ID issue and confirmed `https://cia-docs.vercel.app/` deployed successfully with Module 11 docs and Dashboard API spec.
 
 **Open questions:** None.
+
+---
+
+### Session 41 — 2026-04-26: Customer onboarding — KYC document upload + expiry dates
+
+**Scope:** Individual and Corporate customer onboarding — both frontend and backend.
+
+**Requirements implemented:**
+- Individual: ID document upload (JPG/PNG, max 5MB) + expiry date mandatory for Driver's Licence and Passport (must be ≥ today)
+- Corporate: CAC certificate upload (JPG/PNG, max 5MB) + issued date mandatory; per-director ID document upload + same expiry date rule as individual
+- Backend: real `multipart/form-data` endpoints replacing `console.log` placeholders; files stored in MinIO via `DocumentStorageService`; expiry date validation at service layer
+
+**Backend files changed:**
+
+| File | Change |
+|---|---|
+| `cia-customer/pom.xml` | Added `cia-storage` dependency |
+| `V19__customer_kyc_document_fields.sql` | New Flyway migration — adds `id_document_url`, `id_expiry_date` to `customers` and `customer_directors`; adds `cac_certificate_url`, `cac_issued_date` to `customers` |
+| `Customer.java` | Added `idDocumentUrl`, `idExpiryDate`, `cacCertificateUrl`, `cacIssuedDate` fields |
+| `CustomerDirector.java` | Added `idDocumentUrl`, `idExpiryDate` fields |
+| `IndividualCustomerRequest.java` | Added `idExpiryDate` field |
+| `CorporateCustomerRequest.java` | Added `cacIssuedDate` field |
+| `CustomerDirectorRequest.java` | Added `idExpiryDate` field |
+| `CustomerDirectorResponse.java` | Added `idDocumentUrl`, `idExpiryDate` fields |
+| `CustomerResponse.java` | Added `idDocumentUrl`, `idExpiryDate`, `cacCertificateUrl`, `cacIssuedDate` fields |
+| `CustomerService.java` | Injected `DocumentStorageService`; `createIndividual` and `createCorporate` now accept `MultipartFile`; added `validateExpiryDate()` (mandatory + must be ≥ today for DL/Passport), `uploadKycDocument()` (MinIO upload via `DocumentStorageService`); `addDirectors()` sets `idExpiryDate` on directors |
+| `CustomerController.java` | Changed both POST endpoints to `consumes = MULTIPART_FORM_DATA_VALUE`; uses `@ModelAttribute` + `@RequestPart` for file parts |
+
+**Frontend files changed:**
+
+| File | Change |
+|---|---|
+| `IndividualOnboardingSheet.tsx` | Added Zod `superRefine` for expiry date validation; conditional `idExpiryDate` input (visible only for DL/Passport, min=today); drag-and-drop file upload zone with client-side type + size validation; `useMutation` submitting real `FormData` to `POST /api/v1/customers/individual`; error message on failure; cache invalidation on success |
+| `CorporateOnboardingSheet.tsx` | Added CAC certificate upload zone + `cacIssuedDate` date input; per-director ID upload zones + conditional expiry date; `dirFileRefs` ref array pattern (avoids hooks-in-map violation); `useMutation` submitting real `FormData` to `POST /api/v1/customers/corporate` with indexed director fields |
+
+**Key decisions:**
+- Files stored in MinIO at path `customers/{customerId}/kyc/{docKey}.ext` — consistent with other document flows
+- Expiry validation runs at both Zod (frontend, instant feedback) and `CustomerService` (backend, defence in depth)
+- `dirFileRefs.current[i]` via callback ref (`ref={el => { dirFileRefs.current[i] = el; }}`) — avoids the React hooks-in-map violation of calling `useRef()` inside `.map()`
+- Unused `i` variable in `onSubmit` eliminated by consolidating validation into a single `values.directors.map()` call
+
+**Typecheck:** `tsc --noEmit` exits 0. Backend `mvn install -pl cia-customer` builds cleanly.
+
+**Open questions:** None.

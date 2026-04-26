@@ -67,12 +67,24 @@ public class Customer extends BaseEntity {
     @Column(name = "id_number", length = 50)
     private String idNumber;
 
+    @Column(name = "id_document_url", length = 500)
+    private String idDocumentUrl;
+
+    @Column(name = "id_expiry_date")
+    private LocalDate idExpiryDate;
+
     // Corporate fields
     @Column(name = "company_name", length = 200)
     private String companyName;
 
     @Column(name = "rc_number", length = 50)
     private String rcNumber;
+
+    @Column(name = "cac_certificate_url", length = 500)
+    private String cacCertificateUrl;
+
+    @Column(name = "cac_issued_date")
+    private LocalDate cacIssuedDate;
 
     @Column(name = "incorporation_date")
     private LocalDate incorporationDate;

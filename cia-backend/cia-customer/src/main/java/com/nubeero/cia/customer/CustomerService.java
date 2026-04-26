@@ -4,8 +4,10 @@ import com.nubeero.cia.common.audit.AuditAction;
 import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
+import com.nubeero.cia.common.tenant.TenantContext;
 import com.nubeero.cia.customer.dto.*;
 import com.nubeero.cia.integrations.kyc.*;
+import com.nubeero.cia.storage.DocumentStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -14,8 +16,11 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -28,6 +33,7 @@ public class CustomerService {
     private final CustomerDirectorRepository directorRepository;
     private final KycVerificationService kycVerificationService;
     private final AuditService auditService;
+    private final DocumentStorageService documentStorageService;
 
     // ─── Queries ────────────────────────────────────────────────────
 
@@ -57,7 +63,10 @@ public class CustomerService {
     // ─── Create ─────────────────────────────────────────────────────
 
     @Transactional
-    public CustomerResponse createIndividual(IndividualCustomerRequest request) {
+    public CustomerResponse createIndividual(IndividualCustomerRequest request,
+                                              MultipartFile idDocument) {
+        validateExpiryDate(request.getIdType(), request.getIdExpiryDate(), "ID document");
+
         Customer customer = Customer.builder()
                 .customerType(CustomerType.INDIVIDUAL)
                 .firstName(request.getFirstName())
@@ -68,6 +77,7 @@ public class CustomerService {
                 .maritalStatus(request.getMaritalStatus())
                 .idType(request.getIdType())
                 .idNumber(request.getIdNumber())
+                .idExpiryDate(request.getIdExpiryDate())
                 .email(request.getEmail())
                 .phone(request.getPhone())
                 .alternatePhone(request.getAlternatePhone())
@@ -77,18 +87,37 @@ public class CustomerService {
                 .country(request.getCountry())
                 .build();
 
+        // Save first to get ID, then upload document
         runIndividualKyc(customer);
         Customer saved = repository.save(customer);
+
+        String docUrl = uploadKycDocument(idDocument, saved.getId(), "kyc-id");
+        saved.setIdDocumentUrl(docUrl);
+        saved = repository.save(saved);
+
         auditService.log("Customer", saved.getId().toString(), AuditAction.CREATE, null, saved);
         return toResponse(saved);
     }
 
     @Transactional
-    public CustomerResponse createCorporate(CorporateCustomerRequest request) {
+    public CustomerResponse createCorporate(CorporateCustomerRequest request,
+                                             MultipartFile cacCertificate,
+                                             List<MultipartFile> directorIdDocuments) {
+        if (request.getCacIssuedDate() == null) {
+            throw new BusinessRuleException("MISSING_CAC_DATE", "CAC certificate issued date is required");
+        }
+        // Validate each director's expiry date
+        List<CustomerDirectorRequest> dirs = request.getDirectors();
+        for (int i = 0; i < dirs.size(); i++) {
+            CustomerDirectorRequest dir = dirs.get(i);
+            validateExpiryDate(dir.getIdType(), dir.getIdExpiryDate(), "Director " + (i + 1) + " ID document");
+        }
+
         Customer customer = Customer.builder()
                 .customerType(CustomerType.CORPORATE)
                 .companyName(request.getCompanyName())
                 .rcNumber(request.getRcNumber())
+                .cacIssuedDate(request.getCacIssuedDate())
                 .incorporationDate(request.getIncorporationDate())
                 .industry(request.getIndustry())
                 .contactPerson(request.getContactPerson())
@@ -103,6 +132,25 @@ public class CustomerService {
 
         runCorporateKyc(customer, request.getDirectors());
         Customer saved = repository.save(customer);
+
+        // Upload CAC certificate
+        String cacUrl = uploadKycDocument(cacCertificate, saved.getId(), "cac-certificate");
+        saved.setCacCertificateUrl(cacUrl);
+
+        // Upload director ID documents (indexed by position)
+        for (int i = 0; i < saved.getDirectors().size(); i++) {
+            if (directorIdDocuments != null && i < directorIdDocuments.size()) {
+                MultipartFile dirDoc = directorIdDocuments.get(i);
+                if (dirDoc != null && !dirDoc.isEmpty()) {
+                    String dirDocUrl = uploadKycDocument(dirDoc, saved.getId(), "director-" + i + "-id");
+                    CustomerDirector dir = saved.getDirectors().get(i);
+                    dir.setIdDocumentUrl(dirDocUrl);
+                    dir.setIdExpiryDate(dirs.get(i).getIdExpiryDate());
+                }
+            }
+        }
+
+        saved = repository.save(saved);
         auditService.log("Customer", saved.getId().toString(), AuditAction.CREATE, null, saved);
         return toResponse(saved);
     }
@@ -251,7 +299,41 @@ public class CustomerService {
                         .dateOfBirth(r.getDateOfBirth())
                         .idType(r.getIdType())
                         .idNumber(r.getIdNumber())
+                        .idExpiryDate(r.getIdExpiryDate())
                         .build()));
+    }
+
+    /** Validates that DL/Passport expiry date is present and not in the past. */
+    private void validateExpiryDate(IdType idType, LocalDate expiryDate, String label) {
+        if (idType == IdType.DRIVERS_LICENSE || idType == IdType.PASSPORT) {
+            if (expiryDate == null) {
+                throw new BusinessRuleException("MISSING_EXPIRY_DATE",
+                        label + " expiry date is required for " + idType);
+            }
+            if (expiryDate.isBefore(LocalDate.now())) {
+                throw new BusinessRuleException("EXPIRED_ID_DOCUMENT",
+                        label + " has expired (expiry: " + expiryDate + "). Please provide a valid document.");
+            }
+        }
+    }
+
+    /** Uploads a KYC document file to MinIO and returns the stored path. */
+    private String uploadKycDocument(MultipartFile file, UUID customerId, String docKey) {
+        if (file == null || file.isEmpty()) return null;
+        String tenantId = TenantContext.getTenantId() != null ? TenantContext.getTenantId() : "public";
+        String ext = getExtension(file.getOriginalFilename());
+        String path = "customers/" + customerId + "/kyc/" + docKey + ext;
+        try {
+            return documentStorageService.upload(tenantId, path, file.getInputStream(), file.getContentType());
+        } catch (IOException e) {
+            log.error("Failed to upload KYC document for customer {}: {}", customerId, e.getMessage());
+            throw new BusinessRuleException("DOCUMENT_UPLOAD_FAILED", "Failed to upload " + docKey + ": " + e.getMessage());
+        }
+    }
+
+    private String getExtension(String filename) {
+        if (filename == null || !filename.contains(".")) return "";
+        return filename.substring(filename.lastIndexOf('.'));
     }
 
     private void verifyDirectors(Customer customer) {
@@ -351,7 +433,8 @@ public class CustomerService {
                         .map(d -> CustomerDirectorResponse.builder()
                                 .id(d.getId()).firstName(d.getFirstName()).lastName(d.getLastName())
                                 .dateOfBirth(d.getDateOfBirth()).idType(d.getIdType())
-                                .idNumber(d.getIdNumber()).kycStatus(d.getKycStatus())
+                                .idNumber(d.getIdNumber()).idDocumentUrl(d.getIdDocumentUrl())
+                                .idExpiryDate(d.getIdExpiryDate()).kycStatus(d.getKycStatus())
                                 .kycFailureReason(d.getKycFailureReason())
                                 .build())
                         .toList();
@@ -375,7 +458,9 @@ public class CustomerService {
                 .firstName(c.getFirstName()).lastName(c.getLastName()).otherNames(c.getOtherNames())
                 .dateOfBirth(c.getDateOfBirth()).gender(c.getGender()).maritalStatus(c.getMaritalStatus())
                 .idType(c.getIdType()).idNumber(c.getIdNumber())
+                .idDocumentUrl(c.getIdDocumentUrl()).idExpiryDate(c.getIdExpiryDate())
                 .companyName(c.getCompanyName()).rcNumber(c.getRcNumber())
+                .cacCertificateUrl(c.getCacCertificateUrl()).cacIssuedDate(c.getCacIssuedDate())
                 .incorporationDate(c.getIncorporationDate()).industry(c.getIndustry())
                 .contactPerson(c.getContactPerson())
                 .email(c.getEmail()).phone(c.getPhone()).alternatePhone(c.getAlternatePhone())
