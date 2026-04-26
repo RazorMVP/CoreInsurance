@@ -2112,3 +2112,21 @@ BackOffice / Dashboard (6:2) · reports-home (223:2) · reports-library (224:2) 
 **Typecheck:** `tsc --noEmit` exits 0. Backend `mvn install -pl cia-customer` builds cleanly.
 
 **Open questions:** None.
+
+---
+
+### Session 42 — 2026-04-26: Update cia-docs logo and favicon with Nubeero branding
+
+**Files updated in `docs-site/static/`:**
+
+| File | Change |
+|---|---|
+| `static/img/logo.png` | Replaced with Nubeero Icon_roundBorder.png (3726×3726 RGBA PNG) — Docusaurus navbar logo |
+| `static/img/favicon.png` | Same Nubeero logo — used as PNG favicon (`favicon: "img/favicon.png"` in docusaurus.config.ts) |
+| `static/favicon.ico` | Generated from Nubeero logo via Pillow at 16×16, 32×32, 48×48 — browser tab favicon fallback |
+
+**Source file:** `/Users/razormvp/Documents/Nubeero_Images/nubeeroLogo/Nubeero Icon_roundBorder.png`
+
+**Docusaurus config already correct** — `logo.alt: "Nubeero Logo"`, `logo.src: "img/logo.png"`, `favicon: "img/favicon.png"` — no config changes needed.
+
+**Open questions:** None.
