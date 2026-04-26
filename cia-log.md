@@ -2178,3 +2178,34 @@ BackOffice / Dashboard (6:2) · reports-home (223:2) · reports-library (224:2) 
 - Added 9e — 7-point verification checklist (replaces the old 5-point one)
 
 **Open questions:** None.
+
+---
+
+### Session 44 — 2026-04-26: Complete internal-api.json — all 119 paths documented
+
+**Context:** Comprehensive audit of all backend controllers revealed 82 paths missing from `internal-api.json`. Previous sessions only documented audit, dashboard, customer, and reports endpoints.
+
+**internal-api.json:** 37 → 119 paths (+82)
+
+**New paths added by module:**
+
+| Module | Paths | Key endpoints |
+|---|---|---|
+| Claims | 17 | search, get/update, assign-surveyor, reserve, submit/approve/reject/withdraw/settle, reserves, documents, expenses |
+| Customers (extensions) | 2 | customer document get/delete |
+| Documents | 2 | document-templates get/update |
+| Endorsements | 7 | get/update, submit/approve/reject/cancel, premium-preview |
+| Finance | 13 | debit-notes get/update/cancel/void, receipts get/reverse, credit-notes get/update/cancel, payments get/reverse |
+| Partner Apps | 4 | get/update/revoke, activate |
+| Policies | 10 | search, get/update, bind-from-quote, submit/approve/reject/cancel/reinstate, naicom-upload |
+| Quotation | 6 | search, get/update, submit/approve/reject |
+| Reinsurance | 15 | allocations get/update/confirm/cancel, fac-covers get/update/confirm/cancel, treaties get/update/activate/expire/cancel/participants |
+| Setup | 62 | company-settings, access-groups, approval-groups, banks, currencies, cause-of-loss, claim-reserve-categories, nature-of-loss, branches, brokers, insurance-companies, reinsurance-companies, relationship-managers, sbus, surveyors, products, classes-of-business, vehicle-makes/models, vehicle-types |
+
+**New schemas added:** ClaimSummary, EndorsementSummary, DebitNote, CreditNote, Receipt, Payment, PolicySummary, QuoteSummary, RiAllocation, RiFacCover, RiTreaty, SetupEntity, PartnerApp
+
+**Partner API swagger (openapi.json):** 15 paths — confirmed complete against cia-partner-api controllers ✅
+
+**API version bumped:** `1.0.0` → `2.0.0` to reflect comprehensive documentation scope.
+
+**Open questions:** None.
