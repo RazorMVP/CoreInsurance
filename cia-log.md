@@ -4,6 +4,19 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-26 — Session 44c: Fix customer detail page navigation
+
+### Bug
+`CustomerDetailPage` always rendered the hardcoded `c1` mock regardless of which customer was clicked, because `useParams()` was never called.
+
+### Fix
+- `cia-frontend/apps/back-office/src/modules/customers/pages/detail/CustomerDetailPage.tsx` — replaced single `mockCustomer` with `MOCK_CUSTOMERS` array (all 5 records, each with full individual/corporate fields); added `useParams<{id}>()` to resolve the route param; lookup by ID with `EmptyState` fallback for unknown IDs; summary tab now conditionally renders individual fields (DOB, occupation, ID type/number) vs corporate fields (RC number, industry, contact person, directors); policies and claims keyed per customer ID so c1 shows real data while others show empty-state messages
+
+### Git Commit
+`13023e9` fix(customers): detail page reads :id from URL — shows correct customer
+
+---
+
 ## 2026-04-26 — Session 44b: Direct Customer Channel Indicator
 
 ### Change
