@@ -4,6 +4,29 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-27 — Session 45d: Corporate Director Management in Edit Customer Sheet
+
+### Files Created
+- `cia-backend/cia-customer/src/main/java/com/nubeero/cia/customer/dto/DirectorUpdateRequest.java` — id (null=new director), deleted flag, name/DOB/KYC fields, kycUpdateReason + kycUpdateNotes
+
+### Files Modified
+- `cia-backend/cia-customer/src/main/java/com/nubeero/cia/customer/dto/CustomerUpdateRequest.java` — added `List<DirectorUpdateRequest> directors`
+- `cia-backend/cia-customer/src/main/java/com/nubeero/cia/customer/CustomerService.java` — `processDirectorUpdates()`: soft-delete, edit-existing (KYC change detection + reason validation + re-verify + dual audit entry), add-new (verify PENDING directors); `BusinessRuleException` if active directors < 2; `update()` signature extended with directorDocs Map
+- `cia-backend/cia-customer/src/main/java/com/nubeero/cia/customer/CustomerController.java` — switched to `MultipartRequest` to extract `idDocument` + `directorDoc_{i}` files
+- `cia-frontend/apps/back-office/src/modules/customers/pages/detail/EditCustomerSheet.tsx` — full rewrite: `useFieldArray` for directors, per-director KYC change detection vs originals map, amber reason block per director, Removed/Restore toggle for soft-delete, new directors removable immediately, "active directors < 2" banner disables Save
+- `cia-frontend/apps/back-office/src/modules/customers/pages/detail/CustomerDetailPage.tsx` — `directors` added to `MockCustomer` interface; Alaba Trading Co. and Danforth Logistics each have 2 mock directors; snapshot passes directors to EditCustomerSheet
+
+### Business Rules Implemented
+- Minimum 2 active directors required for corporate customers — enforced on both backend (BusinessRuleException) and frontend (disabled Save + banner)
+- Director KYC field changes require reason (same dropdown as customer-level); "Other" makes notes mandatory
+- Director deletion = soft-delete (deleted_at); new directors in the form = removed from array entirely on cancel
+- Each director change logged as two audit entries: general UPDATE + dedicated CustomerDirectorKyc UPDATE with reason/notes/kycStatus
+
+### Git Commit
+`3a49e63` feat(customers): corporate director management in Edit Customer sheet
+
+---
+
 ## 2026-04-27 — Session 45c: Additional Notes required when KYC reason is Other
 
 ### Change
