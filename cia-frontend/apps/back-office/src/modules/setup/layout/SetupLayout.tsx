@@ -34,6 +34,12 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
+    label: 'Customers',
+    items: [
+      { label: 'Customer Number Format', path: '/setup/customer-number-format' },
+    ],
+  },
+  {
     label: 'Claims',
     items: [
       { label: 'Claims Configuration', path: '/setup/claims-config' },

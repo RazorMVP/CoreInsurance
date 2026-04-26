@@ -10,12 +10,12 @@ import type { CustomerDto } from '@cia/api-client';
 import IndividualOnboardingSheet from './individual/IndividualOnboardingSheet';
 import CorporateOnboardingSheet from './corporate/CorporateOnboardingSheet';
 
-const mockCustomers: CustomerDto[] = [
-  { id: 'c1', customerType: 'INDIVIDUAL', displayName: 'Chioma Okafor',    email: 'chioma@email.ng',   phone: '+234 803 111 0001', kycStatus: 'VERIFIED', status: 'ACTIVE',   brokerId: undefined, brokerName: undefined,          createdAt: '2026-01-15', updatedAt: '2026-01-15' },
-  { id: 'c2', customerType: 'CORPORATE',  displayName: 'Alaba Trading Co.', email: 'info@alaba.ng',    phone: '+234 701 222 0002', kycStatus: 'VERIFIED', status: 'ACTIVE',   brokerId: 'b1',      brokerName: 'Leadway Brokers',   createdAt: '2026-01-20', updatedAt: '2026-01-20' },
-  { id: 'c3', customerType: 'INDIVIDUAL', displayName: 'Emeka Eze',         email: 'emeka@email.ng',   phone: '+234 805 333 0003', kycStatus: 'PENDING',  status: 'ACTIVE',   brokerId: undefined, brokerName: undefined,          createdAt: '2026-02-01', updatedAt: '2026-02-01' },
-  { id: 'c4', customerType: 'CORPORATE',  displayName: 'Danforth Logistics', email: 'ops@danforth.ng', phone: '+234 809 444 0004', kycStatus: 'FAILED',   status: 'ACTIVE',   brokerId: undefined, brokerName: undefined,          createdAt: '2026-02-10', updatedAt: '2026-02-10' },
-  { id: 'c5', customerType: 'INDIVIDUAL', displayName: 'Ngozi Adeyemi',     email: 'ngozi@email.ng',   phone: '+234 706 555 0005', kycStatus: 'VERIFIED', status: 'INACTIVE', brokerId: 'b2',      brokerName: 'Stanbic Brokers',   createdAt: '2026-02-15', updatedAt: '2026-02-15' },
+const mockCustomers: (CustomerDto & { customerNumber?: string })[] = [
+  { id: 'c1', customerNumber: 'CUST/2026/IND/00000001', customerType: 'INDIVIDUAL', displayName: 'Chioma Okafor',     email: 'chioma@email.ng',   phone: '+234 803 111 0001', kycStatus: 'VERIFIED', status: 'ACTIVE',   brokerId: undefined, brokerName: undefined,        createdAt: '2026-01-15', updatedAt: '2026-01-15' },
+  { id: 'c2', customerNumber: 'CUST/2026/CORP/00000001', customerType: 'CORPORATE',  displayName: 'Alaba Trading Co.', email: 'info@alaba.ng',     phone: '+234 701 222 0002', kycStatus: 'VERIFIED', status: 'ACTIVE',   brokerId: 'b1',      brokerName: 'Leadway Brokers', createdAt: '2026-01-20', updatedAt: '2026-01-20' },
+  { id: 'c3', customerNumber: 'CUST/2026/IND/00000002', customerType: 'INDIVIDUAL', displayName: 'Emeka Eze',          email: 'emeka@email.ng',    phone: '+234 805 333 0003', kycStatus: 'PENDING',  status: 'ACTIVE',   brokerId: undefined, brokerName: undefined,        createdAt: '2026-02-01', updatedAt: '2026-02-01' },
+  { id: 'c4', customerNumber: 'CUST/2026/CORP/00000002', customerType: 'CORPORATE',  displayName: 'Danforth Logistics', email: 'ops@danforth.ng',  phone: '+234 809 444 0004', kycStatus: 'FAILED',   status: 'ACTIVE',   brokerId: undefined, brokerName: undefined,        createdAt: '2026-02-10', updatedAt: '2026-02-10' },
+  { id: 'c5', customerNumber: 'CUST/2026/IND/00000003', customerType: 'INDIVIDUAL', displayName: 'Ngozi Adeyemi',      email: 'ngozi@email.ng',    phone: '+234 706 555 0005', kycStatus: 'VERIFIED', status: 'INACTIVE', brokerId: 'b2',      brokerName: 'Stanbic Brokers', createdAt: '2026-02-15', updatedAt: '2026-02-15' },
 ];
 
 const kycVariant: Record<CustomerDto['kycStatus'], 'active' | 'pending' | 'rejected'> = { VERIFIED: 'active', PENDING: 'pending', FAILED: 'rejected', RESUBMIT: 'pending' };
@@ -26,7 +26,7 @@ export default function CustomersListPage() {
   const [indivOpen, setIndivOpen] = useState(false);
   const [corpOpen,  setCorpOpen]  = useState(false);
 
-  const columns: ColumnDef<CustomerDto>[] = [
+  const columns: ColumnDef<CustomerDto & { customerNumber?: string }>[] = [
     {
       accessorKey: 'displayName',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Customer" />,
@@ -36,7 +36,7 @@ export default function CustomersListPage() {
           onClick={() => navigate(`/customers/${row.original.id}`)}
         >
           <p className="font-medium text-foreground">{row.original.displayName}</p>
-          <p className="text-xs text-muted-foreground">{row.original.email}</p>
+          <p className="text-xs text-muted-foreground font-mono">{row.original.customerNumber ?? row.original.email}</p>
         </button>
       ),
     },

@@ -7,6 +7,7 @@ import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import com.nubeero.cia.common.tenant.TenantContext;
 import com.nubeero.cia.customer.dto.*;
 import com.nubeero.cia.integrations.kyc.*;
+import com.nubeero.cia.setup.customer.CustomerNumberFormatService;
 import com.nubeero.cia.storage.DocumentStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ public class CustomerService {
     private final KycVerificationService kycVerificationService;
     private final AuditService auditService;
     private final DocumentStorageService documentStorageService;
+    private final CustomerNumberFormatService customerNumberFormatService;
 
     // ─── Queries ────────────────────────────────────────────────────
 
@@ -69,6 +71,7 @@ public class CustomerService {
 
         Customer customer = Customer.builder()
                 .customerType(CustomerType.INDIVIDUAL)
+                .customerNumber(customerNumberFormatService.generateNext("INDIVIDUAL"))
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
                 .otherNames(request.getOtherNames())
@@ -115,6 +118,7 @@ public class CustomerService {
 
         Customer customer = Customer.builder()
                 .customerType(CustomerType.CORPORATE)
+                .customerNumber(customerNumberFormatService.generateNext("CORPORATE"))
                 .companyName(request.getCompanyName())
                 .rcNumber(request.getRcNumber())
                 .cacIssuedDate(request.getCacIssuedDate())
@@ -419,7 +423,8 @@ public class CustomerService {
                 ? c.getFirstName() + " " + c.getLastName()
                 : c.getCompanyName();
         return CustomerSummaryResponse.builder()
-                .id(c.getId()).customerType(c.getCustomerType())
+                .id(c.getId()).customerNumber(c.getCustomerNumber())
+                .customerType(c.getCustomerType())
                 .customerStatus(c.getCustomerStatus()).kycStatus(c.getKycStatus())
                 .displayName(displayName).email(c.getEmail()).phone(c.getPhone())
                 .createdAt(c.getCreatedAt())
@@ -451,7 +456,8 @@ public class CustomerService {
                         .toList();
 
         return CustomerResponse.builder()
-                .id(c.getId()).customerType(c.getCustomerType())
+                .id(c.getId()).customerNumber(c.getCustomerNumber())
+                .customerType(c.getCustomerType())
                 .customerStatus(c.getCustomerStatus()).kycStatus(c.getKycStatus())
                 .kycProviderRef(c.getKycProviderRef()).kycFailureReason(c.getKycFailureReason())
                 .kycVerifiedAt(c.getKycVerifiedAt())

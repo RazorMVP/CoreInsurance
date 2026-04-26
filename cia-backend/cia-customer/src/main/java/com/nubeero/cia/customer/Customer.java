@@ -18,6 +18,9 @@ import java.util.List;
 @AllArgsConstructor
 public class Customer extends BaseEntity {
 
+    @Column(name = "customer_number", length = 60, unique = true)
+    private String customerNumber;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "customer_type", nullable = false, length = 20)
     private CustomerType customerType;

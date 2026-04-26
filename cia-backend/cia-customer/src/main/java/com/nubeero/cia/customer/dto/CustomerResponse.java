@@ -16,6 +16,7 @@ import java.util.UUID;
 @Builder
 public class CustomerResponse {
     private UUID id;
+    private String customerNumber;
     private CustomerType customerType;
     private CustomerStatus customerStatus;
     private KycStatus kycStatus;

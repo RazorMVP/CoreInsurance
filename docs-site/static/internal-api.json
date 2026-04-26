@@ -1232,6 +1232,49 @@
             "type": "string"
           }
         }
+      },
+      "CustomerNumberFormat": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "prefix": {
+            "type": "string",
+            "example": "CUST"
+          },
+          "includeYear": {
+            "type": "boolean"
+          },
+          "includeType": {
+            "type": "boolean"
+          },
+          "sequenceLength": {
+            "type": "integer",
+            "example": 8
+          },
+          "lastSequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastSequenceIndividual": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastSequenceCorporate": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       }
     }
   },
@@ -9814,6 +9857,117 @@
           },
           "404": {
             "description": "Not found"
+          }
+        }
+      }
+    },
+    "/setup/customer-number-format": {
+      "get": {
+        "summary": "Get customer number format",
+        "operationId": "getCustomerNumberFormat",
+        "tags": [
+          "Setup"
+        ],
+        "security": [
+          {
+            "bearerJwt": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current customer number format configuration (null if not yet configured)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerNumberFormat"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 requires SETUP_VIEW role"
+          }
+        }
+      },
+      "put": {
+        "summary": "Create or update customer number format",
+        "operationId": "upsertCustomerNumberFormat",
+        "tags": [
+          "Setup"
+        ],
+        "security": [
+          {
+            "bearerJwt": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "prefix",
+                  "sequenceLength"
+                ],
+                "properties": {
+                  "prefix": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "example": "CUST"
+                  },
+                  "includeYear": {
+                    "type": "boolean",
+                    "example": true
+                  },
+                  "includeType": {
+                    "type": "boolean",
+                    "example": true,
+                    "description": "Appends IND or CORP; uses separate sequences per type"
+                  },
+                  "sequenceLength": {
+                    "type": "integer",
+                    "minimum": 5,
+                    "maximum": 10,
+                    "example": 8
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved customer number format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerNumberFormat"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 requires SETUP_UPDATE role"
           }
         }
       }

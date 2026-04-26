@@ -5,7 +5,8 @@ import {
 } from '@cia/ui';
 
 const mockCustomer = {
-  id: 'c1', customerType: 'INDIVIDUAL' as const, displayName: 'Chioma Okafor',
+  id: 'c1', customerNumber: 'CUST/2026/IND/00000001',
+  customerType: 'INDIVIDUAL' as const, displayName: 'Chioma Okafor',
   email: 'chioma@email.ng', phone: '+234 803 111 0001',
   kycStatus: 'VERIFIED' as const, status: 'ACTIVE' as const,
   brokerId: undefined, brokerName: undefined, createdAt: '2026-01-15',
@@ -42,7 +43,7 @@ export default function CustomerDetailPage() {
     <div className="p-6 space-y-5 max-w-4xl">
       <PageHeader
         title={c.displayName}
-        description={`${c.customerType === 'INDIVIDUAL' ? 'Individual' : 'Corporate'} · ${c.email}`}
+        description={`${c.customerType === 'INDIVIDUAL' ? 'Individual' : 'Corporate'} · ${c.customerNumber}`}
         breadcrumb={<button onClick={() => navigate('/customers')} className="text-sm text-muted-foreground hover:text-foreground">← Customers</button>}
         actions={
           <div className="flex gap-2">
@@ -66,13 +67,14 @@ export default function CustomerDetailPage() {
           <Card>
             <CardHeader><CardTitle>Contact Details</CardTitle></CardHeader>
             <CardContent>
-              <Row label="Email"       value={c.email} />
-              <Row label="Phone"       value={c.phone} />
-              <Row label="Address"     value={c.address} />
+              <Row label="Customer ID"   value={c.customerNumber} />
+              <Row label="Email"         value={c.email} />
+              <Row label="Phone"         value={c.phone} />
+              <Row label="Address"       value={c.address} />
               <Row label="Date of Birth" value={c.dateOfBirth} />
-              <Row label="Occupation"  value={c.occupation} />
-              <Row label="Broker"      value={c.brokerName ?? 'Direct'} />
-              <Row label="Created"     value={c.createdAt} />
+              <Row label="Occupation"    value={c.occupation} />
+              <Row label="Broker"        value={c.brokerName ?? 'Direct'} />
+              <Row label="Created"       value={c.createdAt} />
             </CardContent>
           </Card>
         </TabsContent>

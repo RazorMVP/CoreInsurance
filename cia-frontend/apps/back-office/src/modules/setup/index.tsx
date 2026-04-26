@@ -13,7 +13,8 @@ const PolicySpecificationsPage = lazy(() => import('./pages/policy-specs/PolicyS
 const OrganisationsPage       = lazy(() => import('./pages/organisations/OrganisationsPage'));
 const VehicleRegistryPage     = lazy(() => import('./pages/vehicle-registry/VehicleRegistryPage'));
 const ClaimsConfigPage        = lazy(() => import('./pages/claims-config/ClaimsConfigPage'));
-const PartnerAppsPage         = lazy(() => import('./pages/partner-apps/PartnerAppsPage'));
+const PartnerAppsPage              = lazy(() => import('./pages/partner-apps/PartnerAppsPage'));
+const CustomerNumberFormatPage     = lazy(() => import('./pages/customer-number-format/CustomerNumberFormatPage'));
 
 function PageLoading() {
   return (
@@ -41,7 +42,8 @@ export default function SetupModule() {
           <Route path="organisations"         element={<OrganisationsPage />} />
           <Route path="vehicle-registry" element={<VehicleRegistryPage />} />
           <Route path="claims-config"    element={<ClaimsConfigPage />} />
-          <Route path="partner-apps"     element={<PartnerAppsPage />} />
+          <Route path="partner-apps"             element={<PartnerAppsPage />} />
+          <Route path="customer-number-format"  element={<CustomerNumberFormatPage />} />
         </Routes>
       </Suspense>
     </SetupLayout>
