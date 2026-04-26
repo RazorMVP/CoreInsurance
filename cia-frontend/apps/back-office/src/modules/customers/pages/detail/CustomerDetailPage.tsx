@@ -243,8 +243,12 @@ export default function CustomerDetailPage() {
                   </tr></thead>
                   <tbody>
                     {policies.map((p, i) => (
-                      <tr key={p.id} className={i < policies.length - 1 ? 'border-b' : ''}>
-                        <td className="px-4 py-3 font-mono text-xs text-primary">{p.policyNumber}</td>
+                      <tr
+                        key={p.id}
+                        className={`cursor-pointer hover:bg-muted/40 transition-colors ${i < policies.length - 1 ? 'border-b' : ''}`}
+                        onClick={() => navigate(`/policies/${p.id}`)}
+                      >
+                        <td className="px-4 py-3 font-mono text-xs text-primary underline-offset-2 hover:underline">{p.policyNumber}</td>
                         <td className="px-4 py-3 text-sm">{p.product}</td>
                         <td className="px-4 py-3"><Badge variant={p.status === 'ACTIVE' ? 'active' : 'draft'} className="text-[10px]">{p.status.toLowerCase()}</Badge></td>
                         <td className="px-4 py-3 text-sm">₦{p.premium.toLocaleString()}</td>
@@ -273,8 +277,12 @@ export default function CustomerDetailPage() {
                   </tr></thead>
                   <tbody>
                     {claims.map((cl, i) => (
-                      <tr key={cl.id} className={i < claims.length - 1 ? 'border-b' : ''}>
-                        <td className="px-4 py-3 font-mono text-xs text-primary">{cl.claimNumber}</td>
+                      <tr
+                        key={cl.id}
+                        className={`cursor-pointer hover:bg-muted/40 transition-colors ${i < claims.length - 1 ? 'border-b' : ''}`}
+                        onClick={() => navigate(`/claims/${cl.id}`)}
+                      >
+                        <td className="px-4 py-3 font-mono text-xs text-primary underline-offset-2 hover:underline">{cl.claimNumber}</td>
                         <td className="px-4 py-3 font-mono text-xs">{cl.policyNumber}</td>
                         <td className="px-4 py-3"><Badge variant="pending" className="text-[10px]">{cl.status.toLowerCase()}</Badge></td>
                         <td className="px-4 py-3 text-sm">₦{cl.amount.toLocaleString()}</td>
