@@ -368,7 +368,8 @@ export default function EditCustomerSheet({ open, onOpenChange, customer, onSucc
               </FormItem>
             )} />
 
-            {/* ── Customer KYC ── */}
+            {/* ── Customer KYC — individual only ── */}
+            {!isCorporate && <>
             <Separator />
             <p className="text-sm font-semibold text-foreground">KYC Identity Document</p>
 
@@ -445,6 +446,7 @@ export default function EditCustomerSheet({ open, onOpenChange, customer, onSucc
                 </div>
               </>
             )}
+            </>}
 
             {/* ── Directors (corporate only) ── */}
             {isCorporate && (
