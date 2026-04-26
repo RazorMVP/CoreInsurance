@@ -467,6 +467,347 @@
             "example": "/policies/3fa85f64-5717-4562-b3fc-2c963f66afa6"
           }
         }
+      },
+      "CustomerSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "customerType": {
+            "type": "string",
+            "enum": [
+              "INDIVIDUAL",
+              "CORPORATE"
+            ]
+          },
+          "customerStatus": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "BLACKLISTED",
+              "INACTIVE"
+            ]
+          },
+          "kycStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "IN_PROGRESS",
+              "PASSED",
+              "FAILED"
+            ]
+          },
+          "displayName": {
+            "type": "string",
+            "example": "Chioma Okafor"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "phone": {
+            "type": "string",
+            "example": "+234 803 000 0000"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CustomerDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "customerType": {
+            "type": "string",
+            "enum": [
+              "INDIVIDUAL",
+              "CORPORATE"
+            ]
+          },
+          "customerStatus": {
+            "type": "string"
+          },
+          "kycStatus": {
+            "type": "string"
+          },
+          "kycProviderRef": {
+            "type": "string"
+          },
+          "kycFailureReason": {
+            "type": "string"
+          },
+          "kycVerifiedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "format": "date"
+          },
+          "idType": {
+            "type": "string",
+            "enum": [
+              "NIN",
+              "VOTERS_CARD",
+              "DRIVERS_LICENSE",
+              "PASSPORT"
+            ]
+          },
+          "idNumber": {
+            "type": "string"
+          },
+          "idDocumentUrl": {
+            "type": "string",
+            "description": "MinIO/S3 path to uploaded ID document"
+          },
+          "idExpiryDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Required for Driver's Licence and Passport; must not be expired at onboarding"
+          },
+          "companyName": {
+            "type": "string"
+          },
+          "rcNumber": {
+            "type": "string"
+          },
+          "cacCertificateUrl": {
+            "type": "string",
+            "description": "MinIO/S3 path to uploaded CAC certificate"
+          },
+          "cacIssuedDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "directors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomerDirector"
+            }
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomerDocument"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CustomerDirector": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "idType": {
+            "type": "string"
+          },
+          "idNumber": {
+            "type": "string"
+          },
+          "idDocumentUrl": {
+            "type": "string"
+          },
+          "idExpiryDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "kycStatus": {
+            "type": "string"
+          },
+          "kycFailureReason": {
+            "type": "string"
+          }
+        }
+      },
+      "CustomerDocument": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "documentType": {
+            "type": "string"
+          },
+          "documentName": {
+            "type": "string"
+          },
+          "documentPath": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "fileSizeBytes": {
+            "type": "integer"
+          },
+          "uploadedBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ReportDefinition": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Loss Ratio Report"
+          },
+          "description": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "UNDERWRITING",
+              "CLAIMS",
+              "FINANCE",
+              "REINSURANCE",
+              "CUSTOMER",
+              "REGULATORY"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "SYSTEM",
+              "CUSTOM"
+            ],
+            "description": "SYSTEM reports are immutable; clone into CUSTOM to modify"
+          },
+          "dataSource": {
+            "type": "string",
+            "enum": [
+              "POLICIES",
+              "CLAIMS",
+              "FINANCE",
+              "REINSURANCE",
+              "CUSTOMERS",
+              "ENDORSEMENTS"
+            ]
+          },
+          "config": {
+            "type": "object",
+            "description": "ReportConfig JSONB: {fields, filters, groupBy, sortBy, sortDir, chart}"
+          },
+          "pinnable": {
+            "type": "boolean"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ReportResult": {
+        "type": "object",
+        "properties": {
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "computed": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "totalRows": {
+            "type": "integer"
+          }
+        }
+      },
+      "ReportAccessPolicy": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accessGroupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "category": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null for report-level policies"
+          },
+          "report": {
+            "$ref": "#/components/schemas/ReportDefinition",
+            "nullable": true
+          },
+          "canView": {
+            "type": "boolean"
+          },
+          "canExportCsv": {
+            "type": "boolean"
+          },
+          "canExportPdf": {
+            "type": "boolean"
+          }
+        }
       }
     }
   },
@@ -1493,6 +1834,1269 @@
           },
           "401": {
             "description": "Unauthorized \u2014 missing or expired JWT"
+          }
+        }
+      }
+    },
+    "/customers": {
+      "get": {
+        "summary": "List customers",
+        "operationId": "listCustomers",
+        "tags": [
+          "Customers"
+        ],
+        "description": "Returns a paginated list of all customers. Filterable by type (INDIVIDUAL/CORPORATE) and KYC status.",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "INDIVIDUAL",
+                "CORPORATE"
+              ]
+            }
+          },
+          {
+            "name": "kycStatus",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING",
+                "IN_PROGRESS",
+                "PASSED",
+                "FAILED"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated customer list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerSummary"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient role"
+          }
+        }
+      }
+    },
+    "/customers/search": {
+      "get": {
+        "summary": "Search customers by name, email, or phone",
+        "operationId": "searchCustomers",
+        "tags": [
+          "Customers"
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching customers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerSummary"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient role"
+          }
+        }
+      }
+    },
+    "/customers/individual": {
+      "post": {
+        "summary": "Onboard an individual customer",
+        "operationId": "createIndividualCustomer",
+        "tags": [
+          "Customers"
+        ],
+        "description": "Creates an individual customer record and triggers KYC verification. Accepts `multipart/form-data`. The `idDocument` file must be JPG or PNG, max 5 MB. `idExpiryDate` is **required and must not be expired** when `idType` is `DRIVERS_LICENSE` or `PASSPORT`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "firstName",
+                  "lastName",
+                  "email",
+                  "phone",
+                  "dateOfBirth",
+                  "idType",
+                  "idNumber",
+                  "address",
+                  "idDocument"
+                ],
+                "properties": {
+                  "firstName": {
+                    "type": "string"
+                  },
+                  "lastName": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "dateOfBirth": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "idType": {
+                    "type": "string",
+                    "enum": [
+                      "NIN",
+                      "VOTERS_CARD",
+                      "DRIVERS_LICENSE",
+                      "PASSPORT"
+                    ]
+                  },
+                  "idNumber": {
+                    "type": "string"
+                  },
+                  "idExpiryDate": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Required for DRIVERS_LICENSE and PASSPORT. Must be \u2265 today."
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "occupation": {
+                    "type": "string"
+                  },
+                  "country": {
+                    "type": "string",
+                    "default": "Nigeria"
+                  },
+                  "brokerId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "idDocument": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "JPG or PNG, max 5 MB"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Customer created and KYC triggered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error \u2014 e.g. expired ID document"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/customers/corporate": {
+      "post": {
+        "summary": "Onboard a corporate customer",
+        "operationId": "createCorporateCustomer",
+        "tags": [
+          "Customers"
+        ],
+        "description": "Creates a corporate customer record and triggers KYC (RC number verification + director ID checks). Accepts `multipart/form-data`. `cacCertificate` must be JPG or PNG, max 5 MB. `cacIssuedDate` is required. Each director's `idDocument` (indexed as `directorIdDocuments`) must be provided. Director `idExpiryDate[i]` is required and must not be expired for DRIVERS_LICENSE/PASSPORT.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "companyName",
+                  "rcNumber",
+                  "cacIssuedDate",
+                  "email",
+                  "phone",
+                  "address",
+                  "cacCertificate"
+                ],
+                "properties": {
+                  "companyName": {
+                    "type": "string"
+                  },
+                  "rcNumber": {
+                    "type": "string"
+                  },
+                  "cacIssuedDate": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "CAC certificate issued date (required)"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "country": {
+                    "type": "string",
+                    "default": "Nigeria"
+                  },
+                  "brokerId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "directors[0].fullName": {
+                    "type": "string",
+                    "description": "Repeat for each director with indexed fields"
+                  },
+                  "directors[0].idType": {
+                    "type": "string",
+                    "enum": [
+                      "NIN",
+                      "VOTERS_CARD",
+                      "DRIVERS_LICENSE",
+                      "PASSPORT"
+                    ]
+                  },
+                  "directors[0].idNumber": {
+                    "type": "string"
+                  },
+                  "directors[0].idExpiryDate": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Required for DRIVERS_LICENSE/PASSPORT. Must be \u2265 today."
+                  },
+                  "cacCertificate": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "CAC certificate \u2014 JPG or PNG, max 5 MB"
+                  },
+                  "directorIdDocuments": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "description": "One file per director in the same order as directors[]. JPG or PNG, max 5 MB each"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Company created and KYC triggered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error \u2014 e.g. expired director ID"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/customers/{id}": {
+      "get": {
+        "summary": "Get customer by ID",
+        "operationId": "getCustomer",
+        "tags": [
+          "Customers"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient role"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update customer contact details",
+        "operationId": "updateCustomer",
+        "tags": [
+          "Customers"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated customer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient role"
+          }
+        }
+      }
+    },
+    "/customers/{id}/retrigger-kyc": {
+      "post": {
+        "summary": "Re-trigger KYC verification",
+        "operationId": "retriggerKyc",
+        "tags": [
+          "Customers"
+        ],
+        "description": "Re-runs KYC verification for a customer whose KYC status is FAILED or PENDING. Returns 422 if KYC has already passed.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "KYC re-triggered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient role"
+          }
+        }
+      }
+    },
+    "/customers/{id}/blacklist": {
+      "post": {
+        "summary": "Blacklist a customer",
+        "operationId": "blacklistCustomer",
+        "tags": [
+          "Customers"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "reason"
+                ],
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Customer blacklisted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient role"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove blacklist status",
+        "operationId": "unblacklistCustomer",
+        "tags": [
+          "Customers"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer unblacklisted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient role"
+          }
+        }
+      }
+    },
+    "/reports/definitions": {
+      "get": {
+        "summary": "List all accessible report definitions",
+        "operationId": "listReportDefinitions",
+        "tags": [
+          "Reports"
+        ],
+        "description": "Returns all active report definitions the caller can view. Filter by category to narrow results. Reports the caller cannot view are invisible (not returned with an access-denied flag).",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "UNDERWRITING",
+                "CLAIMS",
+                "FINANCE",
+                "REINSURANCE",
+                "CUSTOMER",
+                "REGULATORY"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of report definitions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ReportDefinition"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient role"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a custom report definition",
+        "operationId": "createReportDefinition",
+        "tags": [
+          "Reports"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "category",
+                  "dataSource",
+                  "config"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "dataSource": {
+                    "type": "string"
+                  },
+                  "config": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Custom report created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReportDefinition"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/reports/definitions/{id}": {
+      "get": {
+        "summary": "Get a single report definition",
+        "operationId": "getReportDefinition",
+        "tags": [
+          "Reports"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report definition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReportDefinition"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient role"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a custom report definition",
+        "operationId": "updateReportDefinition",
+        "tags": [
+          "Reports"
+        ],
+        "description": "Only CUSTOM reports can be updated. SYSTEM reports are immutable \u2014 clone them first.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated report definition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReportDefinition"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient role"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a custom report definition",
+        "operationId": "deleteReportDefinition",
+        "tags": [
+          "Reports"
+        ],
+        "description": "Only CUSTOM reports can be deleted. SYSTEM reports cannot be deleted.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/reports/definitions/{id}/clone": {
+      "post": {
+        "summary": "Clone a SYSTEM report into a CUSTOM report",
+        "operationId": "cloneReportDefinition",
+        "tags": [
+          "Reports"
+        ],
+        "description": "Creates a new CUSTOM report pre-populated with the source report's config. The user can then edit and save it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Name for the cloned report (defaults to source name + ' (Copy)')"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Cloned report definition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReportDefinition"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/reports/run": {
+      "post": {
+        "summary": "Run a report \u2014 returns JSON result",
+        "operationId": "runReport",
+        "tags": [
+          "Reports"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "reportId"
+                ],
+                "properties": {
+                  "reportId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "filters": {
+                    "type": "object",
+                    "description": "Key-value map of filter values matching the report's config.filters"
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "JSON",
+                      "CSV",
+                      "PDF"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Report result with columns, rows, and totalRows",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReportResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient role"
+          }
+        }
+      }
+    },
+    "/reports/run/csv": {
+      "post": {
+        "summary": "Run a report \u2014 streams CSV download",
+        "operationId": "runReportCsv",
+        "tags": [
+          "Reports"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "reportId"
+                ],
+                "properties": {
+                  "reportId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "filters": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "CSV file download",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/reports/run/pdf": {
+      "post": {
+        "summary": "Run a report \u2014 returns PDF download",
+        "operationId": "runReportPdf",
+        "tags": [
+          "Reports"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "reportId"
+                ],
+                "properties": {
+                  "reportId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "filters": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "PDF file download",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/reports/pins": {
+      "get": {
+        "summary": "List pinned reports for the current user",
+        "operationId": "listPinnedReports",
+        "tags": [
+          "Reports"
+        ],
+        "responses": {
+          "200": {
+            "description": "Pinned report definitions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ReportDefinition"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient role"
+          }
+        }
+      }
+    },
+    "/reports/pins/{id}": {
+      "post": {
+        "summary": "Pin a report to the home page",
+        "operationId": "pinReport",
+        "tags": [
+          "Reports"
+        ],
+        "description": "Pins are per-user. Regulatory reports (REGULATORY category) cannot be pinned.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Unpin a report",
+        "operationId": "unpinReport",
+        "tags": [
+          "Reports"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/reports/access-policies": {
+      "get": {
+        "summary": "List report access policies for an access group",
+        "operationId": "listReportAccessPolicies",
+        "tags": [
+          "Reports"
+        ],
+        "description": "System Admin only (`reports:manage_access`). Returns all category-level and report-level access policies for the specified group.",
+        "parameters": [
+          {
+            "name": "accessGroupId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Access policies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ReportAccessPolicy"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient role"
+          }
+        }
+      },
+      "put": {
+        "summary": "Upsert a category-level or report-level access policy",
+        "operationId": "upsertReportAccessPolicy",
+        "tags": [
+          "Reports"
+        ],
+        "description": "Resolution order: report-level policy wins over category-level. A user with no matching policy cannot see the report at all.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "accessGroupId"
+                ],
+                "properties": {
+                  "accessGroupId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "category": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "reportId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "canView": {
+                    "type": "boolean"
+                  },
+                  "canExportCsv": {
+                    "type": "boolean"
+                  },
+                  "canExportPdf": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved access policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReportAccessPolicy"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient role"
           }
         }
       }

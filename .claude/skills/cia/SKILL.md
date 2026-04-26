@@ -500,27 +500,67 @@ If any service interface method was added or modified:
 
 ---
 
-### 9. Docs Site (https://cia-docs.vercel.app/) — required after every backend or architecture change
+### 9. Docs Site (https://cia-docs.vercel.app/) — MANDATORY after EVERY session that touches backend or architecture
 
-**Mandatory when any of the following changed this session:**
+**This gate is non-negotiable. Do not mark a session complete if any of the conditions below are true and the corresponding doc update has NOT been made.**
 
-| Change | Docs update required |
+#### 9a. What triggers a docs update
+
+| If this changed this session… | Update this docs file |
 |---|---|
-| New Maven module added (e.g. `cia-reports`) | Update `docs-site/docs/architecture/modules.md` — add to inventory tree and dependency table |
-| New module architecture | Create `docs-site/docs/architecture/<module-name>.md` + add to `docs-site/sidebars.ts` |
-| New internal REST endpoints (`/api/v1/...`) | Add paths + schemas to `docs-site/static/internal-api.json` |
-| Partner API changes (`/partner/v1/...`) | `cia-backend/cia-partner-api/docs/openapi.json` is auto-synced to docs on deploy — ensure it is updated first |
-| New environment variables | Update `docs-site/docs/guides/environment-variables.md` |
-| New Flyway migrations | Update `docs-site/docs/guides/database-migrations.md` |
-| Security or auth changes | Update `docs-site/docs/architecture/security.md` |
+| New Maven module added | `docs-site/docs/architecture/modules.md` — inventory tree + dependency table |
+| New module architecture | New `docs-site/docs/architecture/<module>.md` + `docs-site/sidebars.ts` |
+| Any new `@GetMapping`, `@PostMapping`, `@PutMapping`, `@DeleteMapping` in ANY controller | `docs-site/static/internal-api.json` — add path + schema |
+| Any change to an existing endpoint's request body, content-type, or response shape | `docs-site/static/internal-api.json` — update the existing path entry |
+| Partner API change (`/partner/v1/`) | `cia-backend/cia-partner-api/docs/openapi.json` (auto-synced on deploy) |
+| New env var | `docs-site/docs/guides/environment-variables.md` |
+| New Flyway migration | `docs-site/docs/guides/database-migrations.md` |
+| Security/auth change | `docs-site/docs/architecture/security.md` |
 
-**Deployment trigger:** Committing any file under `docs-site/**` or `cia-backend/cia-partner-api/docs/openapi.json` to `main` automatically triggers `docs-deploy.yml` → builds Docusaurus → deploys to `https://cia-docs.vercel.app/`.
+#### 9b. How to audit `internal-api.json` completeness
 
-**Critical — project ID:** `docs-deploy.yml` hardcodes `VERCEL_PROJECT_ID: prj_KgaDZ7fSkBNu3r6GEdiV8vAoZyAC` (the cia-docs project). Do NOT change this to `${{ secrets.VERCEL_PROJECT_ID }}` — that secret points to back-office and would silently deploy docs content to the wrong project.
+Run this check before closing any session that added or changed endpoints:
 
-**Verification checklist:**
-- [ ] `docs-site/docs/architecture/modules.md` lists all current Maven modules
-- [ ] `docs-site/static/internal-api.json` has entries for all `/api/v1/` endpoints introduced this session
-- [ ] `docs-site/static/openapi.json` matches `cia-backend/cia-partner-api/docs/openapi.json` (auto-synced on deploy)
-- [ ] GitHub Actions run for `docs-deploy.yml` shows `Deploying razormvps-projects/cia-docs` (NOT back-office)
-- [ ] `vercel ls` from `docs-site/` shows a deployment timestamped within the last few minutes
+```bash
+python3 -c "
+import json, subprocess, re
+with open('docs-site/static/internal-api.json') as f:
+    spec = json.load(f)
+documented = set(spec.get('paths', {}).keys())
+
+# Find all @*Mapping annotations in controllers
+result = subprocess.run(
+    ['grep', '-rh', r'@GetMapping\|@PostMapping\|@PutMapping\|@DeleteMapping', '--include=*.java',
+     'cia-backend/'],
+    capture_output=True, text=True
+)
+# (manual review — compare annotated paths to documented paths)
+print('Documented paths:', len(documented))
+for p in sorted(documented): print(' ', p)
+"
+```
+
+If any `/api/v1/` path from a controller is missing from the documented list, add it before closing.
+
+#### 9c. `internal-api.json` path naming convention
+
+Paths in `internal-api.json` use the **suffix after `/api/v1/`**, NOT the full URL. Examples:
+- Controller `@RequestMapping("/api/v1/customers")` → spec path `/customers`
+- Controller `@PostMapping("/individual")` → spec path `/customers/individual`
+- Endpoint `POST /api/v1/reports/run/csv` → spec path `/reports/run/csv`
+
+#### 9d. Deployment
+
+Committing any file under `docs-site/**` triggers `docs-deploy.yml` → Docusaurus build → `https://cia-docs.vercel.app/`.
+
+**CRITICAL — never change `VERCEL_PROJECT_ID` in `docs-deploy.yml` back to `${{ secrets.VERCEL_PROJECT_ID }}`** — that secret points to the back-office project. The workflow hardcodes `prj_KgaDZ7fSkBNu3r6GEdiV8vAoZyAC` for a reason: the shared secret caused the docs to silently deploy to the wrong Vercel project for 3 days (April 23–26, 2026) before it was caught.
+
+#### 9e. Verification checklist (run before marking gate complete)
+
+- [ ] Ran the audit script in 9b and confirmed all new/changed controller paths are in `internal-api.json`
+- [ ] `docs-site/docs/architecture/modules.md` lists all current Maven modules (including `cia-reports` and any new ones)
+- [ ] `docs-site/static/openapi.json` matches `cia-backend/cia-partner-api/docs/openapi.json`
+- [ ] Committed changes to `docs-site/**` and pushed to `main`
+- [ ] GitHub Actions run for `docs-deploy.yml` completed with `✓ success`
+- [ ] Log shows `Deploying razormvps-projects/cia-docs` (NOT `back-office`)
+- [ ] `cd docs-site && vercel ls` shows a deployment ≤ 5 minutes old

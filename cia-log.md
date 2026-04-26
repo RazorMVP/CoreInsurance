@@ -2130,3 +2130,51 @@ BackOffice / Dashboard (6:2) · reports-home (223:2) · reports-library (224:2) 
 **Docusaurus config already correct** — `logo.alt: "Nubeero Logo"`, `logo.src: "img/logo.png"`, `favicon: "img/favicon.png"` — no config changes needed.
 
 **Open questions:** None.
+
+---
+
+### Session 43 — 2026-04-26: Fill internal-api.json gaps + enforce Gate 9
+
+**Root cause identified:** Sessions 34, 36, and 41 added endpoints that were never added to `docs-site/static/internal-api.json`. The session gate wording was too vague ("endpoints aren't currently documented") and allowed the gap to go unfixed across multiple sessions.
+
+**internal-api.json updated:** 21 → 37 paths
+
+**New paths added:**
+
+*Customer API (9 paths):*
+- `GET /customers` — list with type/kycStatus filters
+- `GET /customers/search` — search by name/email/phone
+- `POST /customers/individual` — multipart/form-data with `idDocument` file; expiry date rules documented
+- `POST /customers/corporate` — multipart/form-data with `cacCertificate` + `directorIdDocuments[]`; all constraints documented
+- `GET /customers/{id}` — customer detail
+- `PUT /customers/{id}` — update contact fields
+- `POST /customers/{id}/retrigger-kyc`
+- `POST /customers/{id}/blacklist`
+- `DELETE /customers/{id}/blacklist`
+
+*Reports API (14 paths):*
+- `GET /reports/definitions` (with category filter)
+- `POST /reports/definitions` (create custom)
+- `GET /reports/definitions/{id}`
+- `PUT /reports/definitions/{id}`
+- `DELETE /reports/definitions/{id}`
+- `POST /reports/definitions/{id}/clone`
+- `POST /reports/run` (JSON result)
+- `POST /reports/run/csv` (streaming download)
+- `POST /reports/run/pdf` (PDF download)
+- `GET /reports/pins`
+- `POST /reports/pins/{id}`
+- `DELETE /reports/pins/{id}`
+- `GET /reports/access-policies`
+- `PUT /reports/access-policies`
+
+**New schemas added:** CustomerSummary, CustomerDetail, CustomerDirector, CustomerDocument, ReportDefinition, ReportResult, ReportAccessPolicy
+
+**Gate 9 in SKILL.md strengthened:**
+- Added 9a — explicit trigger table (any new `@*Mapping` → update spec)
+- Added 9b — Python audit script to run before closing any backend session
+- Added 9c — path naming convention (suffix after `/api/v1/`, not full URL)
+- Added 9d — deployment note with CRITICAL warning about `VERCEL_PROJECT_ID`
+- Added 9e — 7-point verification checklist (replaces the old 5-point one)
+
+**Open questions:** None.
