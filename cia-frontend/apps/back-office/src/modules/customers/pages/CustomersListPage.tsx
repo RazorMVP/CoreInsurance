@@ -57,8 +57,13 @@ export default function CustomersListPage() {
     },
     {
       accessorKey: 'brokerName',
-      header: 'Broker',
-      cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{(getValue() as string) ?? '—'}</span>,
+      header: 'Channel',
+      cell: ({ getValue }) => {
+        const name = getValue() as string | undefined;
+        return name
+          ? <span className="text-sm text-foreground">{name}</span>
+          : <Badge variant="outline" className="text-[10px] font-medium text-muted-foreground border-muted-foreground/30">Direct</Badge>;
+      },
     },
     {
       accessorKey: 'createdAt',
