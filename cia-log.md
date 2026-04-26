@@ -4,6 +4,46 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-26 — Session 44: Tenant-Configurable Customer Number Format
+
+### PRD Verification
+- Confirmed "Customer ID" is explicitly required by PRD 2.7.6 (Customer Summary Page): listed as a display field alongside Name, Email, Phone; also referenced as a clickable identifier in the customer list.
+- Confirmed the PRD does not specify the format — "Customer ID" is the only mention. Decision made to implement as tenant-configurable (Option B), consistent with the existing policy number format pattern in Setup.
+
+### Decision: Customer Number Format Design
+- **Singleton per tenant** (not per product) — one row in `customer_number_format` table, configurable by System Admin.
+- **Format:** `{prefix}/{year}/{type}/{sequence}` — e.g. `CUST/2026/IND/00000001`, `CUST/2026/CORP/00000001`
+- **`includeType` flag** — when true, appends IND or CORP and maintains **separate sequences per type** (lastSequenceIndividual / lastSequenceCorporate). When false, uses a single shared sequence.
+- **`sequenceLength` defaults to 8** — supports up to 99,999,999 per type per year (user escalated from 5-digit default).
+- **PESSIMISTIC_WRITE** lock on `customer_number_format` during generation — prevents duplicates under concurrent onboardings.
+
+### Files Created
+- `cia-backend/cia-api/src/main/resources/db/migration/V20__customer_number_format.sql` — adds `customer_number VARCHAR(60) UNIQUE` to `customers`; creates `customer_number_format` singleton table
+- `cia-backend/cia-setup/src/main/java/com/nubeero/cia/setup/customer/CustomerNumberFormat.java` — entity
+- `cia-backend/cia-setup/src/main/java/com/nubeero/cia/setup/customer/CustomerNumberFormatRepository.java` — findFirstByDeletedAtIsNull + PESSIMISTIC_WRITE findForUpdate
+- `cia-backend/cia-setup/src/main/java/com/nubeero/cia/setup/customer/CustomerNumberFormatService.java` — generateNext(customerType), get(), upsert()
+- `cia-backend/cia-setup/src/main/java/com/nubeero/cia/setup/customer/CustomerNumberFormatController.java` — GET/PUT /api/v1/setup/customer-number-format
+- `cia-backend/cia-setup/src/main/java/com/nubeero/cia/setup/customer/dto/CustomerNumberFormatRequest.java`
+- `cia-backend/cia-setup/src/main/java/com/nubeero/cia/setup/customer/dto/CustomerNumberFormatResponse.java`
+- `cia-frontend/apps/back-office/src/modules/setup/pages/customer-number-format/CustomerNumberFormatPage.tsx` — Setup page with live format preview (useMemo mirrors backend generateNext logic)
+
+### Files Modified
+- `cia-backend/cia-customer/pom.xml` — added `cia-setup` dependency
+- `cia-backend/cia-customer/src/main/java/com/nubeero/cia/customer/Customer.java` — added `customerNumber` field
+- `cia-backend/cia-customer/src/main/java/com/nubeero/cia/customer/CustomerService.java` — injected CustomerNumberFormatService; generateNext called in createIndividual and createCorporate
+- `cia-backend/cia-customer/src/main/java/com/nubeero/cia/customer/dto/CustomerResponse.java` — added customerNumber
+- `cia-backend/cia-customer/src/main/java/com/nubeero/cia/customer/dto/CustomerSummaryResponse.java` — added customerNumber
+- `cia-frontend/apps/back-office/src/modules/setup/layout/SetupLayout.tsx` — added "Customers" nav group with Customer Number Format link
+- `cia-frontend/apps/back-office/src/modules/setup/index.tsx` — added /setup/customer-number-format route
+- `cia-frontend/apps/back-office/src/modules/customers/pages/CustomersListPage.tsx` — customer number shown as monospace sub-line under customer name
+- `cia-frontend/apps/back-office/src/modules/customers/pages/detail/CustomerDetailPage.tsx` — customer number in page header description + Customer ID row in summary tab
+- `docs-site/static/internal-api.json` — 119 → 120 paths; added /setup/customer-number-format GET+PUT + CustomerNumberFormat schema
+
+### Git Commit
+`c2c8fe3` feat(customers): tenant-configurable customer number format
+
+---
+
 ## 2026-04-20
 
 ### Session 1 — Project Setup & Planning
