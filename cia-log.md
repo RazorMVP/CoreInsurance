@@ -4,6 +4,16 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-27 — Session 45c: Additional Notes required when KYC reason is Other
+
+### Change
+- `EditCustomerSheet.tsx` — Zod `superRefine` validates `kycUpdateNotes` is non-empty when `kycUpdateReason === 'Other'`; label toggles between "Additional Notes *" (required) and "Additional Notes (optional)" based on `useWatch` on the reason field.
+
+### Git Commit
+`9fc8f1b` feat(customers): make Additional Notes required when KYC reason is Other
+
+---
+
 ## 2026-04-27 — Session 45b: Edit Customer Sheet with KYC Update Flow
 
 ### Files Created
