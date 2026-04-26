@@ -53,6 +53,9 @@ const schema = z.object({
   if (data.idExpiryDate && new Date(data.idExpiryDate) < new Date(new Date().toDateString())) {
     ctx.addIssue({ code: 'custom', path: ['idExpiryDate'], message: 'ID document has expired — provide a valid document' });
   }
+  if (data.kycUpdateReason === 'Other' && !data.kycUpdateNotes?.trim()) {
+    ctx.addIssue({ code: 'custom', path: ['kycUpdateNotes'], message: 'Additional notes are required when reason is "Other"' });
+  }
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -127,7 +130,8 @@ export default function EditCustomerSheet({ open, onOpenChange, customer, onSucc
     }
   }, [open, customer.id]);
 
-  const watched = useWatch({ control: form.control, name: ['idType', 'idNumber', 'idExpiryDate'] });
+  const watched         = useWatch({ control: form.control, name: ['idType', 'idNumber', 'idExpiryDate'] });
+  const selectedReason  = form.watch('kycUpdateReason');
   const kycChanged =
     watched[0] !== (customer.idType  ?? '') ||
     watched[1] !== (customer.idNumber ?? '') ||
@@ -372,7 +376,9 @@ export default function EditCustomerSheet({ open, onOpenChange, customer, onSucc
                   <FormField control={form.control} name="kycUpdateNotes"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Additional Notes (optional)</FormLabel>
+                        <FormLabel>
+                          Additional Notes{selectedReason === 'Other' ? <span className="text-destructive"> *</span> : ' (optional)'}
+                        </FormLabel>
                         <FormControl>
                           <Textarea placeholder="Any additional context…" rows={2} className="resize-none" {...field} />
                         </FormControl>
