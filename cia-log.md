@@ -4,6 +4,16 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-26 — Session 44b: Direct Customer Channel Indicator
+
+### Change
+- `cia-frontend/apps/back-office/src/modules/customers/pages/CustomersListPage.tsx` — renamed Broker column to **Channel**; direct customers (no `brokerId`) now display a styled "Direct" badge instead of `—`; broker-enabled customers continue to show the broker name. Makes onboarding channel visible at a glance on the customer list.
+
+### Git Commit
+`b1c6cd4` feat(customers): show Direct badge for non-broker customers in list
+
+---
+
 ## 2026-04-26 — Session 44: Tenant-Configurable Customer Number Format
 
 ### PRD Verification
