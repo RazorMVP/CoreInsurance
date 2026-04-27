@@ -4,6 +4,17 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-27 — Session 45k: Clause search bar in quote sheets
+
+### Files Modified
+- `cia-frontend/apps/back-office/src/modules/quotation/pages/create/MultiRiskQuoteSheet.tsx` — added `clauseSearch` state + search `Input` above the clause list; filters by title or text, case-insensitive
+- `cia-frontend/apps/back-office/src/modules/quotation/pages/create/SingleRiskQuoteSheet.tsx` — same change applied
+
+### Git Commit
+`33acbf5` feat(quotation): add clause search bar to single-risk and multi-risk quote sheets
+
+---
+
 ## 2026-04-27 — Session 45j: Quotation module — loadings, discounts, clauses, PDF download, Quotes config tab
 
 ### Files Created
