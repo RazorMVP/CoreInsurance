@@ -57,6 +57,29 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-27 — Session 45h: Confluence PRD Update — Customer Module
+
+### Confluence Page Updated
+- **Page:** "7. Customer Onboarding" (ID: 344653826, now v4)
+- **URL:** https://akinwalenubeero.atlassian.net/wiki/spaces/CIAGB/pages/344653826/7.+Customer+Onboarding
+
+### Structure of PRD Before Update
+Single flat page with 10 features (2.7.1–2.7.10). No child pages. All features as H2 sections with Acceptance Criteria and Business Rules sub-sections.
+
+### Sections Updated
+
+**2.7.1 Individual Onboarding** — Added to required fields: ID Expiry Date (mandatory for DL/Passport, must not be in the past), ID Document Upload (JPG/PNG, max 5MB). Added acceptance criterion: Customer Number generated on creation. Added business rules: document upload mandatory; expiry enforcement; Customer Number format requirement.
+
+**2.7.2 Corporate Onboarding** — Added to required fields: CAC Certificate upload + CAC Issued Date; per-director ID Document Upload; per-director ID Expiry Date (mandatory for DL/Passport). Added acceptance criterion: minimum 2 directors required; Customer Number generated on creation. Added business rules: CAC mandatory; director document mandatory; min-2 directors enforced; director expiry enforcement.
+
+**2.7.5 KYC Update → Edit Customer and KYC Update** — Complete rewrite. New user story: edit contact + KYC from single panel. New acceptance criteria: contact-only edits (email, phone, address, contact person, channel) need no reason; KYC field changes trigger reason-required section (6 predefined options + "Other" which makes notes mandatory); corporate director management (edit/add/delete); min-2 active directors block save; auto-reverification on KYC changes; new KYC replaces current tab record; old KYC preserved in audit log only. Updated business rules accordingly.
+
+**2.7.6 Customer Summary Page** — Updated customer list columns to include Customer Number sub-line and Channel column with "Direct" badge. Added Customer ID clarification: auto-generated formatted number (CUST/2026/IND/00000001), configured in Setup → Customer Number Format. Added tab descriptions including clickable policy and claim rows navigating to detail pages. Updated business rules for formatted Customer ID and clickable rows.
+
+**Unchanged:** 2.7.3, 2.7.4, 2.7.7, 2.7.8, 2.7.9, 2.7.10 — preserved verbatim.
+
+---
+
 ## 2026-04-27 — Session 45g: Figma Sync — Editable Frames (not screenshots)
 
 ### Why this session
