@@ -39,7 +39,7 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title={siteConfig.title}
-      description="Developer and partner reference for the Core Insurance Application — a multi-tenant SaaS platform for end-to-end general insurance operations.">
+      description="Developer and partner reference for NubSure — a multi-tenant SaaS platform for end-to-end general insurance operations by Nubeero.">
       <HomepageHeader />
     </Layout>
   );

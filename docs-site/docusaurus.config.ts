@@ -3,8 +3,8 @@ import type { Config } from "@docusaurus/types";
 import type * as Preset from "@docusaurus/preset-classic";
 
 const config: Config = {
-  title: "CIA Documentation",
-  tagline: "Core Insurance Application — Developer & Partner Reference",
+  title: "NubSure Documentation",
+  tagline: "NubSure by Nubeero · Developer & Partner Reference",
   favicon: "img/favicon.png",
 
   url: process.env.DOCUSAURUS_URL || "https://cia-docs.vercel.app",
@@ -71,9 +71,9 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: "CIA Docs",
+      title: "NubSure Docs",
       logo: {
-        alt: "Nubeero Logo",
+        alt: "NubSure Logo",
         src: "img/logo.png",
       },
       items: [
