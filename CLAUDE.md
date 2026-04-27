@@ -997,6 +997,7 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 | `[x]` | Organisations | Tabbed: Brokers (full CRUD + BrokerSheet), Reinsurers/Insurers/Branches/SBUs/Surveyors (skeleton) |
 | `[x]` | Vehicle Registry | Tabbed: Makes, Models, Types (skeleton tabs ready) |
 | `[x]` | Partner App Management | EmptyState with Register App action (skeleton) |
+| `[x]` | Customer Number Format | CustomerNumberFormatPage — prefix, includeYear, includeType (IND/CORP segments with separate sequences), sequenceLength (default 8 → 99M/type/year); live format preview via useMemo; amber warning when unconfigured |
 
 ---
 
@@ -1004,12 +1005,12 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 | Status | Sub-page | Key features |
 |---|---|---|
-| `[x]` | Individual Onboarding | IndividualOnboardingSheet — ID type select (NIN/Voter/DL/Passport), DOB, address, occupation, broker-enabled checkbox |
-| `[x]` | Corporate Onboarding | CorporateOnboardingSheet — RC number, useFieldArray directors (name + ID), broker-enabled |
-| `[x]` | Broker-enabled flows | Checkbox toggle reveals broker Select in both individual and corporate sheets |
-| `[x]` | KYC Update | "Re-submit KYC" button on CustomerDetailPage KYC tab (triggers update flow) |
-| `[x]` | Customer Summary | CustomerDetailPage Summary tab — contact details, broker, created date |
-| `[x]` | Customer History | CustomerDetailPage Policies + Claims tabs with inline tables |
+| `[x]` | Individual Onboarding | IndividualOnboardingSheet — ID type select (NIN/Voter/DL/Passport), DOB, address, occupation, broker-enabled checkbox; KYC document upload (JPG/PNG 5MB); conditional expiry date for DL/Passport |
+| `[x]` | Corporate Onboarding | CorporateOnboardingSheet — RC number, CAC certificate upload, useFieldArray directors (name + ID + per-director document upload); broker-enabled |
+| `[x]` | Broker-enabled flows | Checkbox toggle reveals broker Select in both individual and corporate sheets; Channel column in list shows "Direct" badge for non-broker customers |
+| `[x]` | KYC Update | EditCustomerSheet — contact fields (email, phone, address, contactPerson for corporate, channel); KYC section for individual (ID type/number/expiry/document); KYC reason block (dropdown + notes, notes required if Other) shown only when KYC fields change; re-submits to KYC provider; directors section for corporate with add/edit/delete/restore + per-director KYC reason; min 2 active directors enforced; all changes dual-audit-logged |
+| `[x]` | Customer Summary | CustomerDetailPage — customer number in header + summary tab; individual/corporate conditional fields; Channel row (Direct or broker name); policy/claim rows clickable → navigate to detail pages |
+| `[x]` | Customer History | CustomerDetailPage Policies + Claims tabs — clickable rows navigate to /policies/:id and /claims/:id |
 | `[x]` | Reports | LossRatioReportPage (by class, premium vs claims, rating badge); ActiveCustomersReportPage (by channel, individual vs corporate count) |
 
 ---

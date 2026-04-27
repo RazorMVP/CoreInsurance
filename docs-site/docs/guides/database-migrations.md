@@ -18,10 +18,26 @@ All migration files live in `cia-api/src/main/resources/db/migration/`:
 
 ```text
 db/migration/
-├── V1__init_public_schema.sql        # tenant registry in public schema
-├── V2__init_tenant_schema.sql        # all business tables (applied per tenant schema)
-├── V3__add_partner_apps.sql          # example incremental migration
-└── ...
+├── V1__init_public_schema.sql              # tenant registry in public schema
+├── V2__init_tenant_schema.sql              # all business tables (applied per tenant schema)
+├── V3__create_setup_tables.sql             # setup module tables (products, policy_number_formats, etc.)
+├── V4__create_customer_tables.sql          # customers, customer_directors, customer_documents
+├── V5__create_quotation_tables.sql         # quotes
+├── V6__create_policy_tables.sql            # policies, policy_clauses
+├── V7__create_finance_tables.sql           # debit_notes, credit_notes, receipts, payments
+├── V8__create_endorsement_tables.sql       # endorsements
+├── V9__create_claims_tables.sql            # claims, claim_reserves, claim_expenses
+├── V10__create_reinsurance_tables.sql      # ri_treaties, ri_allocations, fac_policies
+├── V11__create_partner_tables.sql          # partner_apps, webhook_registrations, webhook_delivery_logs
+├── V12__create_audit_tables.sql            # audit_log, login_audit_log, audit_alert, audit_alert_config
+├── V13__create_workflow_state_tables.sql   # temporal saga state helpers
+├── V14__fix_missing_created_by_columns.sql # patch: created_by on several tables
+├── V15__add_policy_naicom_fields.sql       # naicom_uid, niid_uid on policies
+├── V16__create_audit_alert_config.sql      # audit_alert_config default row
+├── V17__create_report_tables.sql           # report_definition, report_pin, report_access_policy
+├── V18__seed_system_report_definitions.sql # 55 SYSTEM report definitions (data migration)
+├── V19__customer_kyc_document_fields.sql   # id_document_url, id_expiry_date, cac fields
+└── V20__customer_number_format.sql         # customer_number_format singleton; customer_number column
 ```
 
 ### Naming Convention

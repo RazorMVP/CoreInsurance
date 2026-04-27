@@ -222,6 +222,25 @@ Domain (tenant schema)
 
 ## Key Cross-Cutting Business Rules
 
+### Customer Number Format
+- `customer_number_format` is a **singleton per tenant** (at most one row). Managed by System Admin via Setup → Customer Number Format.
+- Format: `{prefix}/{year}/{type}/{sequence}` — e.g. `CUST/2026/IND/00000001`, `CUST/2026/CORP/00000001`.
+- `includeType=true` separates sequences per customer type (`lastSequenceIndividual` / `lastSequenceCorporate`). `includeType=false` uses a shared `lastSequence`.
+- Default `sequenceLength=8` supports up to 99,999,999 per type per year.
+- `generateNext(customerType)` uses `PESSIMISTIC_WRITE` lock — prevents duplicate numbers under concurrent onboardings.
+- If no format is configured, customer creation throws `CUSTOMER_NUMBER_FORMAT_NOT_CONFIGURED`.
+
+### KYC Update Rules
+- Updating any KYC field (ID type, ID number, expiry date, or document) on a customer or director **requires a reason** from a predefined dropdown (Document expired / Incorrect details submitted / Name mismatch / Customer request / ID type change / Other). Selecting "Other" makes the additional notes field mandatory.
+- KYC field updates automatically trigger re-verification with the KYC provider. Changes are audit-logged twice: a general UPDATE (before/after customer snapshot) and a dedicated `CustomerKyc` or `CustomerDirectorKyc` UPDATE entry containing the reason, notes, and resulting KYC status.
+- Old KYC details are preserved in the audit log only — the KYC tab always shows the current record.
+
+### Corporate Director Rules
+- A corporate customer must have **at least 2 active directors** at all times. The backend throws `MINIMUM_DIRECTORS_REQUIRED` and the frontend disables the Save button if active directors drop below 2.
+- Director deletion is **soft-delete** (`deleted_at`): the record is preserved for audit, shown with a "Removed" badge in the Edit Customer sheet, and restorable before saving.
+- Each director's KYC fields can be updated independently, following the same reason-required flow as the customer-level KYC update.
+- New directors added via the Edit Customer sheet trigger KYC verification on save.
+
 ### Premium Calculations
 - `Premium = (Sum Insured × Rate) − Discount`
 - Pro-rata endorsements: `(Annual Premium / 365) × Days`
@@ -273,7 +292,7 @@ Domain (tenant schema)
 ## Data Model Highlights
 
 ### Core entities (per tenant schema)
-`customers`, `policies`, `quotes`, `endorsements`, `claims`, `claim_reserves`, `claim_expenses`, `reinsurance_treaties`, `ri_allocations`, `debit_notes`, `credit_notes`, `receipts`, `payments`, `products`, `classes_of_business`, `brokers`, `users`, `access_groups`, `approval_groups`, `document_templates`, `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`, `audit_log`, `login_audit_log`, `audit_alert`, `audit_alert_config`, `report_definition`, `report_pin`, `report_access_policy`.
+`customers`, `customer_directors`, `customer_documents`, `customer_number_format`, `policies`, `quotes`, `endorsements`, `claims`, `claim_reserves`, `claim_expenses`, `reinsurance_treaties`, `ri_allocations`, `debit_notes`, `credit_notes`, `receipts`, `payments`, `products`, `classes_of_business`, `brokers`, `users`, `access_groups`, `approval_groups`, `document_templates`, `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`, `audit_log`, `login_audit_log`, `audit_alert`, `audit_alert_config`, `report_definition`, `report_pin`, `report_access_policy`, `policy_number_formats`.
 
 ### Key relationships
 - `policies` → `customers` (many-to-one)

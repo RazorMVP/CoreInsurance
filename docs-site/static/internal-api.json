@@ -2708,7 +2708,7 @@
         }
       },
       "put": {
-        "summary": "Update customer contact details",
+        "summary": "Update customer contact details, KYC, and directors",
         "operationId": "updateCustomer",
         "tags": [
           "Customers"
@@ -2727,18 +2727,100 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "multipart/form-data": {
               "schema": {
                 "type": "object",
                 "properties": {
                   "email": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "email"
                   },
                   "phone": {
                     "type": "string"
                   },
                   "address": {
                     "type": "string"
+                  },
+                  "contactPerson": {
+                    "type": "string",
+                    "description": "Corporate customers only"
+                  },
+                  "brokerId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "idType": {
+                    "type": "string",
+                    "enum": [
+                      "NIN",
+                      "VOTERS_CARD",
+                      "DRIVERS_LICENSE",
+                      "PASSPORT"
+                    ],
+                    "description": "Individual customers only"
+                  },
+                  "idNumber": {
+                    "type": "string",
+                    "description": "Individual customers only"
+                  },
+                  "idExpiryDate": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Required for DRIVERS_LICENSE and PASSPORT"
+                  },
+                  "idDocument": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Replacement KYC document (JPG/PNG, max 5 MB)"
+                  },
+                  "kycUpdateReason": {
+                    "type": "string",
+                    "description": "Required when any KYC field changes"
+                  },
+                  "kycUpdateNotes": {
+                    "type": "string",
+                    "description": "Required when kycUpdateReason = Other"
+                  },
+                  "directors[N].id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Corporate: existing director ID (omit for new)"
+                  },
+                  "directors[N].deleted": {
+                    "type": "boolean",
+                    "description": "Soft-delete this director"
+                  },
+                  "directors[N].firstName": {
+                    "type": "string"
+                  },
+                  "directors[N].lastName": {
+                    "type": "string"
+                  },
+                  "directors[N].dateOfBirth": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "directors[N].idType": {
+                    "type": "string"
+                  },
+                  "directors[N].idNumber": {
+                    "type": "string"
+                  },
+                  "directors[N].idExpiryDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "directors[N].kycUpdateReason": {
+                    "type": "string",
+                    "description": "Required when director KYC fields change"
+                  },
+                  "directors[N].kycUpdateNotes": {
+                    "type": "string"
+                  },
+                  "directorDoc_N": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Document for director at index N"
                   }
                 }
               }
@@ -2747,25 +2829,19 @@
         },
         "responses": {
           "200": {
-            "description": "Updated customer",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/CustomerDetail"
-                    }
-                  }
-                }
-              }
-            }
+            "description": "Updated customer"
+          },
+          "400": {
+            "description": "Validation error \u2014 e.g. KYC reason missing, minimum 2 directors violated, expired ID"
           },
           "401": {
             "description": "Unauthorized"
           },
           "403": {
-            "description": "Forbidden \u2014 insufficient role"
+            "description": "Forbidden \u2014 requires CUSTOMER_UPDATE role"
+          },
+          "404": {
+            "description": "Customer not found"
           }
         }
       }
