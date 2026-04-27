@@ -9,6 +9,27 @@ import { type ColumnDef } from '@tanstack/react-table';
 import type { QuoteDto } from '@cia/api-client';
 import SingleRiskQuoteSheet from './create/SingleRiskQuoteSheet';
 import MultiRiskQuoteSheet  from './create/MultiRiskQuoteSheet';
+import QuotePdfPreview, { type QuotePdfData } from './QuotePdfPreview';
+
+// Extended mock — carries PDF data for approved quotes
+const mockQuotePdfData: Record<string, QuotePdfData> = {
+  q1: {
+    quoteNumber: 'QUO-2026-00001', issueDate: '2026-01-28',
+    customerName: 'Chioma Okafor', productName: 'Private Motor Comprehensive', classOfBusiness: 'Motor (Private)',
+    startDate: '2026-02-01', endDate: '2027-02-01',
+    risks: [{ description: '2022 Toyota Camry, Reg: LND-001-AA', sumInsured: 3_500_000, rate: 2.25, loadings: [{ typeId: 'l1', format: 'PERCENT', value: 5 }], discounts: [{ typeId: 'd1', format: 'PERCENT', value: 2.5 }] }],
+    quoteLoadings: [], quoteDiscounts: [], selectedClauseIds: ['c1', 'c2'],
+    inputterName: 'Chidi Okafor', approverName: 'Adeola Bello',
+  },
+  q4: {
+    quoteNumber: 'QUO-2026-00004', issueDate: '2026-01-10',
+    customerName: 'Chioma Okafor', productName: 'Marine Cargo Open Cover', classOfBusiness: 'Marine Cargo',
+    startDate: '2026-01-15', endDate: '2027-01-15',
+    risks: [{ description: 'General cargo — Lagos to Kano', sumInsured: 8_000_000, rate: 0.75, loadings: [], discounts: [] }],
+    quoteLoadings: [], quoteDiscounts: [], selectedClauseIds: ['c7'],
+    inputterName: 'Chidi Okafor', approverName: 'Adeola Bello',
+  },
+};
 
 const mockQuotes: QuoteDto[] = [
   { id: 'q1', quoteNumber: 'QUO-2026-00001', customerId: 'c1', customerName: 'Chioma Okafor',     productId: 'p1', productName: 'Private Motor Comprehensive', classOfBusinessId: '1', classOfBusinessName: 'Motor (Private)',  businessType: 'DIRECT', status: 'APPROVED',  sumInsured: 3_500_000, premium: 78_750,  discount: 0,     netPremium: 78_750,  startDate: '2026-02-01', endDate: '2027-02-01', version: 1, createdAt: '2026-01-28', updatedAt: '2026-01-30' },
@@ -31,6 +52,7 @@ export default function QuotationListPage() {
   const navigate = useNavigate();
   const [singleOpen, setSingleOpen] = useState(false);
   const [multiOpen,  setMultiOpen]  = useState(false);
+  const [pdfData,    setPdfData]    = useState<QuotePdfData | null>(null);
 
   const columns: ColumnDef<QuoteDto>[] = [
     {
@@ -108,6 +130,9 @@ export default function QuotationListPage() {
               ...(status === 'DRAFT'     ? [{ label: 'Submit for approval', onClick: () => {} }] : []),
               ...(status === 'APPROVED'  ? [{ label: 'Convert to policy',   onClick: () => {} }] : []),
               ...(status !== 'CONVERTED' ? [{ label: 'Edit quote',          onClick: () => {} }] : []),
+              ...((status === 'APPROVED' || status === 'CONVERTED') && mockQuotePdfData[row.original.id]
+                ? [{ label: 'Download PDF', onClick: (r: any) => setPdfData(mockQuotePdfData[r.original.id] ?? null) }]
+                : []),
               { label: 'Duplicate', onClick: () => {} },
             ]}
           />
@@ -159,6 +184,7 @@ export default function QuotationListPage() {
 
       <SingleRiskQuoteSheet open={singleOpen} onOpenChange={setSingleOpen} onSuccess={() => setSingleOpen(false)} />
       <MultiRiskQuoteSheet  open={multiOpen}  onOpenChange={setMultiOpen}  onSuccess={() => setMultiOpen(false)}  />
+      <QuotePdfPreview open={!!pdfData} onOpenChange={(v) => { if (!v) setPdfData(null); }} data={pdfData} />
     </div>
   );
 }

@@ -1,13 +1,25 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  Button, Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
+  Button,
+  Checkbox,
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
   FormRow, Input,
   Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue,
   Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle,
   Separator,
 } from '@cia/ui';
-import { useForm } from 'react-hook-form';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
+import type { Control } from 'react-hook-form';
+import { MOCK_DISCOUNT_TYPES, MOCK_LOADING_TYPES } from '../../../setup/pages/policy-specs/quote-config-types';
+import { INITIAL_CLAUSES } from '../clauses-shared';
+
+// ── Schema ────────────────────────────────────────────────────────────────────
+const adjustmentSchema = z.object({
+  typeId: z.string().min(1, 'Select a type'),
+  format: z.enum(['PERCENT', 'FLAT']),
+  value:  z.coerce.number().min(0, 'Must be ≥ 0'),
+});
 
 const schema = z.object({
   customerId:        z.string().min(1, 'Select a customer'),
@@ -16,17 +28,19 @@ const schema = z.object({
   endDate:           z.string().min(1, 'Required'),
   sumInsured:        z.coerce.number().positive('Must be positive'),
   rate:              z.coerce.number().min(0).max(100),
-  discount:          z.coerce.number().min(0),
   riskDescription:   z.string().min(5, 'Describe the risk'),
+  loadings:          z.array(adjustmentSchema),
+  discounts:         z.array(adjustmentSchema),
+  selectedClauseIds: z.array(z.string()),
 });
-type FormValues = z.infer<typeof schema>;
+export type SingleRiskFormValues = z.infer<typeof schema>;
 
+// ── Mock data ─────────────────────────────────────────────────────────────────
 const mockCustomers = [
   { id: 'c1', name: 'Chioma Okafor' },
   { id: 'c2', name: 'Alaba Trading Co.' },
   { id: 'c3', name: 'Emeka Eze' },
 ];
-
 const mockProducts = [
   { id: 'p1', name: 'Private Motor Comprehensive', defaultRate: 2.25 },
   { id: 'p2', name: 'Commercial Vehicle',          defaultRate: 1.80 },
@@ -34,19 +48,107 @@ const mockProducts = [
   { id: 'p4', name: 'Marine Cargo Open Cover',     defaultRate: 0.75 },
 ];
 
+// ── Adjustment row array ──────────────────────────────────────────────────────
+function AdjustmentRows({
+  control, name, label, typeOptions, accentColor,
+}: {
+  control: Control<SingleRiskFormValues>;
+  name: 'loadings' | 'discounts';
+  label: string;
+  typeOptions: { id: string; name: string }[];
+  accentColor: 'amber' | 'rose';
+}) {
+  const { fields, append, remove } = useFieldArray({ control, name });
+
+  const accent = accentColor === 'amber'
+    ? 'bg-amber-50 border-amber-200 text-amber-700'
+    : 'bg-rose-50 border-rose-200 text-rose-700';
+
+  return (
+    <div className="space-y-2">
+      {fields.map((f, i) => (
+        <div key={f.id} className={`rounded-md border p-2.5 space-y-2 ${accentColor === 'amber' ? 'bg-amber-50/40' : 'bg-rose-50/40'}`}>
+          <div className="grid grid-cols-[1fr_100px_90px_auto] gap-2 items-end">
+            <FormField control={control} name={`${name}.${i}.typeId`}
+              render={({ field }) => (
+                <FormItem className="space-y-1">
+                  <FormLabel className="text-xs">{label} Type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select type" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {typeOptions.map(t => <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField control={control} name={`${name}.${i}.format`}
+              render={({ field }) => (
+                <FormItem className="space-y-1">
+                  <FormLabel className="text-xs">Format</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl><SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="PERCENT" className="text-xs">% Rate</SelectItem>
+                      <SelectItem value="FLAT" className="text-xs">₦ Flat</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField control={control} name={`${name}.${i}.value`}
+              render={({ field }) => (
+                <FormItem className="space-y-1">
+                  <FormLabel className="text-xs">Value</FormLabel>
+                  <FormControl><Input type="number" min={0} step={0.01} className="h-8 text-xs" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button type="button" variant="ghost" size="sm"
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive self-end"
+              onClick={() => remove(i)}>✕</Button>
+          </div>
+        </div>
+      ))}
+      <Button type="button" variant="ghost" size="sm"
+        className={`h-7 text-xs border rounded-md px-2 ${accent}`}
+        onClick={() => append({ typeId: '', format: 'PERCENT', value: 0 })}>
+        + Add {label}
+      </Button>
+    </div>
+  );
+}
+
+// ── Main sheet ────────────────────────────────────────────────────────────────
 interface Props { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void; }
 
 export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: Props) {
-  const form = useForm<FormValues>({
-    resolver:      zodResolver(schema) as any,
-    defaultValues: { customerId: '', productId: '', startDate: '', endDate: '', sumInsured: 0, rate: 0, discount: 0, riskDescription: '' },
+  const form = useForm<SingleRiskFormValues>({
+    resolver: zodResolver(schema) as any,
+    defaultValues: {
+      customerId: '', productId: '', startDate: '', endDate: '',
+      sumInsured: 0, rate: 0, riskDescription: '',
+      loadings: [], discounts: [], selectedClauseIds: [],
+    },
   });
 
-  const sumInsured = form.watch('sumInsured') || 0;
-  const rate       = form.watch('rate')       || 0;
-  const discount   = form.watch('discount')   || 0;
-  const grossPremium = (sumInsured * rate) / 100;
-  const netPremium   = grossPremium - discount;
+  const sumInsured = useWatch({ control: form.control, name: 'sumInsured' }) || 0;
+  const rate       = useWatch({ control: form.control, name: 'rate' })       || 0;
+  const loadings   = useWatch({ control: form.control, name: 'loadings' })   || [];
+  const discounts  = useWatch({ control: form.control, name: 'discounts' })  || [];
+
+  const gross = (sumInsured * rate) / 100;
+  const totalLoading = loadings.reduce((sum: number, l: any) => {
+    return sum + (l.format === 'PERCENT' ? gross * l.value / 100 : l.value);
+  }, 0);
+  const loaded = gross + totalLoading;
+  const totalDiscount = discounts.reduce((sum: number, d: any) => {
+    return sum + (d.format === 'PERCENT' ? loaded * d.value / 100 : d.value);
+  }, 0);
+  const netPremium = Math.max(0, loaded - totalDiscount);
 
   function onProductChange(productId: string, fieldOnChange: (v: string) => void) {
     fieldOnChange(productId);
@@ -54,9 +156,8 @@ export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: 
     if (product) form.setValue('rate', product.defaultRate);
   }
 
-  async function onSubmit(values: FormValues) {
+  async function onSubmit(values: SingleRiskFormValues) {
     console.log('Create single-risk quote', values);
-    // TODO: POST /api/v1/quotes
     onSuccess();
   }
 
@@ -66,12 +167,13 @@ export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: 
         <SheetHeader>
           <SheetTitle>New Single-Risk Quote</SheetTitle>
           <SheetDescription>
-            Generate a quote for one insured risk. The premium is calculated automatically from the sum insured and rate.
+            Generate a quote for one insured risk with optional loadings and discounts.
           </SheetDescription>
         </SheetHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="mt-6 space-y-4">
+
             {/* Customer */}
             <FormField control={form.control} name="customerId"
               render={({ field }) => (
@@ -129,8 +231,29 @@ export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: 
                 render={({ field }) => (<FormItem><FormLabel>Rate (%)</FormLabel><FormControl><Input type="number" min={0} max={100} step={0.01} {...field} /></FormControl><FormMessage /></FormItem>)} />
             </FormRow>
 
-            <FormField control={form.control} name="discount"
-              render={({ field }) => (<FormItem><FormLabel>Discount (₦)</FormLabel><FormControl><Input type="number" min={0} {...field} /></FormControl><FormMessage /></FormItem>)} />
+            {/* Loadings */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-amber-700">Loadings</p>
+              <AdjustmentRows
+                control={form.control}
+                name="loadings"
+                label="Loading"
+                typeOptions={MOCK_LOADING_TYPES}
+                accentColor="amber"
+              />
+            </div>
+
+            {/* Discounts */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-rose-700">Discounts</p>
+              <AdjustmentRows
+                control={form.control}
+                name="discounts"
+                label="Discount"
+                typeOptions={MOCK_DISCOUNT_TYPES}
+                accentColor="rose"
+              />
+            </div>
 
             {/* Premium preview */}
             {sumInsured > 0 && rate > 0 && (
@@ -138,12 +261,18 @@ export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: 
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Premium Summary</p>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Gross Premium</span>
-                  <span className="font-medium">₦{grossPremium.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span className="font-medium">₦{gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
-                {discount > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Discount</span>
-                    <span className="text-destructive">−₦{discount.toLocaleString()}</span>
+                {totalLoading > 0 && (
+                  <div className="flex justify-between text-sm text-amber-700">
+                    <span>+ Total Loading</span>
+                    <span>₦{totalLoading.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                {totalDiscount > 0 && (
+                  <div className="flex justify-between text-sm text-rose-700">
+                    <span>− Total Discount</span>
+                    <span>₦{totalDiscount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                 )}
                 <Separator />
@@ -153,6 +282,40 @@ export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: 
                 </div>
               </div>
             )}
+
+            <Separator />
+
+            {/* Clause selection */}
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-foreground">Applicable Clauses</p>
+              <p className="text-xs text-muted-foreground">Select clauses from the clause bank that apply to this quote.</p>
+              <div className="space-y-2 max-h-44 overflow-y-auto rounded-md border p-3">
+                {INITIAL_CLAUSES.map(clause => (
+                  <FormField key={clause.id} control={form.control} name="selectedClauseIds"
+                    render={({ field }) => {
+                      const checked = field.value.includes(clause.id);
+                      return (
+                        <div className="flex items-start gap-2 py-1">
+                          <Checkbox
+                            id={`sr-clause-${clause.id}`}
+                            checked={checked}
+                            onCheckedChange={(c) => {
+                              field.onChange(c
+                                ? [...field.value, clause.id]
+                                : field.value.filter((id: string) => id !== clause.id));
+                            }}
+                          />
+                          <label htmlFor={`sr-clause-${clause.id}`} className="cursor-pointer space-y-0.5">
+                            <p className="text-sm font-medium leading-none">{clause.title}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-1">{clause.text}</p>
+                          </label>
+                        </div>
+                      );
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
 
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
