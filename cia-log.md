@@ -4,6 +4,16 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-27 — Session 45f: Clickable policy and claim rows in customer detail
+
+### Change
+- `CustomerDetailPage.tsx` — policy rows now navigate to `/policies/:id` on click; claim rows navigate to `/claims/:id`. Added `cursor-pointer`, `hover:bg-muted/40`, and underline on the reference number cell for clear affordance.
+
+### Git Commit
+`20df822` fix(customers): make policy and claim rows clickable in customer detail
+
+---
+
 ## 2026-04-27 — Session 45e: Hide customer-level KYC section for corporate customers
 
 ### Change
