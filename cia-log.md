@@ -57,6 +57,42 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-27 — Session 45g: Figma Sync — Editable Frames (not screenshots)
+
+### Why this session
+Previous Figma syncs uploaded raster screenshots (flat images). This session creates proper **editable vector frames** using the Figma Plugin API — real text nodes, auto-layout, named layers, and correct OKLCH-mapped colours. All frames are fully editable in Figma.
+
+### Figma File
+BackOffice design file: `Zaiu2K7NvEJ7Cjj6z1xt2D`
+
+### Frames Created
+
+| Page | Frame Name | Node ID | Dimensions |
+|---|---|---|---|
+| Setup | `BackOffice / Setup / Customer Number Format` | `255:2` | 1440×900 |
+| Customers | `Sheet: Edit Customer (Individual)` | `260:2` | 480×900 |
+| Customers | `BackOffice / Customer / Chioma Okafor / Detail — Updated` | `261:2` | 1440×900 |
+
+### What Each Frame Shows
+
+**Customer Number Format (Setup):**
+Full app shell with sidebar (Setup active, Customers sub-nav group visible with Customer Number Format highlighted in teal). Form card: Prefix input ("CUST"), Sequence Digits input ("8"), Include Year toggle (ON), Include Customer Type toggle (ON), Live Preview section showing `CUST/2026/IND/00000001` and `CUST/2026/CORP/00000001`, Save Format button.
+
+**Sheet: Edit Customer (Individual):**
+480px side sheet. Header: "Edit Customer" (Bricolage Grotesque SemiBold), description text. Contact Details: Email + Phone (2-col), Address, Channel select. KYC Identity Document: ID Type + ID Number (2-col), Upload zone. Amber KYC Reason Block: "KYC details changed — reason required." label, Reason dropdown ("Document expired"), Additional Notes textarea. Footer: Cancel (outline) + Save Changes (teal).
+
+**Customer Detail — Updated:**
+Full app shell, Customers active in sidebar. Page header: "Chioma Okafor" + `Individual · CUST/2026/IND/00000001` sub-line + Verified/Active badges + Edit Customer button + New Policy button. Tabs: Summary (active, teal underline), KYC, Policies (2), Claims (1). Contact Details card: Customer ID as first row, all other fields. Recent Policies panel: policy numbers in teal with underline (clickable affordance), status badges, premiums.
+
+### Technical notes
+- Fonts: Bricolage Grotesque SemiBold for headings, Geist Regular/Medium/SemiBold for UI
+- Colours: OKLCH design tokens approximated as RGB (teal ≈ #1AB6A4, sidebar ≈ #1C2D2D)
+- All frames use auto-layout — editable in Figma without ungrouping
+- `resize()` called BEFORE `primaryAxisSizingMode='AUTO'` (lesson learned: resize resets sizing modes to FIXED)
+- `layoutSizingHorizontal/Vertical='FILL'` always set AFTER `parent.appendChild(child)`
+
+---
+
 ## 2026-04-27 — Session 45b: Edit Customer Sheet with KYC Update Flow
 
 ### Files Created
