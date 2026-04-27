@@ -8,6 +8,7 @@ import {
   Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle,
   Separator,
 } from '@cia/ui';
+import { useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import type { Control } from 'react-hook-form';
@@ -126,6 +127,8 @@ function AdjustmentRows({
 interface Props { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void; }
 
 export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: Props) {
+  const [clauseSearch, setClauseSearch] = useState('');
+
   const form = useForm<SingleRiskFormValues>({
     resolver: zodResolver(schema) as any,
     defaultValues: {
@@ -289,8 +292,18 @@ export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: 
             <div className="space-y-3">
               <p className="text-sm font-semibold text-foreground">Applicable Clauses</p>
               <p className="text-xs text-muted-foreground">Select clauses from the clause bank that apply to this quote.</p>
+              <Input
+                placeholder="Search clauses…"
+                value={clauseSearch}
+                onChange={e => setClauseSearch(e.target.value)}
+                className="h-8 text-sm"
+              />
               <div className="space-y-2 max-h-44 overflow-y-auto rounded-md border p-3">
-                {INITIAL_CLAUSES.map(clause => (
+                {INITIAL_CLAUSES.filter(c =>
+                  clauseSearch === '' ||
+                  c.title.toLowerCase().includes(clauseSearch.toLowerCase()) ||
+                  c.text.toLowerCase().includes(clauseSearch.toLowerCase())
+                ).map(clause => (
                   <FormField key={clause.id} control={form.control} name="selectedClauseIds"
                     render={({ field }) => {
                       const checked = field.value.includes(clause.id);
