@@ -357,8 +357,10 @@ Domain (tenant schema)
 - `DevAuthProvider` is exported from `@cia/auth` and uses the same `AuthContext` as `AuthProvider`, so all `useAuth()` calls work identically in both modes.
 - The Tailwind config in each app imports the shared base via a **relative path** (`../../packages/ui/tailwind.config`) — never via the package name (`@cia/ui/tailwind.config`). Tailwind's PostCSS loader uses CJS `require()` which does not honour the `exports` field.
 - `layoutSizingVertical = 'HUG'` in Figma Plugin API must be set **after** all children are appended to a frame. Setting `primaryAxisSizingMode = 'AUTO'` at frame creation time has no effect until children exist.
-- Figma BackOffice design file: `Zaiu2K7NvEJ7Cjj6z1xt2D`. Designs are pushed to this file as each module is built using `use_figma` + `upload_assets` (for images). Always invoke the `figma:figma-use` skill before any `use_figma` call.
-- To upload PNG assets into Figma, use `mcp__claude_ai_Figma__upload_assets` with a `nodeId` to set the image directly as a fill — this bypasses the unreliable base64 `createImage()` approach.
+- Figma BackOffice design file: `Zaiu2K7NvEJ7Cjj6z1xt2D`. Always invoke `figma:figma-use` + `figma:figma-generate-design` skills before any `use_figma` call.
+- **Figma screens MUST be built as editable auto-layout frames** — never as screenshots or raster image uploads. Screenshots are flat pixels that cannot be edited in Figma. Use `use_figma` Plugin API to create real `FRAME`, `TEXT`, `RECTANGLE`, and `ELLIPSE` nodes with proper auto-layout, named layers, and font loading.
+- To upload PNG image assets (e.g. logos, photos) into a frame, use `mcp__plugin_figma_figma__upload_assets` with a `nodeId` — this is for image fills only, not for screen designs.
+- **Key Plugin API gotchas for this project:** (1) Always call `resize()` BEFORE setting `primaryAxisSizingMode = 'AUTO'` — resize resets sizing modes to FIXED. (2) Always set `layoutSizingHorizontal/Vertical = 'FILL'` AFTER `parent.appendChild(child)` — setting before append throws. (3) Never set `paddingLeft/paddingRight/paddingTop/paddingBottom` on TEXT nodes — only FRAME nodes have padding.
 - **Vercel deployment:** Link and deploy from `cia-frontend/` (monorepo root), never from `apps/back-office/`. Linking from a subdirectory causes Vercel to upload only that directory (~254B), making workspace packages (`@cia/ui`, `@cia/auth`, `@cia/api-client`) unreachable during `pnpm install`. The `vercel.json` and `.vercel/project.json` both live at `cia-frontend/`. Production URL: `back-office-blush-six.vercel.app`.
 - **SESSION COMPLETION GATE** is enforced automatically via a Claude Code `Stop` hook in `.claude/settings.json`. It fires at the end of every response in this project — no manual trigger needed.
 - **Inline master-data creation pattern:** When a `Select` in a form Sheet references master data (classes of business, brokers, reinsurers, etc.), add a `+ New [Entity]` sentinel item (`value="__create_new__"`) at the bottom separated by `SelectSeparator`. Intercept it in `onValueChange` before calling `field.onChange`. Open a **Dialog** (not a nested Sheet — avoids z-index issues). On save, append the new item to local state and auto-select it via `form.setValue`. This pattern was established in `ProductSheet.tsx` for Classes of Business.
@@ -474,11 +476,12 @@ Additional checks:
 ### 5. Figma Sync (required when adding or changing a screen)
 
 For every new or significantly changed screen in the Back Office app:
-- Push the corresponding frame to the BackOffice Figma file (`Zaiu2K7NvEJ7Cjj6z1xt2D`) using `use_figma`.
-- Always invoke the `figma:figma-use` skill BEFORE any `use_figma` call.
-- To upload PNG/image assets into Figma, use `mcp__claude_ai_Figma__upload_assets` with `nodeId` — never use `figma.createImage()` with base64 (unreliable in API/screenshot context).
+- Always invoke `figma:figma-use` AND `figma:figma-generate-design` skills BEFORE any `use_figma` call.
+- **CRITICAL: Build editable auto-layout frames — NOT screenshots or raster images.** Use the Plugin API to create real `FRAME`, `TEXT`, `RECTANGLE`, `ELLIPSE` nodes. Screenshots are flat pixels that cannot be edited in Figma and are unacceptable for design sync.
+- Use `figma.createAutoLayout()` for any container that needs auto-layout. Use `figma.createFrame()` + `frame.layoutMode = 'VERTICAL'` only when you need FIXED sizing.
+- To upload PNG image assets (logos, photos) as fills, use `mcp__plugin_figma_figma__upload_assets` — this is for image content inside frames, not for screen designs.
 - For the ₦ character in Figma text nodes, apply `setRangeFontName(i, i+1, { family: 'Noto Sans', style: 'Regular' })` to each ₦ character — Bricolage Grotesque and Geist lack this glyph.
-- Take a `get_screenshot` after major changes to verify the frame renders correctly.
+- Take `await node.screenshot()` inline after each section to verify as you build — catch layout bugs early.
 - Note in cia-log.md: which Figma node IDs were created or mutated.
 
 ---
