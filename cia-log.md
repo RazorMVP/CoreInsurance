@@ -57,6 +57,18 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-27 — Session 45i: Docs Site NubSure Rebrand
+
+### Changes
+- `docs-site/docusaurus.config.ts` — title → "NubSure Documentation"; tagline → "NubSure by Nubeero · Developer & Partner Reference"; navbar title → "NubSure Docs"; logo alt → "NubSure Logo"
+- `docs-site/src/css/custom.css` — replaced default Docusaurus green with NubSure teal (#1a9e91 light mode, #29d0c0 dark mode) across all 7 Infima color variants; added dark-teal hero gradient, active nav underline, dark footer
+- `docs-site/src/pages/index.tsx` — updated SEO description to reference NubSure
+
+### Git Commit
+`a010992` feat(docs): rebrand docs site to NubSure Documentation
+
+---
+
 ## 2026-04-27 — Session 45h: Confluence PRD Update — Customer Module
 
 ### Confluence Page Updated
