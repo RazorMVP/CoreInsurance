@@ -4,6 +4,38 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-27 — Session 45j: Quotation module — loadings, discounts, clauses, PDF download, Quotes config tab
+
+### Files Created
+- `cia-frontend/apps/back-office/src/modules/setup/pages/policy-specs/quote-config-types.ts` — shared types: `DiscountType`, `LoadingType`, `QuoteConfig`, `AdjustmentEntry`; mock data for discount types (5), loading types (5), and default quote config (30-day validity, LOADING_FIRST sequence)
+- `cia-frontend/apps/back-office/src/modules/setup/pages/policy-specs/QuotesConfigTab.tsx` — new Quotes tab: Discount Types CRUD, Loading Types CRUD, Quote Validity Period input, Premium Calculation Sequence select (LOADING_FIRST / DISCOUNT_FIRST); extensible for future settings
+- `cia-frontend/apps/back-office/src/modules/quotation/pages/clauses-shared.ts` — shared clause data (8 clauses) used by both quote sheets and PDF preview
+- `cia-frontend/apps/back-office/src/modules/quotation/pages/QuotePdfPreview.tsx` — print-ready Dialog: risk items table with per-item loading/discount rows, quote-level adjustment table, Final Net Premium highlighted, applicable clauses, General Subjectivity section (3 lines: no known loss, validity period with computed expiry date, satisfactory survey), inputter + approver signature blocks; Print/Save as PDF via `window.print()` with isolated print styles
+
+### Files Modified
+- `cia-frontend/apps/back-office/src/modules/setup/pages/policy-specs/PolicySpecificationsPage.tsx` — added Quotes tab trigger and content slot
+- `cia-frontend/apps/back-office/src/modules/quotation/pages/create/MultiRiskQuoteSheet.tsx` — full rewrite: `AdjustmentRows` sub-component (shared for loadings and discounts); `RiskItemCard` component with nested `useFieldArray` for per-item loadings and discounts; quote-level loadings and discounts; clause selection (scrollable checkbox list from clause bank); live grand total preview
+- `cia-frontend/apps/back-office/src/modules/quotation/pages/create/SingleRiskQuoteSheet.tsx` — same loading/discount/clause treatment as multi-risk; replaced single flat discount field with full adjustment arrays
+- `cia-frontend/apps/back-office/src/modules/quotation/pages/detail/QuoteDetailPage.tsx` — fixed `useParams()` bug (was always showing first quote); typed MOCK_QUOTES with explicit `MockQuote` interface; expanded risk items card (per-item loading/discount breakdown); clauses card; inputter/approver in details card; Download PDF button (APPROVED/CONVERTED only)
+- `cia-frontend/apps/back-office/src/modules/quotation/pages/QuotationListPage.tsx` — added `mockQuotePdfData` map; Download PDF row action for APPROVED and CONVERTED quotes; `QuotePdfPreview` dialog wired to list page
+
+### Business Rules Implemented
+- **Premium calculation (LOADING_FIRST):** Gross = SI × Rate%; Loaded = Gross + Σ loadings (% of gross or flat); Item Net = Loaded − Σ discounts (% of loaded or flat)
+- **Quote-level adjustments:** Final Net = Σ item nets + quote loading (% of Σ gross) − quote discount (% of quote-loaded base)
+- **PDF download:** Only available when quote status is APPROVED or CONVERTED; inputter and approver names both present
+- **Calculation sequence:** Configurable in Quotes tab (LOADING_FIRST default); DISCOUNT_FIRST option available
+- **Clause selection:** Underwriter selects from existing clause bank; new clauses must be added to Policy Specifications first
+
+### Design Decisions
+- Used `RiskItemCard` sub-component with its own `useFieldArray` calls to avoid hooks-in-loops violation for nested loading/discount arrays
+- PDF uses `window.print()` with dynamically injected `<style>` (textContent, not innerHTML) scoping print output to `#quote-print-portal` — no extra library dependency
+- `as const` on format literals in mock data would narrow types and cause TypeScript to flag `format === 'PERCENT'` comparisons as unreachable — resolved by explicit `MockQuote` interface with `AdjustmentLine` typing
+
+### Git Commit
+`42369a3` feat(quotation): per-item loadings/discounts, clause selection, PDF download + Quotes config tab
+
+---
+
 ## 2026-04-27 — Session 45f: Clickable policy and claim rows in customer detail
 
 ### Change
