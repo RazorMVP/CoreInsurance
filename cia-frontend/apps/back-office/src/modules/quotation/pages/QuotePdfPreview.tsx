@@ -313,6 +313,161 @@ export function PrintContent({ data }: { data: QuotePdfData }) {
   );
 }
 
+// ── Self-contained HTML generator for the print popup ────────────────────────
+function buildPrintHtml(data: QuotePdfData): string {
+  const validityDays = MOCK_QUOTE_CONFIG.validityDays;
+  const items        = data.risks.map(r => ({ ...r, ...computeItemAmounts(r) }));
+  const totalGross   = items.reduce((s, r) => s + r.gross, 0);
+  const totalNets    = items.reduce((s, r) => s + r.net, 0);
+  const qLoading     = data.quoteLoadings.reduce((s, l) =>
+    s + (l.format === 'PERCENT' ? totalGross * l.value / 100 : l.value), 0);
+  const loadedBase   = totalNets + qLoading;
+  const qDiscount    = data.quoteDiscounts.reduce((s, d) =>
+    s + (d.format === 'PERCENT' ? loadedBase * d.value / 100 : d.value), 0);
+  const finalNet     = Math.max(0, loadedBase - qDiscount);
+
+  const expiryDate = (() => {
+    const d = new Date(data.issueDate);
+    d.setDate(d.getDate() + validityDays);
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  })();
+
+  const selectedClauses = INITIAL_CLAUSES.filter(c => data.selectedClauseIds.includes(c.id));
+
+  const m = (n: number) =>
+    `&#8358;${n.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const adjFmt = (l: AdjustmentLine) => l.format === 'PERCENT' ? `${l.value}%` : 'Flat';
+
+  let risksHtml = '';
+  items.forEach((item, i) => {
+    risksHtml += `<p style="font-weight:bold;font-size:9pt;margin:10px 0 4px;">Item ${i + 1} — ${item.description}</p>
+    <table><thead><tr>
+      <th>Description</th><th style="text-align:right">Sum Insured</th>
+      <th style="text-align:right">Rate (%)</th><th style="text-align:right">Gross Premium</th>
+    </tr></thead><tbody><tr>
+      <td>${item.description}</td><td style="text-align:right">${m(item.sumInsured)}</td>
+      <td style="text-align:right">${item.rate}%</td><td style="text-align:right">${m(item.gross)}</td>
+    </tr></tbody></table>`;
+    if (item.loadings.length > 0) {
+      risksHtml += `<table><thead>
+        <tr><th colspan="3" style="color:#b45309">Loadings</th></tr>
+        <tr><th>Type</th><th>Format</th><th style="text-align:right">Amount</th></tr>
+      </thead><tbody>`;
+      item.loadings.forEach(l => {
+        const amt = l.format === 'PERCENT' ? item.gross * l.value / 100 : l.value;
+        risksHtml += `<tr><td>${resolveTypeName(l.typeId, 'loading')}</td><td>${adjFmt(l)}</td>
+          <td style="text-align:right;color:#b45309">${m(amt)}</td></tr>`;
+      });
+      risksHtml += '</tbody></table>';
+    }
+    if (item.discounts.length > 0) {
+      risksHtml += `<table><thead>
+        <tr><th colspan="3" style="color:#be185d">Discounts</th></tr>
+        <tr><th>Type</th><th>Format</th><th style="text-align:right">Amount</th></tr>
+      </thead><tbody>`;
+      item.discounts.forEach(d => {
+        const base = item.gross + item.totalLoading;
+        const amt  = d.format === 'PERCENT' ? base * d.value / 100 : d.value;
+        risksHtml += `<tr><td>${resolveTypeName(d.typeId, 'discount')}</td><td>${adjFmt(d)}</td>
+          <td style="text-align:right;color:#be185d">${m(amt)}</td></tr>`;
+      });
+      risksHtml += '</tbody></table>';
+    }
+    risksHtml += `<p style="text-align:right;font-size:9pt;margin:2px 0 8px;">
+      <strong>Item Net: </strong><span style="color:#0f766e;font-weight:bold;">${m(item.net)}</span></p>`;
+  });
+
+  let adjHtml = '';
+  if (data.quoteLoadings.length > 0 || data.quoteDiscounts.length > 0) {
+    adjHtml = `<h2>Quote-Level Adjustments</h2><table><tbody>
+      <tr><td>Sum of Item Gross Premiums (% base)</td><td style="text-align:right">${m(totalGross)}</td></tr>
+      <tr><td>Sum of Item Net Premiums</td><td style="text-align:right">${m(totalNets)}</td></tr>`;
+    data.quoteLoadings.forEach(l => {
+      const amt = l.format === 'PERCENT' ? totalGross * l.value / 100 : l.value;
+      adjHtml += `<tr><td style="color:#b45309">+ ${resolveTypeName(l.typeId, 'loading')} (${adjFmt(l)})</td>
+        <td style="text-align:right;color:#b45309">${m(amt)}</td></tr>`;
+    });
+    data.quoteDiscounts.forEach(d => {
+      const amt = d.format === 'PERCENT' ? loadedBase * d.value / 100 : d.value;
+      adjHtml += `<tr><td style="color:#be185d">- ${resolveTypeName(d.typeId, 'discount')} (${adjFmt(d)})</td>
+        <td style="text-align:right;color:#be185d">${m(amt)}</td></tr>`;
+    });
+    adjHtml += '</tbody></table>';
+  }
+
+  const clausesHtml = selectedClauses.length === 0 ? '' : `<h2>Applicable Clauses</h2>
+    ${selectedClauses.map((c, i) =>
+      `<p style="font-weight:bold;font-size:9pt;margin-bottom:2px;">${i + 1}. ${c.title}</p>
+       <p style="font-size:8.5pt;color:#444;margin-bottom:8px;">${c.text}</p>`
+    ).join('')}`;
+
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
+  <title>${data.quoteNumber} — Insurance Quotation</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Helvetica,Arial,sans-serif;font-size:10pt;color:#1a1a1a;padding:32px}
+    h1{font-size:18pt;margin-bottom:4px}
+    h2{font-size:10pt;text-transform:uppercase;letter-spacing:1px;color:#444;
+       border-bottom:1px solid #ccc;padding-bottom:4px;margin:16px 0 8px}
+    table{width:100%;border-collapse:collapse;margin-bottom:8px;font-size:9pt}
+    th,td{border:1px solid #ccc;padding:4px 8px;text-align:left;vertical-align:top}
+    th{background:#f0f0f0;font-weight:bold}
+    hr{border:none;border-top:1px solid #ccc;margin:10px 0}
+    .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+    .hdr-right{text-align:right}
+    .info{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-bottom:12px}
+    .lbl{font-size:8pt;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:1px}
+    .val{font-weight:bold}
+    .net{border:2px solid #0f766e;background:#f0fdf9;padding:10px 14px;
+         display:flex;justify-content:space-between;align-items:center;margin:12px 0}
+    .sig{display:flex;gap:60px;margin-top:28px}
+    .sig-b{flex:1;border-top:1px solid #888;padding-top:4px}
+    .foot{font-size:8pt;color:#888;text-align:center;margin-top:24px}
+    ol{margin:0 0 0 18px}li{font-size:9pt;margin-bottom:6px;line-height:1.4}
+    @media print{body{padding:16px}@page{margin:16mm}}
+  </style>
+  </head><body>
+  <div class="hdr">
+    <div><h1>INSURANCE QUOTATION</h1>
+      <p style="color:#666;font-size:9pt">NubSure &mdash; Powered by Nubeero Technologies</p></div>
+    <div class="hdr-right">
+      <p style="font-family:Courier,monospace;font-size:13pt;font-weight:bold">${data.quoteNumber}</p>
+      <p style="color:#666;font-size:9pt">Issue Date: ${data.issueDate}</p>
+    </div>
+  </div><hr/>
+  <div class="info">
+    <div><p class="lbl">Prepared For</p><p class="val">${data.customerName}</p></div>
+    <div><p class="lbl">Policy Period</p><p class="val">${data.startDate} to ${data.endDate}</p></div>
+    <div><p class="lbl">Product</p><p class="val">${data.productName}</p></div>
+    <div><p class="lbl">Quote Validity</p><p class="val">Valid ${validityDays} days (expires ${expiryDate})</p></div>
+    <div><p class="lbl">Class of Business</p><p class="val">${data.classOfBusiness}</p></div>
+  </div><hr/>
+  <h2>Risk Details &amp; Premium Breakdown</h2>
+  ${risksHtml}${adjHtml}
+  <div class="net">
+    <span style="font-size:11pt;font-weight:bold;color:#0f766e">FINAL NET PREMIUM</span>
+    <span style="font-size:15pt;font-weight:bold;color:#0f766e">${m(finalNet)}</span>
+  </div>
+  ${clausesHtml}${clausesHtml ? '<hr/>' : ''}
+  <h2>General Subjectivity</h2>
+  <ol>
+    <li>This quote is subject to <strong>no known loss or reported loss</strong> till date.</li>
+    <li>This quotation is valid for <strong>${validityDays} days</strong> from the date of issue (${data.issueDate}).
+        It will expire on <strong>${expiryDate}</strong>.</li>
+    <li>This quote is subject to a <strong>satisfactory survey report</strong>.</li>
+  </ol><hr/>
+  <div class="sig">
+    <div class="sig-b"><p style="font-weight:bold;font-size:9pt">${data.inputterName || '&mdash;'}</p>
+      <p style="font-size:8pt;color:#666">Prepared by (Underwriter)</p></div>
+    <div class="sig-b"><p style="font-weight:bold;font-size:9pt">${data.approverName || '&mdash;'}</p>
+      <p style="font-size:8pt;color:#666">Approved by</p></div>
+  </div>
+  <p class="foot">NubSure by Nubeero Technologies &middot; Computer generated quotation.</p>
+  <script>window.onload=function(){window.focus();window.print();}</script>
+  </body></html>`;
+}
+
 // ── Dialog wrapper ────────────────────────────────────────────────────────────
 interface Props {
   open:         boolean;
@@ -322,40 +477,30 @@ interface Props {
 
 export default function QuotePdfPreview({ open, onOpenChange, data }: Props) {
   function handlePrint() {
-    const styleEl = document.createElement('style');
-    styleEl.id = '__quote-print-style';
-    styleEl.textContent = [
-      '@media print {',
-      '  body > * { display: none !important; }',
-      '  #quote-print-portal { display: block !important; position: fixed; inset: 0; background: white; z-index: 99999; overflow: auto; }',
-      '}',
-    ].join('\n');
-    document.head.appendChild(styleEl);
-
-    const portal = document.getElementById('quote-print-portal');
-    if (portal) portal.style.display = 'none';
-
-    window.print();
-
-    setTimeout(() => {
-      document.getElementById('__quote-print-style')?.remove();
-    }, 500);
+    if (!data) return;
+    const html    = buildPrintHtml(data);
+    const blob    = new Blob([html], { type: 'text/html' });
+    const blobUrl = URL.createObjectURL(blob);
+    const win     = window.open(blobUrl, '_blank', 'width=900,height=700,scrollbars=yes');
+    if (!win) {
+      URL.revokeObjectURL(blobUrl);
+      // eslint-disable-next-line no-alert
+      window.alert('Pop-up blocked. Please allow pop-ups for this site and try again.');
+      return;
+    }
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
   }
 
   if (!data) return null;
 
   return (
     <>
-      <div id="quote-print-portal" style={{ display: 'none' }} aria-hidden="true">
-        <PrintContent data={data} />
-      </div>
-
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Quote Preview — {data.quoteNumber}</DialogTitle>
             <DialogDescription>
-              Review before printing. Use your browser's "Save as PDF" option when the print dialog opens.
+              Review the quote below. Click "Print / Save as PDF" to open a print-ready popup — choose "Save as PDF" in your browser print dialog.
             </DialogDescription>
           </DialogHeader>
 
