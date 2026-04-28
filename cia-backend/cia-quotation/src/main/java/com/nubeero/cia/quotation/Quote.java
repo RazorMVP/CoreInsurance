@@ -7,6 +7,9 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -89,6 +92,27 @@ public class Quote extends BaseEntity {
     @Column(name = "net_premium", nullable = false, precision = 18, scale = 2)
     @Builder.Default
     private BigDecimal netPremium = BigDecimal.ZERO;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "quote_loadings", columnDefinition = "jsonb")
+    @Builder.Default
+    private List<AdjustmentEntry> quoteLoadings = new ArrayList<>();
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "quote_discounts", columnDefinition = "jsonb")
+    @Builder.Default
+    private List<AdjustmentEntry> quoteDiscounts = new ArrayList<>();
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "selected_clause_ids", columnDefinition = "jsonb")
+    @Builder.Default
+    private List<String> selectedClauseIds = new ArrayList<>();
+
+    @Column(name = "inputter_name", length = 200)
+    private String inputterName;
+
+    @Column(name = "approver_name", length = 200)
+    private String approverName;
 
     @Column(columnDefinition = "TEXT")
     private String notes;

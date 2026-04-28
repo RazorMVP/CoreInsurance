@@ -7,6 +7,8 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -29,8 +31,24 @@ public class QuoteRisk extends BaseEntity {
     @Column(name = "sum_insured", nullable = false, precision = 18, scale = 2)
     private BigDecimal sumInsured;
 
+    @Column(nullable = false, precision = 10, scale = 4)
+    private BigDecimal rate;
+
+    @Column(nullable = false, precision = 18, scale = 2)
+    private BigDecimal grossPremium;
+
     @Column(nullable = false, precision = 18, scale = 2)
     private BigDecimal premium;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "loadings", columnDefinition = "jsonb")
+    @Builder.Default
+    private List<AdjustmentEntry> loadings = new ArrayList<>();
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "discounts", columnDefinition = "jsonb")
+    @Builder.Default
+    private List<AdjustmentEntry> discounts = new ArrayList<>();
 
     @Column(name = "section_id")
     private UUID sectionId;

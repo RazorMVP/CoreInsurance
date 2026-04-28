@@ -7,7 +7,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,7 +21,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class QuoteController {
 
-    private final QuoteService service;
+    private final QuoteService    service;
+    private final QuotePdfService pdfService;
 
     @GetMapping
     @PreAuthorize("hasRole('QUOTATION_VIEW')")
@@ -78,5 +82,17 @@ public class QuoteController {
             @PathVariable UUID id,
             @RequestBody(required = false) QuoteApprovalRequest request) {
         return ApiResponse.success(service.reject(id, request));
+    }
+
+    @GetMapping(value = "/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    @PreAuthorize("hasRole('QUOTATION_VIEW')")
+    public ResponseEntity<byte[]> downloadPdf(@PathVariable UUID id) {
+        byte[] pdf = pdfService.generatePdf(id);
+        Quote  q   = service.findOrThrow(id);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + q.getQuoteNumber() + ".pdf\"")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
     }
 }

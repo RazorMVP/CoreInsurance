@@ -16,6 +16,11 @@ import com.nubeero.cia.setup.org.InsuranceCompanyRepository;
 import com.nubeero.cia.setup.product.Product;
 import com.nubeero.cia.setup.product.ProductRepository;
 import com.nubeero.cia.setup.product.ProductSection;
+import com.nubeero.cia.setup.quote.CalcSequence;
+import com.nubeero.cia.setup.quote.QuoteConfig;
+import com.nubeero.cia.setup.quote.QuoteConfigService;
+import com.nubeero.cia.setup.quote.QuoteDiscountTypeRepository;
+import com.nubeero.cia.setup.quote.QuoteLoadingTypeRepository;
 import com.nubeero.cia.workflow.TemporalQueues;
 import com.nubeero.cia.workflow.approval.ApprovalRequest;
 import com.nubeero.cia.workflow.approval.ApprovalWorkflow;
@@ -31,8 +36,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -42,16 +49,19 @@ import java.util.concurrent.atomic.AtomicInteger;
 @RequiredArgsConstructor
 public class QuoteService {
 
-    private final QuoteRepository repository;
-    private final QuoteNumberService quoteNumberService;
-    private final CustomerService customerService;
-    private final ProductRepository productRepository;
-    private final BrokerRepository brokerRepository;
+    private final QuoteRepository           repository;
+    private final QuoteNumberService        quoteNumberService;
+    private final CustomerService           customerService;
+    private final ProductRepository         productRepository;
+    private final BrokerRepository          brokerRepository;
     private final InsuranceCompanyRepository insuranceCompanyRepository;
-    private final AuditService auditService;
-    private final WorkflowClient workflowClient;
+    private final AuditService              auditService;
+    private final WorkflowClient            workflowClient;
+    private final QuoteConfigService        quoteConfigService;
+    private final QuoteDiscountTypeRepository discountTypeRepository;
+    private final QuoteLoadingTypeRepository  loadingTypeRepository;
 
-    // ─── Queries ─────────────────────────────────────────────────────────
+    // ── Queries ───────────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public Page<QuoteSummaryResponse> list(QuoteStatus status, UUID customerId, Pageable pageable) {
@@ -76,11 +86,10 @@ public class QuoteService {
         return toResponse(findOrThrow(id));
     }
 
-    // ─── Create ───────────────────────────────────────────────────────────
+    // ── Create ────────────────────────────────────────────────────────────────
 
     @Transactional
     public QuoteResponse create(QuoteRequest request) {
-        // Resolve cross-module references
         Customer customer = customerService.findOrThrow(request.getCustomerId());
         Product product = productRepository.findById(request.getProductId())
                 .filter(p -> p.getDeletedAt() == null && p.isActive())
@@ -96,8 +105,8 @@ public class QuoteService {
 
         validateDates(request.getPolicyStartDate(), request.getPolicyEndDate());
 
+        QuoteConfig config = quoteConfigService.fetchConfig();
         String quoteNumber = quoteNumberService.nextQuoteNumber();
-        BigDecimal discount = request.getDiscount() != null ? request.getDiscount() : BigDecimal.ZERO;
 
         Quote quote = Quote.builder()
                 .quoteNumber(quoteNumber)
@@ -114,14 +123,17 @@ public class QuoteService {
                 .businessType(request.getBusinessType())
                 .policyStartDate(request.getPolicyStartDate())
                 .policyEndDate(request.getPolicyEndDate())
-                .discount(discount)
                 .notes(request.getNotes())
-                .expiresAt(Instant.now().plus(30, ChronoUnit.DAYS))
+                .selectedClauseIds(request.getSelectedClauseIds() != null
+                        ? request.getSelectedClauseIds() : new ArrayList<>())
+                .inputterName(currentUserName())
+                .expiresAt(Instant.now().plus(config.getValidityDays(), ChronoUnit.DAYS))
                 .build();
 
-        applyRisks(quote, request.getRisks(), product);
+        applyRisks(quote, request.getRisks(), config);
+        applyQuoteAdjustments(quote, request.getQuoteLoadings(), request.getQuoteDiscounts(), config);
         applyCoinsuranceParticipants(quote, request.getCoinsuranceParticipants());
-        recalculateTotals(quote, discount);
+        recalculateTotals(quote, config);
         validateCoinsuranceShares(quote);
 
         Quote saved = repository.save(quote);
@@ -129,7 +141,7 @@ public class QuoteService {
         return toResponse(saved);
     }
 
-    // ─── Update ───────────────────────────────────────────────────────────
+    // ── Update ────────────────────────────────────────────────────────────────
 
     @Transactional
     public QuoteResponse update(UUID id, QuoteUpdateRequest request) {
@@ -152,19 +164,25 @@ public class QuoteService {
             validateDates(quote.getPolicyStartDate(), quote.getPolicyEndDate());
         }
 
-        BigDecimal discount = request.getDiscount() != null ? request.getDiscount() : quote.getDiscount();
+        QuoteConfig config = quoteConfigService.fetchConfig();
 
         if (request.getRisks() != null && !request.getRisks().isEmpty()) {
-            Product product = productRepository.findById(quote.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Product", quote.getProductId()));
-            applyRisks(quote, request.getRisks(), product);
+            applyRisks(quote, request.getRisks(), config);
         }
-
+        if (request.getQuoteLoadings() != null || request.getQuoteDiscounts() != null) {
+            applyQuoteAdjustments(quote,
+                    request.getQuoteLoadings(),
+                    request.getQuoteDiscounts(),
+                    config);
+        }
+        if (request.getSelectedClauseIds() != null) {
+            quote.setSelectedClauseIds(request.getSelectedClauseIds());
+        }
         if (request.getCoinsuranceParticipants() != null) {
             applyCoinsuranceParticipants(quote, request.getCoinsuranceParticipants());
         }
 
-        recalculateTotals(quote, discount);
+        recalculateTotals(quote, config);
         validateCoinsuranceShares(quote);
 
         Quote saved = repository.save(quote);
@@ -172,7 +190,7 @@ public class QuoteService {
         return toResponse(saved);
     }
 
-    // ─── Submit for approval ──────────────────────────────────────────────
+    // ── Submit ────────────────────────────────────────────────────────────────
 
     @Transactional
     public QuoteResponse submit(UUID id) {
@@ -204,7 +222,7 @@ public class QuoteService {
         return toResponse(saved);
     }
 
-    // ─── Approve ──────────────────────────────────────────────────────────
+    // ── Approve ───────────────────────────────────────────────────────────────
 
     @Transactional
     public QuoteResponse approve(UUID id, QuoteApprovalRequest request) {
@@ -214,6 +232,7 @@ public class QuoteService {
         quote.setStatus(QuoteStatus.APPROVED);
         quote.setApprovedBy(currentUserId());
         quote.setApprovedAt(Instant.now());
+        quote.setApproverName(currentUserName());
 
         if (quote.getWorkflowId() != null) {
             try {
@@ -231,7 +250,7 @@ public class QuoteService {
         return toResponse(saved);
     }
 
-    // ─── Reject ───────────────────────────────────────────────────────────
+    // ── Reject ────────────────────────────────────────────────────────────────
 
     @Transactional
     public QuoteResponse reject(UUID id, QuoteApprovalRequest request) {
@@ -259,7 +278,7 @@ public class QuoteService {
         return toResponse(saved);
     }
 
-    // ─── Convert to policy ────────────────────────────────────────────────
+    // ── Convert ───────────────────────────────────────────────────────────────
 
     @Transactional
     public QuoteResponse markConverted(UUID id) {
@@ -274,32 +293,134 @@ public class QuoteService {
         return toResponse(saved);
     }
 
-    // ─── Internal helpers ─────────────────────────────────────────────────
+    // ── Premium calculation ───────────────────────────────────────────────────
 
-    private void applyRisks(Quote quote, List<QuoteRiskRequest> requests, Product product) {
+    /**
+     * Per-item: Gross = SI × Rate
+     * If LOADING_FIRST: Loaded = Gross + Σloadings; Net = Loaded - Σdiscounts
+     * If DISCOUNT_FIRST: Discounted = Gross - Σdiscounts; Net = Discounted + Σloadings
+     */
+    private BigDecimal computeItemNet(BigDecimal gross,
+                                      List<AdjustmentEntry> loadings,
+                                      List<AdjustmentEntry> discounts,
+                                      CalcSequence sequence) {
+        BigDecimal totalLoading  = sumAdjustments(loadings,  gross);
+        BigDecimal totalDiscount = sumAdjustments(discounts, gross);
+
+        if (sequence == CalcSequence.LOADING_FIRST) {
+            BigDecimal loaded = gross.add(totalLoading);
+            // Discount is applied to the loaded premium
+            BigDecimal discountOnLoaded = sumAdjustments(discounts, loaded);
+            return loaded.subtract(discountOnLoaded).max(BigDecimal.ZERO);
+        } else {
+            BigDecimal discounted = gross.subtract(totalDiscount).max(BigDecimal.ZERO);
+            BigDecimal loadingOnDiscounted = sumAdjustments(loadings, discounted);
+            return discounted.add(loadingOnDiscounted);
+        }
+    }
+
+    private BigDecimal sumAdjustments(List<AdjustmentEntry> entries, BigDecimal base) {
+        if (entries == null || entries.isEmpty()) return BigDecimal.ZERO;
+        return entries.stream()
+                .map(e -> {
+                    if (e.getFormat() == AdjustmentFormat.PERCENT) {
+                        return base.multiply(e.getValue())
+                                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                    }
+                    return e.getValue().setScale(2, RoundingMode.HALF_UP);
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private void applyRisks(Quote quote, List<QuoteRiskRequest> requests, QuoteConfig config) {
         quote.getRisks().clear();
         AtomicInteger order = new AtomicInteger(1);
         requests.forEach(r -> {
             String sectionName = null;
+            Product product = productRepository.findById(quote.getProductId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Product", quote.getProductId()));
             if (r.getSectionId() != null) {
                 sectionName = product.getSections().stream()
                         .filter(s -> s.getId().equals(r.getSectionId()) && s.getDeletedAt() == null)
-                        .findFirst()
-                        .map(ProductSection::getName)
-                        .orElse(null);
+                        .findFirst().map(ProductSection::getName).orElse(null);
             }
-            BigDecimal premium = r.getSumInsured().multiply(product.getRate());
+
+            List<AdjustmentEntry> loadings  = resolveAdjustments(r.getLoadings(),  "LOADING");
+            List<AdjustmentEntry> discounts = resolveAdjustments(r.getDiscounts(), "DISCOUNT");
+
+            BigDecimal gross   = r.getSumInsured().multiply(r.getRate())
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            BigDecimal premium = computeItemNet(gross, loadings, discounts, config.getCalcSequence());
+
             quote.getRisks().add(QuoteRisk.builder()
                     .quote(quote)
                     .description(r.getDescription())
                     .sumInsured(r.getSumInsured())
+                    .rate(r.getRate())
+                    .grossPremium(gross)
                     .premium(premium)
+                    .loadings(loadings)
+                    .discounts(discounts)
                     .sectionId(r.getSectionId())
                     .sectionName(sectionName)
                     .riskDetails(r.getRiskDetails())
                     .orderNo(order.getAndIncrement())
                     .build());
         });
+    }
+
+    private void applyQuoteAdjustments(Quote quote,
+                                        List<AdjustmentEntryRequest> loadingRequests,
+                                        List<AdjustmentEntryRequest> discountRequests,
+                                        QuoteConfig config) {
+        if (loadingRequests != null) {
+            quote.setQuoteLoadings(resolveAdjustments(loadingRequests, "LOADING"));
+        }
+        if (discountRequests != null) {
+            quote.setQuoteDiscounts(resolveAdjustments(discountRequests, "DISCOUNT"));
+        }
+    }
+
+    private List<AdjustmentEntry> resolveAdjustments(
+            List<AdjustmentEntryRequest> requests, String category) {
+        if (requests == null || requests.isEmpty()) return new ArrayList<>();
+        return requests.stream().map(r -> {
+            String typeName = "LOADING".equals(category)
+                    ? loadingTypeRepository.findById(r.getTypeId())
+                            .map(t -> t.getName()).orElse(r.getTypeId().toString())
+                    : discountTypeRepository.findById(r.getTypeId())
+                            .map(t -> t.getName()).orElse(r.getTypeId().toString());
+            return AdjustmentEntry.builder()
+                    .typeId(r.getTypeId())
+                    .typeName(typeName)
+                    .format(r.getFormat())
+                    .value(r.getValue())
+                    .build();
+        }).toList();
+    }
+
+    private void recalculateTotals(Quote quote, QuoteConfig config) {
+        BigDecimal totalSumInsured = quote.getRisks().stream()
+                .map(QuoteRisk::getSumInsured)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalGross = quote.getRisks().stream()
+                .map(QuoteRisk::getGrossPremium)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sumOfItemNets = quote.getRisks().stream()
+                .map(QuoteRisk::getPremium)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Quote-level adjustments use totalGross as the % base
+        BigDecimal quoteLoading  = sumAdjustments(quote.getQuoteLoadings(),  totalGross);
+        BigDecimal quoteDiscount = sumAdjustments(quote.getQuoteDiscounts(), totalGross.add(quoteLoading));
+
+        BigDecimal finalNet = sumOfItemNets.add(quoteLoading).subtract(quoteDiscount)
+                .max(BigDecimal.ZERO);
+
+        quote.setTotalSumInsured(totalSumInsured);
+        quote.setTotalPremium(totalGross);   // total_premium column stores gross total
+        quote.setDiscount(quoteDiscount);
+        quote.setNetPremium(finalNet);       // net_premium column stores final net
     }
 
     private void applyCoinsuranceParticipants(Quote quote,
@@ -320,21 +441,6 @@ public class QuoteService {
         });
     }
 
-    private void recalculateTotals(Quote quote, BigDecimal discount) {
-        BigDecimal totalSumInsured = quote.getRisks().stream()
-                .map(QuoteRisk::getSumInsured)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalPremium = quote.getRisks().stream()
-                .map(QuoteRisk::getPremium)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal effectiveDiscount = discount.min(totalPremium);
-
-        quote.setTotalSumInsured(totalSumInsured);
-        quote.setTotalPremium(totalPremium);
-        quote.setDiscount(effectiveDiscount);
-        quote.setNetPremium(totalPremium.subtract(effectiveDiscount));
-    }
-
     private void validateCoinsuranceShares(Quote quote) {
         if (quote.getBusinessType() != BusinessType.DIRECT_WITH_COINSURANCE) return;
         if (quote.getCoinsuranceParticipants().isEmpty()) {
@@ -346,7 +452,7 @@ public class QuoteService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         if (totalShares.compareTo(new BigDecimal("100")) >= 0) {
             throw new BusinessRuleException("COINSURANCE_SHARES_EXCEED_100",
-                    "Coinsurance participant shares must be less than 100% (retention must be positive)");
+                    "Coinsurance participant shares must be less than 100%");
         }
     }
 
@@ -385,7 +491,16 @@ public class QuoteService {
         return "system";
     }
 
-    // ─── Mapping ──────────────────────────────────────────────────────────
+    private String currentUserName() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
+            String name = jwt.getClaimAsString("name");
+            return name != null ? name : jwt.getSubject();
+        }
+        return "system";
+    }
+
+    // ── Mapping ───────────────────────────────────────────────────────────────
 
     private QuoteSummaryResponse toSummary(Quote q) {
         return QuoteSummaryResponse.builder()
@@ -394,7 +509,8 @@ public class QuoteService {
                 .productName(q.getProductName()).classOfBusinessName(q.getClassOfBusinessName())
                 .brokerName(q.getBrokerName()).businessType(q.getBusinessType())
                 .policyStartDate(q.getPolicyStartDate()).policyEndDate(q.getPolicyEndDate())
-                .netPremium(q.getNetPremium()).expiresAt(q.getExpiresAt()).createdAt(q.getCreatedAt())
+                .netPremium(q.getNetPremium()).expiresAt(q.getExpiresAt())
+                .createdAt(q.getCreatedAt())
                 .build();
     }
 
@@ -403,10 +519,19 @@ public class QuoteService {
                 q.getRisks().stream()
                         .filter(r -> r.getDeletedAt() == null)
                         .map(r -> QuoteRiskResponse.builder()
-                                .id(r.getId()).description(r.getDescription())
-                                .sumInsured(r.getSumInsured()).premium(r.getPremium())
-                                .sectionId(r.getSectionId()).sectionName(r.getSectionName())
-                                .riskDetails(r.getRiskDetails()).orderNo(r.getOrderNo())
+                                .id(r.getId())
+                                .description(r.getDescription())
+                                .sumInsured(r.getSumInsured())
+                                .rate(r.getRate())
+                                .grossPremium(r.getGrossPremium())
+                                .premium(r.getPremium())
+                                .sectionId(r.getSectionId())
+                                .sectionName(r.getSectionName())
+                                .riskDetails(r.getRiskDetails())
+                                .loadings(toAdjustmentResponses(r.getLoadings(), r.getGrossPremium()))
+                                .discounts(toAdjustmentResponses(r.getDiscounts(),
+                                        r.getGrossPremium().add(sumAdjustments(r.getLoadings(), r.getGrossPremium()))))
+                                .orderNo(r.getOrderNo())
                                 .build())
                         .toList();
 
@@ -422,6 +547,8 @@ public class QuoteService {
                                         .build())
                                 .toList();
 
+        BigDecimal totalGross = q.getTotalPremium();
+
         return QuoteResponse.builder()
                 .id(q.getId()).quoteNumber(q.getQuoteNumber()).status(q.getStatus())
                 .customerId(q.getCustomerId()).customerName(q.getCustomerName())
@@ -431,8 +558,15 @@ public class QuoteService {
                 .brokerId(q.getBrokerId()).brokerName(q.getBrokerName())
                 .businessType(q.getBusinessType())
                 .policyStartDate(q.getPolicyStartDate()).policyEndDate(q.getPolicyEndDate())
-                .totalSumInsured(q.getTotalSumInsured()).totalPremium(q.getTotalPremium())
-                .discount(q.getDiscount()).netPremium(q.getNetPremium())
+                .totalSumInsured(q.getTotalSumInsured())
+                .totalGrossPremium(totalGross)
+                .totalNetPremium(q.getNetPremium())
+                .quoteLoadings(toAdjustmentResponses(q.getQuoteLoadings(), totalGross))
+                .quoteDiscounts(toAdjustmentResponses(q.getQuoteDiscounts(),
+                        totalGross.add(sumAdjustments(q.getQuoteLoadings(), totalGross))))
+                .selectedClauseIds(q.getSelectedClauseIds())
+                .inputterName(q.getInputterName())
+                .approverName(q.getApproverName())
                 .notes(q.getNotes()).workflowId(q.getWorkflowId())
                 .approvedBy(q.getApprovedBy()).approvedAt(q.getApprovedAt())
                 .rejectedBy(q.getRejectedBy()).rejectedAt(q.getRejectedAt())
@@ -440,5 +574,22 @@ public class QuoteService {
                 .risks(risks).coinsuranceParticipants(participants)
                 .createdAt(q.getCreatedAt()).updatedAt(q.getUpdatedAt())
                 .build();
+    }
+
+    private List<AdjustmentEntryResponse> toAdjustmentResponses(
+            List<AdjustmentEntry> entries, BigDecimal base) {
+        if (entries == null || entries.isEmpty()) return List.of();
+        return entries.stream().map(e -> {
+            BigDecimal computed = e.getFormat() == AdjustmentFormat.PERCENT
+                    ? base.multiply(e.getValue()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
+                    : e.getValue();
+            return AdjustmentEntryResponse.builder()
+                    .typeId(e.getTypeId())
+                    .typeName(e.getTypeName())
+                    .format(e.getFormat())
+                    .value(e.getValue())
+                    .computedAmount(computed)
+                    .build();
+        }).toList();
     }
 }

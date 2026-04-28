@@ -38,9 +38,15 @@ public class QuoteResponse {
     private LocalDate policyEndDate;
 
     private BigDecimal totalSumInsured;
-    private BigDecimal totalPremium;
-    private BigDecimal discount;
-    private BigDecimal netPremium;
+    private BigDecimal totalGrossPremium;
+    private BigDecimal totalNetPremium;
+
+    private List<AdjustmentEntryResponse> quoteLoadings;
+    private List<AdjustmentEntryResponse> quoteDiscounts;
+    private List<String> selectedClauseIds;
+
+    private String inputterName;
+    private String approverName;
 
     private String notes;
     private String workflowId;
