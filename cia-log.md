@@ -4,6 +4,53 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-28 — Session 46a: Backend for quotation module — loadings, discounts, clause selection, PDF, quote config
+
+### Files Created
+- `cia-backend/cia-api/src/main/resources/db/migration/V21__quote_config_tables.sql` — `quote_discount_types`, `quote_loading_types`, `quote_config` tables; seeded with 5 discount types, 5 loading types, default config (30 days, LOADING_FIRST)
+- `cia-backend/cia-api/src/main/resources/db/migration/V22__quote_adjustments.sql` — adds `rate`, `loadings`, `discounts` JSONB to `quote_risks`; adds `quote_loadings`, `quote_discounts`, `selected_clause_ids`, `inputter_name`, `approver_name` to `quotes`
+- `cia-backend/cia-setup/src/main/java/com/nubeero/cia/setup/quote/` (new package):
+  - `CalcSequence.java` — enum: LOADING_FIRST | DISCOUNT_FIRST
+  - `QuoteDiscountType.java`, `QuoteLoadingType.java` — entities (soft-delete, unique name)
+  - `QuoteConfig.java` — singleton entity (validity_days, calc_sequence)
+  - `QuoteDiscountTypeRepository.java`, `QuoteLoadingTypeRepository.java`, `QuoteConfigRepository.java`
+  - `QuoteConfigService.java` — CRUD for both type lists + singleton upsert; `fetchConfig()` for QuoteService
+  - `QuoteConfigController.java` — 8 endpoints: GET/PUT /quote-config, GET/POST/PUT/DELETE /quote-discount-types, GET/POST/PUT/DELETE /quote-loading-types
+  - `dto/AdjustmentTypeRequest.java`, `AdjustmentTypeResponse.java`, `QuoteConfigRequest.java`, `QuoteConfigResponse.java`
+- `cia-backend/cia-quotation/src/main/java/com/nubeero/cia/quotation/AdjustmentFormat.java` — enum: PERCENT | FLAT
+- `cia-backend/cia-quotation/src/main/java/com/nubeero/cia/quotation/AdjustmentEntry.java` — JSONB value object (typeId, typeName denormalized, format, value)
+- `cia-backend/cia-quotation/src/main/java/com/nubeero/cia/quotation/QuotePdfService.java` — HTML → PDF via HtmlToPdfConverter; per-item loading/discount rows, quote-level adjustments, General Subjectivity (3 lines), signature blocks
+- `cia-backend/cia-quotation/src/main/java/com/nubeero/cia/quotation/dto/AdjustmentEntryRequest.java`, `AdjustmentEntryResponse.java`
+
+### Files Modified
+- `cia-backend/cia-quotation/pom.xml` — added `cia-documents` dependency for HtmlToPdfConverter
+- `cia-backend/cia-quotation/src/main/java/com/nubeero/cia/quotation/QuoteRisk.java` — added `rate`, `grossPremium`, `loadings` JSONB, `discounts` JSONB
+- `cia-backend/cia-quotation/src/main/java/com/nubeero/cia/quotation/Quote.java` — added `quoteLoadings`, `quoteDiscounts`, `selectedClauseIds` JSONB + `inputterName`, `approverName`
+- `cia-backend/cia-quotation/src/main/java/com/nubeero/cia/quotation/QuoteService.java` — full rewrite of premium calculation (LOADING_FIRST/DISCOUNT_FIRST configurable); type names denormalized at save; inputterName from JWT; approverName on approval; validity days from QuoteConfig
+- `cia-backend/cia-quotation/src/main/java/com/nubeero/cia/quotation/QuoteController.java` — added `GET /{id}/pdf` endpoint (APPROVED/CONVERTED only, returns application/pdf)
+- `cia-backend/cia-quotation/src/main/java/com/nubeero/cia/quotation/dto/QuoteRequest.java` — added quoteLoadings, quoteDiscounts, selectedClauseIds; removed flat discount field
+- `cia-backend/cia-quotation/src/main/java/com/nubeero/cia/quotation/dto/QuoteUpdateRequest.java` — added quoteLoadings, quoteDiscounts, selectedClauseIds; removed flat discount field
+- `cia-backend/cia-quotation/src/main/java/com/nubeero/cia/quotation/dto/QuoteRiskRequest.java` — added rate, loadings, discounts
+- `cia-backend/cia-quotation/src/main/java/com/nubeero/cia/quotation/dto/QuoteRiskResponse.java` — added rate, grossPremium, loadings, discounts
+- `cia-backend/cia-quotation/src/main/java/com/nubeero/cia/quotation/dto/QuoteResponse.java` — replaced discount/netPremium with totalGrossPremium/totalNetPremium; added quoteLoadings, quoteDiscounts, selectedClauseIds, inputterName, approverName
+
+### Business Rules Implemented
+- Per-item: Gross = SI × Rate; Loaded = Gross + Σloadings; Net = Loaded − Σdiscounts (LOADING_FIRST)
+- Quote-level: Final Net = Σ item nets + quote loading (% base = Σ gross) − quote discount
+- Calculation sequence (LOADING_FIRST / DISCOUNT_FIRST) configurable per tenant in quote_config
+- PDF only available for APPROVED or CONVERTED quotes; throws BusinessRuleException otherwise
+- typeName denormalized into JSONB at save time — PDF renders without joins
+
+### Design Decisions
+- JSONB chosen over junction tables for loadings/discounts — consistent with existing risk_details pattern; avoids schema proliferation for variable-length arrays
+- `typeName` denormalized into AdjustmentEntry at save time so PDF generation needs no additional DB queries
+- `total_premium` (existing column) reused for gross total; `net_premium` reused for final net — no new columns needed, avoiding a V23 migration for those fields
+
+### Git Commit
+`5ab938a` feat(quotation): backend support for per-item loadings/discounts, clause selection, PDF + quote config
+
+---
+
 ## 2026-04-27 — Session 45k: Clause search bar in quote sheets
 
 ### Files Modified
