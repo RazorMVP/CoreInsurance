@@ -4,6 +4,18 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-28 — Session 46c: Quote PDF margin — increase gap between General Subjectivity and signatures
+
+### Files Modified
+- `cia-frontend/apps/back-office/src/modules/quotation/pages/QuotePdfPreview.tsx`
+  - `PrintContent` (dialog preview): `mb-8` → `mb-16` on the General Subjectivity `<ol>` — doubles bottom margin before the signature block
+  - `buildPrintHtml` (print popup CSS): `.sig { margin-top: 28px }` → `56px` — doubles top margin on the signature row
+
+### Git Commit
+`c7288ea` fix(quotation): increase margin between General Subjectivity and signatures in quote PDF
+
+---
+
 ## 2026-04-28 — Session 46b: Fix blank PDF on quote download
 
 ### Root Causes Found and Fixed
