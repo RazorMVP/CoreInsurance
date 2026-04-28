@@ -4,6 +4,33 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-04-28 — Session 46b: Fix blank PDF on quote download
+
+### Root Causes Found and Fixed
+
+**Frontend — blank print output:**
+The `window.print()` CSS isolation approach used `display: none` set inline via JavaScript on `#quote-print-portal` *after* injecting the `@media print` CSS, which re-hid the element before printing ran. The portal was invisible during print despite the `!important` rule.
+
+**Backend — blank/error PDF via API endpoint:**
+`QuotePdfService.buildHtml()` generated HTML with `display:flex`, `display:grid`, CSS class attributes (class='right', class='amber'), and the `₦` sign (U+20A6, outside WinAnsi). `HtmlToPdfConverter` only renders `h1/h2/p/table/ul/ol/hr` — CSS class attributes and layout divs fall through to a no-op `default` branch. The `₦` character throws `IllegalArgumentException` in `PDType1Font.showText()` since Helvetica uses WinAnsiEncoding.
+
+### Files Modified
+- `cia-frontend/apps/back-office/src/modules/quotation/pages/QuotePdfPreview.tsx`:
+  - Added `buildPrintHtml()` — generates a fully self-contained HTML document with embedded `<style>` block (no Tailwind dependency), all quote content, and `window.onload = window.print()` auto-trigger
+  - `handlePrint()` now creates a `Blob` from the HTML string, opens it via `URL.createObjectURL()` in a new window — zero CSS specificity issues, isolated rendering context
+  - Removed the `#quote-print-portal` hidden div from JSX (no longer needed)
+- `cia-backend/cia-quotation/src/main/java/com/nubeero/cia/quotation/QuotePdfService.java`:
+  - Rewrote `buildHtml()` to use only tags `HtmlToPdfConverter` supports: `h1`, `h2`, `p`, `table`, `ol`, `hr`
+  - Removed all CSS class attributes and `display:flex`/`display:grid` layout divs
+  - Replaced `₦` (U+20A6) with ASCII-safe `NGN ` prefix throughout
+  - Replaced `appendAdjustments()` (which used `class=` attributes) with `appendAdjTable()` (clean table rows only)
+  - Removed unused `addInfo()` helper
+
+### Git Commit
+`2176ba7` fix(quotation): blank PDF — replace CSS-portal print with Blob URL popup; fix PDFBox HTML
+
+---
+
 ## 2026-04-28 — Session 46a: Backend for quotation module — loadings, discounts, clause selection, PDF, quote config
 
 ### Files Created
