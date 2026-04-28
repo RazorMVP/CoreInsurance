@@ -279,7 +279,7 @@ export function PrintContent({ data }: { data: QuotePdfData }) {
 
       {/* General Subjectivity */}
       <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">General Subjectivity</h2>
-      <ol className="list-decimal list-inside space-y-2 mb-8">
+      <ol className="list-decimal list-inside space-y-2 mb-16">
         <li className="text-xs text-gray-700 leading-relaxed">
           This quote is subject to <strong>no known loss or reported loss</strong> till date.
         </li>
@@ -421,7 +421,7 @@ function buildPrintHtml(data: QuotePdfData): string {
     .val{font-weight:bold}
     .net{border:2px solid #0f766e;background:#f0fdf9;padding:10px 14px;
          display:flex;justify-content:space-between;align-items:center;margin:12px 0}
-    .sig{display:flex;gap:60px;margin-top:28px}
+    .sig{display:flex;gap:60px;margin-top:56px}
     .sig-b{flex:1;border-top:1px solid #888;padding-top:4px}
     .foot{font-size:8pt;color:#888;text-align:center;margin-top:24px}
     ol{margin:0 0 0 18px}li{font-size:9pt;margin-bottom:6px;line-height:1.4}
