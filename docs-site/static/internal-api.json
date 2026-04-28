@@ -1311,6 +1311,422 @@
             "description": "Premium calculation sequence"
           }
         }
+      },
+      "AdjustmentEntryRequest": {
+        "type": "object",
+        "required": [
+          "typeId",
+          "format",
+          "value"
+        ],
+        "properties": {
+          "typeId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the discount/loading type from setup"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "PERCENT",
+              "FLAT"
+            ],
+            "description": "Whether the value is a percentage or flat Naira amount"
+          },
+          "value": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Rate (%) or flat amount (NGN)"
+          }
+        }
+      },
+      "AdjustmentEntryResponse": {
+        "type": "object",
+        "properties": {
+          "typeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "typeName": {
+            "type": "string",
+            "description": "Denormalized type name at time of save"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "PERCENT",
+              "FLAT"
+            ]
+          },
+          "value": {
+            "type": "number"
+          },
+          "computedAmount": {
+            "type": "number",
+            "description": "Calculated NGN amount based on format and base premium"
+          }
+        }
+      },
+      "QuoteRiskRequest": {
+        "type": "object",
+        "required": [
+          "description",
+          "sumInsured",
+          "rate"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "sumInsured": {
+            "type": "number",
+            "description": "Sum insured in NGN"
+          },
+          "rate": {
+            "type": "number",
+            "description": "Premium rate as a percentage (e.g. 2.25 for 2.25%)"
+          },
+          "sectionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional product section ID"
+          },
+          "riskDetails": {
+            "type": "object",
+            "description": "Flexible JSONB risk-specific metadata"
+          },
+          "loadings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentEntryRequest"
+            }
+          },
+          "discounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentEntryRequest"
+            }
+          }
+        }
+      },
+      "QuoteRiskResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": {
+            "type": "string"
+          },
+          "sumInsured": {
+            "type": "number"
+          },
+          "rate": {
+            "type": "number"
+          },
+          "grossPremium": {
+            "type": "number",
+            "description": "Gross premium before loadings/discounts"
+          },
+          "premium": {
+            "type": "number",
+            "description": "Item net premium after loadings and discounts"
+          },
+          "sectionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sectionName": {
+            "type": "string"
+          },
+          "loadings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentEntryResponse"
+            }
+          },
+          "discounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentEntryResponse"
+            }
+          },
+          "orderNo": {
+            "type": "integer"
+          }
+        }
+      },
+      "QuoteRequest": {
+        "type": "object",
+        "required": [
+          "customerId",
+          "productId",
+          "businessType",
+          "policyStartDate",
+          "policyEndDate",
+          "risks"
+        ],
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "brokerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "businessType": {
+            "type": "string",
+            "enum": [
+              "DIRECT",
+              "DIRECT_WITH_COINSURANCE",
+              "INWARD_COINSURANCE"
+            ]
+          },
+          "policyStartDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "policyEndDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "risks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteRiskRequest"
+            },
+            "minItems": 1
+          },
+          "quoteLoadings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentEntryRequest"
+            },
+            "description": "Quote-level loadings applied on top of item nets"
+          },
+          "quoteDiscounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentEntryRequest"
+            },
+            "description": "Quote-level discounts"
+          },
+          "selectedClauseIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "IDs of clauses from the clause bank to attach to this quote"
+          }
+        }
+      },
+      "QuoteResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "quoteNumber": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PENDING_APPROVAL",
+              "APPROVED",
+              "REJECTED",
+              "CONVERTED",
+              "EXPIRED"
+            ]
+          },
+          "customerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "customerName": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "productCode": {
+            "type": "string"
+          },
+          "productRate": {
+            "type": "number"
+          },
+          "classOfBusinessId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "classOfBusinessName": {
+            "type": "string"
+          },
+          "brokerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "brokerName": {
+            "type": "string"
+          },
+          "businessType": {
+            "type": "string"
+          },
+          "policyStartDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "policyEndDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "totalSumInsured": {
+            "type": "number"
+          },
+          "totalGrossPremium": {
+            "type": "number",
+            "description": "Sum of all item gross premiums"
+          },
+          "totalNetPremium": {
+            "type": "number",
+            "description": "Final net premium after all loadings and discounts"
+          },
+          "quoteLoadings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentEntryResponse"
+            }
+          },
+          "quoteDiscounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentEntryResponse"
+            }
+          },
+          "selectedClauseIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "inputterName": {
+            "type": "string",
+            "description": "Name of the underwriter who created the quote"
+          },
+          "approverName": {
+            "type": "string",
+            "description": "Name of the approving officer (set on approval)"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "workflowId": {
+            "type": "string"
+          },
+          "approvedBy": {
+            "type": "string"
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "rejectedBy": {
+            "type": "string"
+          },
+          "rejectedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "rejectionReason": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "risks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteRiskResponse"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "QuoteUpdateRequest": {
+        "type": "object",
+        "description": "All fields optional \u2014 only provided fields are updated. Risks, if provided, replace all existing risk items.",
+        "properties": {
+          "brokerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "businessType": {
+            "type": "string",
+            "enum": [
+              "DIRECT",
+              "DIRECT_WITH_COINSURANCE",
+              "INWARD_COINSURANCE"
+            ]
+          },
+          "policyStartDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "policyEndDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "risks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteRiskRequest"
+            }
+          },
+          "quoteLoadings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentEntryRequest"
+            }
+          },
+          "quoteDiscounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentEntryRequest"
+            }
+          },
+          "selectedClauseIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       }
     }
   },
@@ -6465,16 +6881,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Quote detail",
+            "description": "Quote details including per-item loadings/discounts, clause IDs, inputterName, approverName",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/QuoteSummary"
-                    }
-                  }
+                  "$ref": "#/components/schemas/QuoteResponse"
                 }
               }
             }
@@ -6509,7 +6920,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/QuoteUpdateRequest"
               }
             }
           }
@@ -6520,12 +6931,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/QuoteSummary"
-                    }
-                  }
+                  "$ref": "#/components/schemas/QuoteResponse"
                 }
               }
             }
@@ -10409,6 +10815,112 @@
           },
           "404": {
             "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/quotes": {
+      "post": {
+        "summary": "Create a new quote",
+        "description": "Creates a DRAFT quote with per-item loadings, discounts, and clause selection. Supports single-risk (one item) and multi-risk (multiple items).",
+        "tags": [
+          "Quotation"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Quote created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Insufficient permissions"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "get": {
+        "summary": "List quotes",
+        "description": "Returns a paginated list of quotes. Filter by status or customerId.",
+        "tags": [
+          "Quotation"
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DRAFT",
+                "PENDING_APPROVAL",
+                "APPROVED",
+                "REJECTED",
+                "CONVERTED",
+                "EXPIRED"
+              ]
+            }
+          },
+          {
+            "name": "customerId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of quotes"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         },
         "security": [
