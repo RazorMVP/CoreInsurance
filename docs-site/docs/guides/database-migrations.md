@@ -37,7 +37,9 @@ db/migration/
 ├── V17__create_report_tables.sql           # report_definition, report_pin, report_access_policy
 ├── V18__seed_system_report_definitions.sql # 55 SYSTEM report definitions (data migration)
 ├── V19__customer_kyc_document_fields.sql   # id_document_url, id_expiry_date, cac fields
-└── V20__customer_number_format.sql         # customer_number_format singleton; customer_number column
+├── V20__customer_number_format.sql         # customer_number_format singleton; customer_number column
+├── V21__quote_config_tables.sql            # quote_discount_types, quote_loading_types, quote_config; seeded defaults
+└── V22__quote_adjustments.sql              # rate/loadings/discounts JSONB on quote_risks; quote_loadings/discounts/clause_ids/inputter/approver on quotes
 ```
 
 ### Naming Convention

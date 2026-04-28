@@ -776,7 +776,7 @@ Each tenant can optionally enable a **sandbox mode** for Insurtechs to test inte
 | # | Module | Features | Key Outputs |
 |---|---|---|---|
 | 1 | Setup & Administration | 35 | Products, classes, approval groups, master data, partner management |
-| 2 | Quotation | 5 | Quote documents, approval workflow |
+| 2 | Quotation | 6 | Quote documents, per-item loadings/discounts, clause selection, PDF download, quote config tab |
 | 3 | Policy | 23 | Policy documents, debit notes, NAICOM/NIID upload |
 | 4 | Endorsements | 10 | Endorsement documents, debit/credit notes |
 | 5 | Claims | 23 | Reserves, DVs, claim settlements, credit notes to finance |
@@ -992,7 +992,7 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 | `[x]` | Approval Groups | Card-based multi-level display + ApprovalGroupSheet with useFieldArray |
 | `[x]` | Classes of Business | DataTable list + ClassSheet (create/edit) |
 | `[x]` | Products | DataTable list + ProductSheet (single/multi-risk, commission rate, 14 seed classes); inline `+ New Class of Business` via Dialog inside Sheet |
-| `[x]` | Policy Specifications | Clause bank DataTable (search, product/type filter, mandatory/optional, CRUD); template manager (per-product, type-coloured badges, upload/replace/archive/delete) |
+| `[x]` | Policy Specifications | Clause bank DataTable (search, product/type filter, mandatory/optional, CRUD); template manager (per-product, type-coloured badges, upload/replace/archive/delete); **Quotes tab** — Discount Types CRUD, Loading Types CRUD, Quote Validity Period, Premium Calculation Sequence (LOADING_FIRST/DISCOUNT_FIRST) |
 | `[x]` | Claims Setup | Tabbed: Reserve Categories, Notification Timelines, Documents, Loss Types (skeleton tabs ready) |
 | `[x]` | Organisations | Tabbed: Brokers (full CRUD + BrokerSheet), Reinsurers/Insurers/Branches/SBUs/Surveyors (skeleton) |
 | `[x]` | Vehicle Registry | Tabbed: Makes, Models, Types (skeleton tabs ready) |
@@ -1015,15 +1015,16 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 
 ---
 
-#### Build 4 — Module 2: Quotation (5 features) 🟡
+#### Build 4 — Module 2: Quotation (6 features) 🟡
 
 | Status | Sub-page | Key features |
 |---|---|---|
-| `[x]` | Create Quote | SingleRiskQuoteSheet — customer, product, dates, sum insured, rate, discount, live premium preview |
-| `[x]` | Multi-risk Quote | MultiRiskQuoteSheet — useFieldArray risk items each with SI + rate, rolling total |
+| `[x]` | Create Quote | SingleRiskQuoteSheet — customer, product, dates, SI, rate; per-item loadings (type+format+value, multiple); per-item discounts (same); clause selection with search bar; live premium preview (Gross → +Loadings → −Discounts → Net) |
+| `[x]` | Multi-risk Quote | MultiRiskQuoteSheet — per-item loadings/discounts; quote-level loadings/discounts; grand total (Σ item nets + quote adjustments); clause selection with search bar |
 | `[x]` | Bulk Upload | BulkUploadPage — drag-and-drop CSV, validation results, error row detail, template download |
-| `[x]` | Quote Detail | QuoteDetailPage — premium card, version history timeline (v-dot), status-conditional action buttons |
-| `[x]` | Quote Approval | Submit for Approval / Convert to Policy / Edit conditioned on status; status badge throughout |
+| `[x]` | Quote Detail | QuoteDetailPage — useParams fix (correct quote per click); risk items card with per-item loading/discount breakdown; clauses card; inputter/approver in details; Download PDF button (APPROVED/CONVERTED only); version history timeline |
+| `[x]` | Quote Approval | Submit for Approval / Convert to Policy / Edit conditioned on status; status badge throughout; PDF row action on list page for APPROVED/CONVERTED quotes |
+| `[x]` | Quote PDF | QuotePdfPreview — Blob URL popup with self-contained HTML + embedded CSS; auto-triggers window.print(); General Subjectivity section (3 lines); inputter + approver signature blocks; validity period from Quote Config |
 
 ---
 

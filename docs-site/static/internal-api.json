@@ -1275,6 +1275,42 @@
             "format": "date-time"
           }
         }
+      },
+      "AdjustmentTypeRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Discount or loading type name"
+          }
+        }
+      },
+      "QuoteConfigRequest": {
+        "type": "object",
+        "required": [
+          "validityDays",
+          "calcSequence"
+        ],
+        "properties": {
+          "validityDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365,
+            "description": "Quote validity in days (printed on PDF)"
+          },
+          "calcSequence": {
+            "type": "string",
+            "enum": [
+              "LOADING_FIRST",
+              "DISCOUNT_FIRST"
+            ],
+            "description": "Premium calculation sequence"
+          }
+        }
       }
     }
   },
@@ -10046,6 +10082,340 @@
             "description": "Forbidden \u2014 requires SETUP_UPDATE role"
           }
         }
+      }
+    },
+    "/quotes/{id}/pdf": {
+      "get": {
+        "summary": "Download approved quote as PDF",
+        "description": "Generates and streams a PDF of the quote. Only available when status is APPROVED or CONVERTED.",
+        "tags": [
+          "Quotation"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF document",
+            "content": {
+              "application/pdf": {}
+            }
+          },
+          "400": {
+            "description": "Quote not in APPROVED or CONVERTED status"
+          },
+          "404": {
+            "description": "Quote not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/setup/quote-config": {
+      "get": {
+        "summary": "Get quote configuration",
+        "description": "Returns the tenant's quote configuration singleton (validity days, premium calculation sequence).",
+        "tags": [
+          "Setup"
+        ],
+        "responses": {
+          "200": {
+            "description": "Quote configuration"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "summary": "Update quote configuration",
+        "description": "Updates the quote config singleton. Creates it if it does not exist.",
+        "tags": [
+          "Setup"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuoteConfigRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated quote configuration"
+          },
+          "400": {
+            "description": "Validation error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/setup/quote-discount-types": {
+      "get": {
+        "summary": "List quote discount types",
+        "description": "Returns all active discount types available to underwriters when building quotes.",
+        "tags": [
+          "Setup"
+        ],
+        "responses": {
+          "200": {
+            "description": "List of discount types"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create quote discount type",
+        "description": "Adds a new named discount type. The actual rate/amount is set by the underwriter at quote time.",
+        "tags": [
+          "Setup"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdjustmentTypeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created discount type"
+          },
+          "400": {
+            "description": "Validation error or duplicate name"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/setup/quote-discount-types/{id}": {
+      "put": {
+        "summary": "Update quote discount type",
+        "tags": [
+          "Setup"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdjustmentTypeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "summary": "Delete quote discount type",
+        "description": "Soft-deletes the discount type. Existing quotes retain the resolved label.",
+        "tags": [
+          "Setup"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/setup/quote-loading-types": {
+      "get": {
+        "summary": "List quote loading types",
+        "description": "Returns all active loading types available to underwriters when building quotes.",
+        "tags": [
+          "Setup"
+        ],
+        "responses": {
+          "200": {
+            "description": "List of loading types"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create quote loading type",
+        "tags": [
+          "Setup"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdjustmentTypeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Validation error or duplicate name"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/setup/quote-loading-types/{id}": {
+      "put": {
+        "summary": "Update quote loading type",
+        "tags": [
+          "Setup"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdjustmentTypeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "summary": "Delete quote loading type",
+        "description": "Soft-deletes the loading type. Existing quotes retain the resolved label.",
+        "tags": [
+          "Setup"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     }
   }

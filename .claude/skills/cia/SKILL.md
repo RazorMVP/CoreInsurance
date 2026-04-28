@@ -246,6 +246,28 @@ Domain (tenant schema)
 - Pro-rata endorsements: `(Annual Premium / 365) × Days`
 - Multi-risk: section premiums less section discounts, summed, less product-level discounts.
 
+### Quote Premium Formula (with Loadings and Discounts)
+Quotes support multiple per-item loadings and discounts, plus quote-level adjustments. The calculation sequence is configurable per tenant in `quote_config` (default: LOADING_FIRST).
+
+**Per item (LOADING_FIRST):**
+- `Gross = Sum Insured × Rate%`
+- `Loaded = Gross + Σ loadings` (% loadings applied to Gross; flat loadings added directly)
+- `Item Net = Loaded − Σ discounts` (% discounts applied to Loaded; flat discounts subtracted)
+
+**Quote-level (applied on top of per-item nets):**
+- `Total Gross = Σ per-item gross premiums` (also the % base for quote-level loading/discount)
+- `Quote Loading amount = Σ quote loadings` (% of Total Gross or flat)
+- `Quote Discount amount = Σ quote discounts` (% of Total Gross + Quote Loading, or flat)
+- `Final Net = Σ Item Nets + Quote Loading − Quote Discount`
+
+**Quote Config (singleton per tenant, table: `quote_config`):**
+- `validity_days` — drives the PDF General Subjectivity expiry statement
+- `calc_sequence` — `LOADING_FIRST` (default) or `DISCOUNT_FIRST`
+
+**PDF download** is only available for quotes with status `APPROVED` or `CONVERTED`. The PDF includes inputter name and approver name, and a General Subjectivity section with 3 fixed statements (no known loss, validity/expiry date, satisfactory survey).
+
+**Adjustment types** (`quote_discount_types`, `quote_loading_types`) are named labels only — no rate is stored. The underwriter sets the rate/amount at quote time. Type names are denormalized into `AdjustmentEntry` JSONB at save time so PDF rendering needs no join.
+
 ### Approval Hierarchies
 - Single-level: one approver within amount range.
 - Multi-level: escalates through tiers until approver whose limit ≥ amount.
@@ -292,7 +314,7 @@ Domain (tenant schema)
 ## Data Model Highlights
 
 ### Core entities (per tenant schema)
-`customers`, `customer_directors`, `customer_documents`, `customer_number_format`, `policies`, `quotes`, `endorsements`, `claims`, `claim_reserves`, `claim_expenses`, `reinsurance_treaties`, `ri_allocations`, `debit_notes`, `credit_notes`, `receipts`, `payments`, `products`, `classes_of_business`, `brokers`, `users`, `access_groups`, `approval_groups`, `document_templates`, `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`, `audit_log`, `login_audit_log`, `audit_alert`, `audit_alert_config`, `report_definition`, `report_pin`, `report_access_policy`, `policy_number_formats`.
+`customers`, `customer_directors`, `customer_documents`, `customer_number_format`, `policies`, `quotes`, `endorsements`, `claims`, `claim_reserves`, `claim_expenses`, `reinsurance_treaties`, `ri_allocations`, `debit_notes`, `credit_notes`, `receipts`, `payments`, `products`, `classes_of_business`, `brokers`, `users`, `access_groups`, `approval_groups`, `document_templates`, `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`, `audit_log`, `login_audit_log`, `audit_alert`, `audit_alert_config`, `report_definition`, `report_pin`, `report_access_policy`, `policy_number_formats`, `quote_discount_types`, `quote_loading_types`, `quote_config`.
 
 ### Key relationships
 - `policies` → `customers` (many-to-one)
