@@ -4,6 +4,34 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-01 — Session 47: Gate — Complete internal-api.json for quotation endpoints
+
+### Context
+
+Session completion gate from the prior session (46c) ran before a final documentation audit revealed gaps in `internal-api.json`. This session documents the fix applied in commit `f404ec4`.
+
+### Files Modified
+
+- `docs-site/static/internal-api.json` — 119 → 127 paths, 36 → 43 schemas
+  - **New paths added:** `POST /quotes` (was entirely missing), `GET /quotes` (list with status/customerId/page/size filters)
+  - **Updated paths:** `GET /quotes/{id}` response now references `QuoteResponse` schema; `PUT /quotes/{id}` requestBody now references `QuoteUpdateRequest` schema
+  - **New schemas added (7):** `AdjustmentEntryRequest`, `AdjustmentEntryResponse`, `QuoteRiskRequest`, `QuoteRiskResponse`, `QuoteRequest`, `QuoteResponse`, `QuoteUpdateRequest`
+
+### Gate Items Verified
+
+- ✅ cia-log.md — this entry
+- ✅ CLAUDE.md — updated in gate commit 4f38d7e (Build 4 rows, feature count 5→6, Module Summary)
+- ✅ SKILL.md — Quote Premium Formula, Data Model, entities updated in gate commit 4f38d7e
+- ✅ database-migrations.md — V21 and V22 entries present
+- ✅ internal-api.json — 127 paths / 43 schemas, all quote + setup/quote-config endpoints documented
+- ✅ Vercel deploy — docs site deployed after f404ec4 push
+
+### Git Commit
+
+`f404ec4` docs(api): complete quotation endpoints in internal-api.json
+
+---
+
 ## 2026-04-28 — Session 46c: Quote PDF margin — increase gap between General Subjectivity and signatures
 
 ### Files Modified
