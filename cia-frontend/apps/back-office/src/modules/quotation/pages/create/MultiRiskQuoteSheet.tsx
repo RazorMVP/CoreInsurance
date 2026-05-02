@@ -11,8 +11,20 @@ import {
 import { useState } from 'react';
 import { useFieldArray, useForm, useWatch, Control } from 'react-hook-form';
 import { z } from 'zod';
-import { MOCK_DISCOUNT_TYPES, MOCK_LOADING_TYPES } from '../../../setup/pages/policy-specs/quote-config-types';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  apiClient,
+  type CustomerDto,
+  type ProductDto,
+} from '@cia/api-client';
 import { INITIAL_CLAUSES } from '../clauses-shared';
+
+interface AdjustmentTypeDto { id: string; name: string; }
+type CustomerSummary = CustomerDto & { firstName?: string; lastName?: string; companyName?: string };
+function customerLabel(c: CustomerSummary): string {
+  if (c.customerType === 'CORPORATE') return c.companyName ?? '(unnamed corporate)';
+  return `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim() || '(unnamed individual)';
+}
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 const adjustmentSchema = z.object({
@@ -40,17 +52,6 @@ const schema = z.object({
   selectedClauseIds: z.array(z.string()),
 });
 export type MultiRiskFormValues = z.infer<typeof schema>;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const mockCustomers = [
-  { id: 'c1', name: 'Chioma Okafor' },
-  { id: 'c2', name: 'Alaba Trading Co.' },
-  { id: 'c3', name: 'Emeka Eze' },
-];
-const mockProducts = [
-  { id: 'p3', name: 'Fire & Burglary Standard' },
-  { id: 'p4', name: 'Marine Cargo Open Cover' },
-];
 
 function computeItemNet(si: number, rate: number, loadings: { format: string; value: number }[], discounts: { format: string; value: number }[]) {
   const gross = (si * rate) / 100;
@@ -143,11 +144,13 @@ function AdjustmentRows({
 
 // ── Single risk item card ─────────────────────────────────────────────────────
 function RiskItemCard({
-  index, control, remove: removeItem,
+  index, control, remove: removeItem, loadingTypes, discountTypes,
 }: {
   index: number;
   control: Control<MultiRiskFormValues>;
   remove: () => void;
+  loadingTypes:  AdjustmentTypeDto[];
+  discountTypes: AdjustmentTypeDto[];
 }) {
   const si       = useWatch({ control, name: `risks.${index}.sumInsured` }) || 0;
   const rate     = useWatch({ control, name: `risks.${index}.rate` })       || 0;
@@ -204,7 +207,7 @@ function RiskItemCard({
           control={control}
           name={`risks.${index}.loadings`}
           label="Loading"
-          typeOptions={MOCK_LOADING_TYPES}
+          typeOptions={loadingTypes}
           accentColor="amber"
         />
       </div>
@@ -216,7 +219,7 @@ function RiskItemCard({
           control={control}
           name={`risks.${index}.discounts`}
           label="Discount"
-          typeOptions={MOCK_DISCOUNT_TYPES}
+          typeOptions={discountTypes}
           accentColor="rose"
         />
       </div>
@@ -255,8 +258,50 @@ interface Props { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: 
 
 export default function MultiRiskQuoteSheet({ open, onOpenChange, onSuccess }: Props) {
   const [clauseSearch, setClauseSearch] = useState('');
+  const queryClient = useQueryClient();
+
+  const customersQuery = useQuery<CustomerSummary[]>({
+    queryKey: ['customers'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: CustomerSummary[] }>('/api/v1/customers');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const customers = customersQuery.data ?? [];
+
+  const productsQuery = useQuery<ProductDto[]>({
+    queryKey: ['setup', 'products'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ProductDto[] }>('/api/v1/setup/products');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const products = productsQuery.data ?? [];
+
+  const loadingTypesQuery = useQuery<AdjustmentTypeDto[]>({
+    queryKey: ['setup', 'quote-loading-types'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: AdjustmentTypeDto[] }>('/api/v1/setup/quote-loading-types');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const loadingTypes = loadingTypesQuery.data ?? [];
+
+  const discountTypesQuery = useQuery<AdjustmentTypeDto[]>({
+    queryKey: ['setup', 'quote-discount-types'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: AdjustmentTypeDto[] }>('/api/v1/setup/quote-discount-types');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const discountTypes = discountTypesQuery.data ?? [];
 
   const form = useForm<MultiRiskFormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(schema) as any,
     defaultValues: {
       customerId: '', productId: '', startDate: '', endDate: '',
@@ -289,9 +334,42 @@ export default function MultiRiskQuoteSheet({ open, onOpenChange, onSuccess }: P
   }, 0);
   const finalNet = Math.max(0, quoteLoadedBase - totalQuoteDiscount);
 
-  async function onSubmit(values: MultiRiskFormValues) {
-    console.log('Create multi-risk quote', values);
-    onSuccess();
+  function resolveTypeName(typeId: string, kind: 'loading' | 'discount'): string {
+    const list = kind === 'loading' ? loadingTypes : discountTypes;
+    return list.find(t => t.id === typeId)?.name ?? '';
+  }
+
+  const createQuote = useMutation({
+    mutationFn: async (values: MultiRiskFormValues) => {
+      const payload = {
+        customerId:      values.customerId,
+        productId:       values.productId,
+        businessType:    'DIRECT',
+        policyStartDate: values.startDate,
+        policyEndDate:   values.endDate,
+        risks: values.risks.map(r => ({
+          description: r.description,
+          sumInsured:  r.sumInsured,
+          rate:        r.rate,
+          loadings:    r.loadings.map(l => ({ ...l, typeName: resolveTypeName(l.typeId, 'loading') })),
+          discounts:   r.discounts.map(d => ({ ...d, typeName: resolveTypeName(d.typeId, 'discount') })),
+        })),
+        quoteLoadings:    values.quoteLoadings.map(l => ({ ...l, typeName: resolveTypeName(l.typeId, 'loading') })),
+        quoteDiscounts:   values.quoteDiscounts.map(d => ({ ...d, typeName: resolveTypeName(d.typeId, 'discount') })),
+        selectedClauseIds: values.selectedClauseIds,
+      };
+      const res = await apiClient.post<{ data: { id: string } }>('/api/v1/quotes', payload);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotes'] });
+      onSuccess();
+      form.reset();
+    },
+  });
+
+  function onSubmit(values: MultiRiskFormValues) {
+    createQuote.mutate(values);
   }
 
   return (
@@ -315,7 +393,7 @@ export default function MultiRiskQuoteSheet({ open, onOpenChange, onSuccess }: P
                     <FormLabel>Customer</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger></FormControl>
-                      <SelectContent>{mockCustomers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                      <SelectContent>{customers.map(c => <SelectItem key={c.id} value={c.id}>{customerLabel(c)}</SelectItem>)}</SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
@@ -327,7 +405,7 @@ export default function MultiRiskQuoteSheet({ open, onOpenChange, onSuccess }: P
                     <FormLabel>Product</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger></FormControl>
-                      <SelectContent>{mockProducts.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                      <SelectContent>{products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
@@ -353,6 +431,8 @@ export default function MultiRiskQuoteSheet({ open, onOpenChange, onSuccess }: P
                   index={i}
                   control={form.control}
                   remove={() => remove(i)}
+                  loadingTypes={loadingTypes}
+                  discountTypes={discountTypes}
                 />
               ))}
             </div>
@@ -375,7 +455,7 @@ export default function MultiRiskQuoteSheet({ open, onOpenChange, onSuccess }: P
                 control={form.control}
                 name="quoteLoadings"
                 label="Loading"
-                typeOptions={MOCK_LOADING_TYPES}
+                typeOptions={loadingTypes}
                 accentColor="amber"
               />
             </div>
@@ -386,7 +466,7 @@ export default function MultiRiskQuoteSheet({ open, onOpenChange, onSuccess }: P
                 control={form.control}
                 name="quoteDiscounts"
                 label="Discount"
-                typeOptions={MOCK_DISCOUNT_TYPES}
+                typeOptions={discountTypes}
                 accentColor="rose"
               />
             </div>
