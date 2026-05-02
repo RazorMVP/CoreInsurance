@@ -39,7 +39,8 @@ db/migration/
 ├── V19__customer_kyc_document_fields.sql   # id_document_url, id_expiry_date, cac fields
 ├── V20__customer_number_format.sql         # customer_number_format singleton; customer_number column
 ├── V21__quote_config_tables.sql            # quote_discount_types, quote_loading_types, quote_config; seeded defaults
-└── V22__quote_adjustments.sql              # rate/loadings/discounts JSONB on quote_risks; quote_loadings/discounts/clause_ids/inputter/approver on quotes
+├── V22__quote_adjustments.sql              # rate/loadings/discounts JSONB on quote_risks; quote_loadings/discounts/clause_ids/inputter/approver on quotes
+└── V23__audit_log_index_and_customer_number_backfill.sql # composite index on audit_log (user_id,action,timestamp); backfill customer_number for pre-V20 rows
 ```
 
 ### Naming Convention
