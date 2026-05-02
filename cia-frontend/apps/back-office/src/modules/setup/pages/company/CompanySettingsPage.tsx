@@ -4,7 +4,10 @@ import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
   FormSection, FormRow, Input, PageHeader, Separator, Skeleton, Textarea,
 } from '@cia/ui';
+import { apiClient, type CompanySettingsDto } from '@cia/api-client';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -20,28 +23,71 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-// Placeholder — replace with useQuery once backend is up
-const isLoading = false;
-const defaults: FormValues = {
-  companyName:         'Nubeero Insurance Ltd',
-  address:             '1 Insurance Street, Victoria Island, Lagos',
-  email:               'info@nubeero-insurance.com',
-  phone:               '+234 801 000 0000',
-  website:             'https://nubeero-insurance.com',
+interface CompanySettingsResponse extends CompanySettingsDto {
+  minPasswordLength?:  number;
+  passwordExpireDays?: number;
+}
+
+const FALLBACK_DEFAULTS: FormValues = {
+  companyName:         '',
+  address:             '',
+  email:               '',
+  phone:               '',
+  website:             '',
   defaultCurrencyCode: 'NGN',
   minPasswordLength:   8,
   passwordExpireDays:  90,
 };
 
 export default function CompanySettingsPage() {
+  const queryClient = useQueryClient();
+
+  const settingsQuery = useQuery<CompanySettingsResponse>({
+    queryKey: ['setup', 'company-settings'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: CompanySettingsResponse }>(
+        '/api/v1/setup/company-settings',
+      );
+      return res.data.data;
+    },
+  });
+  const isLoading = settingsQuery.isLoading;
+
   const form = useForm<FormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(schema) as any,
-    defaultValues: defaults,
+    defaultValues: FALLBACK_DEFAULTS,
+  });
+
+  useEffect(() => {
+    const s = settingsQuery.data;
+    if (!s) return;
+    form.reset({
+      companyName:         s.companyName,
+      address:             s.address,
+      email:               s.email,
+      phone:               s.phone,
+      website:             s.website ?? '',
+      defaultCurrencyCode: s.defaultCurrencyCode,
+      minPasswordLength:   s.minPasswordLength ?? 8,
+      passwordExpireDays:  s.passwordExpireDays ?? 90,
+    });
+  }, [settingsQuery.data, form]);
+
+  const save = useMutation({
+    mutationFn: async (values: FormValues) => {
+      const res = await apiClient.put<{ data: CompanySettingsResponse }>(
+        '/api/v1/setup/company-settings', values,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['setup', 'company-settings'] });
+    },
   });
 
   function onSubmit(values: FormValues) {
-    console.log('Save settings', values);
-    // TODO: useMutation → PUT /api/v1/setup/company
+    save.mutate(values);
   }
 
   if (isLoading) {
