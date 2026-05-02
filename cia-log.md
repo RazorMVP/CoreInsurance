@@ -4,6 +4,96 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-02 — Session 49: Code review fixes — critical/high/medium + NDPR PII encryption
+
+### Context
+
+Worked through the Session 48 code review findings. Started with 14 issues identified; this session resolved all critical + high + medium findings, deferred H2/M1 (form-to-API wiring across 22+ forms) to a continuation.
+
+### Backend fixes
+
+- **C3 — PartnerScopeFilter OAuth2 scope parsing.** Keycloak issues `scope` as a space-delimited string per RFC 8693, not a JSON array. `jwt.getClaimAsStringList("scope")` returned null for strings, triggering 403 on every partner API call. Added `extractScopes()` that handles both shapes. Hardened `forbidden()` JSON construction with proper escape function (`jsonEscape`).
+- **H1 — ReportQueryBuilder result limit.** Added `setMaxResults()` cap: 10,000 for JSON, 100,000 for CSV/PDF exports. ReportRunnerService threads the higher cap through CSV/PDF paths.
+- **H4 — Removed `@Async` from AlertDetectionService.** Was breaking `TenantContext` ThreadLocal. Detection logic is lightweight (small COUNT queries), runs synchronously on the request thread.
+- **H6 — ReportAccessService.upsert** now correctly sets the `report` relationship on report-level policies (was leaving `report_id` NULL, breaking access-resolution hierarchy).
+- **CustomerService** defaults `country` to `"Nigeria"` when omitted from the request, so the frontend doesn't need to send it.
+- **V23 migration** — composite index on `audit_log (user_id, action, timestamp)` for `AlertDetectionService.checkBulkDelete()` queries; backfill `customer_number` for any rows that pre-date V20.
+
+### NDPR PII encryption (C2)
+
+- **V24 migration** — `CREATE EXTENSION IF NOT EXISTS pgcrypto`; converts `customers.id_number/id_document_url/address` and `customer_directors.id_number/id_document_url` from plain VARCHAR/TEXT to bytea, encrypting any existing rows in place using `pgp_sym_encrypt(value, current_setting('app.pii_key'))`.
+- **Customer.java + CustomerDirector.java** — Hibernate `@ColumnTransformer` wraps reads/writes with `pgp_sym_decrypt` / `pgp_sym_encrypt`. Entity field type stays `String`, transparent to service code.
+- **application.yml** — `cia.security.pii-key` reads `PII_ENCRYPTION_KEY` env var; Hikari `connection-init-sql` runs `SET app.pii_key = '<key>'` per connection so Flyway and runtime queries share the key.
+- **Search-critical fields** (`first_name`, `last_name`, `email`, `phone`, `date_of_birth`) intentionally remain plain — substring search on encrypted bytea is impossible without companion HMAC-indexed lookup columns. Adding HMAC indexes is a documented follow-up.
+- **Pre-existing build break** in `PartnerQuoteResponse.from()` fixed at the same time — was calling removed `getDiscount()` and `getNetPremium()` left over from the V21/V22 quote refactor; replaced with `totalGrossPremium` / `totalNetPremium`.
+
+### Frontend fixes
+
+- **C1 — DevAuthProvider production guard.** Switched the guard from "is `VITE_KEYCLOAK_URL` set?" to "are we in dev mode?" — production builds without Keycloak now fail loud at startup rather than silently shipping unauthenticated mock access.
+- **H5 — Removed hardcoded `'Nigeria'`** from `IndividualOnboardingSheet` and `CorporateOnboardingSheet` form submissions. Backend defaults the field if omitted.
+- **M3 — `today` constant** in `CorporateOnboardingSheet` moved inside `superRefine` so KYC expiry validation is correct across midnight rollovers.
+- **M2 + M6 — QuotePdfPreview refactored.** Added `typeName` (denormalized at construction time) and `validityDays` to `QuotePdfData`; new `computeQuoteSummary()` replaces three separate copies of the per-item gross/loading/discount math. Updated `QuoteDetailPage` and `QuotationListPage` to populate the new fields.
+- **H3 — `zodResolver(...) as any`** removed from 11 simple-schema forms. Kept on 18 forms whose schemas use Zod's `coerce`/`transform`/`default` (genuine input/output type divergence — Zod feature, not a defect). Those casts now sit behind `eslint-disable-next-line` comments to mark the intentional escape.
+
+### H2/M1 form-to-API wiring (in progress)
+
+- **ProductSheet** — replaced `INITIAL_CLASSES` with a `useQuery` against `GET /api/v1/setup/classes-of-business`; replaced `console.log` onSubmit with `useMutation` (POST or PUT depending on edit mode); inline class-creation dialog now POSTs to `/api/v1/setup/classes-of-business` and auto-selects the returned ID. Established as the template for the remaining 21 forms.
+- **ClassSheet** — wired with `useMutation` for POST/PUT to `/api/v1/setup/classes-of-business`; invalidates the setup/classes-of-business query on success so ProductSheet's class picker refreshes.
+- **Remaining 20 forms** — UserSheet, AccessGroupSheet, ApprovalGroupSheet, BrokerSheet, CompanySettings, plus all create flows in Quotation, Policy, Endorsement, Claims, Finance, Reinsurance, Audit. Continuing in subsequent commits — option 1 chosen (quality pace, commit per form/module).
+
+### Files Modified
+
+Backend:
+
+- `cia-backend/cia-partner-api/src/main/java/com/nubeero/cia/partner/config/PartnerScopeFilter.java`
+- `cia-backend/cia-partner-api/src/main/java/com/nubeero/cia/partner/controller/dto/PartnerQuoteResponse.java`
+- `cia-backend/cia-reports/src/main/java/com/nubeero/cia/reports/service/ReportQueryBuilder.java`
+- `cia-backend/cia-reports/src/main/java/com/nubeero/cia/reports/service/ReportRunnerService.java`
+- `cia-backend/cia-reports/src/main/java/com/nubeero/cia/reports/service/ReportAccessService.java`
+- `cia-backend/cia-audit/src/main/java/com/nubeero/cia/audit/alert/AlertDetectionService.java`
+- `cia-backend/cia-customer/src/main/java/com/nubeero/cia/customer/Customer.java`
+- `cia-backend/cia-customer/src/main/java/com/nubeero/cia/customer/CustomerDirector.java`
+- `cia-backend/cia-customer/src/main/java/com/nubeero/cia/customer/CustomerService.java`
+- `cia-backend/cia-api/src/main/resources/application.yml`
+- `cia-backend/cia-api/src/main/resources/db/migration/V23__audit_log_index_and_customer_number_backfill.sql` (new)
+- `cia-backend/cia-api/src/main/resources/db/migration/V24__pii_encryption.sql` (new)
+
+Frontend:
+
+- `cia-frontend/apps/back-office/src/main.tsx`
+- `cia-frontend/apps/back-office/src/modules/customers/pages/individual/IndividualOnboardingSheet.tsx`
+- `cia-frontend/apps/back-office/src/modules/customers/pages/corporate/CorporateOnboardingSheet.tsx`
+- `cia-frontend/apps/back-office/src/modules/customers/pages/detail/EditCustomerSheet.tsx`
+- `cia-frontend/apps/back-office/src/modules/quotation/pages/QuotePdfPreview.tsx`
+- `cia-frontend/apps/back-office/src/modules/quotation/pages/QuotationListPage.tsx`
+- `cia-frontend/apps/back-office/src/modules/quotation/pages/detail/QuoteDetailPage.tsx`
+- `cia-frontend/apps/back-office/src/modules/setup/pages/products/ProductSheet.tsx`
+- `cia-frontend/apps/back-office/src/modules/setup/pages/classes/ClassSheet.tsx`
+- 18 other forms with selective `zodResolver as any` retention
+
+Docs:
+
+- `CLAUDE.md` — NDPR section + env-vars table updated for `PII_ENCRYPTION_KEY`
+- `docs-site/docs/guides/database-migrations.md` — V23 + V24 entries
+- `docs-site/docs/guides/environment-variables.md` — `PII_ENCRYPTION_KEY` entry
+
+### Git Commits
+
+- `ef6d94e` — backend fixes (partner scope, report access, async, indexes)
+- `d8c304a` — frontend fixes (auth guard, country, quote PDF refactor, type safety)
+- `ff1af5a` — V23 migration docs
+- `ff1c080` — C2 NDPR PII encryption (V24, @ColumnTransformer, app.pii_key)
+- `7033d52` — ProductSheet wired to API
+- `7f816c5` — ClassSheet wired to API
+
+### Open Items
+
+- **H2/M1 continuation** — 20 more forms to wire (UserSheet, AccessGroupSheet, ApprovalGroupSheet, BrokerSheet, CompanySettingsPage; Quotation/Policy/Endorsement/Claims/Finance/Reinsurance create flows; AlertConfigDialog). User chose option 1 (quality pace, commit per form). Continuing.
+- **NDPR full coverage** — `first_name`, `last_name`, `email`, `phone`, `date_of_birth` still plain. Encrypting them needs HMAC-indexed companion columns to preserve `CustomerRepository.search()` `LIKE` queries. Documented as follow-up.
+- **PII key rotation** — no automated path. Manual procedure: maintenance window, decrypt with old key, re-encrypt with new. Documented in V24 migration header.
+
+---
+
 ## 2026-05-02 — Session 48: Full codebase code review (frontend, backend, APIs)
 
 ### Context
