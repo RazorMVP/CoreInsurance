@@ -3,9 +3,10 @@ import {
   Button, Checkbox, Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
   FormSection, Input, Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle,
 } from '@cia/ui';
-import type { AccessGroupDto } from '@cia/api-client';
+import { apiClient, type AccessGroupDto } from '@cia/api-client';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
 const ALL_PERMISSIONS = [
@@ -30,6 +31,7 @@ interface Props {
 }
 
 export default function AccessGroupSheet({ open, onOpenChange, group, onSuccess }: Props) {
+  const queryClient = useQueryClient();
   const form = useForm<FormValues>({
     resolver:      zodResolver(schema),
     defaultValues: { name: '', permissions: [] },
@@ -39,9 +41,27 @@ export default function AccessGroupSheet({ open, onOpenChange, group, onSuccess 
     form.reset(group ? { name: group.name, permissions: group.permissions } : { name: '', permissions: [] });
   }, [group, form]);
 
-  async function onSubmit(values: FormValues) {
-    console.log(group ? 'Update group' : 'Create group', values);
-    onSuccess();
+  const save = useMutation({
+    mutationFn: async (values: FormValues) => {
+      if (group) {
+        const res = await apiClient.put<{ data: AccessGroupDto }>(
+          `/api/v1/setup/access-groups/${group.id}`, values,
+        );
+        return res.data.data;
+      }
+      const res = await apiClient.post<{ data: AccessGroupDto }>(
+        '/api/v1/setup/access-groups', values,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['setup', 'access-groups'] });
+      onSuccess();
+    },
+  });
+
+  function onSubmit(values: FormValues) {
+    save.mutate(values);
   }
 
   return (
