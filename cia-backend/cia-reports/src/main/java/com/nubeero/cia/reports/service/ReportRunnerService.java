@@ -49,7 +49,8 @@ public class ReportRunnerService {
     @Transactional(readOnly = true)
     public StreamingResponseBody runCsv(ReportRunRequest request) {
         ReportDefinition definition = definitionService.get(request.getReportId());
-        List<Map<String, Object>> rows = queryBuilder.execute(definition, request.getFilters());
+        List<Map<String, Object>> rows = queryBuilder.execute(
+                definition, request.getFilters(), ReportQueryBuilder.EXPORT_MAX_ROWS);
         List<ReportField> columns = definition.getConfig().getFields() != null
                 ? definition.getConfig().getFields()
                 : List.of();
@@ -59,7 +60,8 @@ public class ReportRunnerService {
     @Transactional(readOnly = true)
     public byte[] runPdf(ReportRunRequest request) {
         ReportDefinition definition = definitionService.get(request.getReportId());
-        List<Map<String, Object>> rows = queryBuilder.execute(definition, request.getFilters());
+        List<Map<String, Object>> rows = queryBuilder.execute(
+                definition, request.getFilters(), ReportQueryBuilder.EXPORT_MAX_ROWS);
         List<ReportField> columns = definition.getConfig().getFields() != null
                 ? definition.getConfig().getFields()
                 : List.of();

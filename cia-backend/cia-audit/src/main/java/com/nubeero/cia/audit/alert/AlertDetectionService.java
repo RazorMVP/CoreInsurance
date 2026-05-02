@@ -8,7 +8,6 @@ import com.nubeero.cia.audit.login.LoginAuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
@@ -29,7 +28,12 @@ public class AlertDetectionService {
     private final AuditLogRepository auditLogRepository;
     private final LoginAuditService loginAuditService;
 
-    @Async
+    /**
+     * Runs synchronously on the request thread so {@code TenantContext}
+     * (a ThreadLocal) is still populated when {@link AuditAlertConfigService}
+     * resolves the per-tenant config. The detection logic is lightweight
+     * (small COUNT queries) — keep it on the request thread.
+     */
     @EventListener
     public void onAuditLogCreated(AuditLogCreatedEvent event) {
         try {

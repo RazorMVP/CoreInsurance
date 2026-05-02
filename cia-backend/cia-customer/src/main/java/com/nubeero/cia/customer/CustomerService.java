@@ -87,7 +87,8 @@ public class CustomerService {
                 .address(request.getAddress())
                 .city(request.getCity())
                 .state(request.getState())
-                .country(request.getCountry())
+                .country(request.getCountry() != null && !request.getCountry().isBlank()
+                        ? request.getCountry() : "Nigeria")
                 .build();
 
         // Save first to get ID, then upload document
@@ -131,7 +132,8 @@ public class CustomerService {
                 .address(request.getAddress())
                 .city(request.getCity())
                 .state(request.getState())
-                .country(request.getCountry())
+                .country(request.getCountry() != null && !request.getCountry().isBlank()
+                        ? request.getCountry() : "Nigeria")
                 .build();
 
         runCorporateKyc(customer, request.getDirectors());

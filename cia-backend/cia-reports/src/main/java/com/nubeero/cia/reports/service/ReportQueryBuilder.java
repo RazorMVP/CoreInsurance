@@ -21,6 +21,12 @@ import java.util.*;
 @RequiredArgsConstructor
 public class ReportQueryBuilder {
 
+    /** Default cap for JSON results (in-memory render). */
+    public static final int DEFAULT_MAX_ROWS = 10_000;
+
+    /** Cap for CSV / PDF exports. Higher than JSON because the result is streamed/written to disk. */
+    public static final int EXPORT_MAX_ROWS = 100_000;
+
     private final EntityManager entityManager;
 
     // Base SQL templates per data source
@@ -72,9 +78,15 @@ public class ReportQueryBuilder {
             "WHERE e.deleted_at IS NULL"
     );
 
-    @SuppressWarnings("unchecked")
     public List<Map<String, Object>> execute(ReportDefinition definition,
                                               Map<String, String> filterValues) {
+        return execute(definition, filterValues, DEFAULT_MAX_ROWS);
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> execute(ReportDefinition definition,
+                                              Map<String, String> filterValues,
+                                              int maxRows) {
         ReportConfig config = definition.getConfig();
         StringBuilder sql = new StringBuilder(BASE_QUERIES.get(definition.getDataSource()));
         List<Object> params = new ArrayList<>();
@@ -131,6 +143,7 @@ public class ReportQueryBuilder {
         for (int i = 0; i < params.size(); i++) {
             query.setParameter(i + 1, params.get(i));
         }
+        query.setMaxResults(maxRows);
 
         List<Object[]> rawRows = query.getResultList();
         return applyComputedFields(rawRows, config);

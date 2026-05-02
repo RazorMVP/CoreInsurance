@@ -4,6 +4,8 @@ import com.nubeero.cia.reports.domain.ReportAccessPolicy;
 import com.nubeero.cia.reports.domain.ReportCategory;
 import com.nubeero.cia.reports.domain.ReportDefinition;
 import com.nubeero.cia.reports.repository.ReportAccessPolicyRepository;
+import com.nubeero.cia.reports.repository.ReportDefinitionRepository;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +23,7 @@ import java.util.UUID;
 public class ReportAccessService {
 
     private final ReportAccessPolicyRepository accessPolicyRepository;
+    private final ReportDefinitionRepository reportDefinitionRepository;
 
     @Transactional(readOnly = true)
     public boolean canView(UUID accessGroupId, ReportDefinition report) {
@@ -46,12 +49,25 @@ public class ReportAccessService {
     public ReportAccessPolicy upsert(UUID accessGroupId, ReportCategory category,
                                      UUID reportId, boolean canView,
                                      boolean canExportCsv, boolean canExportPdf) {
+        if (category == null && reportId == null) {
+            throw new IllegalArgumentException("Either category or reportId must be set");
+        }
+
         ReportAccessPolicy policy = resolveExact(accessGroupId, category, reportId)
                 .orElseGet(() -> ReportAccessPolicy.builder()
                         .accessGroupId(accessGroupId)
                         .build());
 
-        policy.setCategory(category);
+        // Report-level policy XOR category-level policy — DB constraint enforces exactly one.
+        if (reportId != null) {
+            ReportDefinition report = reportDefinitionRepository.findById(reportId)
+                    .orElseThrow(() -> new EntityNotFoundException("Report not found: " + reportId));
+            policy.setReport(report);
+            policy.setCategory(null);
+        } else {
+            policy.setReport(null);
+            policy.setCategory(category);
+        }
         policy.setCanView(canView);
         policy.setCanExportCsv(canExportCsv);
         policy.setCanExportPdf(canExportPdf);
