@@ -7,10 +7,11 @@ import {
   Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue,
   Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle,
 } from '@cia/ui';
-import type { ProductDto } from '@cia/api-client';
+import { apiClient, type ProductDto, type ClassOfBusinessDto } from '@cia/api-client';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 // ── Product form schema ────────────────────────────────────────────────────
 const productSchema = z.object({
@@ -29,24 +30,6 @@ const classSchema = z.object({
 });
 type ClassFormValues = z.infer<typeof classSchema>;
 
-// ── Seed classes — replace with useList('/api/v1/setup/classes') ──────────
-const INITIAL_CLASSES = [
-  { id: '1',  name: 'Motor (Private)' },
-  { id: '2',  name: 'Motor (Commercial)' },
-  { id: '3',  name: 'Fire & Burglary' },
-  { id: '4',  name: 'Marine Cargo' },
-  { id: '5',  name: 'Marine Hull' },
-  { id: '6',  name: 'Goods in Transit' },
-  { id: '7',  name: 'Engineering / CAR' },
-  { id: '8',  name: 'Professional Indemnity' },
-  { id: '9',  name: 'Public Liability' },
-  { id: '10', name: "Employer's Liability" },
-  { id: '11', name: 'Personal Accident' },
-  { id: '12', name: 'Travel Insurance' },
-  { id: '13', name: 'Life (Group)' },
-  { id: '14', name: 'Bonds' },
-];
-
 const CREATE_NEW_SENTINEL = '__create_new__';
 
 interface Props {
@@ -57,9 +40,22 @@ interface Props {
 }
 
 export default function ProductSheet({ open, onOpenChange, product, onSuccess }: Props) {
-  // Local classes state — new classes created inline are appended here
-  const [classes, setClasses] = useState(INITIAL_CLASSES);
+  const queryClient = useQueryClient();
   const [createClassOpen, setCreateClassOpen] = useState(false);
+
+  // Live class-of-business list from the API. New rows created via the
+  // inline dialog cause this query to invalidate and refetch.
+  const classesQuery = useQuery<ClassOfBusinessDto[]>({
+    queryKey: ['setup', 'classes-of-business'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ClassOfBusinessDto[] }>(
+        '/api/v1/setup/classes-of-business',
+      );
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const classes = classesQuery.data ?? [];
 
   // ── Product form ──────────────────────────────────────────────────────────
   const form = useForm<ProductFormValues>({
@@ -82,10 +78,27 @@ export default function ProductSheet({ open, onOpenChange, product, onSuccess }:
     );
   }, [product, form]);
 
-  async function onSubmit(values: ProductFormValues) {
-    console.log(product ? 'Update product' : 'Create product', values);
-    // TODO: useCreate / useUpdate hooks
-    onSuccess();
+  const saveProduct = useMutation({
+    mutationFn: async (values: ProductFormValues) => {
+      if (product) {
+        const res = await apiClient.put<{ data: ProductDto }>(
+          `/api/v1/setup/products/${product.id}`, values,
+        );
+        return res.data.data;
+      }
+      const res = await apiClient.post<{ data: ProductDto }>(
+        '/api/v1/setup/products', values,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['setup', 'products'] });
+      onSuccess();
+    },
+  });
+
+  function onSubmit(values: ProductFormValues) {
+    saveProduct.mutate(values);
   }
 
   // ── Inline class-creation form ────────────────────────────────────────────
@@ -106,13 +119,22 @@ export default function ProductSheet({ open, onOpenChange, product, onSuccess }:
     fieldOnChange(value);
   }
 
-  async function onCreateClass(values: ClassFormValues) {
-    const newId = `local-${Date.now()}`;
-    const newClass = { id: newId, name: values.name };
-    setClasses((prev) => [...prev, newClass]);
-    form.setValue('classOfBusinessId', newId); // auto-select the new class
-    setCreateClassOpen(false);
-    // TODO: POST /api/v1/setup/classes then use returned ID
+  const createClass = useMutation({
+    mutationFn: async (values: ClassFormValues) => {
+      const res = await apiClient.post<{ data: ClassOfBusinessDto }>(
+        '/api/v1/setup/classes-of-business', values,
+      );
+      return res.data.data;
+    },
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ['setup', 'classes-of-business'] });
+      form.setValue('classOfBusinessId', created.id); // auto-select the new class
+      setCreateClassOpen(false);
+    },
+  });
+
+  function onCreateClass(values: ClassFormValues) {
+    createClass.mutate(values);
   }
 
   const selectedClassName =
