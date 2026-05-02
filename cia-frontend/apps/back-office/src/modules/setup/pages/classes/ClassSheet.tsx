@@ -3,9 +3,10 @@ import {
   Button, Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
   Input, Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle,
 } from '@cia/ui';
-import type { ClassOfBusinessDto } from '@cia/api-client';
+import { apiClient, type ClassOfBusinessDto } from '@cia/api-client';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -20,15 +21,34 @@ interface Props {
 }
 
 export default function ClassSheet({ open, onOpenChange, cls, onSuccess }: Props) {
+  const queryClient = useQueryClient();
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { name: '', code: '' } });
 
   useEffect(() => {
     form.reset(cls ? { name: cls.name, code: cls.code } : { name: '', code: '' });
   }, [cls, form]);
 
-  async function onSubmit(values: FormValues) {
-    console.log(cls ? 'Update class' : 'Create class', values);
-    onSuccess();
+  const save = useMutation({
+    mutationFn: async (values: FormValues) => {
+      if (cls) {
+        const res = await apiClient.put<{ data: ClassOfBusinessDto }>(
+          `/api/v1/setup/classes-of-business/${cls.id}`, values,
+        );
+        return res.data.data;
+      }
+      const res = await apiClient.post<{ data: ClassOfBusinessDto }>(
+        '/api/v1/setup/classes-of-business', values,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['setup', 'classes-of-business'] });
+      onSuccess();
+    },
+  });
+
+  function onSubmit(values: FormValues) {
+    save.mutate(values);
   }
 
   return (
