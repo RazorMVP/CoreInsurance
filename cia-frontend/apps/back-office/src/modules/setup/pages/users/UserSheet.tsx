@@ -5,9 +5,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
   Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle,
 } from '@cia/ui';
-import type { UserDto } from '@cia/api-client';
+import { apiClient, type UserDto, type AccessGroupDto } from '@cia/api-client';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -20,15 +21,6 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-// Placeholder — replace with useAccessGroups() hook
-const mockGroups = [
-  { id: 'ag1', name: 'System Admin' },
-  { id: 'ag2', name: 'Underwriter' },
-  { id: 'ag3', name: 'Claims Officer' },
-  { id: 'ag4', name: 'Finance Officer' },
-  { id: 'ag5', name: 'System Auditor' },
-];
-
 interface UserSheetProps {
   open:          boolean;
   onOpenChange:  (open: boolean) => void;
@@ -38,6 +30,17 @@ interface UserSheetProps {
 
 export default function UserSheet({ open, onOpenChange, user, onSuccess }: UserSheetProps) {
   const isEditing = !!user;
+  const queryClient = useQueryClient();
+
+  const groupsQuery = useQuery<AccessGroupDto[]>({
+    queryKey: ['setup', 'access-groups'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: AccessGroupDto[] }>('/api/v1/setup/access-groups');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const groups = groupsQuery.data ?? [];
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -64,10 +67,27 @@ export default function UserSheet({ open, onOpenChange, user, onSuccess }: UserS
     }
   }, [user, form]);
 
-  async function onSubmit(values: FormValues) {
-    console.log(isEditing ? 'Update user' : 'Create user', values);
-    // TODO: useCreate / useUpdate hooks
-    onSuccess();
+  const save = useMutation({
+    mutationFn: async (values: FormValues) => {
+      if (isEditing && user) {
+        const res = await apiClient.put<{ data: UserDto }>(
+          `/api/v1/setup/users/${user.id}`, values,
+        );
+        return res.data.data;
+      }
+      const res = await apiClient.post<{ data: UserDto }>(
+        '/api/v1/setup/users', values,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['setup', 'users'] });
+      onSuccess();
+    },
+  });
+
+  function onSubmit(values: FormValues) {
+    save.mutate(values);
   }
 
   return (
@@ -134,7 +154,7 @@ export default function UserSheet({ open, onOpenChange, user, onSuccess }: UserS
                       <SelectTrigger><SelectValue placeholder="Select a group" /></SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {mockGroups.map((g) => (
+                      {groups.map((g) => (
                         <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
                       ))}
                     </SelectContent>
