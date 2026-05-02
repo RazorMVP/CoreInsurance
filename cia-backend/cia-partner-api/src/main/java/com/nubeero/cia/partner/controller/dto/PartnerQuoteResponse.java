@@ -59,14 +59,11 @@ public class PartnerQuoteResponse {
     @Schema(description = "Total sum insured across all risks (NGN)", example = "5000000.00")
     private BigDecimal totalSumInsured;
 
-    @Schema(description = "Gross premium before discount (NGN)", example = "250000.00")
-    private BigDecimal totalPremium;
+    @Schema(description = "Sum of gross premiums across all risks before adjustments (NGN)", example = "250000.00")
+    private BigDecimal totalGrossPremium;
 
-    @Schema(description = "Discount amount (NGN)", example = "12500.00")
-    private BigDecimal discount;
-
-    @Schema(description = "Net premium payable after discount (NGN)", example = "237500.00")
-    private BigDecimal netPremium;
+    @Schema(description = "Final net premium payable after all per-item and quote-level loadings/discounts (NGN)", example = "237500.00")
+    private BigDecimal totalNetPremium;
 
     @Schema(description = "Timestamp when the quote approval was confirmed", example = "2026-04-20T14:23:00Z")
     private Instant approvedAt;
@@ -99,9 +96,8 @@ public class PartnerQuoteResponse {
                 .policyStartDate(q.getPolicyStartDate())
                 .policyEndDate(q.getPolicyEndDate())
                 .totalSumInsured(q.getTotalSumInsured())
-                .totalPremium(q.getTotalPremium())
-                .discount(q.getDiscount())
-                .netPremium(q.getNetPremium())
+                .totalGrossPremium(q.getTotalGrossPremium())
+                .totalNetPremium(q.getTotalNetPremium())
                 .approvedAt(q.getApprovedAt())
                 .expiresAt(q.getExpiresAt())
                 .rejectionReason(q.getRejectionReason())

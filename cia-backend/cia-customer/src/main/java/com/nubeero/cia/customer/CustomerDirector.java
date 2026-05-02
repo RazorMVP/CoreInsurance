@@ -3,6 +3,7 @@ package com.nubeero.cia.customer;
 import com.nubeero.cia.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.ColumnTransformer;
 
 import java.time.LocalDate;
 
@@ -32,10 +33,19 @@ public class CustomerDirector extends BaseEntity {
     @Column(name = "id_type", length = 30)
     private IdType idType;
 
-    @Column(name = "id_number", length = 50)
+    // NDPR: encrypted at rest via pgcrypto. See V24 migration + application.yml.
+    @ColumnTransformer(
+        read  = "pgp_sym_decrypt(id_number, current_setting('app.pii_key'))",
+        write = "pgp_sym_encrypt(?, current_setting('app.pii_key'))"
+    )
+    @Column(name = "id_number", columnDefinition = "bytea")
     private String idNumber;
 
-    @Column(name = "id_document_url", length = 500)
+    @ColumnTransformer(
+        read  = "pgp_sym_decrypt(id_document_url, current_setting('app.pii_key'))",
+        write = "pgp_sym_encrypt(?, current_setting('app.pii_key'))"
+    )
+    @Column(name = "id_document_url", columnDefinition = "bytea")
     private String idDocumentUrl;
 
     @Column(name = "id_expiry_date")

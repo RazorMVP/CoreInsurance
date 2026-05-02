@@ -61,6 +61,7 @@ All variables have defaults for local development. Production values must be sup
 | `PARTNER_API_RATE_LIMIT_STORE` | `in-memory` | `redis` / `in-memory` for bucket4j |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection (partner rate limiting) |
 | `WEBHOOK_SIGNING_SECRET` | — | Default HMAC-SHA256 key for webhook payloads |
+| `PII_ENCRYPTION_KEY` | `dev-pii-key-do-not-use-in-prod-CHANGE-ME` | pgcrypto symmetric key for NDPR PII encryption on `customers` + `customer_directors`. Loss = unrecoverable customer PII. Recommended: 32+ random bytes, base64-encoded. Set via env / vault in production. |
 
 ### AI
 

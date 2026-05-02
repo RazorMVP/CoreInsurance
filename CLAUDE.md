@@ -407,7 +407,8 @@ Access groups aggregate roles; users inherit permissions through their access gr
 
 **NDPR compliance:**
 
-- PII fields (name, DOB, NIN, address, email) encrypted at rest via PostgreSQL `pgcrypto`.
+- High-risk PII fields encrypted at rest via PostgreSQL `pgcrypto` (V24): `customers.id_number`, `customers.id_document_url`, `customers.address`, `customer_directors.id_number`, `customer_directors.id_document_url`. Implemented via Hibernate `@ColumnTransformer` wrapping `pgp_sym_encrypt` / `pgp_sym_decrypt` and `current_setting('app.pii_key')`. The session var is set per Hikari connection from `cia.security.pii-key` (env `PII_ENCRYPTION_KEY`).
+- Search-critical fields (`first_name`, `last_name`, `email`, `phone`, `date_of_birth`) intentionally remain plain — substring search on encrypted bytea isn't possible without companion HMAC-indexed columns. Adding those is a follow-up.
 - All data access logged to per-tenant audit table.
 - Data retention period enforced per tenant config via scheduled Temporal purge workflow.
 - Data export endpoint available to satisfy NDPR data subject access requests.
@@ -944,6 +945,7 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 | `PARTNER_API_RATE_LIMIT_STORE` | `redis` / `in-memory` for bucket4j | env |
 | `REDIS_URL` | Redis connection (partner rate limiting) | env / vault |
 | `WEBHOOK_SIGNING_SECRET` | Default HMAC-SHA256 key for webhook payloads | env / vault |
+| `PII_ENCRYPTION_KEY` | pgcrypto symmetric key for NDPR PII encryption (`id_number`, `id_document_url`, `address` on customers + directors). Loss = unrecoverable customer PII. Recommended: 32+ random bytes, base64-encoded. | env / vault |
 
 **Frontend environment variables (Vite — prefix `VITE_`):**
 

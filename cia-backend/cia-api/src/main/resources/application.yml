@@ -9,6 +9,13 @@ spring:
     username: ${DB_USERNAME:cia}
     password: ${DB_PASSWORD:cia_dev}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      # Set the per-connection PostgreSQL session var that pgcrypto reads via
+      # current_setting('app.pii_key'). Required for the @ColumnTransformer
+      # encryption on Customer / CustomerDirector PII fields. Must run on every
+      # new connection — Hikari runs this once after acquiring a connection
+      # from the pool.
+      connection-init-sql: "SET app.pii_key = '${cia.security.pii-key}'"
 
   jpa:
     hibernate:
@@ -93,6 +100,14 @@ cia:
       token-url: ${PARTNER_TOKEN_URL:http://localhost:8280/realms/cia/protocol/openid-connect/token}
     webhook:
       signing-secret: ${WEBHOOK_SIGNING_SECRET:dev-secret-replace-in-prod}
+
+  security:
+    # NDPR PII encryption key for pgcrypto (pgp_sym_encrypt / pgp_sym_decrypt).
+    # Used via current_setting('app.pii_key') on the Hibernate connection.
+    # MUST be set to a strong, externally managed value in production —
+    # losing this key means all encrypted customer PII is unrecoverable.
+    # Recommended: 32+ random bytes, base64-encoded.
+    pii-key: ${PII_ENCRYPTION_KEY:dev-pii-key-do-not-use-in-prod-CHANGE-ME}
 
 springdoc:
   api-docs:
