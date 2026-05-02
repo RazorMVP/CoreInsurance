@@ -4,13 +4,14 @@ import {
   Separator,
 } from '@cia/ui';
 import { INITIAL_CLAUSES } from './clauses-shared';
-import { MOCK_DISCOUNT_TYPES, MOCK_LOADING_TYPES, MOCK_QUOTE_CONFIG } from '../../setup/pages/policy-specs/quote-config-types';
 
 // ── Types for the PDF data model ──────────────────────────────────────────────
 export interface AdjustmentLine {
-  typeId:  string;
-  format:  'PERCENT' | 'FLAT';
-  value:   number;
+  typeId:   string;
+  /** Human-readable type label resolved at construction time (denormalized). */
+  typeName: string;
+  format:   'PERCENT' | 'FLAT';
+  value:    number;
 }
 
 export interface RiskItemData {
@@ -35,6 +36,77 @@ export interface QuotePdfData {
   selectedClauseIds: string[];
   inputterName:      string;
   approverName:      string;
+  /** Days the quote remains valid from the issue date. */
+  validityDays:      number;
+}
+
+// ── Shared calculation logic ─────────────────────────────────────────────────
+// Single source of truth — used by both PrintContent and buildPrintHtml.
+// LOADING_FIRST sequence: gross → +loadings → -discounts (per item),
+// then sum item nets → +quote loadings → -quote discounts.
+
+interface ItemBreakdown extends RiskItemData {
+  gross:         number;
+  totalLoading:  number;
+  loaded:        number;
+  totalDiscount: number;
+  net:           number;
+}
+
+interface QuoteSummary {
+  items:           ItemBreakdown[];
+  totalGross:      number;
+  totalItemNets:   number;
+  totalQuoteLoading:  number;
+  totalQuoteDiscount: number;
+  quoteLoadedBase: number;
+  finalNet:        number;
+  expiryDate:      string;
+}
+
+function computeItemBreakdown(item: RiskItemData): ItemBreakdown {
+  const gross = (item.sumInsured * item.rate) / 100;
+  const totalLoading = item.loadings.reduce(
+    (s, l) => s + (l.format === 'PERCENT' ? (gross * l.value) / 100 : l.value), 0);
+  const loaded = gross + totalLoading;
+  const totalDiscount = item.discounts.reduce(
+    (s, d) => s + (d.format === 'PERCENT' ? (loaded * d.value) / 100 : d.value), 0);
+  return {
+    ...item,
+    gross,
+    totalLoading,
+    loaded,
+    totalDiscount,
+    net: Math.max(0, loaded - totalDiscount),
+  };
+}
+
+export function computeQuoteSummary(data: QuotePdfData): QuoteSummary {
+  const items         = data.risks.map(computeItemBreakdown);
+  const totalGross    = items.reduce((s, r) => s + r.gross, 0);
+  const totalItemNets = items.reduce((s, r) => s + r.net, 0);
+
+  const totalQuoteLoading = data.quoteLoadings.reduce(
+    (s, l) => s + (l.format === 'PERCENT' ? (totalGross * l.value) / 100 : l.value), 0);
+  const quoteLoadedBase = totalItemNets + totalQuoteLoading;
+  const totalQuoteDiscount = data.quoteDiscounts.reduce(
+    (s, d) => s + (d.format === 'PERCENT' ? (quoteLoadedBase * d.value) / 100 : d.value), 0);
+
+  const expiry = new Date(data.issueDate);
+  expiry.setDate(expiry.getDate() + data.validityDays);
+  const expiryDate = expiry.toLocaleDateString('en-GB',
+    { day: '2-digit', month: 'long', year: 'numeric' });
+
+  return {
+    items,
+    totalGross,
+    totalItemNets,
+    totalQuoteLoading,
+    totalQuoteDiscount,
+    quoteLoadedBase,
+    finalNet: Math.max(0, quoteLoadedBase - totalQuoteDiscount),
+    expiryDate,
+  };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -42,43 +114,10 @@ function fmt(n: number) {
   return `₦${n.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function resolveTypeName(typeId: string, category: 'loading' | 'discount') {
-  const list = category === 'loading' ? MOCK_LOADING_TYPES : MOCK_DISCOUNT_TYPES;
-  return list.find(t => t.id === typeId)?.name ?? typeId;
-}
-
-function computeItemAmounts(item: RiskItemData) {
-  const gross = (item.sumInsured * item.rate) / 100;
-  const totalLoading = item.loadings.reduce((s, l) => s + (l.format === 'PERCENT' ? gross * l.value / 100 : l.value), 0);
-  const loaded = gross + totalLoading;
-  const totalDiscount = item.discounts.reduce((s, d) => s + (d.format === 'PERCENT' ? loaded * d.value / 100 : d.value), 0);
-  return { gross, totalLoading, loaded, totalDiscount, net: Math.max(0, loaded - totalDiscount) };
-}
-
 // ── Print content component ───────────────────────────────────────────────────
 export function PrintContent({ data }: { data: QuotePdfData }) {
-  const validityDays = MOCK_QUOTE_CONFIG.validityDays;
-
-  const itemResults = data.risks.map(r => ({ ...r, ...computeItemAmounts(r) }));
-  const totalGross    = itemResults.reduce((s, r) => s + r.gross, 0);
-  const totalItemNets = itemResults.reduce((s, r) => s + r.net, 0);
-
-  const totalQuoteLoading = data.quoteLoadings.reduce((s, l) => {
-    return s + (l.format === 'PERCENT' ? totalGross * l.value / 100 : l.value);
-  }, 0);
-  const quoteLoadedBase = totalItemNets + totalQuoteLoading;
-  const totalQuoteDiscount = data.quoteDiscounts.reduce((s, d) => {
-    return s + (d.format === 'PERCENT' ? quoteLoadedBase * d.value / 100 : d.value);
-  }, 0);
-  const finalNet = Math.max(0, quoteLoadedBase - totalQuoteDiscount);
-
+  const summary = computeQuoteSummary(data);
   const selectedClauses = INITIAL_CLAUSES.filter(c => data.selectedClauseIds.includes(c.id));
-
-  const expiryDate = (() => {
-    const d = new Date(data.issueDate);
-    d.setDate(d.getDate() + validityDays);
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
-  })();
 
   const cell = 'border border-gray-300 px-2 py-1 text-xs';
   const th   = `${cell} bg-gray-100 font-semibold text-left`;
@@ -122,7 +161,7 @@ export function PrintContent({ data }: { data: QuotePdfData }) {
           </div>
           <div>
             <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Quote Validity</p>
-            <p className="text-sm font-semibold text-gray-900">Valid for {validityDays} days from issue</p>
+            <p className="text-sm font-semibold text-gray-900">Valid for {data.validityDays} days from issue</p>
           </div>
         </div>
       </div>
@@ -131,7 +170,7 @@ export function PrintContent({ data }: { data: QuotePdfData }) {
 
       {/* Risk items */}
       <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">Risk Details & Premium Breakdown</h2>
-      {itemResults.map((item, i) => (
+      {summary.items.map((item, i) => (
         <div key={i} className="mb-5">
           <p className="text-xs font-semibold text-gray-600 mb-2">Item {i + 1} — {item.description}</p>
           <table className="w-full border-collapse text-xs mb-1">
@@ -170,7 +209,7 @@ export function PrintContent({ data }: { data: QuotePdfData }) {
                   const amt = l.format === 'PERCENT' ? item.gross * l.value / 100 : l.value;
                   return (
                     <tr key={li}>
-                      <td className={cell}>{resolveTypeName(l.typeId, 'loading')}</td>
+                      <td className={cell}>{l.typeName}</td>
                       <td className={cell}>{l.format === 'PERCENT' ? `${l.value}%` : 'Flat'}</td>
                       <td className={`${cell} text-right tabular-nums`}>{fmt(amt)}</td>
                     </tr>
@@ -198,7 +237,7 @@ export function PrintContent({ data }: { data: QuotePdfData }) {
                   const amt  = d.format === 'PERCENT' ? base * d.value / 100 : d.value;
                   return (
                     <tr key={di}>
-                      <td className={cell}>{resolveTypeName(d.typeId, 'discount')}</td>
+                      <td className={cell}>{d.typeName}</td>
                       <td className={cell}>{d.format === 'PERCENT' ? `${d.value}%` : 'Flat'}</td>
                       <td className={`${cell} text-right tabular-nums`}>{fmt(amt)}</td>
                     </tr>
@@ -224,26 +263,26 @@ export function PrintContent({ data }: { data: QuotePdfData }) {
             <tbody>
               <tr>
                 <td className={cell}>Sum of Item Gross Premiums (base for % adjustments)</td>
-                <td className={`${cell} text-right tabular-nums font-semibold`}>{fmt(totalGross)}</td>
+                <td className={`${cell} text-right tabular-nums font-semibold`}>{fmt(summary.totalGross)}</td>
               </tr>
               <tr>
                 <td className={cell}>Sum of Item Net Premiums</td>
-                <td className={`${cell} text-right tabular-nums font-semibold`}>{fmt(totalItemNets)}</td>
+                <td className={`${cell} text-right tabular-nums font-semibold`}>{fmt(summary.totalItemNets)}</td>
               </tr>
               {data.quoteLoadings.map((l, i) => {
-                const amt = l.format === 'PERCENT' ? totalGross * l.value / 100 : l.value;
+                const amt = l.format === 'PERCENT' ? summary.totalGross * l.value / 100 : l.value;
                 return (
                   <tr key={i}>
-                    <td className={cell}>+ Loading: {resolveTypeName(l.typeId, 'loading')} ({l.format === 'PERCENT' ? `${l.value}%` : 'Flat'})</td>
+                    <td className={cell}>+ Loading: {l.typeName} ({l.format === 'PERCENT' ? `${l.value}%` : 'Flat'})</td>
                     <td className={`${cell} text-right tabular-nums`}>{fmt(amt)}</td>
                   </tr>
                 );
               })}
               {data.quoteDiscounts.map((d, i) => {
-                const amt = d.format === 'PERCENT' ? quoteLoadedBase * d.value / 100 : d.value;
+                const amt = d.format === 'PERCENT' ? summary.quoteLoadedBase * d.value / 100 : d.value;
                 return (
                   <tr key={i}>
-                    <td className={cell}>- Discount: {resolveTypeName(d.typeId, 'discount')} ({d.format === 'PERCENT' ? `${d.value}%` : 'Flat'})</td>
+                    <td className={cell}>- Discount: {d.typeName} ({d.format === 'PERCENT' ? `${d.value}%` : 'Flat'})</td>
                     <td className={`${cell} text-right tabular-nums`}>{fmt(amt)}</td>
                   </tr>
                 );
@@ -256,7 +295,7 @@ export function PrintContent({ data }: { data: QuotePdfData }) {
       {/* Final net */}
       <div className="rounded-lg border-2 border-teal-600 bg-teal-50 px-4 py-3 flex justify-between items-center mb-6">
         <span className="text-sm font-bold text-teal-800">FINAL NET PREMIUM</span>
-        <span className="text-xl font-bold text-teal-700 tabular-nums">{fmt(finalNet)}</span>
+        <span className="text-xl font-bold text-teal-700 tabular-nums">{fmt(summary.finalNet)}</span>
       </div>
 
       {/* Clauses */}
@@ -284,8 +323,8 @@ export function PrintContent({ data }: { data: QuotePdfData }) {
           This quote is subject to <strong>no known loss or reported loss</strong> till date.
         </li>
         <li className="text-xs text-gray-700 leading-relaxed">
-          This quotation is valid for <strong>{validityDays} days</strong> from the date of issue ({data.issueDate}).
-          It will expire on <strong>{expiryDate}</strong>.
+          This quotation is valid for <strong>{data.validityDays} days</strong> from the date of issue ({data.issueDate}).
+          It will expire on <strong>{summary.expiryDate}</strong>.
         </li>
         <li className="text-xs text-gray-700 leading-relaxed">
           This quote is subject to a <strong>satisfactory survey report</strong>.
@@ -315,23 +354,7 @@ export function PrintContent({ data }: { data: QuotePdfData }) {
 
 // ── Self-contained HTML generator for the print popup ────────────────────────
 function buildPrintHtml(data: QuotePdfData): string {
-  const validityDays = MOCK_QUOTE_CONFIG.validityDays;
-  const items        = data.risks.map(r => ({ ...r, ...computeItemAmounts(r) }));
-  const totalGross   = items.reduce((s, r) => s + r.gross, 0);
-  const totalNets    = items.reduce((s, r) => s + r.net, 0);
-  const qLoading     = data.quoteLoadings.reduce((s, l) =>
-    s + (l.format === 'PERCENT' ? totalGross * l.value / 100 : l.value), 0);
-  const loadedBase   = totalNets + qLoading;
-  const qDiscount    = data.quoteDiscounts.reduce((s, d) =>
-    s + (d.format === 'PERCENT' ? loadedBase * d.value / 100 : d.value), 0);
-  const finalNet     = Math.max(0, loadedBase - qDiscount);
-
-  const expiryDate = (() => {
-    const d = new Date(data.issueDate);
-    d.setDate(d.getDate() + validityDays);
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
-  })();
-
+  const summary = computeQuoteSummary(data);
   const selectedClauses = INITIAL_CLAUSES.filter(c => data.selectedClauseIds.includes(c.id));
 
   const m = (n: number) =>
@@ -340,7 +363,7 @@ function buildPrintHtml(data: QuotePdfData): string {
   const adjFmt = (l: AdjustmentLine) => l.format === 'PERCENT' ? `${l.value}%` : 'Flat';
 
   let risksHtml = '';
-  items.forEach((item, i) => {
+  summary.items.forEach((item, i) => {
     risksHtml += `<p style="font-weight:bold;font-size:9pt;margin:10px 0 4px;">Item ${i + 1} — ${item.description}</p>
     <table><thead><tr>
       <th>Description</th><th style="text-align:right">Sum Insured</th>
@@ -356,7 +379,7 @@ function buildPrintHtml(data: QuotePdfData): string {
       </thead><tbody>`;
       item.loadings.forEach(l => {
         const amt = l.format === 'PERCENT' ? item.gross * l.value / 100 : l.value;
-        risksHtml += `<tr><td>${resolveTypeName(l.typeId, 'loading')}</td><td>${adjFmt(l)}</td>
+        risksHtml += `<tr><td>${l.typeName}</td><td>${adjFmt(l)}</td>
           <td style="text-align:right;color:#b45309">${m(amt)}</td></tr>`;
       });
       risksHtml += '</tbody></table>';
@@ -369,7 +392,7 @@ function buildPrintHtml(data: QuotePdfData): string {
       item.discounts.forEach(d => {
         const base = item.gross + item.totalLoading;
         const amt  = d.format === 'PERCENT' ? base * d.value / 100 : d.value;
-        risksHtml += `<tr><td>${resolveTypeName(d.typeId, 'discount')}</td><td>${adjFmt(d)}</td>
+        risksHtml += `<tr><td>${d.typeName}</td><td>${adjFmt(d)}</td>
           <td style="text-align:right;color:#be185d">${m(amt)}</td></tr>`;
       });
       risksHtml += '</tbody></table>';
@@ -381,16 +404,16 @@ function buildPrintHtml(data: QuotePdfData): string {
   let adjHtml = '';
   if (data.quoteLoadings.length > 0 || data.quoteDiscounts.length > 0) {
     adjHtml = `<h2>Quote-Level Adjustments</h2><table><tbody>
-      <tr><td>Sum of Item Gross Premiums (% base)</td><td style="text-align:right">${m(totalGross)}</td></tr>
-      <tr><td>Sum of Item Net Premiums</td><td style="text-align:right">${m(totalNets)}</td></tr>`;
+      <tr><td>Sum of Item Gross Premiums (% base)</td><td style="text-align:right">${m(summary.totalGross)}</td></tr>
+      <tr><td>Sum of Item Net Premiums</td><td style="text-align:right">${m(summary.totalItemNets)}</td></tr>`;
     data.quoteLoadings.forEach(l => {
-      const amt = l.format === 'PERCENT' ? totalGross * l.value / 100 : l.value;
-      adjHtml += `<tr><td style="color:#b45309">+ ${resolveTypeName(l.typeId, 'loading')} (${adjFmt(l)})</td>
+      const amt = l.format === 'PERCENT' ? summary.totalGross * l.value / 100 : l.value;
+      adjHtml += `<tr><td style="color:#b45309">+ ${l.typeName} (${adjFmt(l)})</td>
         <td style="text-align:right;color:#b45309">${m(amt)}</td></tr>`;
     });
     data.quoteDiscounts.forEach(d => {
-      const amt = d.format === 'PERCENT' ? loadedBase * d.value / 100 : d.value;
-      adjHtml += `<tr><td style="color:#be185d">- ${resolveTypeName(d.typeId, 'discount')} (${adjFmt(d)})</td>
+      const amt = d.format === 'PERCENT' ? summary.quoteLoadedBase * d.value / 100 : d.value;
+      adjHtml += `<tr><td style="color:#be185d">- ${d.typeName} (${adjFmt(d)})</td>
         <td style="text-align:right;color:#be185d">${m(amt)}</td></tr>`;
     });
     adjHtml += '</tbody></table>';
@@ -440,21 +463,21 @@ function buildPrintHtml(data: QuotePdfData): string {
     <div><p class="lbl">Prepared For</p><p class="val">${data.customerName}</p></div>
     <div><p class="lbl">Policy Period</p><p class="val">${data.startDate} to ${data.endDate}</p></div>
     <div><p class="lbl">Product</p><p class="val">${data.productName}</p></div>
-    <div><p class="lbl">Quote Validity</p><p class="val">Valid ${validityDays} days (expires ${expiryDate})</p></div>
+    <div><p class="lbl">Quote Validity</p><p class="val">Valid ${data.validityDays} days (expires ${summary.expiryDate})</p></div>
     <div><p class="lbl">Class of Business</p><p class="val">${data.classOfBusiness}</p></div>
   </div><hr/>
   <h2>Risk Details &amp; Premium Breakdown</h2>
   ${risksHtml}${adjHtml}
   <div class="net">
     <span style="font-size:11pt;font-weight:bold;color:#0f766e">FINAL NET PREMIUM</span>
-    <span style="font-size:15pt;font-weight:bold;color:#0f766e">${m(finalNet)}</span>
+    <span style="font-size:15pt;font-weight:bold;color:#0f766e">${m(summary.finalNet)}</span>
   </div>
   ${clausesHtml}${clausesHtml ? '<hr/>' : ''}
   <h2>General Subjectivity</h2>
   <ol>
     <li>This quote is subject to <strong>no known loss or reported loss</strong> till date.</li>
-    <li>This quotation is valid for <strong>${validityDays} days</strong> from the date of issue (${data.issueDate}).
-        It will expire on <strong>${expiryDate}</strong>.</li>
+    <li>This quotation is valid for <strong>${data.validityDays} days</strong> from the date of issue (${data.issueDate}).
+        It will expire on <strong>${summary.expiryDate}</strong>.</li>
     <li>This quote is subject to a <strong>satisfactory survey report</strong>.</li>
   </ol><hr/>
   <div class="sig">

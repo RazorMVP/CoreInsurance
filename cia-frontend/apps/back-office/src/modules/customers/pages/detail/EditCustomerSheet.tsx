@@ -157,7 +157,7 @@ export default function EditCustomerSheet({ open, onOpenChange, customer, onSucc
   const [dirFileErrors, setDirFileErrors] = useState<string[]>([]);
 
   const form = useForm<FormValues>({
-    resolver:      zodResolver(schema) as any,
+    resolver:      zodResolver(schema),
     defaultValues: buildDefaults(customer),
   });
 

@@ -27,7 +27,7 @@ function TypeEditorDialog({
   title: string;
 }) {
   const form = useForm<TypeForm>({
-    resolver: zodResolver(typeSchema) as any,
+    resolver: zodResolver(typeSchema),
     values:   { name: initial?.name ?? '' },
   });
 

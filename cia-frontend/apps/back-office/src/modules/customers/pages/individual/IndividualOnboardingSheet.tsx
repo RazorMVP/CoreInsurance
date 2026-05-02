@@ -61,7 +61,7 @@ export default function IndividualOnboardingSheet({ open, onOpenChange, onSucces
   const [fileError, setFileError] = useState<string>('');
 
   const form = useForm<FormValues>({
-    resolver:      zodResolver(schema) as any,
+    resolver:      zodResolver(schema),
     defaultValues: {
       firstName: '', lastName: '', email: '', phone: '', dateOfBirth: '',
       idType: 'NIN', idNumber: '', idExpiryDate: '', address: '',
@@ -103,7 +103,6 @@ export default function IndividualOnboardingSheet({ open, onOpenChange, onSucces
       if (values.idExpiryDate) fd.append('idExpiryDate', values.idExpiryDate);
       fd.append('address',     values.address);
       if (values.occupation)   fd.append('occupation', values.occupation);
-      fd.append('country',     'Nigeria');
       if (values.brokerEnabled && values.brokerId) fd.append('brokerId', values.brokerId);
       fd.append('idDocument',  idFile!);
       return apiClient.post('/api/v1/customers/individual', fd);

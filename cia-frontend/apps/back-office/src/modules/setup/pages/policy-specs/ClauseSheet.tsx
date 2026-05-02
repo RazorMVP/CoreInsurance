@@ -35,7 +35,7 @@ interface Props {
 
 export default function ClauseSheet({ open, onOpenChange, clause, onSave }: Props) {
   const form = useForm<ClauseFormValues>({
-    resolver:      zodResolver(clauseSchema) as any,
+    resolver:      zodResolver(clauseSchema),
     defaultValues: { title: '', text: '', type: 'STANDARD', applicability: 'OPTIONAL', productIds: [] },
   });
 

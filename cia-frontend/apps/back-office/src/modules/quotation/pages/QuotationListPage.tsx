@@ -17,17 +17,27 @@ const mockQuotePdfData: Record<string, QuotePdfData> = {
     quoteNumber: 'QUO-2026-00001', issueDate: '2026-01-28',
     customerName: 'Chioma Okafor', productName: 'Private Motor Comprehensive', classOfBusiness: 'Motor (Private)',
     startDate: '2026-02-01', endDate: '2027-02-01',
-    risks: [{ description: '2022 Toyota Camry, Reg: LND-001-AA', sumInsured: 3_500_000, rate: 2.25, loadings: [{ typeId: 'l1', format: 'PERCENT', value: 5 }], discounts: [{ typeId: 'd1', format: 'PERCENT', value: 2.5 }] }],
+    risks: [{
+      description: '2022 Toyota Camry, Reg: LND-001-AA',
+      sumInsured: 3_500_000, rate: 2.25,
+      loadings:  [{ typeId: 'l1', typeName: 'High Risk Area',     format: 'PERCENT', value: 5 }],
+      discounts: [{ typeId: 'd1', typeName: 'No Claims Discount', format: 'PERCENT', value: 2.5 }],
+    }],
     quoteLoadings: [], quoteDiscounts: [], selectedClauseIds: ['c1', 'c2'],
     inputterName: 'Chidi Okafor', approverName: 'Adeola Bello',
+    validityDays: 30,
   },
   q4: {
     quoteNumber: 'QUO-2026-00004', issueDate: '2026-01-10',
     customerName: 'Chioma Okafor', productName: 'Marine Cargo Open Cover', classOfBusiness: 'Marine Cargo',
     startDate: '2026-01-15', endDate: '2027-01-15',
-    risks: [{ description: 'General cargo — Lagos to Kano', sumInsured: 8_000_000, rate: 0.75, loadings: [], discounts: [] }],
+    risks: [{
+      description: 'General cargo — Lagos to Kano',
+      sumInsured: 8_000_000, rate: 0.75, loadings: [], discounts: [],
+    }],
     quoteLoadings: [], quoteDiscounts: [], selectedClauseIds: ['c7'],
     inputterName: 'Chidi Okafor', approverName: 'Adeola Bello',
+    validityDays: 30,
   },
 };
 

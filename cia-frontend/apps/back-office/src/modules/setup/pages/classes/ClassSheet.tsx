@@ -20,7 +20,7 @@ interface Props {
 }
 
 export default function ClassSheet({ open, onOpenChange, cls, onSuccess }: Props) {
-  const form = useForm<FormValues>({ resolver: zodResolver(schema) as any, defaultValues: { name: '', code: '' } });
+  const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { name: '', code: '' } });
 
   useEffect(() => {
     form.reset(cls ? { name: cls.name, code: cls.code } : { name: '', code: '' });

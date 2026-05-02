@@ -4,9 +4,14 @@ import {
   Badge, Button, Card, CardContent, CardHeader, CardTitle, PageHeader, Separator,
 } from '@cia/ui';
 import type { QuoteDto } from '@cia/api-client';
-import QuotePdfPreview, { type QuotePdfData, type AdjustmentLine, type RiskItemData } from '../QuotePdfPreview';
+import QuotePdfPreview, {
+  type QuotePdfData, type AdjustmentLine, type RiskItemData,
+  computeQuoteSummary,
+} from '../QuotePdfPreview';
 import { INITIAL_CLAUSES } from '../clauses-shared';
-import { MOCK_DISCOUNT_TYPES, MOCK_LOADING_TYPES } from '../../../setup/pages/policy-specs/quote-config-types';
+import {
+  MOCK_DISCOUNT_TYPES, MOCK_LOADING_TYPES, MOCK_QUOTE_CONFIG,
+} from '../../../setup/pages/policy-specs/quote-config-types';
 
 // ── Mock quote shape ──────────────────────────────────────────────────────────
 interface MockQuote {
@@ -37,8 +42,8 @@ const MOCK_QUOTES: MockQuote[] = [
       {
         description: '2022 Toyota Camry, Reg: LND-001-AA',
         sumInsured: 3_500_000, rate: 2.25,
-        loadings:  [{ typeId: 'l1', format: 'PERCENT' as const, value: 5 }],
-        discounts: [{ typeId: 'd1', format: 'PERCENT' as const, value: 2.5 }],
+        loadings:  [{ typeId: 'l1', typeName: '', format: 'PERCENT' as const, value: 5 }],
+        discounts: [{ typeId: 'd1', typeName: '', format: 'PERCENT' as const, value: 2.5 }],
       },
     ],
     quoteLoadings: [], quoteDiscounts: [],
@@ -56,18 +61,18 @@ const MOCK_QUOTES: MockQuote[] = [
       {
         description: 'Mixed stock — Eko Hotel Annexe, Warehouse B',
         sumInsured: 10_000_000, rate: 0.80,
-        loadings:  [{ typeId: 'l2', format: 'PERCENT' as const, value: 10 }],
-        discounts: [{ typeId: 'd3', format: 'FLAT' as const, value: 5_000 }],
+        loadings:  [{ typeId: 'l2', typeName: '', format: 'PERCENT' as const, value: 10 }],
+        discounts: [{ typeId: 'd3', typeName: '', format: 'FLAT' as const, value: 5_000 }],
       },
       {
         description: 'Fixtures & fittings — Warehouse B',
         sumInsured: 5_000_000, rate: 0.80,
         loadings:  [],
-        discounts: [{ typeId: 'd2', format: 'PERCENT' as const, value: 5 }],
+        discounts: [{ typeId: 'd2', typeName: '', format: 'PERCENT' as const, value: 5 }],
       },
     ],
-    quoteLoadings: [{ typeId: 'l1', format: 'PERCENT' as const, value: 2.5 }],
-    quoteDiscounts: [{ typeId: 'd4', format: 'FLAT' as const, value: 10_000 }],
+    quoteLoadings:  [{ typeId: 'l1', typeName: '', format: 'PERCENT' as const, value: 2.5 }],
+    quoteDiscounts: [{ typeId: 'd4', typeName: '', format: 'FLAT' as const, value: 10_000 }],
     selectedClauseIds: ['c5', 'c6', 'c8'],
   },
   {
@@ -150,12 +155,23 @@ function resolveTypeName(typeId: string, category: 'loading' | 'discount') {
   return list.find(t => t.id === typeId)?.name ?? typeId;
 }
 
-function computeItemNet(si: number, rate: number, loadings: { format: string; value: number }[], discounts: { format: string; value: number }[]) {
-  const gross = (si * rate) / 100;
-  const totalLoading = loadings.reduce((s, l) => s + (l.format === 'PERCENT' ? gross * l.value / 100 : l.value), 0);
-  const loaded = gross + totalLoading;
-  const totalDiscount = discounts.reduce((s, d) => s + (d.format === 'PERCENT' ? loaded * d.value / 100 : d.value), 0);
-  return { gross, totalLoading, loaded, totalDiscount, net: Math.max(0, loaded - totalDiscount) };
+/** Walk the mock quote and populate `typeName` on every AdjustmentLine. */
+function resolveAdjustmentNames(q: MockQuote): {
+  risks: RiskItemData[];
+  quoteLoadings: AdjustmentLine[];
+  quoteDiscounts: AdjustmentLine[];
+} {
+  const enrich = (lines: AdjustmentLine[], cat: 'loading' | 'discount'): AdjustmentLine[] =>
+    lines.map(l => ({ ...l, typeName: l.typeName || resolveTypeName(l.typeId, cat) }));
+  return {
+    risks: q.risks.map(r => ({
+      ...r,
+      loadings:  enrich(r.loadings, 'loading'),
+      discounts: enrich(r.discounts, 'discount'),
+    })),
+    quoteLoadings:  enrich(q.quoteLoadings,  'loading'),
+    quoteDiscounts: enrich(q.quoteDiscounts, 'discount'),
+  };
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -172,7 +188,9 @@ export default function QuoteDetailPage() {
   const canEdit    = q.status !== 'CONVERTED' && q.status !== 'APPROVED';
   const canDownloadPdf = q.status === 'APPROVED' || q.status === 'CONVERTED';
 
-  // Build QuotePdfData for the preview
+  // Resolve type names once and feed into both display + PDF data
+  const resolved = resolveAdjustmentNames(q);
+
   const pdfData: QuotePdfData = {
     quoteNumber:       q.quoteNumber,
     issueDate:         q.issueDate,
@@ -181,22 +199,19 @@ export default function QuoteDetailPage() {
     classOfBusiness:   q.classOfBusinessName,
     startDate:         q.startDate,
     endDate:           q.endDate,
-    risks:             q.risks,
-    quoteLoadings:     q.quoteLoadings,
-    quoteDiscounts:    q.quoteDiscounts,
+    risks:             resolved.risks,
+    quoteLoadings:     resolved.quoteLoadings,
+    quoteDiscounts:    resolved.quoteDiscounts,
     selectedClauseIds: q.selectedClauseIds,
     inputterName:      q.inputterName,
     approverName:      q.approverName,
+    validityDays:      MOCK_QUOTE_CONFIG.validityDays,
   };
 
-  // Compute totals for display
-  const itemResults = q.risks.map(r => ({ ...r, ...computeItemNet(r.sumInsured, r.rate, r.loadings, r.discounts) }));
-  const totalGross    = itemResults.reduce((s, r) => s + r.gross, 0);
-  const totalItemNets = itemResults.reduce((s, r) => s + r.net, 0);
-  const totalQuoteLoading = q.quoteLoadings.reduce((s, l) => s + (l.format === 'PERCENT' ? totalGross * l.value / 100 : l.value), 0);
-  const quoteLoadedBase   = totalItemNets + totalQuoteLoading;
-  const totalQuoteDiscount = q.quoteDiscounts.reduce((s, d) => s + (d.format === 'PERCENT' ? quoteLoadedBase * d.value / 100 : d.value), 0);
-  const finalNet = Math.max(0, quoteLoadedBase - totalQuoteDiscount);
+  // Single source of truth for display totals
+  const summary = computeQuoteSummary(pdfData);
+  const itemResults = summary.items;
+  const { totalQuoteLoading, totalQuoteDiscount, finalNet } = summary;
 
   const selectedClauses = INITIAL_CLAUSES.filter(c => q.selectedClauseIds.includes(c.id));
 
@@ -313,7 +328,7 @@ export default function QuoteDetailPage() {
                       const amt = l.format === 'PERCENT' ? item.gross * l.value / 100 : l.value;
                       return (
                         <div key={li} className="flex justify-between text-xs text-muted-foreground">
-                          <span>{resolveTypeName(l.typeId, 'loading')} ({l.format === 'PERCENT' ? `${l.value}%` : 'Flat'})</span>
+                          <span>{l.typeName} ({l.format === 'PERCENT' ? `${l.value}%` : 'Flat'})</span>
                           <span className="text-amber-700">+{fmt(amt)}</span>
                         </div>
                       );
@@ -328,7 +343,7 @@ export default function QuoteDetailPage() {
                       const amt  = d.format === 'PERCENT' ? base * d.value / 100 : d.value;
                       return (
                         <div key={di} className="flex justify-between text-xs text-muted-foreground">
-                          <span>{resolveTypeName(d.typeId, 'discount')} ({d.format === 'PERCENT' ? `${d.value}%` : 'Flat'})</span>
+                          <span>{d.typeName} ({d.format === 'PERCENT' ? `${d.value}%` : 'Flat'})</span>
                           <span className="text-rose-700">−{fmt(amt)}</span>
                         </div>
                       );

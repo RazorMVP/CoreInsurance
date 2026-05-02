@@ -31,7 +31,7 @@ interface Props {
 
 export default function AccessGroupSheet({ open, onOpenChange, group, onSuccess }: Props) {
   const form = useForm<FormValues>({
-    resolver:      zodResolver(schema) as any,
+    resolver:      zodResolver(schema),
     defaultValues: { name: '', permissions: [] },
   });
 

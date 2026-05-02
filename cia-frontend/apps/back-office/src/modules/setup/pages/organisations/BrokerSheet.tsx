@@ -24,7 +24,7 @@ interface Props {
 
 export default function BrokerSheet({ open, onOpenChange, broker, onSuccess }: Props) {
   const form = useForm<FormValues>({
-    resolver:      zodResolver(schema) as any,
+    resolver:      zodResolver(schema),
     defaultValues: { name: '', code: '', email: '', phone: '', contactPerson: '' },
   });
 

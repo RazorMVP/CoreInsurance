@@ -63,6 +63,7 @@ export default function ProductSheet({ open, onOpenChange, product, onSuccess }:
 
   // ── Product form ──────────────────────────────────────────────────────────
   const form = useForm<ProductFormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(productSchema) as any,
     defaultValues: { name: '', code: '', classOfBusinessId: '', type: 'SINGLE_RISK', commissionRate: 10 },
   });
@@ -89,7 +90,7 @@ export default function ProductSheet({ open, onOpenChange, product, onSuccess }:
 
   // ── Inline class-creation form ────────────────────────────────────────────
   const classForm = useForm<ClassFormValues>({
-    resolver:      zodResolver(classSchema) as any,
+    resolver:      zodResolver(classSchema),
     defaultValues: { name: '', code: '' },
   });
 

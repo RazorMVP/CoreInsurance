@@ -39,7 +39,7 @@ export default function TemplateUploadSheet({
   const fileInputRef             = useRef<HTMLInputElement>(null);
 
   const form = useForm<TemplateFormValues>({
-    resolver:      zodResolver(templateSchema) as any,
+    resolver:      zodResolver(templateSchema),
     defaultValues: { name: '', type: 'POLICY_DOCUMENT' },
   });
 

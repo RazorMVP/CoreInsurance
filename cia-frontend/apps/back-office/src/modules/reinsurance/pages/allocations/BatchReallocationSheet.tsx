@@ -42,7 +42,7 @@ interface Props {
 
 export default function BatchReallocationSheet({ open, onOpenChange, allocations, onSuccess }: Props) {
   const form = useForm<FormValues>({
-    resolver:      zodResolver(schema) as any,
+    resolver:      zodResolver(schema),
     defaultValues: { selectedIds: [], newTreatyId: '', reason: '', effectiveDate: '' },
   });
 

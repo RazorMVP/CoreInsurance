@@ -16,8 +16,6 @@ const EXPIRY_TYPES = ['DRIVERS_LICENSE', 'PASSPORT'] as const;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME = ['image/jpeg', 'image/jpg', 'image/png'];
 
-const today = new Date().toDateString();
-
 const directorSchema = z.object({
   fullName:     z.string().min(2, 'Required'),
   idType:       z.enum(['NIN', 'VOTERS_CARD', 'DRIVERS_LICENSE', 'PASSPORT']),
@@ -27,7 +25,11 @@ const directorSchema = z.object({
   if (EXPIRY_TYPES.includes(data.idType as typeof EXPIRY_TYPES[number])) {
     if (!data.idExpiryDate) {
       ctx.addIssue({ code: 'custom', path: ['idExpiryDate'], message: 'Expiry date required for this ID type' });
-    } else if (new Date(data.idExpiryDate) < new Date(today)) {
+      return;
+    }
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    if (new Date(data.idExpiryDate) < startOfToday) {
       ctx.addIssue({ code: 'custom', path: ['idExpiryDate'], message: 'ID document has expired — provide a valid document' });
     }
   }
@@ -81,7 +83,7 @@ export default function CorporateOnboardingSheet({ open, onOpenChange, onSuccess
   const dirFileRefs = useRef<(HTMLInputElement | null)[]>([null]);
 
   const form = useForm<FormValues>({
-    resolver:      zodResolver(schema) as any,
+    resolver:      zodResolver(schema),
     defaultValues: {
       companyName: '', rcNumber: '', cacIssuedDate: '', email: '', phone: '', address: '',
       directors:   [{ fullName: '', idType: 'NIN', idNumber: '', idExpiryDate: '' }],
@@ -132,7 +134,6 @@ export default function CorporateOnboardingSheet({ open, onOpenChange, onSuccess
       fd.append('email',         values.email);
       fd.append('phone',         values.phone);
       fd.append('address',       values.address);
-      fd.append('country',       'Nigeria');
       if (values.brokerEnabled && values.brokerId) fd.append('brokerId', values.brokerId);
 
       // Directors as JSON string (Spring @ModelAttribute will bind list fields)

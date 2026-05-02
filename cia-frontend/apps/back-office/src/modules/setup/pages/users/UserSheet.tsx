@@ -40,7 +40,7 @@ export default function UserSheet({ open, onOpenChange, user, onSuccess }: UserS
   const isEditing = !!user;
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(schema) as any,
+    resolver: zodResolver(schema),
     defaultValues: {
       firstName:     '',
       lastName:      '',
