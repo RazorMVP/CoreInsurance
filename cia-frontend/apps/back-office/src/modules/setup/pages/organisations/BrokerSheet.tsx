@@ -3,9 +3,10 @@ import {
   Button, Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
   FormRow, Input, Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle,
 } from '@cia/ui';
-import type { BrokerDto } from '@cia/api-client';
+import { apiClient, type BrokerDto } from '@cia/api-client';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export default function BrokerSheet({ open, onOpenChange, broker, onSuccess }: Props) {
+  const queryClient = useQueryClient();
   const form = useForm<FormValues>({
     resolver:      zodResolver(schema),
     defaultValues: { name: '', code: '', email: '', phone: '', contactPerson: '' },
@@ -35,9 +37,27 @@ export default function BrokerSheet({ open, onOpenChange, broker, onSuccess }: P
     } : { name: '', code: '', email: '', phone: '', contactPerson: '' });
   }, [broker, form]);
 
-  async function onSubmit(values: FormValues) {
-    console.log(broker ? 'Update broker' : 'Create broker', values);
-    onSuccess();
+  const save = useMutation({
+    mutationFn: async (values: FormValues) => {
+      if (broker) {
+        const res = await apiClient.put<{ data: BrokerDto }>(
+          `/api/v1/setup/brokers/${broker.id}`, values,
+        );
+        return res.data.data;
+      }
+      const res = await apiClient.post<{ data: BrokerDto }>(
+        '/api/v1/setup/brokers', values,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['setup', 'brokers'] });
+      onSuccess();
+    },
+  });
+
+  function onSubmit(values: FormValues) {
+    save.mutate(values);
   }
 
   return (
