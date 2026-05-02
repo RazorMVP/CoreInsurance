@@ -4,6 +4,63 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-02 — Session 48: Full codebase code review (frontend, backend, APIs)
+
+### Context
+
+User requested a comprehensive code review of everything built so far across frontend, backend, and APIs. Review conducted by `superpowers:code-reviewer` subagent against CLAUDE.md standards.
+
+### Findings Summary
+
+**Critical (3) — fix before production:**
+
+- **C1.** `DevAuthProvider` can silently activate in production — `main.tsx` guards on `!!import.meta.env.VITE_KEYCLOAK_URL` instead of `import.meta.env.DEV`. If the env var is absent from Vercel, the build ships with unauthenticated mock access.
+- **C2.** NDPR PII encryption at rest not implemented — `customers` and `customer_directors` tables store name, DOB, NIN, email, phone, address as plain `VARCHAR`. No `pgcrypto` extension or `@ColumnTransformer` in place.
+- **C3.** OAuth2 scope parsing bug in `PartnerScopeFilter.java` — Keycloak issues `scope` as a space-delimited string (RFC 8693), not a JSON array. `jwt.getClaimAsStringList("scope")` returns null for a string, triggering 403 on every partner API call.
+
+**High (6):**
+
+- **H1.** `ReportQueryBuilder.execute()` has no `setMaxResults()` — full table scans on mature tenants.
+- **H2.** 20+ form submit handlers are `console.log` stubs, not wired to API mutations (quotes, policies, receipts, payments, treaties).
+- **H3.** Widespread `zodResolver(...) as any` cast suppresses TypeScript strict mode.
+- **H4.** `AlertDetectionService` uses `@Async` — breaks `TenantContext` ThreadLocal.
+- **H5.** Hardcoded `'Nigeria'` country code in `IndividualOnboardingSheet.tsx` and `CorporateOnboardingSheet.tsx`.
+- **H6.** `ReportAccessService.upsert()` never sets `report_id` on report-level policies — access hierarchy broken.
+
+**Medium (6):**
+
+- **M1.** Mock data still wired into 59 form select fields (customers, products, brokers, loading/discount types).
+- **M2.** `QuotePdfPreview.resolveTypeName()` looks up names from mock data — will show raw IDs when real API is wired.
+- **M3.** `today` constant computed at module load in `CorporateOnboardingSheet.tsx`.
+- **M4.** Missing composite index on `audit_log (user_id, action, timestamp)` for bulk-delete detection.
+- **M5.** `customer_number` column has no backfill for pre-V20 rows.
+- **M6.** Premium calculation logic duplicated three times in `QuotePdfPreview.tsx`.
+
+**Positive observations:**
+
+- Module dependency graph clean (`cia-reports` and `cia-audit` correctly isolated).
+- `ReportDefinitionService` throws on SYSTEM report mutations.
+- `ReportRunnerService.pin()` checks `existsByUserIdAndReportId`.
+- `ReportQueryBuilder.sanitizeColumnName()` whitelist correct.
+- `AuditAlertConfigService.loadConfig()` uses `findFirstByOrderByCreatedAtAsc()`.
+- `WebhookEventListener` correctly synchronous.
+- `AuditService.log()` catches all exceptions to prevent audit failures propagating.
+- `tokens.css` NairaFallback `@font-face` correctly scoped to `U+20A6`.
+
+### Files Modified
+
+None — review only. No code changes made this session.
+
+### Open Questions
+
+- User has not yet decided which fixes to start with. Recommended priority: Critical #1 (DevAuth) → Critical #3 (scope parsing) → High #5 (form submits) → Critical #2 (NDPR) → High #7 (@Async) → High #9 (report access).
+
+### Git Commit
+
+None — review-only session.
+
+---
+
 ## 2026-05-01 — Session 47: Gate — Complete internal-api.json for quotation endpoints
 
 ### Context
