@@ -12,8 +12,15 @@ import { useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import type { Control } from 'react-hook-form';
-import { MOCK_DISCOUNT_TYPES, MOCK_LOADING_TYPES } from '../../../setup/pages/policy-specs/quote-config-types';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  apiClient,
+  type CustomerDto,
+  type ProductDto,
+} from '@cia/api-client';
 import { INITIAL_CLAUSES } from '../clauses-shared';
+
+interface AdjustmentTypeDto { id: string; name: string; }
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 const adjustmentSchema = z.object({
@@ -36,18 +43,14 @@ const schema = z.object({
 });
 export type SingleRiskFormValues = z.infer<typeof schema>;
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-const mockCustomers = [
-  { id: 'c1', name: 'Chioma Okafor' },
-  { id: 'c2', name: 'Alaba Trading Co.' },
-  { id: 'c3', name: 'Emeka Eze' },
-];
-const mockProducts = [
-  { id: 'p1', name: 'Private Motor Comprehensive', defaultRate: 2.25 },
-  { id: 'p2', name: 'Commercial Vehicle',          defaultRate: 1.80 },
-  { id: 'p3', name: 'Fire & Burglary Standard',    defaultRate: 0.80 },
-  { id: 'p4', name: 'Marine Cargo Open Cover',     defaultRate: 0.75 },
-];
+// Customer summary as returned by GET /api/v1/customers — display name varies by type.
+function customerLabel(c: CustomerDto & { firstName?: string; lastName?: string; companyName?: string }): string {
+  if (c.customerType === 'CORPORATE') return c.companyName ?? '(unnamed corporate)';
+  return `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim() || '(unnamed individual)';
+}
+
+// Product list shape: backend returns ProductDto with productRate (default rate).
+type ProductWithRate = ProductDto & { productRate?: number };
 
 // ── Adjustment row array ──────────────────────────────────────────────────────
 function AdjustmentRows({
@@ -126,10 +129,54 @@ function AdjustmentRows({
 // ── Main sheet ────────────────────────────────────────────────────────────────
 interface Props { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void; }
 
+type CustomerSummary = CustomerDto & { firstName?: string; lastName?: string; companyName?: string };
+
 export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: Props) {
   const [clauseSearch, setClauseSearch] = useState('');
+  const queryClient = useQueryClient();
+
+  const customersQuery = useQuery<CustomerSummary[]>({
+    queryKey: ['customers'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: CustomerSummary[] }>('/api/v1/customers');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const customers = customersQuery.data ?? [];
+
+  const productsQuery = useQuery<ProductWithRate[]>({
+    queryKey: ['setup', 'products'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ProductWithRate[] }>('/api/v1/setup/products');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const products = productsQuery.data ?? [];
+
+  const loadingTypesQuery = useQuery<AdjustmentTypeDto[]>({
+    queryKey: ['setup', 'quote-loading-types'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: AdjustmentTypeDto[] }>('/api/v1/setup/quote-loading-types');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const loadingTypes = loadingTypesQuery.data ?? [];
+
+  const discountTypesQuery = useQuery<AdjustmentTypeDto[]>({
+    queryKey: ['setup', 'quote-discount-types'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: AdjustmentTypeDto[] }>('/api/v1/setup/quote-discount-types');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const discountTypes = discountTypesQuery.data ?? [];
 
   const form = useForm<SingleRiskFormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(schema) as any,
     defaultValues: {
       customerId: '', productId: '', startDate: '', endDate: '',
@@ -155,13 +202,48 @@ export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: 
 
   function onProductChange(productId: string, fieldOnChange: (v: string) => void) {
     fieldOnChange(productId);
-    const product = mockProducts.find(p => p.id === productId);
-    if (product) form.setValue('rate', product.defaultRate);
+    const product = products.find(p => p.id === productId);
+    if (product?.productRate != null) form.setValue('rate', product.productRate);
   }
 
-  async function onSubmit(values: SingleRiskFormValues) {
-    console.log('Create single-risk quote', values);
-    onSuccess();
+  // Resolve a type-id → name lookup so we can denormalize the typeName into
+  // each AdjustmentEntry payload (matches the backend AdjustmentEntry shape).
+  function resolveTypeName(typeId: string, kind: 'loading' | 'discount'): string {
+    const list = kind === 'loading' ? loadingTypes : discountTypes;
+    return list.find(t => t.id === typeId)?.name ?? '';
+  }
+
+  const createQuote = useMutation({
+    mutationFn: async (values: SingleRiskFormValues) => {
+      const payload = {
+        customerId:        values.customerId,
+        productId:         values.productId,
+        businessType:      'DIRECT',
+        policyStartDate:   values.startDate,
+        policyEndDate:     values.endDate,
+        risks: [{
+          description: values.riskDescription,
+          sumInsured:  values.sumInsured,
+          rate:        values.rate,
+          loadings:    values.loadings.map(l => ({ ...l, typeName: resolveTypeName(l.typeId, 'loading') })),
+          discounts:   values.discounts.map(d => ({ ...d, typeName: resolveTypeName(d.typeId, 'discount') })),
+        }],
+        quoteLoadings:     [],
+        quoteDiscounts:    [],
+        selectedClauseIds: values.selectedClauseIds,
+      };
+      const res = await apiClient.post<{ data: { id: string } }>('/api/v1/quotes', payload);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quotes'] });
+      onSuccess();
+      form.reset();
+    },
+  });
+
+  function onSubmit(values: SingleRiskFormValues) {
+    createQuote.mutate(values);
   }
 
   return (
@@ -185,7 +267,7 @@ export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: 
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger></FormControl>
                     <SelectContent>
-                      {mockCustomers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                      {customers.map(c => <SelectItem key={c.id} value={c.id}>{customerLabel(c)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -201,7 +283,7 @@ export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: 
                   <Select onValueChange={(v) => onProductChange(v, field.onChange)} value={field.value}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger></FormControl>
                     <SelectContent>
-                      {mockProducts.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                      {products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                       <SelectSeparator />
                       <SelectItem value="__new__" className="text-primary font-medium">+ New Product</SelectItem>
                     </SelectContent>
@@ -241,7 +323,7 @@ export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: 
                 control={form.control}
                 name="loadings"
                 label="Loading"
-                typeOptions={MOCK_LOADING_TYPES}
+                typeOptions={loadingTypes}
                 accentColor="amber"
               />
             </div>
@@ -253,7 +335,7 @@ export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: 
                 control={form.control}
                 name="discounts"
                 label="Discount"
-                typeOptions={MOCK_DISCOUNT_TYPES}
+                typeOptions={discountTypes}
                 accentColor="rose"
               />
             </div>
