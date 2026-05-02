@@ -5,9 +5,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
   Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle,
 } from '@cia/ui';
-import type { ApprovalGroupDto } from '@cia/api-client';
+import { apiClient, type ApprovalGroupDto, type UserDto } from '@cia/api-client';
 import { useEffect } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
 const levelSchema = z.object({
@@ -26,20 +27,29 @@ type FormValues = z.infer<typeof schema>;
 
 const MODULES = ['UNDERWRITING','CLAIMS','FINANCE','ENDORSEMENT','QUOTATION'];
 
-// Placeholder — replace with useUsers() hook
-const mockApprovers = [
-  { id: 'u1', name: 'Akinwale Nubeero' },
-  { id: 'u2', name: 'Chidi Okafor' },
-  { id: 'u3', name: 'Adaeze Nwosu' },
-];
-
 interface Props {
   open: boolean; onOpenChange: (v: boolean) => void;
   group: ApprovalGroupDto | null; onSuccess: () => void;
 }
 
 export default function ApprovalGroupSheet({ open, onOpenChange, group, onSuccess }: Props) {
+  const queryClient = useQueryClient();
+
+  const usersQuery = useQuery<UserDto[]>({
+    queryKey: ['setup', 'users'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: UserDto[] }>('/api/v1/setup/users');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const approvers = (usersQuery.data ?? []).map((u) => ({
+    id:   u.id,
+    name: `${u.firstName} ${u.lastName}`,
+  }));
+
   const form = useForm<FormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(schema) as any,
     defaultValues: { name: '', module: '', levels: [{ minAmount: 0, maxAmount: 10_000_000, approverIds: [] }] },
   });
@@ -58,9 +68,27 @@ export default function ApprovalGroupSheet({ open, onOpenChange, group, onSucces
     }
   }, [group, form]);
 
-  async function onSubmit(values: FormValues) {
-    console.log(group ? 'Update approval group' : 'Create approval group', values);
-    onSuccess();
+  const save = useMutation({
+    mutationFn: async (values: FormValues) => {
+      if (group) {
+        const res = await apiClient.put<{ data: ApprovalGroupDto }>(
+          `/api/v1/setup/approval-groups/${group.id}`, values,
+        );
+        return res.data.data;
+      }
+      const res = await apiClient.post<{ data: ApprovalGroupDto }>(
+        '/api/v1/setup/approval-groups', values,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['setup', 'approval-groups'] });
+      onSuccess();
+    },
+  });
+
+  function onSubmit(values: FormValues) {
+    save.mutate(values);
   }
 
   return (
@@ -139,7 +167,7 @@ export default function ApprovalGroupSheet({ open, onOpenChange, group, onSucces
                         >
                           <FormControl><SelectTrigger><SelectValue placeholder="Select approver" /></SelectTrigger></FormControl>
                           <SelectContent>
-                            {mockApprovers.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                            {approvers.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                           </SelectContent>
                         </Select>
                         <FormMessage />
