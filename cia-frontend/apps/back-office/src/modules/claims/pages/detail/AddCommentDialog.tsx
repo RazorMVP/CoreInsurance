@@ -3,15 +3,19 @@ import {
   Button,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@cia/ui';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '@cia/api-client';
 
 interface Props {
   open:         boolean;
   onOpenChange: (v: boolean) => void;
+  claimId:      string;
   claimNumber:  string;
   onSuccess:    () => void;
 }
 
-export default function AddCommentDialog({ open, onOpenChange, claimNumber, onSuccess }: Props) {
+export default function AddCommentDialog({ open, onOpenChange, claimId, claimNumber, onSuccess }: Props) {
+  const queryClient = useQueryClient();
   const [text, setText] = useState('');
 
   function handleClose() {
@@ -19,12 +23,24 @@ export default function AddCommentDialog({ open, onOpenChange, claimNumber, onSu
     onOpenChange(false);
   }
 
-  async function handleSubmit() {
+  const addComment = useMutation({
+    mutationFn: async (comment: string) => {
+      const res = await apiClient.post<{ data: { id: string } }>(
+        `/api/v1/claims/${claimId}/comments`,
+        { text: comment },
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['claims', claimId] });
+      setText('');
+      onSuccess();
+    },
+  });
+
+  function handleSubmit() {
     if (text.trim().length < 3) return;
-    console.log('Add comment', text);
-    // TODO: POST /api/v1/claims/{id}/comments
-    setText('');
-    onSuccess();
+    addComment.mutate(text.trim());
   }
 
   return (
@@ -52,8 +68,8 @@ export default function AddCommentDialog({ open, onOpenChange, claimNumber, onSu
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose}>Cancel</Button>
-          <Button disabled={text.trim().length < 3} onClick={handleSubmit}>
-            Add Comment
+          <Button disabled={text.trim().length < 3 || addComment.isPending} onClick={handleSubmit}>
+            {addComment.isPending ? 'Saving…' : 'Add Comment'}
           </Button>
         </DialogFooter>
       </DialogContent>

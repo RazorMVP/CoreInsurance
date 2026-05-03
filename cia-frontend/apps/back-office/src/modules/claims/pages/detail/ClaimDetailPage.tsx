@@ -29,6 +29,7 @@ type MockClaim = ClaimDto & {
   dvExecuted?: boolean;
 };
 
+// allow-mock: fallback while useQuery is in flight or for unknown ids
 const mockClaim: MockClaim = {
   id: 'cl1', claimNumber: 'CLM-2026-00001',
   policyId: 'pol1', policyNumber: 'POL-2026-00001',
@@ -59,11 +60,13 @@ const mockClaim: MockClaim = {
   dvType: undefined, dvAmount: undefined, dvExecuted: false,
 };
 
+// allow-mock: fallback while /claims/{id}/reserves is in flight
 const fallbackReserves: ClaimReserveDto[] = [
   { id: 'r1', claimId: 'cl1', category: 'Own Damage — Vehicle Repairs', amount: 600_000, createdAt: '2026-03-12' },
   { id: 'r2', claimId: 'cl1', category: 'Survey Fees',                   amount: 50_000,  createdAt: '2026-03-12' },
 ];
 
+// allow-mock: fallback while /claims/{id}/expenses is in flight
 const fallbackExpenses: ClaimExpenseDto[] = [
   { id: 'e1', claimId: 'cl1', type: 'Survey / Assessment Fee', amount: 35_000, status: 'APPROVED', createdAt: '2026-03-14' },
 ];
@@ -557,6 +560,7 @@ export default function ClaimDetailPage() {
       <AddCommentDialog
         open={addCommentOpen}
         onOpenChange={setAddCommentOpen}
+        claimId={c.id}
         claimNumber={c.claimNumber}
         onSuccess={() => setAddCommentOpen(false)}
       />
@@ -564,6 +568,7 @@ export default function ClaimDetailPage() {
       <UploadDocumentDialog
         open={uploadDoc !== null}
         onOpenChange={(v) => { if (!v) setUploadDoc(null); }}
+        claimId={c.id}
         documentName={uploadDoc?.name ?? ''}
         onSuccess={() => setUploadDoc(null)}
       />

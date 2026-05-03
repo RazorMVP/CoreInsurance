@@ -3,15 +3,19 @@ import {
   Button,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@cia/ui';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '@cia/api-client';
 
 interface Props {
   open:         boolean;
   onOpenChange: (v: boolean) => void;
+  claimId:      string;
   documentName: string;
   onSuccess:    () => void;
 }
 
-export default function UploadDocumentDialog({ open, onOpenChange, documentName, onSuccess }: Props) {
+export default function UploadDocumentDialog({ open, onOpenChange, claimId, documentName, onSuccess }: Props) {
+  const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -33,12 +37,27 @@ export default function UploadDocumentDialog({ open, onOpenChange, documentName,
     onOpenChange(false);
   }
 
-  async function handleUpload() {
+  const upload = useMutation({
+    mutationFn: async (f: File) => {
+      const fd = new FormData();
+      fd.append('file', f);
+      fd.append('documentName', documentName);
+      const res = await apiClient.post<{ data: { id: string } }>(
+        `/api/v1/claims/${claimId}/documents`,
+        fd,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['claims', claimId] });
+      handleClose();
+      onSuccess();
+    },
+  });
+
+  function handleUpload() {
     if (!file) return;
-    console.log('Upload document', documentName, file.name);
-    // TODO: POST /api/v1/claims/{id}/documents
-    handleClose();
-    onSuccess();
+    upload.mutate(file);
   }
 
   const acceptedTypes = '.pdf,.jpg,.jpeg,.png,.doc,.docx';
