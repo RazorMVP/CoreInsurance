@@ -260,8 +260,8 @@ export default function CreateEndorsementSheet({ open, onOpenChange, onSuccess }
 
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting || !endorsementType}>
-                {form.formState.isSubmitting ? 'Saving…' : 'Save as Draft'}
+              <Button type="submit" disabled={create.isPending || !endorsementType}>
+                {create.isPending ? 'Saving…' : 'Save as Draft'}
               </Button>
             </SheetFooter>
           </form>

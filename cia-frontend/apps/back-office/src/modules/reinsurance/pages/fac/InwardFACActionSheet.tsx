@@ -256,8 +256,8 @@ export default function InwardFACActionSheet({ open, onOpenChange, fac, mode, on
 
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting
+              <Button type="submit" disabled={action.isPending}>
+                {action.isPending
                   ? 'Saving…'
                   : isRenew ? 'Confirm Renewal' : 'Confirm Extension'}
               </Button>

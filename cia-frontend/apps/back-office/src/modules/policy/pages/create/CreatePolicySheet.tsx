@@ -134,8 +134,8 @@ function FromQuoteForm({ onSuccess, onCancel }: { onSuccess: () => void; onCance
         </FormRow>
         <SheetFooter className="pt-2">
           <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-          <Button type="submit" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? 'Creating…' : 'Issue Policy'}
+          <Button type="submit" disabled={bind.isPending}>
+            {bind.isPending ? 'Creating…' : 'Issue Policy'}
           </Button>
         </SheetFooter>
       </form>
@@ -271,8 +271,8 @@ function DirectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: 
         )}
         <SheetFooter className="pt-2">
           <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-          <Button type="submit" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? 'Creating…' : 'Issue Policy'}
+          <Button type="submit" disabled={create.isPending}>
+            {create.isPending ? 'Creating…' : 'Issue Policy'}
           </Button>
         </SheetFooter>
       </form>

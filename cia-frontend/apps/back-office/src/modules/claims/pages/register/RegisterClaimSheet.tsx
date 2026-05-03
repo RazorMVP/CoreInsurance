@@ -163,8 +163,8 @@ export default function RegisterClaimSheet({ open, onOpenChange, onSuccess }: Pr
 
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Registering…' : 'Register Claim'}
+              <Button type="submit" disabled={register.isPending}>
+                {register.isPending ? 'Registering…' : 'Register Claim'}
               </Button>
             </SheetFooter>
           </form>

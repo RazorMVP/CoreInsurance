@@ -202,8 +202,8 @@ export default function AlertConfigDialog({ open, onOpenChange }: Props) {
               <Button type="button" variant="outline" onClick={() => { form.reset(DEFAULTS); onOpenChange(false); }}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Saving…' : 'Save Configuration'}
+              <Button type="submit" disabled={save.isPending}>
+                {save.isPending ? 'Saving…' : 'Save Configuration'}
               </Button>
             </DialogFooter>
           </form>

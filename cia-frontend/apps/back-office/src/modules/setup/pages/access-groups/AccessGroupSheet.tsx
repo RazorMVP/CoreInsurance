@@ -120,8 +120,8 @@ export default function AccessGroupSheet({ open, onOpenChange, group, onSuccess 
 
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Saving…' : group ? 'Save Changes' : 'Create Group'}
+              <Button type="submit" disabled={save.isPending}>
+                {save.isPending ? 'Saving…' : group ? 'Save Changes' : 'Create Group'}
               </Button>
             </SheetFooter>
           </form>

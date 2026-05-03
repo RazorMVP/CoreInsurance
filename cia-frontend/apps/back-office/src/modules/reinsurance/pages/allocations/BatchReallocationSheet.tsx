@@ -175,8 +175,8 @@ export default function BatchReallocationSheet({ open, onOpenChange, allocations
 
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting || selectedIds.length === 0}>
-                {form.formState.isSubmitting ? 'Processing…' : `Reallocate ${selectedIds.length > 0 ? selectedIds.length : ''} Polic${selectedIds.length === 1 ? 'y' : 'ies'}`}
+              <Button type="submit" disabled={reallocate.isPending || selectedIds.length === 0}>
+                {reallocate.isPending ? 'Processing…' : `Reallocate ${selectedIds.length > 0 ? selectedIds.length : ''} Polic${selectedIds.length === 1 ? 'y' : 'ies'}`}
               </Button>
             </SheetFooter>
           </form>

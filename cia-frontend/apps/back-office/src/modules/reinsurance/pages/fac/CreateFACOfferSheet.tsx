@@ -323,8 +323,8 @@ export default function CreateFACOfferSheet({ open, onOpenChange, onSuccess }: P
 
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Sending…' : isBroker ? 'Send to Broker' : 'Send FAC Offer'}
+              <Button type="submit" disabled={create.isPending}>
+                {create.isPending ? 'Sending…' : isBroker ? 'Send to Broker' : 'Send FAC Offer'}
               </Button>
             </SheetFooter>
           </form>

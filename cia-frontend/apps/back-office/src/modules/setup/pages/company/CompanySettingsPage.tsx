@@ -227,8 +227,8 @@ export default function CompanySettingsPage() {
           <Separator />
 
           <div className="flex justify-end">
-            <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? 'Saving…' : 'Save Settings'}
+            <Button type="submit" disabled={save.isPending}>
+              {save.isPending ? 'Saving…' : 'Save Settings'}
             </Button>
           </div>
         </form>

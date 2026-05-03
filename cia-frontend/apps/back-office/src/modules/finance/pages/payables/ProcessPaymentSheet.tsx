@@ -158,8 +158,8 @@ export default function ProcessPaymentSheet({ open, onOpenChange, creditNote, on
 
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Processing…' : 'Confirm Payment'}
+              <Button type="submit" disabled={process.isPending}>
+                {process.isPending ? 'Processing…' : 'Confirm Payment'}
               </Button>
             </SheetFooter>
           </form>

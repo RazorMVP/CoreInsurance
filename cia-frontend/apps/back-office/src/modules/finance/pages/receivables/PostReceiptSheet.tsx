@@ -148,8 +148,8 @@ export default function PostReceiptSheet({ open, onOpenChange, debitNoteIds, bul
 
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Posting…' : 'Post Receipt'}
+              <Button type="submit" disabled={post.isPending}>
+                {post.isPending ? 'Posting…' : 'Post Receipt'}
               </Button>
             </SheetFooter>
           </form>

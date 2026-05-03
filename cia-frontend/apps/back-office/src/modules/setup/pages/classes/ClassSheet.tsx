@@ -80,8 +80,8 @@ export default function ClassSheet({ open, onOpenChange, cls, onSuccess }: Props
             />
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Saving…' : cls ? 'Save Changes' : 'Create Class'}
+              <Button type="submit" disabled={save.isPending}>
+                {save.isPending ? 'Saving…' : cls ? 'Save Changes' : 'Create Class'}
               </Button>
             </SheetFooter>
           </form>

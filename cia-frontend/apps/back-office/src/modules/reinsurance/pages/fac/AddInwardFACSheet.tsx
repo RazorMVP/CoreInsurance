@@ -207,8 +207,8 @@ export default function AddInwardFACSheet({ open, onOpenChange, onSuccess }: Pro
 
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Saving…' : 'Add Inward FAC'}
+              <Button type="submit" disabled={create.isPending}>
+                {create.isPending ? 'Saving…' : 'Add Inward FAC'}
               </Button>
             </SheetFooter>
           </form>

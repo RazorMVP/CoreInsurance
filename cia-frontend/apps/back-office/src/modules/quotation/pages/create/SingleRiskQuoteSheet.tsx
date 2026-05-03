@@ -414,8 +414,8 @@ export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: 
 
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Saving…' : 'Save as Draft'}
+              <Button type="submit" disabled={createQuote.isPending}>
+                {createQuote.isPending ? 'Saving…' : 'Save as Draft'}
               </Button>
             </SheetFooter>
           </form>

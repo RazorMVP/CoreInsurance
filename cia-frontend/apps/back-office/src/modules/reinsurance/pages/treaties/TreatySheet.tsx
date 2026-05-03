@@ -205,8 +205,8 @@ export default function TreatySheet({ open, onOpenChange, treaty, onSuccess }: P
 
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting || totalShare !== 100}>
-                {form.formState.isSubmitting ? 'Saving…' : treaty ? 'Save Changes' : 'Create Treaty'}
+              <Button type="submit" disabled={save.isPending || totalShare !== 100}>
+                {save.isPending ? 'Saving…' : treaty ? 'Save Changes' : 'Create Treaty'}
               </Button>
             </SheetFooter>
           </form>

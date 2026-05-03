@@ -85,8 +85,8 @@ export default function BrokerSheet({ open, onOpenChange, broker, onSuccess }: P
             </FormRow>
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Saving…' : broker ? 'Save Changes' : 'Add Broker'}
+              <Button type="submit" disabled={save.isPending}>
+                {save.isPending ? 'Saving…' : broker ? 'Save Changes' : 'Add Broker'}
               </Button>
             </SheetFooter>
           </form>

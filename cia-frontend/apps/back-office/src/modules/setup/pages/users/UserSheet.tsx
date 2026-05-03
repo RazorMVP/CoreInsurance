@@ -190,8 +190,8 @@ export default function UserSheet({ open, onOpenChange, user, onSuccess }: UserS
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Saving…' : isEditing ? 'Save Changes' : 'Create User'}
+              <Button type="submit" disabled={save.isPending}>
+                {save.isPending ? 'Saving…' : isEditing ? 'Save Changes' : 'Create User'}
               </Button>
             </SheetFooter>
           </form>

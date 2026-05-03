@@ -110,8 +110,8 @@ export default function AddReserveDialog({ open, onOpenChange, claimId, claimNum
             />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Saving…' : 'Add Reserve'}
+              <Button type="submit" disabled={addReserve.isPending}>
+                {addReserve.isPending ? 'Saving…' : 'Add Reserve'}
               </Button>
             </DialogFooter>
           </form>

@@ -111,8 +111,8 @@ export default function AddExpenseDialog({ open, onOpenChange, claimId, claimNum
             </FormRow>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Saving…' : 'Add Expense'}
+              <Button type="submit" disabled={addExpense.isPending}>
+                {addExpense.isPending ? 'Saving…' : 'Add Expense'}
               </Button>
             </DialogFooter>
           </form>

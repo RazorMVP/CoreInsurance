@@ -261,8 +261,8 @@ export default function ProductSheet({ open, onOpenChange, product, onSuccess }:
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting
+                <Button type="submit" disabled={saveProduct.isPending}>
+                  {saveProduct.isPending
                     ? 'Saving…'
                     : product
                     ? 'Save Changes'
@@ -332,8 +332,8 @@ export default function ProductSheet({ open, onOpenChange, product, onSuccess }:
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={classForm.formState.isSubmitting}>
-                  {classForm.formState.isSubmitting ? 'Creating…' : 'Create Class'}
+                <Button type="submit" disabled={createClass.isPending}>
+                  {createClass.isPending ? 'Creating…' : 'Create Class'}
                 </Button>
               </DialogFooter>
             </form>
