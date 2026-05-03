@@ -7,7 +7,17 @@ import {
   Separator,
 } from '@cia/ui';
 import { useForm } from 'react-hook-form';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '@cia/api-client';
 import { z } from 'zod';
+
+interface PolicySummaryDto {
+  id:            string;
+  policyNumber:  string;
+  customerName:  string;
+  productName?:  string;
+  status:        string;
+}
 
 // All 10 endorsement types
 const ENDORSEMENT_TYPES = [
@@ -40,12 +50,6 @@ const baseSchema = z.object({
 });
 type FormValues = z.infer<typeof baseSchema>;
 
-const mockPolicies = [
-  { id: 'pol1', label: 'POL-2026-00001 — Chioma Okafor · Motor' },
-  { id: 'pol2', label: 'POL-2026-00002 — Alaba Trading · Fire & Burglary' },
-  { id: 'pol5', label: 'POL-2026-00004 — Alaba Trading · Marine Cargo' },
-];
-
 // Pro-rata premium preview (days remaining × daily rate)
 function calcProRata(annualPremium: number, daysAffected: number): number {
   return Math.round((annualPremium / 365) * daysAffected);
@@ -54,7 +58,25 @@ function calcProRata(annualPremium: number, daysAffected: number): number {
 interface Props { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void; }
 
 export default function CreateEndorsementSheet({ open, onOpenChange, onSuccess }: Props) {
+  const queryClient = useQueryClient();
+
+  const policiesQuery = useQuery<PolicySummaryDto[]>({
+    queryKey: ['policies', { status: 'ACTIVE' }],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: PolicySummaryDto[] }>('/api/v1/policies', {
+        params: { status: 'ACTIVE' },
+      });
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const policies = (policiesQuery.data ?? []).map(p => ({
+    id:    p.id,
+    label: `${p.policyNumber} — ${p.customerName}${p.productName ? ` · ${p.productName}` : ''}`,
+  }));
+
   const form = useForm<FormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(baseSchema) as any,
     defaultValues: {
       policyId: '', endorsementType: '', effectiveDate: '', reason: '',
@@ -75,10 +97,20 @@ export default function CreateEndorsementSheet({ open, onOpenChange, onSuccess }
   // Indicative pro-rata (simplified: assume 180 days affected at 2.25% rate)
   const indicativePremium = showSIFields && newSI > 0 ? calcProRata(newSI * 0.0225, 180) : null;
 
-  async function onSubmit(values: FormValues) {
-    console.log('Create endorsement', values);
-    // TODO: POST /api/v1/endorsements
-    onSuccess();
+  const create = useMutation({
+    mutationFn: async (values: FormValues) => {
+      const res = await apiClient.post<{ data: { id: string } }>('/api/v1/endorsements', values);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['endorsements'] });
+      onSuccess();
+      form.reset();
+    },
+  });
+
+  function onSubmit(values: FormValues) {
+    create.mutate(values);
   }
 
   return (
@@ -100,7 +132,7 @@ export default function CreateEndorsementSheet({ open, onOpenChange, onSuccess }
                   <FormLabel>Policy</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select active policy" /></SelectTrigger></FormControl>
-                    <SelectContent>{mockPolicies.map(p => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}</SelectContent>
+                    <SelectContent>{policies.map(p => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}</SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>
