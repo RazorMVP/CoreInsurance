@@ -7,7 +7,16 @@ import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@cia/ui';
 import { useForm } from 'react-hook-form';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient, type CustomerDto, type ProductDto, type QuoteDto } from '@cia/api-client';
 import { z } from 'zod';
+
+type CustomerSummary = CustomerDto & { firstName?: string; lastName?: string; companyName?: string };
+function customerLabel(c: CustomerSummary): string {
+  if (c.customerType === 'CORPORATE') return c.companyName ?? '(unnamed corporate)';
+  return `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim() || '(unnamed individual)';
+}
+type ProductWithRate = ProductDto & { productRate?: number };
 
 // ── Convert from quote ─────────────────────────────────────────────────────
 const fromQuoteSchema = z.object({
@@ -32,17 +41,6 @@ const directSchema = z.object({
 });
 type DirectValues = z.infer<typeof directSchema>;
 
-const mockApprovedQuotes = [
-  { id: 'q1', label: 'QUO-2026-00001 — Chioma Okafor · Private Motor · ₦78,750' },
-  { id: 'q2', label: 'QUO-2026-00002 — Alaba Trading · Fire & Burglary · ₦115,000' },
-];
-const mockCustomers = [{ id: 'c1', name: 'Chioma Okafor' }, { id: 'c2', name: 'Alaba Trading Co.' }, { id: 'c3', name: 'Emeka Eze' }];
-const mockProducts  = [
-  { id: 'p1', name: 'Private Motor Comprehensive', rate: 2.25 },
-  { id: 'p3', name: 'Fire & Burglary Standard',    rate: 0.80 },
-  { id: 'p4', name: 'Marine Cargo Open Cover',     rate: 0.75 },
-];
-
 const BUSINESS_TYPES = [
   { value: 'DIRECT',                   label: 'Direct' },
   { value: 'DIRECT_WITH_COINSURANCE',  label: 'Direct with Coinsurance' },
@@ -53,15 +51,44 @@ const PAYMENT_TERMS = ['Immediate', '30 days', '60 days', 'Quarterly', 'Annual']
 interface Props { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void; }
 
 function FromQuoteForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
+  const queryClient = useQueryClient();
+  const quotesQuery = useQuery<QuoteDto[]>({
+    queryKey: ['quotes', { status: 'APPROVED' }],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: QuoteDto[] }>('/api/v1/quotes', {
+        params: { status: 'APPROVED' },
+      });
+      return res.data.data;
+    },
+  });
+  const approvedQuotes = (quotesQuery.data ?? []).map(q => ({
+    id:    q.id,
+    label: `${q.quoteNumber} — ${q.customerName} · ${q.productName} · ₦${(q.netPremium ?? 0).toLocaleString()}`,
+  }));
+
   const form = useForm<FromQuoteValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(fromQuoteSchema) as any,
     defaultValues: { quoteId: '', businessType: 'DIRECT', paymentTerms: '', notes: '' },
   });
 
-  async function onSubmit(values: FromQuoteValues) {
-    console.log('Convert quote to policy', values);
-    // TODO: POST /api/v1/policies/from-quote
-    onSuccess();
+  const bind = useMutation({
+    mutationFn: async (values: FromQuoteValues) => {
+      const res = await apiClient.post<{ data: { id: string } }>(
+        `/api/v1/policies/bind-from-quote/${values.quoteId}`,
+        { businessType: values.businessType, paymentTerms: values.paymentTerms, notes: values.notes },
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['policies'] });
+      onSuccess();
+      form.reset();
+    },
+  });
+
+  function onSubmit(values: FromQuoteValues) {
+    bind.mutate(values);
   }
 
   return (
@@ -73,7 +100,7 @@ function FromQuoteForm({ onSuccess, onCancel }: { onSuccess: () => void; onCance
               <FormLabel>Approved Quote</FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl><SelectTrigger><SelectValue placeholder="Select approved quote" /></SelectTrigger></FormControl>
-                <SelectContent>{mockApprovedQuotes.map(q => <SelectItem key={q.id} value={q.id}>{q.label}</SelectItem>)}</SelectContent>
+                <SelectContent>{approvedQuotes.map(q => <SelectItem key={q.id} value={q.id}>{q.label}</SelectItem>)}</SelectContent>
               </Select>
               <FormMessage />
             </FormItem>
@@ -117,7 +144,27 @@ function FromQuoteForm({ onSuccess, onCancel }: { onSuccess: () => void; onCance
 }
 
 function DirectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
+  const queryClient = useQueryClient();
+  const customersQuery = useQuery<CustomerSummary[]>({
+    queryKey: ['customers'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: CustomerSummary[] }>('/api/v1/customers');
+      return res.data.data;
+    },
+  });
+  const customers = customersQuery.data ?? [];
+
+  const productsQuery = useQuery<ProductWithRate[]>({
+    queryKey: ['setup', 'products'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ProductWithRate[] }>('/api/v1/setup/products');
+      return res.data.data;
+    },
+  });
+  const products = productsQuery.data ?? [];
+
   const form = useForm<DirectValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(directSchema) as any,
     defaultValues: { customerId: '', productId: '', businessType: 'DIRECT', startDate: '', endDate: '', sumInsured: 0, rate: 0, discount: 0, paymentTerms: '' },
   });
@@ -129,14 +176,24 @@ function DirectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: 
 
   function onProductChange(id: string, fn: (v: string) => void) {
     fn(id);
-    const p = mockProducts.find(p => p.id === id);
-    if (p) form.setValue('rate', p.rate);
+    const p = products.find(p => p.id === id);
+    if (p?.productRate != null) form.setValue('rate', p.productRate);
   }
 
-  async function onSubmit(values: DirectValues) {
-    console.log('Create direct policy', values);
-    // TODO: POST /api/v1/policies
-    onSuccess();
+  const create = useMutation({
+    mutationFn: async (values: DirectValues) => {
+      const res = await apiClient.post<{ data: { id: string } }>('/api/v1/policies', values);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['policies'] });
+      onSuccess();
+      form.reset();
+    },
+  });
+
+  function onSubmit(values: DirectValues) {
+    create.mutate(values);
   }
 
   return (
@@ -149,7 +206,7 @@ function DirectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: 
                 <FormLabel>Customer</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger></FormControl>
-                  <SelectContent>{mockCustomers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{customers.map(c => <SelectItem key={c.id} value={c.id}>{customerLabel(c)}</SelectItem>)}</SelectContent>
                 </Select>
                 <FormMessage />
               </FormItem>
@@ -161,7 +218,7 @@ function DirectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: 
                 <FormLabel>Product</FormLabel>
                 <Select onValueChange={(v) => onProductChange(v, field.onChange)} value={field.value}>
                   <FormControl><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger></FormControl>
-                  <SelectContent>{mockProducts.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                 </Select>
                 <FormMessage />
               </FormItem>
