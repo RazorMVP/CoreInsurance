@@ -10,6 +10,7 @@ import { apiClient } from '@cia/api-client';
 import AuditEventDetailSheet, { type AuditLogEntry } from './AuditEventDetailSheet';
 
 // Replace with useList('/api/v1/audit/logs')
+// allow-mock: fallback while /audit/logs is in flight
 const mockAuditLog: AuditLogEntry[] = [
   { id: 'al01', entityType: 'POLICY',      entityId: 'pol1',  entityRef: 'POL-2026-00001', action: 'CREATE',  userId: 'u1', userName: 'Akinwale Nubeero', timestamp: '2026-02-01T09:12:44Z', ipAddress: '197.210.64.12', sessionId: 'sess-aaa1', oldValue: null, newValue: { status: 'DRAFT', policyNumber: 'POL-2026-00001', customerId: 'c1', sumInsured: 3500000 } },
   { id: 'al02', entityType: 'POLICY',      entityId: 'pol1',  entityRef: 'POL-2026-00001', action: 'APPROVE', userId: 'u1', userName: 'Akinwale Nubeero', timestamp: '2026-02-01T10:05:18Z', ipAddress: '197.210.64.12', sessionId: 'sess-aaa1', oldValue: { status: 'PENDING_APPROVAL' }, newValue: { status: 'ACTIVE' } },

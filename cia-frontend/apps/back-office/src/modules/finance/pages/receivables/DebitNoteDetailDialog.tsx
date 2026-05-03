@@ -5,6 +5,7 @@ import {
 import type { DebitNoteDto } from '@cia/api-client';
 
 // Mock policy details — replace with useGet(`/api/v1/policies/${policyNumber}`)
+// allow-mock: decorative product/class enrichment for the per-row dialog
 const MOCK_POLICY_DETAIL: Record<string, { product: string; class: string; startDate: string; endDate: string; premium: number }> = {
   'POL-2026-00001': { product: 'Private Motor Comprehensive',  class: 'Motor (Private)',  startDate: '2026-02-01', endDate: '2027-02-01', premium: 78_750 },
   'POL-2026-00002': { product: 'Fire & Burglary Standard',     class: 'Fire & Burglary', startDate: '2026-03-01', endDate: '2027-03-01', premium: 115_000 },

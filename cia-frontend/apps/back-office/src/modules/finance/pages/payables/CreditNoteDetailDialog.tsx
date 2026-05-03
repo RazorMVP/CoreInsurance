@@ -17,6 +17,7 @@ const CN_STATUS_VARIANT: Record<CreditNoteDto['status'], 'pending' | 'active'> =
 };
 
 // Mock source details — replace with individual source API calls per type
+// allow-mock: decorative source enrichment for the per-row dialog
 const MOCK_SOURCE_DETAIL: Record<string, { ref: string; description: string; policyRef?: string; beneficiary?: string }> = {
   cl1:  { ref: 'CLM-2026-00001', description: 'Motor accident — third party bodily injury',  policyRef: 'POL-2026-00001', beneficiary: 'Chioma Okafor' },
   end1: { ref: 'END-2026-00001', description: 'Reduction in sum insured endorsement',         policyRef: 'POL-2026-00002', beneficiary: 'Alaba Trading Co.' },

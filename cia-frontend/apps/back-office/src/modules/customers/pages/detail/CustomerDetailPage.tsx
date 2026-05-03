@@ -43,6 +43,7 @@ interface MockCustomer {
   directors?: { id: string; firstName: string; lastName: string; dateOfBirth?: string; idType?: string; idNumber?: string; idExpiryDate?: string }[];
 }
 
+// allow-mock: fallback while useQuery is in flight or for unknown ids
 const MOCK_CUSTOMERS: MockCustomer[] = [
   {
     id: 'c1', customerNumber: 'CUST/2026/IND/00000001', customerType: 'INDIVIDUAL',
@@ -93,6 +94,7 @@ const MOCK_CUSTOMERS: MockCustomer[] = [
   },
 ];
 
+// allow-mock: fallback for /customers/{id}/policies sub-query
 const mockPoliciesByCustomer: Record<string, { id: string; policyNumber: string; product: string; status: string; premium: number; startDate: string; endDate: string }[]> = {
   c1: [
     { id: 'p1', policyNumber: 'POL-2026-00012', product: 'Private Motor Comprehensive', status: 'ACTIVE',  premium: 285000, startDate: '2026-02-01', endDate: '2027-02-01' },
@@ -104,6 +106,7 @@ const mockPoliciesByCustomer: Record<string, { id: string; policyNumber: string;
   c3: [], c4: [], c5: [],
 };
 
+// allow-mock: fallback for /customers/{id}/claims sub-query
 const mockClaimsByCustomer: Record<string, { id: string; claimNumber: string; policyNumber: string; status: string; amount: number; date: string }[]> = {
   c1: [{ id: 'cl1', claimNumber: 'CLM-2026-00003', policyNumber: 'POL-2026-00012', status: 'PROCESSING', amount: 450000, date: '2026-03-10' }],
   c2: [], c3: [], c4: [], c5: [],

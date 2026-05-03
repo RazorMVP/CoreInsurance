@@ -42,11 +42,13 @@ interface FacInwardDto {
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
 
+// allow-mock: fallback while /reinsurance/fac/outward is in flight
 const mockOutward: FacOutwardDto[] = [
   { id: 'fo1', reference: 'FAC-OUT-2026-001', policyNumber: 'POL-2026-00005', reinsurer: 'Munich Re',          sumInsured: 26_000_000, premiumRate: 0.8, status: 'ACCEPTED',   offerDate: '2026-02-15' },
   { id: 'fo2', reference: 'FAC-OUT-2026-002', policyNumber: 'POL-2026-00006', reinsurer: "Lloyd's Syndicate",  sumInsured: 45_000_000, premiumRate: 1.2, status: 'OFFER_SENT', offerDate: '2026-03-10' },
 ];
 
+// allow-mock: fallback while /reinsurance/fac/inward is in flight
 const mockInward: FacInwardDto[] = [
   { id: 'fi1', reference: 'FAC-IN-2026-001', cedingCompany: 'Leadway Assurance', classOfBusiness: 'Fire & Burglary', sumInsured: 20_000_000, ourShare: 30, ourPremium: 48_000, startDate: '2026-01-01', endDate: '2027-01-01', status: 'ACTIVE' },
   { id: 'fi2', reference: 'FAC-IN-2026-002', cedingCompany: 'AIICO Insurance',   classOfBusiness: 'Marine Cargo',    sumInsured: 12_000_000, ourShare: 25, ourPremium: 22_500, startDate: '2025-07-01', endDate: '2026-07-01', status: 'EXPIRED' },

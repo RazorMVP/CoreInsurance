@@ -27,6 +27,7 @@ interface AllocationDto {
   treatyYear:     number;
 }
 
+// allow-mock: fallback while /reinsurance/allocations is in flight
 const mockAllocations: AllocationDto[] = [
   { id: 'a1', policyNumber: 'POL-2026-00001', classOfBusiness: 'Motor (Private)',  sumInsured: 3_500_000,  retentionAmount: 2_000_000, cedingAmount: 1_500_000,  treatyName: 'Motor Surplus 2026', treatyType: 'Surplus',      reinsurers: 'Munich Re 60%, Swiss Re 40%',        status: 'CONFIRMED',       treatyYear: 2026 },
   { id: 'a2', policyNumber: 'POL-2026-00002', classOfBusiness: 'Fire & Burglary',  sumInsured: 15_000_000, retentionAmount: 9_000_000, cedingAmount: 6_000_000,  treatyName: 'Fire QS 2026',       treatyType: 'Quota Share',  reinsurers: 'African Re 40%, Continental Re 60%', status: 'APPROVED',        treatyYear: 2026 },

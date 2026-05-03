@@ -37,6 +37,7 @@ interface AllocationRow {
 }
 
 // Mock allocations per treaty — replace with useList(`/api/v1/reinsurance/allocations?treatyId=...`)
+// allow-mock: per-treaty allocation drilldown — no list endpoint exposes this nested view
 const MOCK_TREATY_ALLOCATIONS: Record<string, AllocationRow[]> = {
   t1: [
     { id: 'a1', policyNumber: 'POL-2026-00001', classOfBusiness: 'Motor (Private)',  sumInsured: 3_500_000,  treatyName: 'Motor Surplus Treaty 2026', status: 'CONFIRMED' },
@@ -51,6 +52,7 @@ const MOCK_TREATY_ALLOCATIONS: Record<string, AllocationRow[]> = {
   ],
 };
 
+// allow-mock: fallback while /reinsurance/treaties is in flight
 const mockTreaties: TreatyDto[] = [
   {
     id: 't1', name: 'Motor Surplus Treaty 2026', type: 'SURPLUS',      classOfBusiness: 'Motor (Private)',  retentionLimit: 2_000_000, treatyLimit: 20_000_000,

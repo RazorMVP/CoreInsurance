@@ -22,6 +22,7 @@ interface LoginLogEntry {
   reason?:   string;
 }
 
+// allow-mock: fallback while /audit/login-logs is in flight
 const mockLoginLog: LoginLogEntry[] = [
   { id: 'll01', userId: 'u1', userName: 'Akinwale Nubeero', email: 'akinwale@nubeero.com',  eventType: 'LOGIN',          ipAddress: '197.210.64.12', userAgent: 'Chrome/124 (Windows)',    timestamp: '2026-04-24T08:01:12Z' },
   { id: 'll02', userId: 'u2', userName: 'Adaeze Nwosu',    email: 'adaeze@nubeero.com',     eventType: 'LOGIN',          ipAddress: '41.206.32.8',   userAgent: 'Chrome/124 (macOS)',      timestamp: '2026-04-24T08:15:44Z' },

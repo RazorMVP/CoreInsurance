@@ -13,6 +13,7 @@ import MultiRiskQuoteSheet  from './create/MultiRiskQuoteSheet';
 import QuotePdfPreview, { type QuotePdfData } from './QuotePdfPreview';
 
 // Extended mock — carries PDF data for approved quotes
+// allow-mock: PDF preview shape — list endpoint doesn't include risk/clause detail
 const mockQuotePdfData: Record<string, QuotePdfData> = {
   q1: {
     quoteNumber: 'QUO-2026-00001', issueDate: '2026-01-28',

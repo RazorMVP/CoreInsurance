@@ -25,6 +25,7 @@ interface AuditAlert {
   entityRef?:      string;
 }
 
+// allow-mock: fallback while /audit/alerts is in flight
 const mockAlerts: AuditAlert[] = [
   {
     id: 'alt1', alertType: 'FAILED_LOGINS', severity: 'HIGH',

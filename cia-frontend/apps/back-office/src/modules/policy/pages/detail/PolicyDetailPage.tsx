@@ -17,6 +17,7 @@ type MockPolicy = Omit<PolicyDto, 'updatedAt'> & {
   clauses: { id: string; title: string; text: string }[];
 };
 
+// allow-mock: fallback while useQuery is in flight or for unknown ids
 const mockPolicy: MockPolicy = {
   id: 'pol1', policyNumber: 'POL-2026-00001', quoteId: 'q4',
   customerId: 'c1', customerName: 'Chioma Okafor',

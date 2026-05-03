@@ -17,6 +17,7 @@ type MockEndorsement = Omit<EndorsementDto, 'updatedAt'> & {
   reason: string;
 };
 
+// allow-mock: fallback while useQuery is in flight or for unknown ids
 const mockEndorsement: MockEndorsement = {
   id: 'end2', endorsementNumber: 'END-2026-00002',
   policyId: 'pol1', policyNumber: 'POL-2026-00001',

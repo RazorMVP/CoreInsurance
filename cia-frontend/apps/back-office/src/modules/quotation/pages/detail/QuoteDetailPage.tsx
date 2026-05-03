@@ -31,6 +31,7 @@ interface MockQuote {
 }
 
 // ── Extended mock data (all quotes, looked up by id from useParams) ────────────
+// allow-mock: fallback while useQuery is in flight or for unknown ids
 const MOCK_QUOTES: MockQuote[] = [
   {
     id: 'q1', quoteNumber: 'QUO-2026-00001', version: 1,
