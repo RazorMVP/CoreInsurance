@@ -1,8 +1,9 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
-  Badge, Button, Card, CardContent, CardHeader, CardTitle, PageHeader, Separator,
+  Badge, Button, Card, CardContent, CardHeader, CardTitle, PageHeader, Separator, Skeleton,
 } from '@cia/ui';
-import type { EndorsementDto } from '@cia/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type EndorsementDto } from '@cia/api-client';
 
 type MockEndorsement = Omit<EndorsementDto, 'updatedAt'> & {
   updatedAt: string;
@@ -47,7 +48,28 @@ function Row({ label, value, highlight }: { label: string; value: string; highli
 
 export default function EndorsementDetailPage() {
   const navigate = useNavigate();
-  const e = mockEndorsement;
+  const { id }   = useParams<{ id: string }>();
+
+  const endorsementQuery = useQuery<MockEndorsement>({
+    queryKey: ['endorsements', id],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: MockEndorsement }>(`/api/v1/endorsements/${id}`);
+      return res.data.data;
+    },
+    enabled: !!id,
+  });
+
+  const e = endorsementQuery.data ?? mockEndorsement;
+
+  if (endorsementQuery.isLoading && !endorsementQuery.data) {
+    return (
+      <div className="p-6 space-y-4 max-w-4xl">
+        <Skeleton className="h-9 w-72" />
+        <Skeleton className="h-32 w-full rounded-lg" />
+        <Skeleton className="h-64 w-full rounded-lg" />
+      </div>
+    );
+  }
 
   const canSubmit  = e.status === 'DRAFT';
   const canApprove = e.status === 'SUBMITTED';

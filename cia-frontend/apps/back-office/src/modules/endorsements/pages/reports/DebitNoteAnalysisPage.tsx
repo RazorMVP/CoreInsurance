@@ -1,25 +1,35 @@
 import { useNavigate } from 'react-router-dom';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, PageHeader, StatCard } from '@cia/ui';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, PageHeader, Skeleton, StatCard } from '@cia/ui';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@cia/api-client';
 
-const mockData = [
-  { period: 'Jan 2026', endorsements: 3, debits: 2, credits: 1, netPremium: 62_250 },
-  { period: 'Feb 2026', endorsements: 7, debits: 5, credits: 2, netPremium: 134_500 },
-  { period: 'Mar 2026', endorsements: 4, debits: 3, credits: 1, netPremium: 48_750 },
-  { period: 'Apr 2026', endorsements: 6, debits: 4, credits: 2, netPremium: 91_000 },
-  { period: 'May 2026', endorsements: 2, debits: 2, credits: 0, netPremium: 28_500 },
-];
-
-const byType = [
-  { type: 'Renewal',             count: 6, totalPremium: 210_000 },
-  { type: 'Extension of Period', count: 5, totalPremium: 87_500 },
-  { type: 'Increase Sum Insured',count: 4, totalPremium: 95_250 },
-  { type: 'Cancellation',        count: 3, totalPremium: -62_000 },
-  { type: 'Decrease Sum Insured',count: 2, totalPremium: -28_750 },
-  { type: 'Other',               count: 2, totalPremium: 12_500 },
-];
+interface PeriodRow { period: string; endorsements: number; debits: number; credits: number; netPremium: number; }
+interface TypeRow   { type: string; count: number; totalPremium: number; }
 
 export default function DebitNoteAnalysisPage() {
   const navigate = useNavigate();
+
+  const byPeriodQuery = useQuery<PeriodRow[]>({
+    queryKey: ['endorsements', 'reports', 'debit-note-by-period'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: PeriodRow[] }>(
+        '/api/v1/endorsements/reports/debit-note-by-period',
+      );
+      return res.data.data;
+    },
+  });
+  const byTypeQuery = useQuery<TypeRow[]>({
+    queryKey: ['endorsements', 'reports', 'debit-note-by-type'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: TypeRow[] }>(
+        '/api/v1/endorsements/reports/debit-note-by-type',
+      );
+      return res.data.data;
+    },
+  });
+  const mockData = byPeriodQuery.data ?? [];
+  const byType   = byTypeQuery.data   ?? [];
+
   const totalEndorsements = mockData.reduce((s, r) => s + r.endorsements, 0);
   const totalDebits       = mockData.reduce((s, r) => s + r.debits, 0);
   const totalCredits      = mockData.reduce((s, r) => s + r.credits, 0);
@@ -46,6 +56,9 @@ export default function DebitNoteAnalysisPage() {
       <Card>
         <CardHeader><CardTitle>By Period</CardTitle></CardHeader>
         <CardContent className="p-0">
+        {byPeriodQuery.isLoading ? (
+          <div className="p-4 space-y-2"><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" /></div>
+        ) : (
           <table className="w-full text-sm">
             <thead><tr className="border-b bg-muted/40">
               {['Period','Endorsements','Debit Notes','Credit Notes','Net Premium'].map(h=>(
@@ -66,6 +79,7 @@ export default function DebitNoteAnalysisPage() {
               ))}
             </tbody>
           </table>
+        )}
         </CardContent>
       </Card>
 
@@ -73,6 +87,9 @@ export default function DebitNoteAnalysisPage() {
       <Card>
         <CardHeader><CardTitle>By Endorsement Type</CardTitle></CardHeader>
         <CardContent className="p-0">
+        {byTypeQuery.isLoading ? (
+          <div className="p-4 space-y-2"><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" /></div>
+        ) : (
           <table className="w-full text-sm">
             <thead><tr className="border-b bg-muted/40">
               {['Type','Count','Total Premium'].map(h=>(
@@ -93,6 +110,7 @@ export default function DebitNoteAnalysisPage() {
               ))}
             </tbody>
           </table>
+        )}
         </CardContent>
       </Card>
     </div>

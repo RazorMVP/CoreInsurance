@@ -2,19 +2,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
-  EmptyState, PageHeader,
+  EmptyState, PageHeader, Skeleton,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import type { EndorsementDto } from '@cia/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type EndorsementDto } from '@cia/api-client';
 import CreateEndorsementSheet from './create/CreateEndorsementSheet';
-
-const mockEndorsements: EndorsementDto[] = [
-  { id: 'end1', endorsementNumber: 'END-2026-00001', policyId: 'pol1', policyNumber: 'POL-2026-00001', status: 'APPROVED',  endorsementType: 'RENEWAL',    sumInsured: 3_500_000, premium: 78_750, startDate: '2027-02-01', endDate: '2028-02-01', createdAt: '2026-12-15', updatedAt: '2026-12-20' },
-  { id: 'end2', endorsementNumber: 'END-2026-00002', policyId: 'pol1', policyNumber: 'POL-2026-00001', status: 'SUBMITTED', endorsementType: 'INCREASE_SI', sumInsured: 4_500_000, premium: 15_625, startDate: '2026-05-01', endDate: '2027-02-01', createdAt: '2026-04-28', updatedAt: '2026-04-29' },
-  { id: 'end3', endorsementNumber: 'END-2026-00003', policyId: 'pol5', policyNumber: 'POL-2026-00004', status: 'DRAFT',     endorsementType: 'EXTENSION',  sumInsured: 8_000_000, premium: 12_500, startDate: '2027-01-15', endDate: '2027-04-15', createdAt: '2026-12-20', updatedAt: '2026-12-20' },
-  { id: 'end4', endorsementNumber: 'END-2026-00004', policyId: 'pol4', policyNumber: 'POL-2025-00088', status: 'APPROVED',  endorsementType: 'CANCELLATION', sumInsured: 5_000_000, premium: -18_000, startDate: '2025-09-01', endDate: '2026-03-01', createdAt: '2025-08-28', updatedAt: '2025-09-01' },
-  { id: 'end5', endorsementNumber: 'END-2026-00005', policyId: 'pol2', policyNumber: 'POL-2026-00002', status: 'REJECTED',  endorsementType: 'DECREASE_SI', sumInsured: 10_000_000, premium: -5_000, startDate: '2026-06-01', endDate: '2027-03-01', createdAt: '2026-05-20', updatedAt: '2026-05-25' },
-];
 
 const TYPE_LABELS: Record<EndorsementDto['endorsementType'], string> = {
   RENEWAL:       'Renewal',
@@ -39,6 +32,15 @@ const statusVariant: Record<EndorsementDto['status'], 'active' | 'pending' | 'dr
 export default function EndorsementsListPage() {
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
+
+  const endorsementsQuery = useQuery<EndorsementDto[]>({
+    queryKey: ['endorsements'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: EndorsementDto[] }>('/api/v1/endorsements');
+      return res.data.data;
+    },
+  });
+  const endorsements = endorsementsQuery.data ?? [];
 
   const columns: ColumnDef<EndorsementDto>[] = [
     {
@@ -136,7 +138,9 @@ export default function EndorsementsListPage() {
         }
       />
 
-      {mockEndorsements.length === 0 ? (
+      {endorsementsQuery.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : endorsements.length === 0 ? (
         <EmptyState
           title="No endorsements yet"
           description="Create an endorsement to amend an existing policy."
@@ -145,7 +149,7 @@ export default function EndorsementsListPage() {
       ) : (
         <DataTable
           columns={columns}
-          data={mockEndorsements}
+          data={endorsements}
           toolbar={{ searchColumn: 'policyNumber', searchPlaceholder: 'Search by policy…' }}
         />
       )}
