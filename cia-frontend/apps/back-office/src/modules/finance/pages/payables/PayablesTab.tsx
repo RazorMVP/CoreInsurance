@@ -4,24 +4,11 @@ import {
   PageSection, Separator,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import type { CreditNoteDto, PaymentDto } from '@cia/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type CreditNoteDto, type PaymentDto } from '@cia/api-client';
 import CreditNoteDetailDialog   from './CreditNoteDetailDialog';
 import ProcessPaymentSheet      from './ProcessPaymentSheet';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
-
-// Credit notes — replace with useList('/api/v1/finance/credit-notes')
-const mockCreditNotes: CreditNoteDto[] = [
-  { id: 'cn1', number: 'CN-2026-00001', sourceType: 'CLAIM',       sourceId: 'cl1',  amount: 450_000, status: 'OUTSTANDING', createdAt: '2026-03-15' },
-  { id: 'cn2', number: 'CN-2026-00002', sourceType: 'ENDORSEMENT', sourceId: 'end1', amount: 12_500,  status: 'PAID',        createdAt: '2026-02-20' },
-  { id: 'cn3', number: 'CN-2026-00003', sourceType: 'COMMISSION',  sourceId: 'pol1', amount: 9_844,   status: 'OUTSTANDING', createdAt: '2026-02-01' },
-  { id: 'cn4', number: 'CN-2026-00004', sourceType: 'REINSURANCE', sourceId: 'ri1',  amount: 28_000,  status: 'OUTSTANDING', createdAt: '2026-02-15' },
-];
-
-// Payments — replace with useList('/api/v1/finance/payments')
-const mockPayments: PaymentDto[] = [
-  { id: 'pay1', paymentNumber: 'PAY-2026-00001', creditNoteId: 'cn2', amount: 12_500,  paymentMethod: 'Bank Transfer', status: 'APPROVED', createdAt: '2026-02-25' },
-  { id: 'pay2', paymentNumber: 'PAY-2026-00002', creditNoteId: 'cn1', amount: 225_000, paymentMethod: 'Bank Transfer', status: 'PENDING',  createdAt: '2026-03-18' },
-];
 
 const sourceLabels: Record<CreditNoteDto['sourceType'], string> = {
   CLAIM:       'Claim DV',
@@ -43,6 +30,24 @@ const payStatusVariant: Record<PaymentDto['status'], 'active' | 'pending' | 'rej
 };
 
 export default function PayablesTab() {
+  const creditNotesQuery = useQuery<CreditNoteDto[]>({
+    queryKey: ['finance', 'credit-notes'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: CreditNoteDto[] }>('/api/v1/finance/credit-notes');
+      return res.data.data;
+    },
+  });
+  const creditNotes = creditNotesQuery.data ?? [];
+
+  const paymentsQuery = useQuery<PaymentDto[]>({
+    queryKey: ['finance', 'payments'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: PaymentDto[] }>('/api/v1/finance/payments');
+      return res.data.data;
+    },
+  });
+  const payments = paymentsQuery.data ?? [];
+
   // Credit note detail dialog
   const [cnDetail, setCnDetail] = useState<CreditNoteDto | null>(null);
 
@@ -133,7 +138,7 @@ export default function PayablesTab() {
       accessorKey: 'creditNoteId',
       header: 'Credit Note',
       cell: ({ getValue }) => {
-        const cn = mockCreditNotes.find(c => c.id === getValue());
+        const cn = creditNotes.find(c => c.id === getValue());
         return <span className="font-mono text-xs text-muted-foreground">{cn?.number ?? (getValue() as string)}</span>;
       },
     },
@@ -160,7 +165,7 @@ export default function PayablesTab() {
     {
       id: 'actions',
       cell: ({ row }) => {
-        const linked = mockCreditNotes.find(c => c.id === row.original.creditNoteId);
+        const linked = creditNotes.find(c => c.id === row.original.creditNoteId);
         return (
           <DataTableRowActions
             row={row}
@@ -198,7 +203,7 @@ export default function PayablesTab() {
       >
         <DataTable
           columns={cnColumns}
-          data={mockCreditNotes}
+          data={creditNotes}
           toolbar={{ searchColumn: 'number', searchPlaceholder: 'Search credit notes…' }}
         />
       </PageSection>
@@ -209,7 +214,7 @@ export default function PayablesTab() {
       <PageSection title="Payments" description="Payments posted against credit notes.">
         <DataTable
           columns={payColumns}
-          data={mockPayments}
+          data={payments}
           toolbar={{ searchColumn: 'paymentNumber', searchPlaceholder: 'Search payments…' }}
         />
       </PageSection>

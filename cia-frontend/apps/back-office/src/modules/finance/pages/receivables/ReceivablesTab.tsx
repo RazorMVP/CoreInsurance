@@ -4,26 +4,11 @@ import {
   PageSection, Separator,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import type { DebitNoteDto, ReceiptDto } from '@cia/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type DebitNoteDto, type ReceiptDto } from '@cia/api-client';
 import PostReceiptSheet         from './PostReceiptSheet';
 import DebitNoteDetailDialog    from './DebitNoteDetailDialog';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
-
-// Debit notes — replace with useList('/api/v1/finance/debit-notes')
-const mockDebitNotes: DebitNoteDto[] = [
-  { id: 'dn1', number: 'DN-2026-00001', policyId: 'pol1', policyNumber: 'POL-2026-00001', customerId: 'c1', customerName: 'Chioma Okafor',     amount: 78_750,  status: 'OUTSTANDING',   dueDate: '2026-02-01', createdAt: '2026-02-01' },
-  { id: 'dn2', number: 'DN-2026-00002', policyId: 'pol2', policyNumber: 'POL-2026-00002', customerId: 'c2', customerName: 'Alaba Trading Co.', amount: 115_000, status: 'OUTSTANDING',   dueDate: '2026-03-01', createdAt: '2026-02-05' },
-  { id: 'dn3', number: 'DN-2026-00003', policyId: 'pol3', policyNumber: 'POL-2025-00088', customerId: 'c5', customerName: 'Ngozi Adeyemi',     amount: 40_000,  status: 'SETTLED',       dueDate: '2025-03-01', createdAt: '2025-02-28' },
-  { id: 'dn4', number: 'DN-2026-00004', policyId: 'pol4', policyNumber: 'POL-2026-00004', customerId: 'c2', customerName: 'Alaba Trading Co.', amount: 60_000,  status: 'SETTLED',       dueDate: '2026-01-15', createdAt: '2026-01-15' },
-  { id: 'dn5', number: 'DN-2026-00005', policyId: 'pol5', policyNumber: 'POL-2026-00003', customerId: 'c3', customerName: 'Emeka Eze',         amount: 49_500,  status: 'OUTSTANDING',   dueDate: '2026-03-15', createdAt: '2026-02-10' },
-];
-
-// Receipts — replace with useList('/api/v1/finance/receipts')
-const mockReceipts: ReceiptDto[] = [
-  { id: 'r1', receiptNumber: 'REC-2026-00001', debitNoteId: 'dn3', debitNoteNumber: 'DN-2026-00003', amount: 40_000, paymentMethod: 'Bank Transfer', status: 'APPROVED',         createdAt: '2025-03-01' },
-  { id: 'r2', receiptNumber: 'REC-2026-00002', debitNoteId: 'dn4', debitNoteNumber: 'DN-2026-00004', amount: 60_000, paymentMethod: 'Cheque',        status: 'APPROVED',         createdAt: '2026-01-15' },
-  { id: 'r3', receiptNumber: 'REC-2026-00003', debitNoteId: 'dn2', debitNoteNumber: 'DN-2026-00002', amount: 57_500, paymentMethod: 'Bank Transfer', status: 'PENDING_APPROVAL', createdAt: '2026-02-10' },
-];
 
 const dnStatusVariant: Record<DebitNoteDto['status'], 'pending' | 'active' | 'draft'> = {
   OUTSTANDING:    'pending',
@@ -43,6 +28,24 @@ export default function ReceivablesTab() {
   const [sheetOpen,   setSheetOpen]   = useState(false);
   const [selectedDns, setSelectedDns] = useState<string[]>([]);
   const [bulkMode,    setBulkMode]    = useState(false);
+
+  const debitNotesQuery = useQuery<DebitNoteDto[]>({
+    queryKey: ['finance', 'debit-notes'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: DebitNoteDto[] }>('/api/v1/finance/debit-notes');
+      return res.data.data;
+    },
+  });
+  const debitNotes = debitNotesQuery.data ?? [];
+
+  const receiptsQuery = useQuery<ReceiptDto[]>({
+    queryKey: ['finance', 'receipts'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ReceiptDto[] }>('/api/v1/finance/receipts');
+      return res.data.data;
+    },
+  });
+  const receipts = receiptsQuery.data ?? [];
 
   // Debit note detail dialog
   const [dnDetail, setDnDetail] = useState<DebitNoteDto | null>(null);
@@ -190,7 +193,7 @@ export default function ReceivablesTab() {
     },
   ];
 
-  const outstanding = mockDebitNotes.filter(d => d.status === 'OUTSTANDING');
+  const outstanding = debitNotes.filter(d => d.status === 'OUTSTANDING');
 
   return (
     <div className="space-y-8">
@@ -213,7 +216,7 @@ export default function ReceivablesTab() {
       >
         <DataTable
           columns={dnColumns}
-          data={mockDebitNotes}
+          data={debitNotes}
           toolbar={{ searchColumn: 'customerName', searchPlaceholder: 'Search debit notes…' }}
         />
       </PageSection>
@@ -224,7 +227,7 @@ export default function ReceivablesTab() {
       <PageSection title="Receipts" description="Posted receipts awaiting or completed approval.">
         <DataTable
           columns={rcColumns}
-          data={mockReceipts}
+          data={receipts}
           toolbar={{ searchColumn: 'receiptNumber', searchPlaceholder: 'Search receipts…' }}
         />
       </PageSection>
@@ -235,7 +238,7 @@ export default function ReceivablesTab() {
         onOpenChange={setSheetOpen}
         debitNoteIds={selectedDns}
         bulk={bulkMode}
-        debitNotes={mockDebitNotes}
+        debitNotes={debitNotes}
         onSuccess={() => setSheetOpen(false)}
       />
 
