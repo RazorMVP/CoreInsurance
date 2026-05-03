@@ -315,7 +315,7 @@ export default function EditCustomerSheet({ open, onOpenChange, customer, onSucc
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
-      queryClient.invalidateQueries({ queryKey: ['customer', customer.id] });
+      queryClient.invalidateQueries({ queryKey: ['customers', customer.id] });
       onSuccess();
       onOpenChange(false);
     },

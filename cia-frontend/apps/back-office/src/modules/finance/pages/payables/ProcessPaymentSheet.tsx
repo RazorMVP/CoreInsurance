@@ -50,7 +50,7 @@ export default function ProcessPaymentSheet({ open, onOpenChange, creditNote, on
       return res.data.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['finance', 'payables'] });
+      queryClient.invalidateQueries({ queryKey: ['finance', 'credit-notes'] });
       queryClient.invalidateQueries({ queryKey: ['finance', 'payments'] });
       onSuccess();
       form.reset();

@@ -121,17 +121,10 @@ export default function ClaimDetailPage() {
     enabled: !!id,
   });
 
-  const c = claimQuery.data ?? mockClaim;
-
-  if (claimQuery.isLoading && !claimQuery.data) {
-    return (
-      <div className="p-6 space-y-4 max-w-5xl">
-        <Skeleton className="h-9 w-72" />
-        <Skeleton className="h-32 w-full rounded-lg" />
-        <Skeleton className="h-64 w-full rounded-lg" />
-      </div>
-    );
-  }
+  // ALL hooks must be declared before any early return. Moving these below
+  // a conditional `return` violates the Rules of Hooks and crashes with
+  // "Rendered more hooks than during the previous render" the first time
+  // claimQuery.data transitions from undefined to a value.
 
   // DV state
   const [dvType,      setDvType]      = useState<DvType | ''>('');
@@ -150,6 +143,18 @@ export default function ClaimDetailPage() {
   const [overrideInspectOpen, setOverrideInspectOpen] = useState(false);
   const [overrideReason,      setOverrideReason]      = useState('');
   const [downloadReportOpen,  setDownloadReportOpen]  = useState(false);
+
+  const c = claimQuery.data ?? mockClaim;
+
+  if (claimQuery.isLoading && !claimQuery.data) {
+    return (
+      <div className="p-6 space-y-4 max-w-5xl">
+        <Skeleton className="h-9 w-72" />
+        <Skeleton className="h-32 w-full rounded-lg" />
+        <Skeleton className="h-64 w-full rounded-lg" />
+      </div>
+    );
+  }
 
   const missingDocs   = c.requiredDocs.filter(d => !d.received);
   const canEdit       = c.status === 'PROCESSING';   // reserve/expense/comment editable only while PROCESSING

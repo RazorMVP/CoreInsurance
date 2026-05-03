@@ -7,6 +7,7 @@ import {
   Separator,
 } from '@cia/ui';
 import { apiClient, type DebitNoteDto } from '@cia/api-client';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
@@ -45,10 +46,14 @@ export default function PostReceiptSheet({ open, onOpenChange, debitNoteIds, bul
     defaultValues: { paymentDate: '', paymentMethod: '', reference: '', bankName: '', amount: totalAmount, notes: '' },
   });
 
-  // Sync amount when selection changes
-  if (form.getValues('amount') !== totalAmount && totalAmount > 0) {
-    form.setValue('amount', totalAmount);
-  }
+  // Sync amount when the selected debit-note set changes. This MUST be in
+  // useEffect — calling form.setValue inside the render body re-renders
+  // synchronously and can loop while the user is typing in the amount field.
+  useEffect(() => {
+    if (totalAmount > 0 && form.getValues('amount') !== totalAmount) {
+      form.setValue('amount', totalAmount);
+    }
+  }, [totalAmount, form]);
 
   const post = useMutation({
     mutationFn: async (values: FormValues) => {
@@ -60,7 +65,7 @@ export default function PostReceiptSheet({ open, onOpenChange, debitNoteIds, bul
       return res.data.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['finance', 'receivables'] });
+      queryClient.invalidateQueries({ queryKey: ['finance', 'debit-notes'] });
       queryClient.invalidateQueries({ queryKey: ['finance', 'receipts'] });
       onSuccess();
       form.reset();
