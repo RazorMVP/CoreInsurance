@@ -7,7 +7,11 @@ import {
   Separator,
 } from '@cia/ui';
 import { useFieldArray, useForm } from 'react-hook-form';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient, type ClassOfBusinessDto } from '@cia/api-client';
 import { z } from 'zod';
+
+interface ReinsurerDto { id: string; name: string; }
 
 const reinsurersSchema = z.object({
   reinsurerId: z.string().min(1, 'Required'),
@@ -25,25 +29,43 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
-const CLASSES = ['Motor (Private)', 'Motor (Commercial)', 'Fire & Burglary', 'Marine Cargo', 'Engineering / CAR', 'Professional Indemnity'];
-const REINSURERS = [
-  { id: 'r1', name: 'Munich Re' }, { id: 'r2', name: 'Swiss Re' },
-  { id: 'r3', name: 'African Re' }, { id: 'r4', name: "Lloyd's Syndicate" },
-  { id: 'r5', name: 'Continental Re' }, { id: 'r6', name: 'ZEP-RE' },
-];
-
 interface Props {
   open: boolean; onOpenChange: (v: boolean) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   treaty: any | null; onSuccess: () => void;
 }
 
 export default function TreatySheet({ open, onOpenChange, treaty, onSuccess }: Props) {
+  const queryClient = useQueryClient();
+
+  const classesQuery = useQuery<ClassOfBusinessDto[]>({
+    queryKey: ['setup', 'classes-of-business'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ClassOfBusinessDto[] }>('/api/v1/setup/classes-of-business');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const classes = classesQuery.data ?? [];
+
+  const reinsurersQuery = useQuery<ReinsurerDto[]>({
+    queryKey: ['setup', 'reinsurance-companies'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ReinsurerDto[] }>('/api/v1/setup/reinsurance-companies');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const reinsurers = reinsurersQuery.data ?? [];
+
   const form = useForm<FormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(schema) as any,
     defaultValues: {
       name: treaty?.name ?? '', type: treaty?.type ?? 'SURPLUS',
       classOfBusiness: treaty?.classOfBusiness ?? '', year: treaty?.year ?? new Date().getFullYear(),
       retentionLimit: treaty?.retentionLimit ?? 0, treatyLimit: treaty?.treatyLimit ?? 0,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       reinsurers: treaty?.reinsurers?.map((r: any) => ({ reinsurerId: r.name, share: r.share })) ?? [{ reinsurerId: '', share: 100 }],
     },
   });
@@ -52,9 +74,27 @@ export default function TreatySheet({ open, onOpenChange, treaty, onSuccess }: P
   const treatyType = form.watch('type');
   const totalShare = form.watch('reinsurers').reduce((s, r) => s + (r.share || 0), 0);
 
-  async function onSubmit(values: FormValues) {
-    console.log(treaty ? 'Update treaty' : 'Create treaty', values);
-    onSuccess();
+  const save = useMutation({
+    mutationFn: async (values: FormValues) => {
+      if (treaty?.id) {
+        const res = await apiClient.put<{ data: { id: string } }>(
+          `/api/v1/reinsurance/treaties/${treaty.id}`, values,
+        );
+        return res.data.data;
+      }
+      const res = await apiClient.post<{ data: { id: string } }>(
+        '/api/v1/reinsurance/treaties', values,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reinsurance', 'treaties'] });
+      onSuccess();
+    },
+  });
+
+  function onSubmit(values: FormValues) {
+    save.mutate(values);
   }
 
   return (
@@ -97,7 +137,7 @@ export default function TreatySheet({ open, onOpenChange, treaty, onSuccess }: P
                   <FormLabel>Class of Business</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger></FormControl>
-                    <SelectContent>{CLASSES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                    <SelectContent>{classes.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>
@@ -137,7 +177,7 @@ export default function TreatySheet({ open, onOpenChange, treaty, onSuccess }: P
                         {i === 0 && <FormLabel>Reinsurer</FormLabel>}
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl><SelectTrigger><SelectValue placeholder="Select reinsurer" /></SelectTrigger></FormControl>
-                          <SelectContent>{REINSURERS.map(r => <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>)}</SelectContent>
+                          <SelectContent>{reinsurers.map(r => <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>)}</SelectContent>
                         </Select>
                         <FormMessage />
                       </FormItem>

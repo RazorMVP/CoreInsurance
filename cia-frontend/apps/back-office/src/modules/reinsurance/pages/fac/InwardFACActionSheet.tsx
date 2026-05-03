@@ -6,6 +6,8 @@ import {
   Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle,
 } from '@cia/ui';
 import { useForm } from 'react-hook-form';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '@cia/api-client';
 import { z } from 'zod';
 
 interface InwardFAC {
@@ -104,10 +106,24 @@ export default function InwardFACActionSheet({ open, onOpenChange, fac, mode, on
   const ourSI       = fac ? (fac.sumInsured * ourShare) / 100 : 0;
   const ourPremium  = (ourSI * premiumRate) / 100;
 
-  async function onSubmit(values: FormValues) {
-    console.log(`Inward FAC ${mode}`, values);
-    // TODO: POST /api/v1/reinsurance/fac/inward/{id}/${mode === 'RENEW' ? 'renew' : 'extend'}
-    onSuccess();
+  const queryClient = useQueryClient();
+  const action = useMutation({
+    mutationFn: async (values: FormValues) => {
+      const verb = mode === 'RENEW' ? 'renew' : 'extend';
+      const res = await apiClient.post<{ data: { id: string } }>(
+        `/api/v1/reinsurance/fac/inward/${fac?.id}/${verb}`,
+        values,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reinsurance', 'fac'] });
+      onSuccess();
+    },
+  });
+
+  function onSubmit(values: FormValues) {
+    action.mutate(values);
   }
 
   if (!fac) return null;

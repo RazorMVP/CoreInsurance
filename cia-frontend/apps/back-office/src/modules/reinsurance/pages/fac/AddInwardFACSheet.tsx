@@ -7,7 +7,11 @@ import {
   Separator,
 } from '@cia/ui';
 import { useForm } from 'react-hook-form';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient, type ClassOfBusinessDto } from '@cia/api-client';
 import { z } from 'zod';
+
+interface InsurerDto { id: string; name: string; }
 
 const schema = z.object({
   cedingCompanyId:   z.string().min(1, 'Select the ceding company'),
@@ -26,21 +30,33 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
-// Placeholder — replace with useList('/api/v1/setup/organisations/reinsurers')
-const CEDING_COMPANIES = [
-  { id: 'cc1', name: 'Leadway Assurance Plc' },
-  { id: 'cc2', name: 'AIICO Insurance Plc' },
-  { id: 'cc3', name: 'Sovereign Trust Insurance' },
-  { id: 'cc4', name: 'NEM Insurance Plc' },
-  { id: 'cc5', name: 'AXA Mansard Insurance' },
-];
-
-const CLASSES = ['Motor (Private)', 'Motor (Commercial)', 'Fire & Burglary', 'Marine Cargo', 'Engineering / CAR', 'Professional Indemnity', 'Oil & Gas', 'Aviation'];
-
 interface Props { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void; }
 
 export default function AddInwardFACSheet({ open, onOpenChange, onSuccess }: Props) {
+  const queryClient = useQueryClient();
+
+  const insurersQuery = useQuery<InsurerDto[]>({
+    queryKey: ['setup', 'insurance-companies'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: InsurerDto[] }>('/api/v1/setup/insurance-companies');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const cedingCompanies = insurersQuery.data ?? [];
+
+  const classesQuery = useQuery<ClassOfBusinessDto[]>({
+    queryKey: ['setup', 'classes-of-business'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ClassOfBusinessDto[] }>('/api/v1/setup/classes-of-business');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const classes = classesQuery.data ?? [];
+
   const form = useForm<FormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(schema) as any,
     defaultValues: {
       cedingCompanyId: '', cedingReference: '', classOfBusiness: '',
@@ -60,10 +76,22 @@ export default function AddInwardFACSheet({ open, onOpenChange, onSuccess }: Pro
   const commAmount     = grossPremium * cedingComm / 100;
   const netPremiumDue  = grossPremium - commAmount;  // what we receive
 
-  async function onSubmit(values: FormValues) {
-    console.log('Add Inward FAC', values);
-    // TODO: POST /api/v1/reinsurance/fac/inward
-    onSuccess();
+  const create = useMutation({
+    mutationFn: async (values: FormValues) => {
+      const res = await apiClient.post<{ data: { id: string } }>(
+        '/api/v1/reinsurance/fac/inward', values,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reinsurance', 'fac'] });
+      onSuccess();
+      form.reset();
+    },
+  });
+
+  function onSubmit(values: FormValues) {
+    create.mutate(values);
   }
 
   return (
@@ -86,7 +114,7 @@ export default function AddInwardFACSheet({ open, onOpenChange, onSuccess }: Pro
                     <FormLabel>Ceding Company</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Select company" /></SelectTrigger></FormControl>
-                      <SelectContent>{CEDING_COMPANIES.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                      <SelectContent>{cedingCompanies.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
@@ -102,7 +130,7 @@ export default function AddInwardFACSheet({ open, onOpenChange, onSuccess }: Pro
                   <FormLabel>Class of Business</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger></FormControl>
-                    <SelectContent>{CLASSES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                    <SelectContent>{classes.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>

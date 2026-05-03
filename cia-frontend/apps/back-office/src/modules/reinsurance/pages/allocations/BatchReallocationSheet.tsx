@@ -7,7 +7,11 @@ import {
   Separator,
 } from '@cia/ui';
 import { useForm } from 'react-hook-form';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '@cia/api-client';
 import { z } from 'zod';
+
+interface TreatyDto { id: string; name: string; type: string; status: string; }
 
 interface AllocationRow {
   id:             string;
@@ -26,13 +30,6 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
-// Placeholder — replace with useList('/api/v1/reinsurance/treaties?status=ACTIVE')
-const ACTIVE_TREATIES = [
-  { id: 't1', name: 'Motor Surplus Treaty 2026',    type: 'Surplus' },
-  { id: 't2', name: 'Fire QS Treaty 2026',          type: 'Quota Share' },
-  { id: 't3', name: 'Marine XOL Layer 1 2026',      type: 'XOL' },
-];
-
 interface Props {
   open:          boolean;
   onOpenChange:  (v: boolean) => void;
@@ -41,6 +38,20 @@ interface Props {
 }
 
 export default function BatchReallocationSheet({ open, onOpenChange, allocations, onSuccess }: Props) {
+  const queryClient = useQueryClient();
+
+  const treatiesQuery = useQuery<TreatyDto[]>({
+    queryKey: ['reinsurance', 'treaties', { status: 'ACTIVE' }],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: TreatyDto[] }>('/api/v1/reinsurance/treaties', {
+        params: { status: 'ACTIVE' },
+      });
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const activeTreaties = treatiesQuery.data ?? [];
+
   const form = useForm<FormValues>({
     resolver:      zodResolver(schema),
     defaultValues: { selectedIds: [], newTreatyId: '', reason: '', effectiveDate: '' },
@@ -61,10 +72,22 @@ export default function BatchReallocationSheet({ open, onOpenChange, allocations
     onChange(reallocatable.map(a => a.id));
   }
 
-  async function onSubmit(values: FormValues) {
-    console.log('Batch reallocation', values);
-    // TODO: POST /api/v1/reinsurance/allocations/batch-reallocate
-    onSuccess();
+  const reallocate = useMutation({
+    mutationFn: async (values: FormValues) => {
+      const res = await apiClient.post<{ data: { reallocatedCount: number } }>(
+        '/api/v1/reinsurance/allocations/batch-reallocate', values,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reinsurance', 'allocations'] });
+      onSuccess();
+      form.reset();
+    },
+  });
+
+  function onSubmit(values: FormValues) {
+    reallocate.mutate(values);
   }
 
   return (
@@ -132,7 +155,7 @@ export default function BatchReallocationSheet({ open, onOpenChange, allocations
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select the treaty to reallocate to" /></SelectTrigger></FormControl>
                     <SelectContent>
-                      {ACTIVE_TREATIES.map(t => (
+                      {activeTreaties.map(t => (
                         <SelectItem key={t.id} value={t.id}>
                           {t.name} <span className="text-muted-foreground ml-1">({t.type})</span>
                         </SelectItem>

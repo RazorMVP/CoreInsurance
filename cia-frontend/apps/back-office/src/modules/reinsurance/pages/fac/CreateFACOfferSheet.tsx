@@ -7,7 +7,19 @@ import {
   Separator,
 } from '@cia/ui';
 import { useForm } from 'react-hook-form';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient, type BrokerDto } from '@cia/api-client';
 import { z } from 'zod';
+
+interface ReinsurerDto { id: string; name: string; }
+interface PolicyExcessDto {
+  id:                string;
+  policyNumber:      string;
+  customerName:      string;
+  classOfBusinessName?: string;
+  sumInsured:        number;
+  treatyCapacity?:   number;
+}
 
 const schema = z.object({
   policyId:          z.string().min(1, 'Select the policy requiring FAC cover'),
@@ -28,40 +40,48 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
-// ── Placeholder lists — replace with useList hooks when backend is wired ──
-const EXCESS_POLICIES = [
-  { id: 'pol-ex1', label: 'POL-2026-00005 — Alaba Trading · Fire & Burglary · SI ₦35,000,000 (treaty cap ₦9M)' },
-  { id: 'pol-ex2', label: 'POL-2026-00006 — Dangote Group · Engineering · SI ₦60,000,000 (treaty cap ₦10M)' },
-];
-
-// Direct reinsurers — from Setup → Organisations → Reinsurance Companies
-const REINSURERS = [
-  { id: 'r1', name: 'Munich Re' },
-  { id: 'r2', name: 'Swiss Re' },
-  { id: 'r3', name: 'African Re' },
-  { id: 'r4', name: "Lloyd's Syndicate 2623" },
-  { id: 'r5', name: "Lloyd's Syndicate 510 (MIG)" },
-  { id: 'r6', name: 'ZEP-RE (PTA Reinsurance)' },
-  { id: 'r7', name: 'Continental Reinsurance' },
-  { id: 'r8', name: 'GIC Re (India)' },
-  { id: 'r9', name: 'Trans-Atlantic Reinsurance' },
-];
-
-// FAC brokers — from Setup → Organisations → Brokers (reinsurance brokers subset)
-const FAC_BROKERS = [
-  { id: 'b1', name: 'Marsh (Nigeria) Ltd' },
-  { id: 'b2', name: 'Aon Re Nigeria' },
-  { id: 'b3', name: 'Willis Towers Watson Nigeria' },
-  { id: 'b4', name: 'SCIB Nigeria' },
-  { id: 'b5', name: 'Gras Savoye Willis Nigeria' },
-  { id: 'b6', name: 'Brokerage International Ltd' },
-  { id: 'b7', name: 'Anchor Insurance Brokers' },
-];
-
 interface Props { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void; }
 
 export default function CreateFACOfferSheet({ open, onOpenChange, onSuccess }: Props) {
+  const queryClient = useQueryClient();
+
+  const excessPoliciesQuery = useQuery<PolicyExcessDto[]>({
+    queryKey: ['reinsurance', 'fac', 'excess-policies'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: PolicyExcessDto[] }>(
+        '/api/v1/reinsurance/fac/excess-policies',
+      );
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const excessPolicies = (excessPoliciesQuery.data ?? []).map(p => ({
+    id:    p.id,
+    label: `${p.policyNumber} — ${p.customerName}${p.classOfBusinessName ? ` · ${p.classOfBusinessName}` : ''} · SI ₦${p.sumInsured.toLocaleString()}${p.treatyCapacity ? ` (treaty cap ₦${p.treatyCapacity.toLocaleString()})` : ''}`,
+  }));
+
+  const reinsurersQuery = useQuery<ReinsurerDto[]>({
+    queryKey: ['setup', 'reinsurance-companies'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ReinsurerDto[] }>('/api/v1/setup/reinsurance-companies');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const reinsurers = reinsurersQuery.data ?? [];
+
+  const brokersQuery = useQuery<BrokerDto[]>({
+    queryKey: ['setup', 'brokers'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: BrokerDto[] }>('/api/v1/setup/brokers');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const facBrokers = (brokersQuery.data ?? []).map(b => ({ id: b.id, name: b.name }));
+
   const form = useForm<FormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(schema) as any,
     defaultValues: {
       policyId: '', riskDescription: '', totalSumInsured: 0, treatyRetention: 0,
@@ -91,14 +111,26 @@ export default function CreateFACOfferSheet({ open, onOpenChange, onSuccess }: P
     form.setValue('brokerMarkets', '');
   }
 
-  async function onSubmit(values: FormValues) {
-    console.log('Create FAC Offer', values);
-    // TODO: POST /api/v1/reinsurance/fac/outward
-    onSuccess();
+  const create = useMutation({
+    mutationFn: async (values: FormValues) => {
+      const res = await apiClient.post<{ data: { id: string } }>(
+        '/api/v1/reinsurance/fac/outward', values,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reinsurance', 'fac'] });
+      onSuccess();
+      form.reset();
+    },
+  });
+
+  function onSubmit(values: FormValues) {
+    create.mutate(values);
   }
 
   const isBroker = placedThrough === 'BROKER';
-  const counterparties = isBroker ? FAC_BROKERS : REINSURERS;
+  const counterparties: { id: string; name: string }[] = isBroker ? facBrokers : reinsurers;
   const counterpartyLabel = isBroker ? 'FAC Broker' : 'Reinsurer';
   const counterpartyPlaceholder = isBroker ? 'Select FAC broker' : 'Select reinsurer';
 
@@ -121,7 +153,7 @@ export default function CreateFACOfferSheet({ open, onOpenChange, onSuccess }: P
                   <FormLabel>Policy (Excess Capacity)</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select policy needing FAC cover" /></SelectTrigger></FormControl>
-                    <SelectContent>{EXCESS_POLICIES.map(p => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}</SelectContent>
+                    <SelectContent>{excessPolicies.map(p => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}</SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>
