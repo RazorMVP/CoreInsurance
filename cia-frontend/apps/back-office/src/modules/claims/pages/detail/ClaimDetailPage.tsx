@@ -501,6 +501,7 @@ export default function ClaimDetailPage() {
       <AddReserveDialog
         open={addReserveOpen}
         onOpenChange={setAddReserveOpen}
+        claimId={c.id}
         claimNumber={c.claimNumber}
         onSuccess={() => setAddReserveOpen(false)}
       />
@@ -508,6 +509,7 @@ export default function ClaimDetailPage() {
       <AddExpenseDialog
         open={addExpenseOpen}
         onOpenChange={setAddExpenseOpen}
+        claimId={c.id}
         claimNumber={c.claimNumber}
         onSuccess={() => setAddExpenseOpen(false)}
       />

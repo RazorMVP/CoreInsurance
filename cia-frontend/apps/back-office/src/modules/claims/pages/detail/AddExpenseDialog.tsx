@@ -5,6 +5,8 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@cia/ui';
 import { useForm } from 'react-hook-form';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '@cia/api-client';
 import { z } from 'zod';
 
 const EXPENSE_TYPES = [
@@ -28,21 +30,36 @@ type FormValues = z.infer<typeof schema>;
 interface Props {
   open:         boolean;
   onOpenChange: (v: boolean) => void;
+  claimId:      string;
   claimNumber:  string;
   onSuccess:    () => void;
 }
 
-export default function AddExpenseDialog({ open, onOpenChange, claimNumber, onSuccess }: Props) {
+export default function AddExpenseDialog({ open, onOpenChange, claimId, claimNumber, onSuccess }: Props) {
+  const queryClient = useQueryClient();
+
   const form = useForm<FormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(schema) as any,
     defaultValues: { type: '', amount: 0, reference: '' },
   });
 
-  async function onSubmit(values: FormValues) {
-    console.log('Add expense', values);
-    // TODO: POST /api/v1/claims/{id}/expenses
-    form.reset();
-    onSuccess();
+  const addExpense = useMutation({
+    mutationFn: async (values: FormValues) => {
+      const res = await apiClient.post<{ data: { id: string } }>(
+        `/api/v1/claims/${claimId}/expenses`, values,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['claims', claimId] });
+      form.reset();
+      onSuccess();
+    },
+  });
+
+  function onSubmit(values: FormValues) {
+    addExpense.mutate(values);
   }
 
   return (
