@@ -1,20 +1,13 @@
 import { useState } from 'react';
 import { Badge, Card, CardContent, CardHeader, CardTitle, Checkbox, Label, PageHeader, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@cia/ui';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type AccessGroupDto } from '@cia/api-client';
 import { useReportDefinitions } from '../../hooks/useReportDefinitions';
 import { useReportAccessPolicies, useUpsertAccessPolicy } from '../../hooks/useReportAccessPolicies';
 import { CATEGORY_LABELS } from '../../types/report.types';
 import type { ReportCategory } from '../../types/report.types';
 
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as ReportCategory[];
-
-// Same IDs as AccessGroupsPage mock data — consistent until real API is wired
-const MOCK_GROUPS = [
-  { id: 'ag1', name: 'System Admin' },
-  { id: 'ag2', name: 'Underwriter' },
-  { id: 'ag3', name: 'Claims Officer' },
-  { id: 'ag4', name: 'Finance Officer' },
-  { id: 'ag5', name: 'System Auditor' },
-];
 
 interface CategoryRowProps {
   category: ReportCategory;
@@ -102,6 +95,15 @@ function CategoryRow({ category, accessGroupId }: CategoryRowProps) {
 export default function ReportAccessSetupPage() {
   const [selectedGroup, setSelectedGroup] = useState<string>('');
 
+  const groupsQuery = useQuery<AccessGroupDto[]>({
+    queryKey: ['setup', 'access-groups'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: AccessGroupDto[] }>('/api/v1/setup/access-groups');
+      return res.data.data;
+    },
+  });
+  const groups = groupsQuery.data ?? [];
+
   return (
     <div className="p-6 space-y-5">
       <PageHeader
@@ -119,7 +121,7 @@ export default function ReportAccessSetupPage() {
               <SelectValue placeholder="Choose access group…" />
             </SelectTrigger>
             <SelectContent>
-              {MOCK_GROUPS.map((g) => (
+              {groups.map((g) => (
                 <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
               ))}
             </SelectContent>
