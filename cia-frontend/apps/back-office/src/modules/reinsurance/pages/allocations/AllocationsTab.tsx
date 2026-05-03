@@ -2,9 +2,11 @@ import { useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-  PageSection,
+  PageSection, Skeleton,
 } from '@cia/ui';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@cia/api-client';
 import PolicyAllocationSheet  from './PolicyAllocationSheet';
 import BatchReallocationSheet from './BatchReallocationSheet';
 import CreateFACOfferSheet    from '../fac/CreateFACOfferSheet';
@@ -48,13 +50,21 @@ const stLabel: Record<AllocStatus, string> = {
 };
 
 export default function AllocationsTab() {
+  const allocationsQuery = useQuery<AllocationDto[]>({
+    queryKey: ['reinsurance', 'allocations'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: AllocationDto[] }>('/api/v1/reinsurance/allocations');
+      return res.data.data;
+    },
+  });
+  const allocations = allocationsQuery.data ?? mockAllocations;
   const [viewAllocation, setViewAllocation] = useState<AllocationDto | null>(null);
   const [batchRealloc,   setBatchRealloc]   = useState(false);
   const [confirmAllOpen, setConfirmAllOpen] = useState(false);
   const [facOpen,        setFacOpen]        = useState(false);
 
-  const pendingConfirmation = mockAllocations.filter(a => a.status === 'AUTO_ALLOCATED');
-  const excessCapacity      = mockAllocations.filter(a => a.status === 'EXCESS_CAPACITY');
+  const pendingConfirmation = allocations.filter(a => a.status === 'AUTO_ALLOCATED');
+  const excessCapacity      = allocations.filter(a => a.status === 'EXCESS_CAPACITY');
 
   const columns: ColumnDef<AllocationDto>[] = [
     {
@@ -160,11 +170,15 @@ export default function AllocationsTab() {
             </Button>
           }
         >
-          <DataTable
-            columns={columns}
-            data={mockAllocations}
-            toolbar={{ searchColumn: 'policyNumber', searchPlaceholder: 'Search by policy…' }}
-          />
+          {allocationsQuery.isLoading ? (
+            <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+          ) : (
+            <DataTable
+              columns={columns}
+              data={allocations}
+              toolbar={{ searchColumn: 'policyNumber', searchPlaceholder: 'Search by policy…' }}
+            />
+          )}
         </PageSection>
       </div>
 
@@ -182,7 +196,7 @@ export default function AllocationsTab() {
       <BatchReallocationSheet
         open={batchRealloc}
         onOpenChange={setBatchRealloc}
-        allocations={mockAllocations}
+        allocations={allocations}
         onSuccess={() => setBatchRealloc(false)}
       />
 

@@ -3,9 +3,11 @@ import {
   Badge, Button,
   DataTable, DataTableRowActions,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-  EmptyState, PageSection, Tabs, TabsContent, TabsList, TabsTrigger,
+  EmptyState, PageSection, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@cia/ui';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@cia/api-client';
 import CreateFACOfferSheet  from './CreateFACOfferSheet';
 import AddInwardFACSheet    from './AddInwardFACSheet';
 import FACCreditNoteDialog  from './FACCreditNoteDialog';
@@ -65,6 +67,24 @@ export default function FACTab() {
   // New offer / inward forms
   const [facOfferOpen,  setFacOfferOpen]  = useState(false);
   const [inwardFACOpen, setInwardFACOpen] = useState(false);
+
+  const outwardQuery = useQuery<FacOutwardDto[]>({
+    queryKey: ['reinsurance', 'fac', 'outward'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: FacOutwardDto[] }>('/api/v1/reinsurance/fac/outward');
+      return res.data.data;
+    },
+  });
+  const outward = outwardQuery.data ?? mockOutward;
+
+  const inwardQuery = useQuery<FacInwardDto[]>({
+    queryKey: ['reinsurance', 'fac', 'inward'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: FacInwardDto[] }>('/api/v1/reinsurance/fac/inward');
+      return res.data.data;
+    },
+  });
+  const inward = inwardQuery.data ?? mockInward;
 
   // Outward actions
   const [creditNoteTarget, setCreditNoteTarget] = useState<FacOutwardDto | null>(null);
@@ -220,8 +240,8 @@ export default function FACTab() {
     <>
       <Tabs defaultValue="outward">
         <TabsList>
-          <TabsTrigger value="outward">Outward FAC ({mockOutward.length})</TabsTrigger>
-          <TabsTrigger value="inward">Inward FAC ({mockInward.length})</TabsTrigger>
+          <TabsTrigger value="outward">Outward FAC ({outward.length})</TabsTrigger>
+          <TabsTrigger value="inward">Inward FAC ({inward.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="outward" className="mt-4">
@@ -230,9 +250,11 @@ export default function FACTab() {
             description="Risks exceeding treaty capacity placed with reinsurers on a facultative basis."
             actions={<Button size="sm" onClick={() => setFacOfferOpen(true)}>Create FAC Offer</Button>}
           >
-            {mockOutward.length === 0
+            {outwardQuery.isLoading
+              ? <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+              : outward.length === 0
               ? <EmptyState title="No outward FAC covers" description="Create when a risk exceeds treaty gross capacity." />
-              : <DataTable columns={outColumns} data={mockOutward} toolbar={{ searchColumn: 'policyNumber', searchPlaceholder: 'Search…' }} />
+              : <DataTable columns={outColumns} data={outward} toolbar={{ searchColumn: 'policyNumber', searchPlaceholder: 'Search…' }} />
             }
           </PageSection>
         </TabsContent>
@@ -243,9 +265,11 @@ export default function FACTab() {
             description="Facultative risks accepted from other ceding companies."
             actions={<Button size="sm" onClick={() => setInwardFACOpen(true)}>Add Inward FAC</Button>}
           >
-            {mockInward.length === 0
+            {inwardQuery.isLoading
+              ? <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+              : inward.length === 0
               ? <EmptyState title="No inward FAC policies" />
-              : <DataTable columns={inColumns} data={mockInward} toolbar={{ searchColumn: 'cedingCompany', searchPlaceholder: 'Search…' }} />
+              : <DataTable columns={inColumns} data={inward} toolbar={{ searchColumn: 'cedingCompany', searchPlaceholder: 'Search…' }} />
             }
           </PageSection>
         </TabsContent>

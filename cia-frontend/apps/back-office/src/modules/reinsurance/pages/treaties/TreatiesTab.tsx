@@ -3,9 +3,11 @@ import {
   Badge, Button, Card, CardContent, DataTable, DataTableColumnHeader,
   DataTableRowActions,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-  EmptyState, PageSection, Separator,
+  EmptyState, PageSection, Separator, Skeleton,
 } from '@cia/ui';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@cia/api-client';
 import TreatySheet from './TreatySheet';
 import BatchReallocationSheet from '../allocations/BatchReallocationSheet';
 
@@ -83,6 +85,15 @@ export default function TreatiesTab() {
   const [editing,          setEditing]          = useState<TreatyDto | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<TreatyDto | null>(null);
   const [batchTarget,      setBatchTarget]      = useState<TreatyDto | null>(null);
+
+  const treatiesQuery = useQuery<TreatyDto[]>({
+    queryKey: ['reinsurance', 'treaties'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: TreatyDto[] }>('/api/v1/reinsurance/treaties');
+      return res.data.data;
+    },
+  });
+  const treaties = treatiesQuery.data ?? mockTreaties;
 
   const columns: ColumnDef<TreatyDto>[] = [
     {
@@ -178,12 +189,14 @@ export default function TreatiesTab() {
         description="Surplus, Quota Share and XOL treaties define how risks are ceded each year."
         actions={<Button onClick={() => { setEditing(null); setSheetOpen(true); }}>Add Treaty</Button>}
       >
-        {mockTreaties.length === 0 ? (
+        {treatiesQuery.isLoading ? (
+          <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+        ) : treaties.length === 0 ? (
           <EmptyState title="No treaties configured" action={<Button onClick={() => setSheetOpen(true)}>Add Treaty</Button>} />
         ) : (
           <DataTable
             columns={columns}
-            data={mockTreaties}
+            data={treaties}
             toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search treaties…' }}
           />
         )}
