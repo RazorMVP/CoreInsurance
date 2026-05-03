@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Badge, Button, Card, CardContent, CardHeader, CardTitle, PageHeader, Separator,
+  Skeleton,
 } from '@cia/ui';
-import type { QuoteDto } from '@cia/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type QuoteDto } from '@cia/api-client';
 import QuotePdfPreview, {
   type QuotePdfData, type AdjustmentLine, type RiskItemData,
   computeQuoteSummary,
@@ -180,7 +182,22 @@ export default function QuoteDetailPage() {
   const { id }   = useParams<{ id: string }>();
   const [pdfOpen, setPdfOpen] = useState(false);
 
-  const q = MOCK_QUOTES.find(x => x.id === id) ?? MOCK_QUOTES[0];
+  // Live quote — falls back to a local mock while the request is in flight.
+  // Maps the backend QuoteResponse shape onto the MockQuote shape the rest
+  // of the page (and PDF preview) expects. Backend returns totalNetPremium
+  // / totalGrossPremium (not premium/netPremium); risks carry per-item
+  // loadings/discounts; quote-level adjustments + selectedClauseIds are
+  // top-level on the response.
+  const quoteQuery = useQuery<MockQuote>({
+    queryKey: ['quotes', id],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: MockQuote }>(`/api/v1/quotes/${id}`);
+      return res.data.data;
+    },
+    enabled: !!id,
+  });
+
+  const q = quoteQuery.data ?? MOCK_QUOTES.find(x => x.id === id) ?? MOCK_QUOTES[0];
   const versionHistory = VERSION_HISTORY[q.id] ?? [];
 
   const canSubmit  = q.status === 'DRAFT';
@@ -214,6 +231,16 @@ export default function QuoteDetailPage() {
   const { totalQuoteLoading, totalQuoteDiscount, finalNet } = summary;
 
   const selectedClauses = INITIAL_CLAUSES.filter(c => q.selectedClauseIds.includes(c.id));
+
+  if (quoteQuery.isLoading && !quoteQuery.data) {
+    return (
+      <div className="p-6 space-y-4 max-w-4xl">
+        <Skeleton className="h-9 w-72" />
+        <Skeleton className="h-32 w-full rounded-lg" />
+        <Skeleton className="h-64 w-full rounded-lg" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-5 max-w-4xl">

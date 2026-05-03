@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-  EmptyState, PageHeader,
+  EmptyState, PageHeader, Skeleton,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import type { QuoteDto } from '@cia/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type QuoteDto } from '@cia/api-client';
 import SingleRiskQuoteSheet from './create/SingleRiskQuoteSheet';
 import MultiRiskQuoteSheet  from './create/MultiRiskQuoteSheet';
 import QuotePdfPreview, { type QuotePdfData } from './QuotePdfPreview';
@@ -41,14 +42,6 @@ const mockQuotePdfData: Record<string, QuotePdfData> = {
   },
 };
 
-const mockQuotes: QuoteDto[] = [
-  { id: 'q1', quoteNumber: 'QUO-2026-00001', customerId: 'c1', customerName: 'Chioma Okafor',     productId: 'p1', productName: 'Private Motor Comprehensive', classOfBusinessId: '1', classOfBusinessName: 'Motor (Private)',  businessType: 'DIRECT', status: 'APPROVED',  sumInsured: 3_500_000, premium: 78_750,  discount: 0,     netPremium: 78_750,  startDate: '2026-02-01', endDate: '2027-02-01', version: 1, createdAt: '2026-01-28', updatedAt: '2026-01-30' },
-  { id: 'q2', quoteNumber: 'QUO-2026-00002', customerId: 'c2', customerName: 'Alaba Trading Co.', productId: 'p3', productName: 'Fire & Burglary Standard',       classOfBusinessId: '3', classOfBusinessName: 'Fire & Burglary', businessType: 'DIRECT', status: 'SUBMITTED', sumInsured: 15_000_000, premium: 120_000, discount: 5_000, netPremium: 115_000, startDate: '2026-03-01', endDate: '2027-03-01', version: 2, createdAt: '2026-02-01', updatedAt: '2026-02-05' },
-  { id: 'q3', quoteNumber: 'QUO-2026-00003', customerId: 'c3', customerName: 'Emeka Eze',         productId: 'p1', productName: 'Private Motor Comprehensive', classOfBusinessId: '1', classOfBusinessName: 'Motor (Private)',  businessType: 'DIRECT', status: 'DRAFT',     sumInsured: 2_200_000, premium: 49_500,  discount: 0,     netPremium: 49_500,  startDate: '2026-03-15', endDate: '2027-03-15', version: 1, createdAt: '2026-02-10', updatedAt: '2026-02-10' },
-  { id: 'q4', quoteNumber: 'QUO-2026-00004', customerId: 'c1', customerName: 'Chioma Okafor',     productId: 'p4', productName: 'Marine Cargo Open Cover',       classOfBusinessId: '4', classOfBusinessName: 'Marine Cargo',    businessType: 'DIRECT', status: 'CONVERTED', sumInsured: 8_000_000, premium: 60_000,  discount: 0,     netPremium: 60_000,  startDate: '2026-01-15', endDate: '2027-01-15', version: 1, createdAt: '2026-01-10', updatedAt: '2026-01-15' },
-  { id: 'q5', quoteNumber: 'QUO-2026-00005', customerId: 'c5', customerName: 'Ngozi Adeyemi',     productId: 'p1', productName: 'Private Motor Comprehensive', classOfBusinessId: '1', classOfBusinessName: 'Motor (Private)',  businessType: 'DIRECT', status: 'REJECTED',  sumInsured: 4_000_000, premium: 90_000,  discount: 0,     netPremium: 90_000,  startDate: '2026-02-20', endDate: '2027-02-20', version: 3, createdAt: '2026-02-08', updatedAt: '2026-02-12' },
-];
-
 const statusVariant: Record<QuoteDto['status'], 'active' | 'pending' | 'rejected' | 'draft' | 'cancelled'> = {
   APPROVED:  'active',
   SUBMITTED: 'pending',
@@ -63,6 +56,15 @@ export default function QuotationListPage() {
   const [singleOpen, setSingleOpen] = useState(false);
   const [multiOpen,  setMultiOpen]  = useState(false);
   const [pdfData,    setPdfData]    = useState<QuotePdfData | null>(null);
+
+  const quotesQuery = useQuery<QuoteDto[]>({
+    queryKey: ['quotes'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: QuoteDto[] }>('/api/v1/quotes');
+      return res.data.data;
+    },
+  });
+  const quotes = quotesQuery.data ?? [];
 
   const columns: ColumnDef<QuoteDto>[] = [
     {
@@ -178,7 +180,13 @@ export default function QuotationListPage() {
         }
       />
 
-      {mockQuotes.length === 0 ? (
+      {quotesQuery.isLoading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      ) : quotes.length === 0 ? (
         <EmptyState
           title="No quotes yet"
           description="Create your first quote to start the underwriting process."
@@ -187,7 +195,7 @@ export default function QuotationListPage() {
       ) : (
         <DataTable
           columns={columns}
-          data={mockQuotes}
+          data={quotes}
           toolbar={{ searchColumn: 'customerName', searchPlaceholder: 'Search by customer…' }}
         />
       )}
