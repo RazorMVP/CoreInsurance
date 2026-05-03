@@ -1,27 +1,12 @@
 import { useState } from 'react';
 import {
   Badge, Button, Card, CardContent, DataTableRowActions, EmptyState,
-  PageHeader, Separator,
+  PageHeader, Separator, Skeleton,
 } from '@cia/ui';
-import type { ApprovalGroupDto } from '@cia/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type ApprovalGroupDto } from '@cia/api-client';
 import { type Row } from '@tanstack/react-table';
 import ApprovalGroupSheet from './ApprovalGroupSheet';
-
-const mockGroups: ApprovalGroupDto[] = [
-  {
-    id: '1', name: 'Policy Approval', module: 'UNDERWRITING',
-    levels: [
-      { level: 1, minAmount: 0,         maxAmount: 10_000_000, approverIds: ['u2'], approverNames: ['Chidi Okafor'] },
-      { level: 2, minAmount: 10_000_000, maxAmount: 50_000_000, approverIds: ['u1'], approverNames: ['Akinwale Nubeero'] },
-    ],
-  },
-  {
-    id: '2', name: 'Claims Approval', module: 'CLAIMS',
-    levels: [
-      { level: 1, minAmount: 0, maxAmount: 5_000_000, approverIds: ['u3'], approverNames: ['Adaeze Nwosu'] },
-    ],
-  },
-];
 
 const MODULE_LABELS: Record<string, string> = {
   UNDERWRITING: 'Underwriting', CLAIMS: 'Claims', FINANCE: 'Finance',
@@ -31,6 +16,15 @@ const MODULE_LABELS: Record<string, string> = {
 export default function ApprovalGroupsPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing,   setEditing]   = useState<ApprovalGroupDto | null>(null);
+
+  const groupsQuery = useQuery<ApprovalGroupDto[]>({
+    queryKey: ['setup', 'approval-groups'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ApprovalGroupDto[] }>('/api/v1/setup/approval-groups');
+      return res.data.data;
+    },
+  });
+  const groups = groupsQuery.data ?? [];
 
   function openCreate() { setEditing(null); setSheetOpen(true); }
   function openEdit(g: ApprovalGroupDto) { setEditing(g); setSheetOpen(true); }
@@ -43,7 +37,9 @@ export default function ApprovalGroupsPage() {
         actions={<Button onClick={openCreate}>Add Group</Button>}
       />
 
-      {mockGroups.length === 0 ? (
+      {groupsQuery.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-32 w-full rounded-lg" /><Skeleton className="h-32 w-full rounded-lg" /></div>
+      ) : groups.length === 0 ? (
         <EmptyState
           title="No approval groups yet"
           description="Create approval groups to enforce authorisation thresholds."
@@ -51,7 +47,7 @@ export default function ApprovalGroupsPage() {
         />
       ) : (
         <div className="space-y-3">
-          {mockGroups.map((group) => (
+          {groups.map((group) => (
             <Card key={group.id}>
               <CardContent className="p-5">
                 <div className="flex items-start justify-between">

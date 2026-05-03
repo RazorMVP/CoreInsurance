@@ -1,19 +1,12 @@
 import { useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
-  EmptyState, PageHeader,
+  EmptyState, PageHeader, Skeleton,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import type { UserDto } from '@cia/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type UserDto } from '@cia/api-client';
 import UserSheet from './UserSheet';
-
-// Placeholder data — replace with useList('/api/v1/setup/users') when backend is up
-const mockUsers: UserDto[] = [
-  { id: '1', email: 'admin@nubsure.ng', firstName: 'Akinwale', lastName: 'Nubeero', status: 'ACTIVE',  accessGroupId: 'ag1', accessGroupName: 'System Admin',  createdAt: '2026-01-10' },
-  { id: '2', email: 'uw@nubsure.ng',    firstName: 'Chidi',    lastName: 'Okafor',   status: 'ACTIVE',  accessGroupId: 'ag2', accessGroupName: 'Underwriter',   createdAt: '2026-01-15' },
-  { id: '3', email: 'claims@nubsure.ng',firstName: 'Adaeze',   lastName: 'Nwosu',    status: 'ACTIVE',  accessGroupId: 'ag3', accessGroupName: 'Claims Officer', createdAt: '2026-02-01' },
-  { id: '4', email: 'fin@nubsure.ng',   firstName: 'Emeka',    lastName: 'Obi',      status: 'INACTIVE',accessGroupId: 'ag4', accessGroupName: 'Finance Officer',createdAt: '2026-02-10' },
-];
 
 const statusVariant: Record<UserDto['status'], 'active' | 'rejected' | 'draft'> = {
   ACTIVE:    'active',
@@ -24,6 +17,15 @@ const statusVariant: Record<UserDto['status'], 'active' | 'rejected' | 'draft'> 
 export default function UsersPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing,   setEditing]   = useState<UserDto | null>(null);
+
+  const usersQuery = useQuery<UserDto[]>({
+    queryKey: ['setup', 'users'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: UserDto[] }>('/api/v1/setup/users');
+      return res.data.data;
+    },
+  });
+  const users = usersQuery.data ?? [];
 
   function openCreate() { setEditing(null); setSheetOpen(true); }
   function openEdit(u: UserDto) { setEditing(u); setSheetOpen(true); }
@@ -80,7 +82,9 @@ export default function UsersPage() {
         actions={<Button onClick={openCreate}>Add User</Button>}
       />
 
-      {mockUsers.length === 0 ? (
+      {usersQuery.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : users.length === 0 ? (
         <EmptyState
           title="No users yet"
           description="Add the first user to get started."
@@ -89,7 +93,7 @@ export default function UsersPage() {
       ) : (
         <DataTable
           columns={columns}
-          data={mockUsers}
+          data={users}
           toolbar={{ searchColumn: 'firstName', searchPlaceholder: 'Search users…' }}
         />
       )}

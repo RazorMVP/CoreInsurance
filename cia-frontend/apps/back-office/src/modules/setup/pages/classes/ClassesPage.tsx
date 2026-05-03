@@ -1,23 +1,25 @@
 import { useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
-  EmptyState, PageHeader,
+  EmptyState, PageHeader, Skeleton,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import type { ClassOfBusinessDto } from '@cia/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type ClassOfBusinessDto } from '@cia/api-client';
 import ClassSheet from './ClassSheet';
-
-const mockClasses: ClassOfBusinessDto[] = [
-  { id: '1', name: 'Motor (Private)',  code: 'MTR-PRV', products: 2 },
-  { id: '2', name: 'Motor (Commercial)',code: 'MTR-COM', products: 1 },
-  { id: '3', name: 'Fire & Burglary',  code: 'F&B',     products: 3 },
-  { id: '4', name: 'Marine Cargo',     code: 'MCG',     products: 1 },
-  { id: '5', name: 'Life (Group)',      code: 'LIFE-GRP',products: 0 },
-];
 
 export default function ClassesPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing,   setEditing]   = useState<ClassOfBusinessDto | null>(null);
+
+  const classesQuery = useQuery<ClassOfBusinessDto[]>({
+    queryKey: ['setup', 'classes-of-business'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ClassOfBusinessDto[] }>('/api/v1/setup/classes-of-business');
+      return res.data.data;
+    },
+  });
+  const classes = classesQuery.data ?? [];
 
   function openCreate() { setEditing(null); setSheetOpen(true); }
   function openEdit(c: ClassOfBusinessDto) { setEditing(c); setSheetOpen(true); }
@@ -61,10 +63,12 @@ export default function ClassesPage() {
         description="Define the insurance classes that products are grouped under."
         actions={<Button onClick={openCreate}>Add Class</Button>}
       />
-      {mockClasses.length === 0 ? (
+      {classesQuery.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : classes.length === 0 ? (
         <EmptyState title="No classes yet" action={<Button onClick={openCreate}>Add Class</Button>} />
       ) : (
-        <DataTable columns={columns} data={mockClasses}
+        <DataTable columns={columns} data={classes}
           toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search classes…' }} />
       )}
       <ClassSheet open={sheetOpen} onOpenChange={setSheetOpen} cls={editing} onSuccess={() => setSheetOpen(false)} />

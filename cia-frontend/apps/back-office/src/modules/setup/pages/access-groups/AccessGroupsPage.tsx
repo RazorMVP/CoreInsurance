@@ -1,23 +1,25 @@
 import { useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
-  EmptyState, PageHeader,
+  EmptyState, PageHeader, Skeleton,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import type { AccessGroupDto } from '@cia/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type AccessGroupDto } from '@cia/api-client';
 import AccessGroupSheet from './AccessGroupSheet';
-
-const mockGroups: AccessGroupDto[] = [
-  { id: 'ag1', name: 'System Admin',   permissions: ['setup:create','setup:update','setup:view'], userCount: 1 },
-  { id: 'ag2', name: 'Underwriter',    permissions: ['underwriting:create','underwriting:view','underwriting:approve'], userCount: 3 },
-  { id: 'ag3', name: 'Claims Officer', permissions: ['claims:create','claims:view','claims:approve'], userCount: 2 },
-  { id: 'ag4', name: 'Finance Officer',permissions: ['finance:create','finance:view','finance:approve'], userCount: 1 },
-  { id: 'ag5', name: 'System Auditor', permissions: ['audit:view'], userCount: 1 },
-];
 
 export default function AccessGroupsPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing,   setEditing]   = useState<AccessGroupDto | null>(null);
+
+  const groupsQuery = useQuery<AccessGroupDto[]>({
+    queryKey: ['setup', 'access-groups'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: AccessGroupDto[] }>('/api/v1/setup/access-groups');
+      return res.data.data;
+    },
+  });
+  const groups = groupsQuery.data ?? [];
 
   function openCreate() { setEditing(null); setSheetOpen(true); }
   function openEdit(g: AccessGroupDto) { setEditing(g); setSheetOpen(true); }
@@ -71,12 +73,14 @@ export default function AccessGroupsPage() {
         description="Define permission sets assigned to users. Each user belongs to one access group."
         actions={<Button onClick={openCreate}>Add Group</Button>}
       />
-      {mockGroups.length === 0 ? (
+      {groupsQuery.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : groups.length === 0 ? (
         <EmptyState title="No access groups yet" action={<Button onClick={openCreate}>Add Group</Button>} />
       ) : (
         <DataTable
           columns={columns}
-          data={mockGroups}
+          data={groups}
           toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search groups…' }}
         />
       )}

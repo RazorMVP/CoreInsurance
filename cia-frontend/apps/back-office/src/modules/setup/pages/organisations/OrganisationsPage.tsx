@@ -1,23 +1,27 @@
 import { useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
-  EmptyState, PageHeader, Tabs, TabsContent, TabsList, TabsTrigger,
+  EmptyState, PageHeader, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import type { BrokerDto } from '@cia/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type BrokerDto } from '@cia/api-client';
 import BrokerSheet from './BrokerSheet';
-
-// Placeholder data
-const mockBrokers: BrokerDto[] = [
-  { id: '1', name: 'Leadway Brokers Ltd',  code: 'LWB', email: 'ops@leadway.ng', phone: '+234 801 000 0001', status: 'ACTIVE', contactPerson: 'Kunle Adeyemi' },
-  { id: '2', name: 'Stanbic IBTC Brokers', code: 'SIB', email: 'info@stanbic.ng', phone: '+234 802 000 0002', status: 'ACTIVE', contactPerson: 'Ada Okonkwo' },
-];
 
 const statusVariant: Record<BrokerDto['status'], 'active' | 'draft'> = { ACTIVE: 'active', INACTIVE: 'draft' };
 
 function BrokersTab() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing,   setEditing]   = useState<BrokerDto | null>(null);
+
+  const brokersQuery = useQuery<BrokerDto[]>({
+    queryKey: ['setup', 'brokers'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: BrokerDto[] }>('/api/v1/setup/brokers');
+      return res.data.data;
+    },
+  });
+  const brokers = brokersQuery.data ?? [];
 
   const columns: ColumnDef<BrokerDto>[] = [
     {
@@ -51,10 +55,12 @@ function BrokersTab() {
       <div className="flex justify-end mb-3">
         <Button size="sm" onClick={() => { setEditing(null); setSheetOpen(true); }}>Add Broker</Button>
       </div>
-      {mockBrokers.length === 0 ? (
+      {brokersQuery.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : brokers.length === 0 ? (
         <EmptyState title="No brokers yet" />
       ) : (
-        <DataTable columns={columns} data={mockBrokers}
+        <DataTable columns={columns} data={brokers}
           toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search brokers…' }} />
       )}
       <BrokerSheet open={sheetOpen} onOpenChange={setSheetOpen} broker={editing} onSuccess={() => setSheetOpen(false)} />

@@ -1,18 +1,12 @@
 import { useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
-  EmptyState, PageHeader,
+  EmptyState, PageHeader, Skeleton,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import type { ProductDto } from '@cia/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type ProductDto } from '@cia/api-client';
 import ProductSheet from './ProductSheet';
-
-const mockProducts: ProductDto[] = [
-  { id: '1', name: 'Private Motor Comprehensive', code: 'PMC-001', classOfBusinessId: '1', classOfBusinessName: 'Motor (Private)',  type: 'SINGLE_RISK', status: 'ACTIVE', commissionRate: 12.5, createdAt: '2026-01-10' },
-  { id: '2', name: 'Commercial Vehicle',           code: 'CMV-001', classOfBusinessId: '2', classOfBusinessName: 'Motor (Commercial)',type: 'SINGLE_RISK', status: 'ACTIVE', commissionRate: 10.0, createdAt: '2026-01-12' },
-  { id: '3', name: 'Fire & Burglary Standard',     code: 'FAB-001', classOfBusinessId: '3', classOfBusinessName: 'Fire & Burglary',  type: 'MULTI_RISK',  status: 'ACTIVE', commissionRate: 8.0,  createdAt: '2026-01-15' },
-  { id: '4', name: 'Marine Cargo Open Cover',      code: 'MCG-001', classOfBusinessId: '4', classOfBusinessName: 'Marine Cargo',     type: 'MULTI_RISK',  status: 'INACTIVE',commissionRate: 7.5,  createdAt: '2026-02-01' },
-];
 
 const statusVariant: Record<ProductDto['status'], 'active' | 'draft'> = {
   ACTIVE: 'active', INACTIVE: 'draft',
@@ -21,6 +15,15 @@ const statusVariant: Record<ProductDto['status'], 'active' | 'draft'> = {
 export default function ProductsPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing,   setEditing]   = useState<ProductDto | null>(null);
+
+  const productsQuery = useQuery<ProductDto[]>({
+    queryKey: ['setup', 'products'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ProductDto[] }>('/api/v1/setup/products');
+      return res.data.data;
+    },
+  });
+  const products = productsQuery.data ?? [];
 
   function openCreate() { setEditing(null); setSheetOpen(true); }
   function openEdit(p: ProductDto) { setEditing(p); setSheetOpen(true); }
@@ -83,10 +86,12 @@ export default function ProductsPage() {
         description="Manage insurance products, their risk types, and commission rates."
         actions={<Button onClick={openCreate}>Add Product</Button>}
       />
-      {mockProducts.length === 0 ? (
+      {productsQuery.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : products.length === 0 ? (
         <EmptyState title="No products yet" action={<Button onClick={openCreate}>Add Product</Button>} />
       ) : (
-        <DataTable columns={columns} data={mockProducts}
+        <DataTable columns={columns} data={products}
           toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search products…' }} />
       )}
       <ProductSheet open={sheetOpen} onOpenChange={setSheetOpen} product={editing} onSuccess={() => setSheetOpen(false)} />
