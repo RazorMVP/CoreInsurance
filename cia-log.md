@@ -4,6 +4,63 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-03 — Session 50: API-wiring CI guard + final H2 misses
+
+### Context
+
+User asked how to maintain the "all forms use useMutation, all lists use useQuery" invariant going forward. Added a CI guard script + CLAUDE.md convention block so the rule survives subsequent edits — both by humans and AI assistants. Process found 5 additional regressions that were quietly left behind in earlier sweeps.
+
+### Catches found by the new guard on first run
+
+- `IndividualOnboardingSheet`, `CorporateOnboardingSheet`, `EditCustomerSheet` — three broker pickers still rendering hardcoded `mockBrokers`. All now read from `useQuery` against `GET /api/v1/setup/brokers`. `EditCustomerSheet` prepends a `NO_BROKER_OPTION` sentinel so the Channel select can represent "Direct".
+- `AddCommentDialog`, `UploadDocumentDialog` (claims module) — two `console.log` form-submit stubs from the original H2 work. Both now take a `claimId` prop alongside the existing display fields and submit via `useMutation` to `POST /api/v1/claims/{id}/comments` and `POST /api/v1/claims/{id}/documents` (multipart for the upload).
+
+### CI guard
+
+`cia-frontend/scripts/check-api-wiring.sh` (new) — bash, runs in <1s. Detects three regression patterns in `cia-frontend/apps/back-office/src/modules/**`:
+
+- `console.log(` anywhere in module code
+- top-level `const mockX = [...]` or `const MOCK_X = [...]`
+- stale `// TODO: useMutation` / `useQuery` / `useCreate` / `useUpdate`
+
+Each violation prints `file:line` with the offending content. Wired into the existing `frontend` job in `.github/workflows/ci.yml` as the step **before** typecheck. Fails the PR if any violation appears.
+
+### Opt-out marker for legitimate fallbacks
+
+Add `// allow-mock: <reason>` on the line immediately above a deliberate mock to bypass the guard. The reason lands in `git blame`. 19 existing fallbacks were annotated this way in `9d80901` — detail-page in-flight loaders, decorative dialog enrichment, the per-treaty allocation drilldown.
+
+### Files Modified
+
+- `cia-frontend/scripts/check-api-wiring.sh` (new, executable)
+- `.github/workflows/ci.yml` — added `API-wiring guard` step to the frontend job
+- `CLAUDE.md` → Development Standards → new `Frontend API wiring rules` subsection
+- `cia-frontend/apps/back-office/src/modules/customers/pages/individual/IndividualOnboardingSheet.tsx`
+- `cia-frontend/apps/back-office/src/modules/customers/pages/corporate/CorporateOnboardingSheet.tsx`
+- `cia-frontend/apps/back-office/src/modules/customers/pages/detail/EditCustomerSheet.tsx`
+- `cia-frontend/apps/back-office/src/modules/claims/pages/detail/AddCommentDialog.tsx`
+- `cia-frontend/apps/back-office/src/modules/claims/pages/detail/UploadDocumentDialog.tsx`
+- `cia-frontend/apps/back-office/src/modules/claims/pages/detail/ClaimDetailPage.tsx` — pass `claimId` to both dialogs
+- 13 fallback files annotated with `// allow-mock:` markers (audit + reinsurance tabs, detail pages, finance dialogs)
+
+### Git Commits
+
+- `8054d1e` — wire 3 broker pickers to `/api/v1/setup/brokers`
+- `4a12d68` — wire AddCommentDialog + UploadDocumentDialog to API
+- `9d80901` — annotate 19 legitimate fallback mocks with `// allow-mock:`
+- `0159eb7` — CI guard script + CLAUDE.md Frontend API wiring rules
+
+### Verification
+
+- Guard runs clean: `✓ No API-wiring violations.`
+- `pnpm --filter @cia/back-office typecheck` clean
+- All commits pushed to `main`
+
+### Open Items
+
+- Could add an ESLint custom rule for IDE-time feedback in addition to CI. Lower priority since CI catches the same patterns at PR review.
+
+---
+
 ## 2026-05-02 — Session 49: Code review fixes — critical/high/medium + NDPR PII encryption
 
 ### Context
