@@ -2,9 +2,14 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Badge, Button, Card, CardContent, CardHeader, CardTitle,
-  EmptyState, PageHeader, Tabs, TabsContent, TabsList, TabsTrigger,
+  EmptyState, PageHeader, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@cia/ui';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@cia/api-client';
 import EditCustomerSheet from './EditCustomerSheet';
+
+interface PolicyHistoryItem { id: string; policyNumber: string; product: string; status: string; premium: number; startDate: string; endDate: string; }
+interface ClaimHistoryItem  { id: string; claimNumber: string; policyNumber: string; status: string; amount: number; date: string; }
 
 type KycStatus    = 'VERIFIED' | 'PENDING' | 'FAILED' | 'RESUBMIT';
 type CustomerStatus = 'ACTIVE' | 'INACTIVE' | 'BLACKLISTED';
@@ -120,7 +125,47 @@ export default function CustomerDetailPage() {
   const navigate    = useNavigate();
   const { id }      = useParams<{ id: string }>();
   const [editOpen, setEditOpen] = useState(false);
-  const c           = MOCK_CUSTOMERS.find(x => x.id === id);
+
+  const customerQuery = useQuery<MockCustomer>({
+    queryKey: ['customers', id],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: MockCustomer }>(`/api/v1/customers/${id}`);
+      return res.data.data;
+    },
+    enabled: !!id,
+  });
+
+  const policiesQuery = useQuery<PolicyHistoryItem[]>({
+    queryKey: ['customers', id, 'policies'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: PolicyHistoryItem[] }>(`/api/v1/customers/${id}/policies`);
+      return res.data.data;
+    },
+    enabled: !!id,
+  });
+
+  const claimsQuery = useQuery<ClaimHistoryItem[]>({
+    queryKey: ['customers', id, 'claims'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ClaimHistoryItem[] }>(`/api/v1/customers/${id}/claims`);
+      return res.data.data;
+    },
+    enabled: !!id,
+  });
+
+  // Fall back to local mock while loading or for unknown ids (so the page
+  // doesn't crash mid-prototype while the backend is wired up).
+  const c = customerQuery.data ?? MOCK_CUSTOMERS.find(x => x.id === id);
+
+  if (customerQuery.isLoading && !customerQuery.data) {
+    return (
+      <div className="p-6 space-y-4 max-w-4xl">
+        <Skeleton className="h-9 w-72" />
+        <Skeleton className="h-32 w-full rounded-lg" />
+        <Skeleton className="h-64 w-full rounded-lg" />
+      </div>
+    );
+  }
 
   if (!c) {
     return (
@@ -134,8 +179,8 @@ export default function CustomerDetailPage() {
     );
   }
 
-  const policies = mockPoliciesByCustomer[c.id] ?? [];
-  const claims   = mockClaimsByCustomer[c.id]   ?? [];
+  const policies = policiesQuery.data ?? mockPoliciesByCustomer[c.id] ?? [];
+  const claims   = claimsQuery.data   ?? mockClaimsByCustomer[c.id]   ?? [];
 
   return (
     <>

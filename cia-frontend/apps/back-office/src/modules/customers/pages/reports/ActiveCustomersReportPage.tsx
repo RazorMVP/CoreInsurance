@@ -1,16 +1,23 @@
-import { Card, CardContent, CardHeader, CardTitle, PageHeader, StatCard } from '@cia/ui';
+import { Card, CardContent, CardHeader, CardTitle, PageHeader, Skeleton, StatCard } from '@cia/ui';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@cia/api-client';
 
-const mockData = [
-  { broker: 'Direct',             individual: 142, corporate: 38, total: 180 },
-  { broker: 'Leadway Brokers',    individual: 67,  corporate: 22, total: 89  },
-  { broker: 'Stanbic Brokers',    individual: 34,  corporate: 11, total: 45  },
-  { broker: 'Other Brokers',      individual: 19,  corporate: 8,  total: 27  },
-];
+interface ActiveCustomersRow { broker: string; individual: number; corporate: number; total: number; }
 
 export default function ActiveCustomersReportPage() {
-  const totalCustomers = mockData.reduce((s, r) => s + r.total, 0);
-  const totalIndividual = mockData.reduce((s, r) => s + r.individual, 0);
-  const totalCorporate  = mockData.reduce((s, r) => s + r.corporate,  0);
+  const reportQuery = useQuery<ActiveCustomersRow[]>({
+    queryKey: ['customers', 'reports', 'active-by-channel'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ActiveCustomersRow[] }>(
+        '/api/v1/customers/reports/active-by-channel',
+      );
+      return res.data.data;
+    },
+  });
+  const data = reportQuery.data ?? [];
+  const totalCustomers = data.reduce((s, r) => s + r.total, 0);
+  const totalIndividual = data.reduce((s, r) => s + r.individual, 0);
+  const totalCorporate  = data.reduce((s, r) => s + r.corporate,  0);
   return (
     <div className="p-6 space-y-5 max-w-4xl">
       <PageHeader title="Active Customers Report" description="Active customer count by onboarding channel and type." />
@@ -22,6 +29,11 @@ export default function ActiveCustomersReportPage() {
       <Card>
         <CardHeader><CardTitle>By Onboarding Channel</CardTitle></CardHeader>
         <CardContent className="p-0">
+        {reportQuery.isLoading ? (
+          <div className="p-4 space-y-2">
+            <Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" />
+          </div>
+        ) : (
           <table className="w-full text-sm">
             <thead><tr className="border-b bg-muted/40">
               {['Channel','Individual','Corporate','Total','Share'].map(h=>(
@@ -29,8 +41,8 @@ export default function ActiveCustomersReportPage() {
               ))}
             </tr></thead>
             <tbody>
-              {mockData.map((r,i)=>(
-                <tr key={r.broker} className={i<mockData.length-1?'border-b':''}>
+              {data.map((r,i)=>(
+                <tr key={r.broker} className={i<data.length-1?'border-b':''}>
                   <td className="px-4 py-3 font-medium">{r.broker}</td>
                   <td className="px-4 py-3">{r.individual}</td>
                   <td className="px-4 py-3">{r.corporate}</td>
@@ -40,6 +52,7 @@ export default function ActiveCustomersReportPage() {
               ))}
             </tbody>
           </table>
+        )}
         </CardContent>
       </Card>
     </div>
