@@ -2,9 +2,11 @@ import { useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-  PageSection, Separator,
+  PageSection, Separator, Skeleton,
 } from '@cia/ui';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@cia/api-client';
 import AlertConfigDialog from './AlertConfigDialog';
 
 type AlertType     = 'FAILED_LOGINS' | 'BULK_DELETE' | 'OFF_HOURS_ACTIVITY' | 'LARGE_FINANCIAL_APPROVAL';
@@ -75,10 +77,18 @@ const STATUS_VARIANT: Record<AlertStatus, 'active'|'draft'> = {
 };
 
 export default function AlertsTab() {
+  const alertsQuery = useQuery<AuditAlert[]>({
+    queryKey: ['audit', 'alerts'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: AuditAlert[] }>('/api/v1/audit/alerts');
+      return res.data.data;
+    },
+  });
+  const alerts = alertsQuery.data ?? mockAlerts;
   const [configOpen,         setConfigOpen]         = useState(false);
   const [acknowledgeTarget,  setAcknowledgeTarget]  = useState<AuditAlert | null>(null);
 
-  const openAlerts = mockAlerts.filter(a => a.status === 'OPEN').length;
+  const openAlerts = alerts.filter(a => a.status === 'OPEN').length;
 
   const columns: ColumnDef<AuditAlert>[] = [
     {
@@ -165,11 +175,15 @@ export default function AlertsTab() {
             </Button>
           }
         >
-          <DataTable
-            columns={columns}
-            data={mockAlerts}
-            toolbar={{ searchColumn: 'description', searchPlaceholder: 'Search alerts…' }}
-          />
+          {alertsQuery.isLoading ? (
+            <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+          ) : (
+            <DataTable
+              columns={columns}
+              data={alerts}
+              toolbar={{ searchColumn: 'description', searchPlaceholder: 'Search alerts…' }}
+            />
+          )}
         </PageSection>
 
         <Separator />

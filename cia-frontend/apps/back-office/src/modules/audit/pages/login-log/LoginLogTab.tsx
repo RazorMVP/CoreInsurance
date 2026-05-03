@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader,
-  Input, PageSection,
+  Input, PageSection, Skeleton,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@cia/api-client';
 
 type LoginEventType = 'LOGIN' | 'LOGOUT' | 'LOGIN_FAILED' | 'PASSWORD_RESET' | 'ACCOUNT_LOCKED';
 
@@ -67,18 +69,26 @@ function exportCSV(data: LoginLogEntry[]) {
 }
 
 export default function LoginLogTab() {
+  const loginQuery = useQuery<LoginLogEntry[]>({
+    queryKey: ['audit', 'login-logs'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: LoginLogEntry[] }>('/api/v1/audit/login-logs');
+      return res.data.data;
+    },
+  });
+  const loginLog = loginQuery.data ?? mockLoginLog;
   const [eventType, setEventType] = useState('ALL');
   const [user,      setUser]      = useState('');
   const [dateFrom,  setDateFrom]  = useState('');
   const [dateTo,    setDateTo]    = useState('');
 
-  const filtered = useMemo(() => mockLoginLog.filter(e => {
+  const filtered = useMemo(() => loginLog.filter(e => {
     if (eventType !== 'ALL' && e.eventType !== eventType) return false;
     if (user && !e.userName.toLowerCase().includes(user.toLowerCase()) && !e.email.toLowerCase().includes(user.toLowerCase())) return false;
     if (dateFrom && e.timestamp < dateFrom) return false;
     if (dateTo   && e.timestamp > dateTo + 'T23:59:59Z') return false;
     return true;
-  }), [eventType, user, dateFrom, dateTo]);
+  }), [loginLog, eventType, user, dateFrom, dateTo]);
 
   const columns: ColumnDef<LoginLogEntry>[] = [
     {
@@ -150,11 +160,15 @@ export default function LoginLogTab() {
         <Input className="h-8 text-xs" type="date" value={dateTo}   onChange={(e) => setDateTo(e.target.value)} />
       </div>
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        toolbar={{ searchColumn: 'userName', searchPlaceholder: 'Search by user…' }}
-      />
+      {loginQuery.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={filtered}
+          toolbar={{ searchColumn: 'userName', searchPlaceholder: 'Search by user…' }}
+        />
+      )}
     </PageSection>
   );
 }

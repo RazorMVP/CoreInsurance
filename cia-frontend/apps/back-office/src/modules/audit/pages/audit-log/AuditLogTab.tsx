@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader,
-  Input, PageSection,
+  Input, PageSection, Skeleton,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@cia/api-client';
 import AuditEventDetailSheet, { type AuditLogEntry } from './AuditEventDetailSheet';
 
 // Replace with useList('/api/v1/audit/logs')
@@ -49,6 +51,14 @@ function exportCSV(data: AuditLogEntry[]) {
 }
 
 export default function AuditLogTab() {
+  const auditQuery = useQuery<AuditLogEntry[]>({
+    queryKey: ['audit', 'logs'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: AuditLogEntry[] }>('/api/v1/audit/logs');
+      return res.data.data;
+    },
+  });
+  const auditLog = auditQuery.data ?? mockAuditLog;
   const [detail,     setDetail]     = useState<AuditLogEntry | null>(null);
   const [entityType, setEntityType] = useState('ALL');
   const [action,     setAction]     = useState('ALL');
@@ -57,7 +67,7 @@ export default function AuditLogTab() {
   const [dateFrom,   setDateFrom]   = useState('');
   const [dateTo,     setDateTo]     = useState('');
 
-  const filtered = useMemo(() => mockAuditLog.filter(e => {
+  const filtered = useMemo(() => auditLog.filter(e => {
     if (entityType !== 'ALL' && e.entityType !== entityType) return false;
     if (action     !== 'ALL' && e.action     !== action)     return false;
     if (user       && !e.userName.toLowerCase().includes(user.toLowerCase()))       return false;
@@ -65,7 +75,7 @@ export default function AuditLogTab() {
     if (dateFrom   && e.timestamp < dateFrom) return false;
     if (dateTo     && e.timestamp > dateTo + 'T23:59:59Z') return false;
     return true;
-  }), [entityType, action, user, entityRef, dateFrom, dateTo]);
+  }), [auditLog, entityType, action, user, entityRef, dateFrom, dateTo]);
 
   const columns: ColumnDef<AuditLogEntry>[] = [
     {
@@ -148,11 +158,15 @@ export default function AuditLogTab() {
           />
         </div>
 
-        <DataTable
-          columns={columns}
-          data={filtered}
-          toolbar={{ searchColumn: 'entityType', searchPlaceholder: 'Search…' }}
-        />
+        {auditQuery.isLoading ? (
+          <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+        ) : (
+          <DataTable
+            columns={columns}
+            data={filtered}
+            toolbar={{ searchColumn: 'entityType', searchPlaceholder: 'Search…' }}
+          />
+        )}
       </PageSection>
 
       <AuditEventDetailSheet
