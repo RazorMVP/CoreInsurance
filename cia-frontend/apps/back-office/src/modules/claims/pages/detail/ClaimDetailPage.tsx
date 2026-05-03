@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Badge, Button, Card, CardContent, CardHeader, CardTitle, PageHeader,
-  Separator, Tabs, TabsContent, TabsList, TabsTrigger,
+  Separator, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@cia/ui';
-import type { ClaimDto, ClaimReserveDto, ClaimExpenseDto } from '@cia/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type ClaimDto, type ClaimReserveDto, type ClaimExpenseDto } from '@cia/api-client';
 import SubmitClaimDialog    from './SubmitClaimDialog';
 import CancelClaimDialog    from './CancelClaimDialog';
 import AddReserveDialog     from './AddReserveDialog';
@@ -58,12 +59,12 @@ const mockClaim: MockClaim = {
   dvType: undefined, dvAmount: undefined, dvExecuted: false,
 };
 
-const mockReserves: ClaimReserveDto[] = [
+const fallbackReserves: ClaimReserveDto[] = [
   { id: 'r1', claimId: 'cl1', category: 'Own Damage — Vehicle Repairs', amount: 600_000, createdAt: '2026-03-12' },
   { id: 'r2', claimId: 'cl1', category: 'Survey Fees',                   amount: 50_000,  createdAt: '2026-03-12' },
 ];
 
-const mockExpenses: ClaimExpenseDto[] = [
+const fallbackExpenses: ClaimExpenseDto[] = [
   { id: 'e1', claimId: 'cl1', type: 'Survey / Assessment Fee', amount: 35_000, status: 'APPROVED', createdAt: '2026-03-14' },
 ];
 
@@ -90,7 +91,44 @@ const DV_LABELS: Record<DvType, string> = {
 
 export default function ClaimDetailPage() {
   const navigate = useNavigate();
-  const c = mockClaim;
+  const { id }   = useParams<{ id: string }>();
+
+  const claimQuery = useQuery<MockClaim>({
+    queryKey: ['claims', id],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: MockClaim }>(`/api/v1/claims/${id}`);
+      return res.data.data;
+    },
+    enabled: !!id,
+  });
+  const reservesQuery = useQuery<ClaimReserveDto[]>({
+    queryKey: ['claims', id, 'reserves'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ClaimReserveDto[] }>(`/api/v1/claims/${id}/reserves`);
+      return res.data.data;
+    },
+    enabled: !!id,
+  });
+  const expensesQuery = useQuery<ClaimExpenseDto[]>({
+    queryKey: ['claims', id, 'expenses'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ClaimExpenseDto[] }>(`/api/v1/claims/${id}/expenses`);
+      return res.data.data;
+    },
+    enabled: !!id,
+  });
+
+  const c = claimQuery.data ?? mockClaim;
+
+  if (claimQuery.isLoading && !claimQuery.data) {
+    return (
+      <div className="p-6 space-y-4 max-w-5xl">
+        <Skeleton className="h-9 w-72" />
+        <Skeleton className="h-32 w-full rounded-lg" />
+        <Skeleton className="h-64 w-full rounded-lg" />
+      </div>
+    );
+  }
 
   // DV state
   const [dvType,      setDvType]      = useState<DvType | ''>('');
@@ -114,8 +152,10 @@ export default function ClaimDetailPage() {
   const canEdit       = c.status === 'PROCESSING';   // reserve/expense/comment editable only while PROCESSING
   const canSubmit     = c.status === 'PROCESSING';
   const canApprove    = c.status === 'PENDING_APPROVAL';
-  const totalReserve  = mockReserves.reduce((s, r) => s + r.amount, 0);
-  const totalExpenses = mockExpenses.reduce((s, e) => s + e.amount, 0);
+  const reserves = reservesQuery.data ?? fallbackReserves;
+  const expenses = expensesQuery.data ?? fallbackExpenses;
+  const totalReserve  = reserves.reduce((s, r) => s + r.amount, 0);
+  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
 
   return (
     <div className="p-6 space-y-5 max-w-5xl">
@@ -233,8 +273,8 @@ export default function ClaimDetailPage() {
                   ))}
                 </tr></thead>
                 <tbody>
-                  {mockReserves.map((r, i) => (
-                    <tr key={r.id} className={i < mockReserves.length - 1 ? 'border-b' : ''}>
+                  {reserves.map((r, i) => (
+                    <tr key={r.id} className={i < reserves.length - 1 ? 'border-b' : ''}>
                       <td className="px-4 py-3">{r.category}</td>
                       <td className="px-4 py-3 font-medium tabular-nums">₦{r.amount.toLocaleString()}</td>
                       <td className="px-4 py-3 text-muted-foreground">{r.createdAt}</td>
@@ -266,8 +306,8 @@ export default function ClaimDetailPage() {
                   ))}
                 </tr></thead>
                 <tbody>
-                  {mockExpenses.map((e, i) => (
-                    <tr key={e.id} className={i < mockExpenses.length - 1 ? 'border-b' : ''}>
+                  {expenses.map((e, i) => (
+                    <tr key={e.id} className={i < expenses.length - 1 ? 'border-b' : ''}>
                       <td className="px-4 py-3">{e.type}</td>
                       <td className="px-4 py-3 font-medium tabular-nums">₦{e.amount.toLocaleString()}</td>
                       <td className="px-4 py-3">
