@@ -6,8 +6,9 @@ import {
   Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle,
   Separator,
 } from '@cia/ui';
-import type { DebitNoteDto } from '@cia/api-client';
+import { apiClient, type DebitNoteDto } from '@cia/api-client';
 import { useForm } from 'react-hook-form';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -34,10 +35,12 @@ interface Props {
 }
 
 export default function PostReceiptSheet({ open, onOpenChange, debitNoteIds, bulk, debitNotes, onSuccess }: Props) {
+  const queryClient = useQueryClient();
   const selectedNotes = debitNotes.filter(d => debitNoteIds.includes(d.id));
   const totalAmount   = selectedNotes.reduce((s, d) => s + d.amount, 0);
 
   const form = useForm<FormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(schema) as any,
     defaultValues: { paymentDate: '', paymentMethod: '', reference: '', bankName: '', amount: totalAmount, notes: '' },
   });
@@ -47,10 +50,25 @@ export default function PostReceiptSheet({ open, onOpenChange, debitNoteIds, bul
     form.setValue('amount', totalAmount);
   }
 
-  async function onSubmit(values: FormValues) {
-    console.log('Post receipt(s)', { debitNoteIds, ...values, bulk });
-    // TODO: bulk ? POST /api/v1/finance/receipts/bulk : POST /api/v1/finance/receipts
-    onSuccess();
+  const post = useMutation({
+    mutationFn: async (values: FormValues) => {
+      const url = bulk ? '/api/v1/finance/receipts/bulk' : '/api/v1/finance/receipts';
+      const body = bulk
+        ? { debitNoteIds, ...values }
+        : { debitNoteId: debitNoteIds[0], ...values };
+      const res = await apiClient.post<{ data: { id: string } }>(url, body);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'receivables'] });
+      queryClient.invalidateQueries({ queryKey: ['finance', 'receipts'] });
+      onSuccess();
+      form.reset();
+    },
+  });
+
+  function onSubmit(values: FormValues) {
+    post.mutate(values);
   }
 
   return (

@@ -5,8 +5,9 @@ import {
   Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle,
 } from '@cia/ui';
 import { useForm } from 'react-hook-form';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import type { CreditNoteDto } from '@cia/api-client';
+import { apiClient, type CreditNoteDto } from '@cia/api-client';
 
 const schema = z.object({
   amount:        z.coerce.number().positive('Amount must be greater than zero'),
@@ -32,16 +33,32 @@ interface Props {
 }
 
 export default function ProcessPaymentSheet({ open, onOpenChange, creditNote, onSuccess }: Props) {
+  const queryClient = useQueryClient();
   const form = useForm<FormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(schema) as any,
     defaultValues: { amount: creditNote?.amount ?? 0, paymentMethod: 'BANK_TRANSFER', bankName: '', reference: '', notes: '' },
     values:        { amount: creditNote?.amount ?? 0, paymentMethod: 'BANK_TRANSFER', bankName: '', reference: '', notes: '' },
   });
 
-  async function onSubmit(values: FormValues) {
-    console.log('Process payment', values);
-    // TODO: POST /api/v1/finance/payments
-    onSuccess();
+  const process = useMutation({
+    mutationFn: async (values: FormValues) => {
+      const res = await apiClient.post<{ data: { id: string } }>(
+        '/api/v1/finance/payments',
+        { creditNoteId: creditNote?.id, ...values },
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'payables'] });
+      queryClient.invalidateQueries({ queryKey: ['finance', 'payments'] });
+      onSuccess();
+      form.reset();
+    },
+  });
+
+  function onSubmit(values: FormValues) {
+    process.mutate(values);
   }
 
   if (!creditNote) return null;
