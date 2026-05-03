@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@cia/api-client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient, type BrokerDto } from '@cia/api-client';
 import {
   Badge, Button, Form, FormControl, FormDescription, FormField, FormItem,
   FormLabel, FormMessage, FormRow, Input,
@@ -34,11 +34,9 @@ const EXPIRY_TYPES = ['DRIVERS_LICENSE', 'PASSPORT'];
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME   = ['image/jpeg', 'image/jpg', 'image/png'];
 
-const MOCK_BROKERS = [
-  { id: '__none__', name: 'Direct (no broker)' },
-  { id: 'b1',       name: 'Leadway Brokers Ltd' },
-  { id: 'b2',       name: 'Stanbic IBTC Brokers' },
-];
+// "No broker" sentinel — prepended to the live broker list as a synthetic
+// option so the form value can represent "Direct" without being undefined.
+const NO_BROKER_OPTION = { id: '__none__', name: 'Direct (no broker)' };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -145,6 +143,17 @@ interface Props {
 
 export default function EditCustomerSheet({ open, onOpenChange, customer, onSuccess }: Props) {
   const queryClient = useQueryClient();
+
+  const brokersQuery = useQuery<BrokerDto[]>({
+    queryKey: ['setup', 'brokers'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: BrokerDto[] }>('/api/v1/setup/brokers');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  // Prepend the "no broker" sentinel so the select can represent "Direct".
+  const brokerOptions = [NO_BROKER_OPTION, ...((brokersQuery.data ?? []).map(b => ({ id: b.id, name: b.name })))];
 
   // Customer-level ID document
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -362,7 +371,7 @@ export default function EditCustomerSheet({ open, onOpenChange, customer, onSucc
                 <FormLabel>Channel</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                  <SelectContent>{MOCK_BROKERS.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{brokerOptions.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
                 </Select>
                 <FormMessage />
               </FormItem>

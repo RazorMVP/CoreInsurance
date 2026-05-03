@@ -9,8 +9,8 @@ import {
 } from '@cia/ui';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@cia/api-client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient, type BrokerDto } from '@cia/api-client';
 
 const EXPIRY_TYPES = ['DRIVERS_LICENSE', 'PASSPORT'] as const;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -47,10 +47,6 @@ const ID_TYPES = [
   { value: 'PASSPORT',        label: 'International Passport' },
 ];
 
-const mockBrokers = [
-  { id: 'b1', name: 'Leadway Brokers Ltd' },
-  { id: 'b2', name: 'Stanbic IBTC Brokers' },
-];
 
 interface Props { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void; }
 
@@ -59,6 +55,16 @@ export default function IndividualOnboardingSheet({ open, onOpenChange, onSucces
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [idFile, setIdFile]       = useState<File | null>(null);
   const [fileError, setFileError] = useState<string>('');
+
+  const brokersQuery = useQuery<BrokerDto[]>({
+    queryKey: ['setup', 'brokers'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: BrokerDto[] }>('/api/v1/setup/brokers');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const brokers = brokersQuery.data ?? [];
 
   const form = useForm<FormValues>({
     resolver:      zodResolver(schema),
@@ -267,7 +273,7 @@ export default function IndividualOnboardingSheet({ open, onOpenChange, onSucces
                     <FormLabel>Broker</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Select broker" /></SelectTrigger></FormControl>
-                      <SelectContent>{mockBrokers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+                      <SelectContent>{brokers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
