@@ -35,11 +35,28 @@ Worked through the Session 48 code review findings. Started with 14 issues ident
 - **M2 + M6 — QuotePdfPreview refactored.** Added `typeName` (denormalized at construction time) and `validityDays` to `QuotePdfData`; new `computeQuoteSummary()` replaces three separate copies of the per-item gross/loading/discount math. Updated `QuoteDetailPage` and `QuotationListPage` to populate the new fields.
 - **H3 — `zodResolver(...) as any`** removed from 11 simple-schema forms. Kept on 18 forms whose schemas use Zod's `coerce`/`transform`/`default` (genuine input/output type divergence — Zod feature, not a defect). Those casts now sit behind `eslint-disable-next-line` comments to mark the intentional escape.
 
-### H2/M1 form-to-API wiring (in progress)
+### H2/M1 form-to-API wiring (complete)
 
-- **ProductSheet** — replaced `INITIAL_CLASSES` with a `useQuery` against `GET /api/v1/setup/classes-of-business`; replaced `console.log` onSubmit with `useMutation` (POST or PUT depending on edit mode); inline class-creation dialog now POSTs to `/api/v1/setup/classes-of-business` and auto-selects the returned ID. Established as the template for the remaining 21 forms.
-- **ClassSheet** — wired with `useMutation` for POST/PUT to `/api/v1/setup/classes-of-business`; invalidates the setup/classes-of-business query on success so ProductSheet's class picker refreshes.
-- **Remaining 20 forms** — UserSheet, AccessGroupSheet, ApprovalGroupSheet, BrokerSheet, CompanySettings, plus all create flows in Quotation, Policy, Endorsement, Claims, Finance, Reinsurance, Audit. Continuing in subsequent commits — option 1 chosen (quality pace, commit per form/module).
+All 22 H2 forms wired to live API endpoints, replacing `console.log` stubs with `useMutation` calls. Mock arrays feeding form selects replaced with `useQuery` hooks against the corresponding `/api/v1/...` endpoints. Each form's parent invalidates the appropriate React Query key on success.
+
+**Setup (7 forms):** ProductSheet, ClassSheet, UserSheet, AccessGroupSheet, ApprovalGroupSheet, BrokerSheet, CompanySettingsPage.
+
+**Quotation (2 forms):** SingleRiskQuoteSheet, MultiRiskQuoteSheet — POST `/api/v1/quotes` with denormalized `typeName` on every AdjustmentEntry; live customers/products/loading-types/discount-types from API.
+
+**Policy (1 form, 2 tabs):** CreatePolicySheet — FromQuoteForm POSTs to `/api/v1/policies/bind-from-quote/{quoteId}`; DirectForm POSTs to `/api/v1/policies`. Live customers/products/approved-quotes feeds.
+
+**Endorsement (1 form):** CreateEndorsementSheet — POST `/api/v1/endorsements`; ACTIVE policies query.
+
+**Claims (3 forms):** RegisterClaimSheet (POST `/api/v1/claims`), AddReserveDialog (POST `/api/v1/claims/{id}/reserves`), AddExpenseDialog (POST `/api/v1/claims/{id}/expenses`). The two dialogs gained `claimId` props alongside the existing `claimNumber` (display only).
+
+**Finance (2 forms):** PostReceiptSheet (routes to `/api/v1/finance/receipts/bulk` when in bulk mode, otherwise `/api/v1/finance/receipts`); ProcessPaymentSheet (POST `/api/v1/finance/payments`).
+
+**Reinsurance (5 forms):** TreatySheet (POST/PUT `/api/v1/reinsurance/treaties`), BatchReallocationSheet (POST `/api/v1/reinsurance/allocations/batch-reallocate`), CreateFACOfferSheet (POST `/api/v1/reinsurance/fac/outward`, plus 3 separate query hooks for excess policies / reinsurers / FAC brokers), AddInwardFACSheet (POST `/api/v1/reinsurance/fac/inward`), InwardFACActionSheet (POST `/api/v1/reinsurance/fac/inward/{id}/{renew|extend}`).
+
+**Audit (1 form):** AlertConfigDialog — GET `/api/v1/audit/alert-config` on open + PUT to save. Form resets onto returned config via useEffect.
+
+Remaining out of scope this session (M1 list-page mock data still in place):
+- List/detail pages still rendering hardcoded mock arrays — not broken, just unwired (e.g., QuotationListPage, PolicyListPage, ClaimsListPage). Wiring those is a follow-up — they show data, just not real data.
 
 ### Files Modified
 
