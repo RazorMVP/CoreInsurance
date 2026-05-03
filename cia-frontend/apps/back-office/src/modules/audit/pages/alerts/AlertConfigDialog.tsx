@@ -4,7 +4,10 @@ import {
   Input, Separator, Switch,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@cia/ui';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '@cia/api-client';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -36,17 +39,42 @@ interface Props {
 }
 
 export default function AlertConfigDialog({ open, onOpenChange }: Props) {
+  const queryClient = useQueryClient();
+
+  const configQuery = useQuery<FormValues>({
+    queryKey: ['audit', 'alert-config'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: FormValues }>('/api/v1/audit/alert-config');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+
   const form = useForm<FormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(schema) as any,
     defaultValues: DEFAULTS,
   });
 
+  useEffect(() => {
+    if (configQuery.data) form.reset(configQuery.data);
+  }, [configQuery.data, form]);
+
   const emailEnabled = form.watch('alertEmailEnabled');
 
-  async function onSubmit(values: FormValues) {
-    console.log('Alert config', values);
-    // TODO: PUT /api/v1/audit/alert-config
-    onOpenChange(false);
+  const save = useMutation({
+    mutationFn: async (values: FormValues) => {
+      const res = await apiClient.put<{ data: FormValues }>('/api/v1/audit/alert-config', values);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['audit', 'alert-config'] });
+      onOpenChange(false);
+    },
+  });
+
+  function onSubmit(values: FormValues) {
+    save.mutate(values);
   }
 
   return (
