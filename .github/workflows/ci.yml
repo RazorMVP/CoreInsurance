@@ -70,6 +70,9 @@ jobs:
         working-directory: cia-frontend
         run: pnpm install --frozen-lockfile
 
+      - name: API-wiring guard (no mock arrays / console.log / stale TODOs)
+        run: bash cia-frontend/scripts/check-api-wiring.sh
+
       - name: TypeScript check — back-office
         working-directory: cia-frontend
         run: pnpm --filter @cia/back-office typecheck

@@ -878,6 +878,63 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 - All strings externalised for i18n readiness (even if English-only initially).
 - No hardcoded tenant IDs, currency codes, or country codes anywhere.
 
+### Frontend API wiring rules
+
+The back-office app reads from `/api/v1/...` everywhere and writes via `useMutation` on every form submit. This invariant is **enforced in CI** by `cia-frontend/scripts/check-api-wiring.sh`, which runs on every PR.
+
+**Hard rules (CI fails on violation):**
+
+1. **No `console.log(` in `cia-frontend/apps/back-office/src/modules/**`.** Remove debug logs before committing. Use `console.error`/`console.warn` for genuine error paths or wire to a real logger.
+2. **No top-level `const mockX = [...]` or `const MOCK_X = [...]` in module files** unless explicitly opted out. The standard is `useQuery` against the matching `/api/v1/...` endpoint.
+3. **No `// TODO: useMutation` / `// TODO: useQuery` / `// TODO: useCreate` / `// TODO: useUpdate` left behind.** If you can write the TODO, you can write the hook.
+
+**Opting out a legitimate fallback:** When a mock genuinely needs to remain (e.g., a detail-page fallback while `useQuery` is in flight, or decorative enrichment that has no list endpoint), add this comment on the line immediately above the declaration:
+
+```ts
+// allow-mock: <one-line reason>
+const mockFallback: PolicyDto = { /* ... */ };
+```
+
+The reason ends up in `git blame` so future readers know why the fallback survives. Examples currently in the codebase:
+
+- `// allow-mock: fallback while useQuery is in flight or for unknown ids` — on detail pages
+- `// allow-mock: decorative product/class enrichment for the per-row dialog` — on finance detail dialogs
+- `// allow-mock: per-treaty allocation drilldown — no list endpoint exposes this nested view` — on TreatiesTab
+
+**Standard wiring patterns:**
+
+```ts
+// List page
+const customersQuery = useQuery<CustomerDto[]>({
+  queryKey: ['customers'],
+  queryFn: async () => {
+    const res = await apiClient.get<{ data: CustomerDto[] }>('/api/v1/customers');
+    return res.data.data;
+  },
+});
+const customers = customersQuery.data ?? [];
+// ... show <Skeleton /> while customersQuery.isLoading
+
+// Form submit
+const create = useMutation({
+  mutationFn: async (values: FormValues) => {
+    const res = await apiClient.post<{ data: { id: string } }>('/api/v1/customers/individual', values);
+    return res.data.data;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['customers'] });
+    onSuccess();
+    form.reset();
+  },
+});
+```
+
+**Run locally before pushing:**
+
+```bash
+bash cia-frontend/scripts/check-api-wiring.sh
+```
+
 ### API Design
 - RESTful JSON APIs.
 - All endpoints prefixed `/api/v1/`.
