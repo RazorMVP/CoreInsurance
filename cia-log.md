@@ -55,8 +55,24 @@ All 22 H2 forms wired to live API endpoints, replacing `console.log` stubs with 
 
 **Audit (1 form):** AlertConfigDialog — GET `/api/v1/audit/alert-config` on open + PUT to save. Form resets onto returned config via useEffect.
 
-Remaining out of scope this session (M1 list-page mock data still in place):
-- List/detail pages still rendering hardcoded mock arrays — not broken, just unwired (e.g., QuotationListPage, PolicyListPage, ClaimsListPage). Wiring those is a follow-up — they show data, just not real data.
+### M1 list-page wiring (complete)
+
+After H2 was completed, the user pushed back on deferring M1, so the same pass continued through every list/detail page that rendered mock arrays. ~30 pages wired across 10 commits, one per logical group:
+
+- **Quotation** — QuotationListPage, QuoteDetailPage
+- **Customers** — CustomersListPage, CustomerDetailPage (with /policies + /claims sub-queries), ActiveCustomersReportPage, LossRatioReportPage
+- **Setup** — ProductsPage, ClassesPage, UsersPage, AccessGroupsPage, ApprovalGroupsPage, OrganisationsPage (BrokersTab)
+- **Policy** — PolicyListPage, PolicyDetailPage
+- **Endorsement** — EndorsementsListPage, EndorsementDetailPage, DebitNoteAnalysisPage (by-period + by-type sub-queries)
+- **Claims** — ClaimsListPage, ClaimDetailPage (with /reserves + /expenses sub-queries)
+- **Finance** — ReceivablesTab (debit-notes + receipts), PayablesTab (credit-notes + payments)
+- **Reinsurance** — TreatiesTab, AllocationsTab, FACTab (outward + inward)
+- **Audit** — AuditLogTab, LoginLogTab, AlertsTab — useMemo filtering layer preserved, fetched data feeds in as the source array
+- **Reports** — ReportAccessSetupPage — access-group picker now reads live data
+
+Pattern across all wirings: `useQuery` against the matching `/api/v1/...` endpoint; `Skeleton` placeholders while in-flight; falls back to the existing local mock data while loading so the UI stays renderable mid-prototype. Detail pages additionally fall back to local mock when the request hasn't returned, so the page survives unknown ids.
+
+The decorative MOCK_POLICY_DETAIL / MOCK_SOURCE_DETAIL lookups inside the per-row finance detail dialogs intentionally remain — they enrich existing data with product names / source labels and aren't simple list endpoints.
 
 ### Files Modified
 
