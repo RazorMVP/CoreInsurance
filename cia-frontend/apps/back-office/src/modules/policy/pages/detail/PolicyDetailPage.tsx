@@ -1,9 +1,10 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Badge, Button, Card, CardContent, CardHeader, CardTitle, PageHeader,
-  Separator, Tabs, TabsContent, TabsList, TabsTrigger,
+  Separator, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@cia/ui';
-import type { PolicyDto } from '@cia/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type PolicyDto } from '@cia/api-client';
 
 type MockPolicy = Omit<PolicyDto, 'updatedAt'> & {
   updatedAt: string;
@@ -70,7 +71,30 @@ function NaicomStatus({ uid, label }: { uid?: string; label: string }) {
 
 export default function PolicyDetailPage() {
   const navigate  = useNavigate();
-  const p = mockPolicy;
+  const { id }    = useParams<{ id: string }>();
+
+  const policyQuery = useQuery<MockPolicy>({
+    queryKey: ['policies', id],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: MockPolicy }>(`/api/v1/policies/${id}`);
+      return res.data.data;
+    },
+    enabled: !!id,
+  });
+
+  // Fall back to local mock while loading or for unknown ids — keeps the
+  // page renderable mid-prototype while the backend wires up.
+  const p = policyQuery.data ?? mockPolicy;
+
+  if (policyQuery.isLoading && !policyQuery.data) {
+    return (
+      <div className="p-6 space-y-4 max-w-5xl">
+        <Skeleton className="h-9 w-72" />
+        <Skeleton className="h-32 w-full rounded-lg" />
+        <Skeleton className="h-64 w-full rounded-lg" />
+      </div>
+    );
+  }
 
   const canSubmit  = p.status === 'DRAFT';
   const canApprove = p.status === 'PENDING_APPROVAL';
