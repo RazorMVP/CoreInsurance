@@ -69,7 +69,7 @@ It is architected as a SaaS product: one codebase, multiple insurance company te
 │  ┌────────────────┐    HTTPS/REST    ┌────────────────────────────────┐  │
 │  │   React SPA    │ ──────────────▶  │      Spring Boot API           │  │
 │  │  (Vite / TS)   │                  │      (cia-api  :8080)          │  │
-│  │  Vercel / CDN  │ ◀──────────────  │      16 Maven modules          │  │
+│  │  Vercel / CDN  │ ◀──────────────  │      19 Maven modules          │  │
 │  └────────────────┘                  └───────────────┬────────────────┘  │
 │                                                      │                   │
 │         ┌────────────────────────────────────────────┼──────────────┐    │
