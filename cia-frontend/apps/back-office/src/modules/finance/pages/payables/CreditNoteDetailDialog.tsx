@@ -2,27 +2,22 @@ import {
   Badge, Button, Separator,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@cia/ui';
-import type { CreditNoteDto } from '@cia/api-client';
+import type { CreditNoteDto, FinanceEntityType } from '@cia/api-client';
 
-const SOURCE_LABELS: Record<CreditNoteDto['sourceType'], string> = {
-  CLAIM:       'Claim DV',
-  ENDORSEMENT: 'Endorsement',
-  COMMISSION:  'Commission',
-  REINSURANCE: 'RI FAC',
+const ENTITY_LABELS: Record<FinanceEntityType, string> = {
+  POLICY:        'Policy',
+  ENDORSEMENT:   'Endorsement',
+  CLAIM:         'Claim DV',
+  CLAIM_EXPENSE: 'Claim Expense',
+  COMMISSION:    'Commission',
+  REINSURANCE:   'RI FAC',
 };
 
-const CN_STATUS_VARIANT: Record<CreditNoteDto['status'], 'pending' | 'active'> = {
+const CN_STATUS_VARIANT: Record<CreditNoteDto['status'], 'pending' | 'active' | 'draft' | 'rejected'> = {
   OUTSTANDING: 'pending',
-  PAID:        'active',
-};
-
-// Mock source details — replace with individual source API calls per type
-// allow-mock: decorative source enrichment for the per-row dialog
-const MOCK_SOURCE_DETAIL: Record<string, { ref: string; description: string; policyRef?: string; beneficiary?: string }> = {
-  cl1:  { ref: 'CLM-2026-00001', description: 'Motor accident — third party bodily injury',  policyRef: 'POL-2026-00001', beneficiary: 'Chioma Okafor' },
-  end1: { ref: 'END-2026-00001', description: 'Reduction in sum insured endorsement',         policyRef: 'POL-2026-00002', beneficiary: 'Alaba Trading Co.' },
-  pol1: { ref: 'POL-2026-00001', description: 'Broker commission — Motor policy',             policyRef: 'POL-2026-00001', beneficiary: 'Chioma Okafor' },
-  ri1:  { ref: 'FAC-OUT-2026-001', description: 'Net FAC premium — Munich Re motor cover',   beneficiary: 'Munich Re' },
+  PARTIAL:     'draft',
+  SETTLED:     'active',
+  CANCELLED:   'rejected',
 };
 
 interface Props {
@@ -44,15 +39,14 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 export default function CreditNoteDetailDialog({ open, onOpenChange, creditNote, onProcessPayment }: Props) {
   if (!creditNote) return null;
 
-  const source    = MOCK_SOURCE_DETAIL[creditNote.sourceId];
-  const canProcess = creditNote.status === 'OUTSTANDING';
+  const canProcess = creditNote.status === 'OUTSTANDING' || creditNote.status === 'PARTIAL';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <DialogTitle>{creditNote.number}</DialogTitle>
+            <DialogTitle>{creditNote.creditNoteNumber}</DialogTitle>
             <Badge variant={CN_STATUS_VARIANT[creditNote.status]} className="text-[10px]">
               {creditNote.status.toLowerCase()}
             </Badge>
@@ -66,19 +60,15 @@ export default function CreditNoteDetailDialog({ open, onOpenChange, creditNote,
           {/* Source section */}
           <div className="bg-muted/40 px-4 py-2 flex items-center gap-2">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Source</p>
-            <Badge variant="outline" className="text-[10px]">{SOURCE_LABELS[creditNote.sourceType]}</Badge>
+            <Badge variant="outline" className="text-[10px]">{ENTITY_LABELS[creditNote.entityType]}</Badge>
           </div>
           <div className="px-4 pb-2">
-            {source && (
-              <>
-                <DetailRow label="Reference"    value={source.ref} />
-                <DetailRow label="Description"  value={source.description} />
-                {source.policyRef  && <DetailRow label="Policy"      value={source.policyRef} />}
-                {source.beneficiary && <DetailRow label="Beneficiary" value={source.beneficiary} />}
-              </>
+            <DetailRow label="Reference"   value={creditNote.entityReference} />
+            {creditNote.description && (
+              <DetailRow label="Description" value={creditNote.description} />
             )}
-            {!source && (
-              <DetailRow label="Source ID" value={creditNote.sourceId} />
+            {creditNote.beneficiaryName && (
+              <DetailRow label="Beneficiary" value={creditNote.beneficiaryName} />
             )}
           </div>
 
@@ -89,12 +79,15 @@ export default function CreditNoteDetailDialog({ open, onOpenChange, creditNote,
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Credit Note</p>
           </div>
           <div className="px-4 pb-2">
-            <DetailRow label="Credit Note"  value={creditNote.number} />
+            <DetailRow label="Credit Note"  value={creditNote.creditNoteNumber} />
+            <DetailRow label="Due Date"     value={creditNote.dueDate} />
             <DetailRow label="Date Raised"  value={creditNote.createdAt} />
+            <DetailRow label="Total"        value={`₦${creditNote.totalAmount.toLocaleString()}`} />
+            <DetailRow label="Paid"         value={`₦${creditNote.paidAmount.toLocaleString()}`} />
           </div>
           <div className="bg-muted/40 px-4 py-3 flex items-center justify-between">
-            <p className="text-sm font-semibold">Amount Payable</p>
-            <p className="text-base font-semibold text-primary">₦{creditNote.amount.toLocaleString()}</p>
+            <p className="text-sm font-semibold">Outstanding</p>
+            <p className="text-base font-semibold text-primary">₦{creditNote.outstandingAmount.toLocaleString()}</p>
           </div>
         </div>
 

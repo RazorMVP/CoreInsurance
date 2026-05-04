@@ -7,7 +7,7 @@ import {
 import { useForm } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import { apiClient, type CreditNoteDto } from '@cia/api-client';
+import { apiClient, type CreditNoteDto, type FinanceEntityType } from '@cia/api-client';
 import { applyApiErrors } from '@/lib/form-errors';
 
 const schema = z.object({
@@ -19,11 +19,13 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
-const SOURCE_LABELS: Record<CreditNoteDto['sourceType'], string> = {
-  CLAIM:       'Claim DV',
-  ENDORSEMENT: 'Endorsement',
-  COMMISSION:  'Commission',
-  REINSURANCE: 'RI FAC',
+const ENTITY_LABELS: Record<FinanceEntityType, string> = {
+  POLICY:        'Policy',
+  ENDORSEMENT:   'Endorsement',
+  CLAIM:         'Claim DV',
+  CLAIM_EXPENSE: 'Claim Expense',
+  COMMISSION:    'Commission',
+  REINSURANCE:   'RI FAC',
 };
 
 interface Props {
@@ -38,8 +40,8 @@ export default function ProcessPaymentSheet({ open, onOpenChange, creditNote, on
   const form = useForm<FormValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(schema) as any,
-    defaultValues: { amount: creditNote?.amount ?? 0, paymentMethod: 'BANK_TRANSFER', bankName: '', reference: '', notes: '' },
-    values:        { amount: creditNote?.amount ?? 0, paymentMethod: 'BANK_TRANSFER', bankName: '', reference: '', notes: '' },
+    defaultValues: { amount: creditNote?.outstandingAmount ?? 0, paymentMethod: 'BANK_TRANSFER', bankName: '', reference: '', notes: '' },
+    values:        { amount: creditNote?.outstandingAmount ?? 0, paymentMethod: 'BANK_TRANSFER', bankName: '', reference: '', notes: '' },
   });
 
   const process = useMutation({
@@ -72,8 +74,8 @@ export default function ProcessPaymentSheet({ open, onOpenChange, creditNote, on
           <SheetTitle>Process Payment</SheetTitle>
           <SheetDescription>
             Record the payment details for{' '}
-            <span className="font-medium text-foreground">{creditNote.number}</span>
-            {' '}({SOURCE_LABELS[creditNote.sourceType]}).
+            <span className="font-medium text-foreground">{creditNote.creditNoteNumber}</span>
+            {' '}({ENTITY_LABELS[creditNote.entityType]}).
           </SheetDescription>
         </SheetHeader>
 
@@ -81,15 +83,15 @@ export default function ProcessPaymentSheet({ open, onOpenChange, creditNote, on
         <div className="mt-4 rounded-lg bg-muted/40 p-3 space-y-1 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Credit Note</span>
-            <span className="font-mono text-xs text-primary">{creditNote.number}</span>
+            <span className="font-mono text-xs text-primary">{creditNote.creditNoteNumber}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Source</span>
-            <span className="font-medium">{SOURCE_LABELS[creditNote.sourceType]}</span>
+            <span className="font-medium">{ENTITY_LABELS[creditNote.entityType]}</span>
           </div>
           <div className="flex justify-between font-semibold">
-            <span className="text-muted-foreground">Amount</span>
-            <span className="text-primary">₦{creditNote.amount.toLocaleString()}</span>
+            <span className="text-muted-foreground">Amount Outstanding</span>
+            <span className="text-primary">₦{creditNote.outstandingAmount.toLocaleString()}</span>
           </div>
         </div>
 

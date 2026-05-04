@@ -39,7 +39,7 @@ interface Props {
 export default function PostReceiptSheet({ open, onOpenChange, debitNoteIds, bulk, debitNotes, onSuccess }: Props) {
   const queryClient = useQueryClient();
   const selectedNotes = debitNotes.filter(d => debitNoteIds.includes(d.id));
-  const totalAmount   = selectedNotes.reduce((s, d) => s + d.amount, 0);
+  const totalAmount   = selectedNotes.reduce((s, d) => s + d.outstandingAmount, 0);
 
   const form = useForm<FormValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -86,7 +86,7 @@ export default function PostReceiptSheet({ open, onOpenChange, debitNoteIds, bul
           <SheetDescription>
             {bulk
               ? `Record payment against ${selectedNotes.length} outstanding debit note${selectedNotes.length > 1 ? 's' : ''}.`
-              : `Record payment for ${selectedNotes[0]?.number ?? 'debit note'}.`
+              : `Record payment for ${selectedNotes[0]?.debitNoteNumber ?? 'debit note'}.`
             }
           </SheetDescription>
         </SheetHeader>
@@ -99,10 +99,10 @@ export default function PostReceiptSheet({ open, onOpenChange, debitNoteIds, bul
           {selectedNotes.map((dn) => (
             <div key={dn.id} className="flex items-center justify-between text-sm">
               <div>
-                <span className="font-mono text-xs text-primary">{dn.number}</span>
+                <span className="font-mono text-xs text-primary">{dn.debitNoteNumber}</span>
                 <span className="ml-2 text-muted-foreground">{dn.customerName}</span>
               </div>
-              <span className="font-medium tabular-nums">₦{dn.amount.toLocaleString()}</span>
+              <span className="font-medium tabular-nums">₦{dn.outstandingAmount.toLocaleString()}</span>
             </div>
           ))}
           {bulk && selectedNotes.length > 1 && (

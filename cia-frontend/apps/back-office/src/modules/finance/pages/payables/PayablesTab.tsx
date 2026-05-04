@@ -5,21 +5,25 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type CreditNoteDto, type PaymentDto } from '@cia/api-client';
+import { apiClient, type CreditNoteDto, type FinanceEntityType, type PaymentDto } from '@cia/api-client';
 import CreditNoteDetailDialog   from './CreditNoteDetailDialog';
 import ProcessPaymentSheet      from './ProcessPaymentSheet';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
 
-const sourceLabels: Record<CreditNoteDto['sourceType'], string> = {
-  CLAIM:       'Claim DV',
-  ENDORSEMENT: 'Endorsement',
-  COMMISSION:  'Commission',
-  REINSURANCE: 'RI FAC',
+const ENTITY_LABELS: Record<FinanceEntityType, string> = {
+  POLICY:        'Policy',
+  ENDORSEMENT:   'Endorsement',
+  CLAIM:         'Claim DV',
+  CLAIM_EXPENSE: 'Claim Expense',
+  COMMISSION:    'Commission',
+  REINSURANCE:   'RI FAC',
 };
 
-const cnStatusVariant: Record<CreditNoteDto['status'], 'pending' | 'active' | 'draft'> = {
+const cnStatusVariant: Record<CreditNoteDto['status'], 'pending' | 'active' | 'draft' | 'rejected'> = {
   OUTSTANDING: 'pending',
-  PAID:        'active',
+  PARTIAL:     'draft',
+  SETTLED:     'active',
+  CANCELLED:   'rejected',
 };
 
 const payStatusVariant: Record<PaymentDto['status'], 'active' | 'pending' | 'rejected'> = {
@@ -64,7 +68,7 @@ export default function PayablesTab() {
 
   const cnColumns: ColumnDef<CreditNoteDto>[] = [
     {
-      accessorKey: 'number',
+      accessorKey: 'creditNoteNumber',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Credit Note" />,
       cell: ({ row }) => (
         <button
@@ -72,27 +76,34 @@ export default function PayablesTab() {
           className="font-mono text-xs text-primary hover:underline underline-offset-2"
           onClick={() => setCnDetail(row.original)}
         >
-          {row.original.number}
+          {row.original.creditNoteNumber}
         </button>
       ),
     },
     {
-      accessorKey: 'sourceType',
+      accessorKey: 'entityType',
       header: 'Source',
       cell: ({ getValue }) => (
-        <Badge variant="outline" className="text-xs">{sourceLabels[getValue() as CreditNoteDto['sourceType']]}</Badge>
+        <Badge variant="outline" className="text-xs">{ENTITY_LABELS[getValue() as FinanceEntityType]}</Badge>
       ),
     },
     {
-      accessorKey: 'sourceId',
+      accessorKey: 'entityReference',
       header: 'Reference',
       cell: ({ getValue }) => <span className="font-mono text-xs text-muted-foreground">{getValue() as string}</span>,
     },
     {
-      accessorKey: 'amount',
+      accessorKey: 'totalAmount',
       header: 'Amount',
       cell: ({ getValue }) => (
         <span className="text-sm font-medium tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
+      ),
+    },
+    {
+      accessorKey: 'outstandingAmount',
+      header: 'Outstanding',
+      cell: ({ getValue }) => (
+        <span className="text-sm font-medium tabular-nums text-amber-700">₦{(getValue() as number).toLocaleString()}</span>
       ),
     },
     {
@@ -139,7 +150,7 @@ export default function PayablesTab() {
       header: 'Credit Note',
       cell: ({ getValue }) => {
         const cn = creditNotes.find(c => c.id === getValue());
-        return <span className="font-mono text-xs text-muted-foreground">{cn?.number ?? (getValue() as string)}</span>;
+        return <span className="font-mono text-xs text-muted-foreground">{cn?.creditNoteNumber ?? (getValue() as string)}</span>;
       },
     },
     {
@@ -183,7 +194,7 @@ export default function PayablesTab() {
                   id:        row.original.id,
                   parentId:  row.original.creditNoteId,
                   reference: row.original.paymentNumber,
-                  linkedRef: linked?.number ?? row.original.creditNoteId,
+                  linkedRef: linked?.creditNoteNumber ?? row.original.creditNoteId,
                   amount:    row.original.amount,
                   method:    row.original.paymentMethod,
                   date:      row.original.createdAt,
@@ -206,7 +217,7 @@ export default function PayablesTab() {
         <DataTable
           columns={cnColumns}
           data={creditNotes}
-          toolbar={{ searchColumn: 'number', searchPlaceholder: 'Search credit notes…' }}
+          toolbar={{ searchColumn: 'creditNoteNumber', searchPlaceholder: 'Search credit notes…' }}
         />
       </PageSection>
 

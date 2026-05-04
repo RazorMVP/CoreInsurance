@@ -10,10 +10,12 @@ import PostReceiptSheet         from './PostReceiptSheet';
 import DebitNoteDetailDialog    from './DebitNoteDetailDialog';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
 
-const dnStatusVariant: Record<DebitNoteDto['status'], 'pending' | 'active' | 'draft'> = {
-  OUTSTANDING:    'pending',
-  PARTIALLY_PAID: 'draft',
-  SETTLED:        'active',
+const dnStatusVariant: Record<DebitNoteDto['status'], 'pending' | 'active' | 'draft' | 'rejected'> = {
+  OUTSTANDING: 'pending',
+  PARTIAL:     'draft',
+  SETTLED:     'active',
+  CANCELLED:   'rejected',
+  VOID:        'rejected',
 };
 
 const rcStatusVariant: Record<ReceiptDto['status'], 'active' | 'pending' | 'rejected' | 'draft'> = {
@@ -66,7 +68,7 @@ export default function ReceivablesTab() {
 
   const dnColumns: ColumnDef<DebitNoteDto>[] = [
     {
-      accessorKey: 'number',
+      accessorKey: 'debitNoteNumber',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Debit Note" />,
       cell: ({ row }) => (
         <button
@@ -74,13 +76,13 @@ export default function ReceivablesTab() {
           className="font-mono text-xs text-primary hover:underline underline-offset-2"
           onClick={() => openDetail(row.original)}
         >
-          {row.original.number}
+          {row.original.debitNoteNumber}
         </button>
       ),
     },
     {
-      accessorKey: 'policyNumber',
-      header: 'Policy',
+      accessorKey: 'entityReference',
+      header: 'Reference',
       cell: ({ getValue }) => <span className="font-mono text-xs text-muted-foreground">{getValue() as string}</span>,
     },
     {
@@ -89,10 +91,17 @@ export default function ReceivablesTab() {
       cell: ({ getValue }) => <span className="text-sm font-medium">{getValue() as string}</span>,
     },
     {
-      accessorKey: 'amount',
+      accessorKey: 'totalAmount',
       header: 'Amount',
       cell: ({ getValue }) => (
         <span className="text-sm font-medium tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
+      ),
+    },
+    {
+      accessorKey: 'outstandingAmount',
+      header: 'Outstanding',
+      cell: ({ getValue }) => (
+        <span className="text-sm font-medium tabular-nums text-amber-700">₦{(getValue() as number).toLocaleString()}</span>
       ),
     },
     {
@@ -100,7 +109,7 @@ export default function ReceivablesTab() {
       header: 'Status',
       cell: ({ getValue }) => {
         const s = getValue() as DebitNoteDto['status'];
-        return <Badge variant={dnStatusVariant[s]} className="text-[10px]">{s.toLowerCase().replace('_', ' ')}</Badge>;
+        return <Badge variant={dnStatusVariant[s]} className="text-[10px]">{s.toLowerCase()}</Badge>;
       },
     },
     {

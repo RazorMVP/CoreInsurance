@@ -1,23 +1,16 @@
 import {
-  Badge, Button, Separator,
+  Badge, Button, Separator, Skeleton,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@cia/ui';
-import type { DebitNoteDto } from '@cia/api-client';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type DebitNoteDto, type PolicyDto } from '@cia/api-client';
 
-// Mock policy details — replace with useGet(`/api/v1/policies/${policyNumber}`)
-// allow-mock: decorative product/class enrichment for the per-row dialog
-const MOCK_POLICY_DETAIL: Record<string, { product: string; class: string; startDate: string; endDate: string; premium: number }> = {
-  'POL-2026-00001': { product: 'Private Motor Comprehensive',  class: 'Motor (Private)',  startDate: '2026-02-01', endDate: '2027-02-01', premium: 78_750 },
-  'POL-2026-00002': { product: 'Fire & Burglary Standard',     class: 'Fire & Burglary', startDate: '2026-03-01', endDate: '2027-03-01', premium: 115_000 },
-  'POL-2026-00003': { product: 'Private Motor Comprehensive',  class: 'Motor (Private)',  startDate: '2026-03-15', endDate: '2027-03-15', premium: 49_500 },
-  'POL-2025-00088': { product: 'Marine Cargo Open Cover',      class: 'Marine Cargo',     startDate: '2025-03-01', endDate: '2026-03-01', premium: 40_000 },
-  'POL-2026-00004': { product: 'Marine Cargo Open Cover',      class: 'Marine Cargo',     startDate: '2026-01-15', endDate: '2027-01-15', premium: 60_000 },
-};
-
-const DN_STATUS_VARIANT: Record<DebitNoteDto['status'], 'pending' | 'active' | 'draft'> = {
-  OUTSTANDING:    'pending',
-  PARTIALLY_PAID: 'draft',
-  SETTLED:        'active',
+const DN_STATUS_VARIANT: Record<DebitNoteDto['status'], 'pending' | 'active' | 'draft' | 'rejected'> = {
+  OUTSTANDING: 'pending',
+  PARTIAL:     'draft',
+  SETTLED:     'active',
+  CANCELLED:   'rejected',
+  VOID:        'rejected',
 };
 
 interface Props {
@@ -37,19 +30,31 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 }
 
 export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, onPostReceipt }: Props) {
+  // Look up policy for class + period when this debit note is policy-backed.
+  // DebitNoteResponse already carries productName + description, so this query
+  // fills in only what the debit note itself doesn't expose.
+  const isPolicyBacked = debitNote?.entityType === 'POLICY';
+  const policyQuery = useQuery<PolicyDto>({
+    queryKey: ['policies', debitNote?.entityId],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: PolicyDto }>(`/api/v1/policies/${debitNote!.entityId}`);
+      return res.data.data;
+    },
+    enabled: open && isPolicyBacked && !!debitNote?.entityId,
+  });
+
   if (!debitNote) return null;
 
-  const policy = MOCK_POLICY_DETAIL[debitNote.policyNumber];
-  const canPost = debitNote.status === 'OUTSTANDING' || debitNote.status === 'PARTIALLY_PAID';
+  const canPost = debitNote.status === 'OUTSTANDING' || debitNote.status === 'PARTIAL';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <DialogTitle>{debitNote.number}</DialogTitle>
+            <DialogTitle>{debitNote.debitNoteNumber}</DialogTitle>
             <Badge variant={DN_STATUS_VARIANT[debitNote.status]} className="text-[10px]">
-              {debitNote.status.toLowerCase().replace('_', ' ')}
+              {debitNote.status.toLowerCase()}
             </Badge>
           </div>
           <DialogDescription>
@@ -59,16 +64,24 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
 
         <div className="space-y-0 rounded-lg border overflow-hidden">
           <div className="bg-muted/40 px-4 py-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Policy</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {isPolicyBacked ? 'Policy' : 'Source'}
+            </p>
           </div>
           <div className="px-4 pb-2">
-            <DetailRow label="Policy No."  value={debitNote.policyNumber} />
-            <DetailRow label="Customer"    value={debitNote.customerName} />
-            {policy && (
+            <DetailRow label={isPolicyBacked ? 'Policy No.' : 'Reference'} value={debitNote.entityReference} />
+            <DetailRow label="Customer"  value={debitNote.customerName} />
+            <DetailRow label="Product"   value={debitNote.productName} />
+            {debitNote.description && (
+              <DetailRow label="Description" value={debitNote.description} />
+            )}
+            {isPolicyBacked && policyQuery.isLoading && (
+              <div className="py-2"><Skeleton className="h-4 w-48" /></div>
+            )}
+            {isPolicyBacked && policyQuery.data && (
               <>
-                <DetailRow label="Product"   value={policy.product} />
-                <DetailRow label="Class"     value={policy.class} />
-                <DetailRow label="Period"    value={`${policy.startDate} → ${policy.endDate}`} />
+                <DetailRow label="Class"  value={policyQuery.data.classOfBusinessName} />
+                <DetailRow label="Period" value={`${policyQuery.data.startDate} → ${policyQuery.data.endDate}`} />
               </>
             )}
           </div>
@@ -79,12 +92,14 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Debit Note</p>
           </div>
           <div className="px-4 pb-2">
-            <DetailRow label="Debit Note"  value={debitNote.number} />
-            <DetailRow label="Due Date"    value={debitNote.dueDate} />
+            <DetailRow label="Debit Note"   value={debitNote.debitNoteNumber} />
+            <DetailRow label="Due Date"     value={debitNote.dueDate} />
+            <DetailRow label="Total"        value={`₦${debitNote.totalAmount.toLocaleString()}`} />
+            <DetailRow label="Paid"         value={`₦${debitNote.paidAmount.toLocaleString()}`} />
           </div>
           <div className="bg-muted/40 px-4 py-3 flex items-center justify-between">
-            <p className="text-sm font-semibold">Amount Due</p>
-            <p className="text-base font-semibold text-primary">₦{debitNote.amount.toLocaleString()}</p>
+            <p className="text-sm font-semibold">Outstanding</p>
+            <p className="text-base font-semibold text-primary">₦{debitNote.outstandingAmount.toLocaleString()}</p>
           </div>
         </div>
 
