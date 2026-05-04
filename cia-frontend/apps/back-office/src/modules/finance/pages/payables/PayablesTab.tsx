@@ -180,6 +180,8 @@ export default function PayablesTab() {
                 className: 'text-destructive',
                 onClick: () => setReverseTarget({
                   type:      'PAYMENT',
+                  id:        row.original.id,
+                  parentId:  row.original.creditNoteId,
                   reference: row.original.paymentNumber,
                   linkedRef: linked?.number ?? row.original.creditNoteId,
                   amount:    row.original.amount,

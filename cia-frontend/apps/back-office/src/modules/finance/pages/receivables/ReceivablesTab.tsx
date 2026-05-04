@@ -180,6 +180,8 @@ export default function ReceivablesTab() {
               className: 'text-destructive',
               onClick: () => setReverseTarget({
                 type:      'RECEIPT',
+                id:        row.original.id,
+                parentId:  row.original.debitNoteId,
                 reference: row.original.receiptNumber,
                 linkedRef: row.original.debitNoteNumber,
                 amount:    row.original.amount,
