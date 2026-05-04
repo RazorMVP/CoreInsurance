@@ -4,7 +4,7 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
-## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6 wired)
+## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5 wired)
 
 ### Context
 
@@ -18,6 +18,8 @@ fc6895c  chore(gitignore): ignore personal skills + tool working dirs
 5639820  fix(setup): wire QuotesConfigTab to backend (G7)
 9e6b1e1  docs(log): session 53 — build audit + start Sequence B (G7 wired)
 de68d50  fix(finance): wire receipt + payment reversal to backend (G6)
+753f2c7  docs(log): session 53 — extend with G6 finance reverse wiring
+76983b9  fix(audit): wire alert acknowledge + client-side CSV export (G5)
 ```
 
 ### Deep audit findings
@@ -66,6 +68,15 @@ Wired:
 - Confirm + Cancel disabled while `mutation.isPending`. Server errors with `field === 'reason'` surface inline; everything else surfaces as a destructive toast.
 - `applyApiErrors` not used here — that helper requires a react-hook-form instance, and this dialog only has one field. Inlined a 5-line error parse instead.
 
+### Workstream — G5 audit (acknowledge + CSV export)
+
+Two TODOs in the audit module — but the underlying gaps were asymmetric:
+
+- **G5a — Alert acknowledge:** Backend exists at `POST /api/v1/audit/alerts/{id}/acknowledge` (frontend TODO said PATCH; backend uses POST — corrected). Wired `useMutation` in `AlertsTab`, Confirm + Cancel disabled while `isPending`, `onSuccess` invalidates `['audit', 'alerts']` and toasts, `onError` surfaces a destructive toast with the server message.
+- **G5b — Reports CSV export:** Backend has the 6 report fetch endpoints (`/api/v1/audit/reports/actions-by-user`, etc.) but **no `/export` endpoint**. The frontend report tables also still render hardcoded mock arrays — they aren't wired to those fetch endpoints yet.
+
+Honest scope for G5b: don't add a backend export endpoint. Don't wire the 6 report reads either (separate, larger task). Do replace the broken Export button with a client-side CSV generator using the same `Blob + createObjectURL` pattern already proven in `AuditLogTab.exportCSV` and `LoginLogTab.exportCSV`. Refactored `ExportButton` to take `{ filename, headers, rows }` and plumbed those props from each of the 6 tabs. When the report reads land later, the data flows through the same prop — no further changes to ExportButton needed.
+
 ### Housekeeping
 
 **`.gitignore` cleanup (`fc6895c`).** Repo had accumulated 7 personal skills under `.claude/skills/` (content-reviewer, gcloud-refresh, plan-week, post, post2, uat, uat-script-generator) plus `.playwright-mcp/` and `.superpowers/` working dirs as side effects of running tools cd'd here. Pattern `.claude/skills/*` + `!.claude/skills/cia/` ignores future bleed-through while keeping the project-canonical CIA skill tracked.
@@ -82,20 +93,23 @@ Wired:
 | --- | --- |
 | [CLAUDE.md](CLAUDE.md) | Container diagram count drift |
 | [.gitignore](.gitignore) | Personal skills + tool working dirs |
-| [.markdownlint.json](.markdownlint.json) | Suppress MD024/MD040/MD032/MD060 — log-style false positives |
+| [.markdownlint.json](.markdownlint.json) | Disable MD013 + MD040 project-wide |
+| [.markdownlintignore](.markdownlintignore) | Exempt cia-log.md from markdownlint entirely (append-only freeform log) |
 | [QuotesConfigTab.tsx](cia-frontend/apps/back-office/src/modules/setup/pages/policy-specs/QuotesConfigTab.tsx) | G7 — wire all three CRUDs to backend |
 | [ReverseTransactionDialog.tsx](cia-frontend/apps/back-office/src/modules/finance/pages/ReverseTransactionDialog.tsx) | G6 — wire useMutation + reason field |
 | [ReceivablesTab.tsx](cia-frontend/apps/back-office/src/modules/finance/pages/receivables/ReceivablesTab.tsx) | G6 — pass id + parentId to dialog |
 | [PayablesTab.tsx](cia-frontend/apps/back-office/src/modules/finance/pages/payables/PayablesTab.tsx) | G6 — pass id + parentId to dialog |
+| [AlertsTab.tsx](cia-frontend/apps/back-office/src/modules/audit/pages/alerts/AlertsTab.tsx) | G5a — wire acknowledge useMutation + isPending guards |
+| [ReportsTab.tsx](cia-frontend/apps/back-office/src/modules/audit/pages/reports/ReportsTab.tsx) | G5b — client-side CSV via Blob + createObjectURL; ExportButton takes filename/headers/rows |
 
 ### Sequence B status
 
 | Gap | Status |
 | --- | --- |
 | G7 — Setup quote-config | ✓ done (`5639820`) |
-| G6 — Finance reverse | next |
-| G5 — Audit (acknowledge + export) | pending |
-| G8 — Finance enrichment investigation | pending |
+| G6 — Finance reverse | ✓ done (`de68d50`) |
+| G5 — Audit (acknowledge + export) | ✓ done (`76983b9`) — backend export endpoint not added; client-side CSV used. Wiring the 6 report reads is a separate follow-up. |
+| G8 — Finance enrichment investigation | next |
 | G3 — Reinsurance (7 endpoints) | pending |
 | G4 — Claims (6 endpoints) | pending |
 | G1 — cia-policy (11 endpoints) | pending |
@@ -105,6 +119,7 @@ Wired:
 
 - `QuoteDetailPage.tsx` still imports `MOCK_DISCOUNT_TYPES`/`MOCK_LOADING_TYPES`/`MOCK_QUOTE_CONFIG` for fallback rendering on the detail page. When that page is wired, the MOCK_ exports can be deleted entirely.
 - The audit's TODO list flagged the visible `// TODO:` comments but missed unwired CRUDs that didn't carry comments (the discount/loading types CRUD on this tab). Future audits should also flag local-state CRUD on pages that have a backend controller.
+- **Audit reports (6 tables) still hardcoded.** Backend endpoints exist (`/api/v1/audit/reports/{actions-by-user,actions-by-module,approvals,data-changes,login-security,user-activity}`) but the frontend renders mock arrays. Wiring those reads (and adding date-range filter forms) is a separate task — when done, ExportButton already works because the data flows through the same prop.
 
 ---
 
