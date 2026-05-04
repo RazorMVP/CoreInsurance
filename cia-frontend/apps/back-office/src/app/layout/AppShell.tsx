@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
+import { Toaster } from '@cia/ui';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 
@@ -27,6 +28,7 @@ export default function AppShell() {
           </div>
         </main>
       </div>
+      <Toaster />
     </div>
   );
 }

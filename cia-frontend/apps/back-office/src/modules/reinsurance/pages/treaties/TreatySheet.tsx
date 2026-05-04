@@ -10,6 +10,7 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type ClassOfBusinessDto } from '@cia/api-client';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 interface ReinsurerDto { id: string; name: string; }
 
@@ -91,6 +92,7 @@ export default function TreatySheet({ open, onOpenChange, treaty, onSuccess }: P
       queryClient.invalidateQueries({ queryKey: ['reinsurance', 'treaties'] });
       onSuccess();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: treaty?.id ? 'Could not update treaty' : 'Could not create treaty' }),
   });
 
   function onSubmit(values: FormValues) {

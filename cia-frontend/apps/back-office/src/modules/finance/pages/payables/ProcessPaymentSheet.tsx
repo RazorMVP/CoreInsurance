@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { apiClient, type CreditNoteDto } from '@cia/api-client';
+import { applyApiErrors } from '@/lib/form-errors';
 
 const schema = z.object({
   amount:        z.coerce.number().positive('Amount must be greater than zero'),
@@ -55,6 +56,7 @@ export default function ProcessPaymentSheet({ open, onOpenChange, creditNote, on
       onSuccess();
       form.reset();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not process payment' }),
   });
 
   function onSubmit(values: FormValues) {

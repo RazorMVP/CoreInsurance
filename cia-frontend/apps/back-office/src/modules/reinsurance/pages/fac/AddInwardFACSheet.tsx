@@ -10,6 +10,7 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type ClassOfBusinessDto } from '@cia/api-client';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 interface InsurerDto { id: string; name: string; }
 
@@ -88,6 +89,7 @@ export default function AddInwardFACSheet({ open, onOpenChange, onSuccess }: Pro
       onSuccess();
       form.reset();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not add inward FAC' }),
   });
 
   function onSubmit(values: FormValues) {

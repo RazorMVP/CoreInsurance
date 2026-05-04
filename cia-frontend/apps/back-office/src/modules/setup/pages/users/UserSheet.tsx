@@ -10,6 +10,7 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 const schema = z.object({
   firstName:     z.string().min(1, 'Required'),
@@ -84,6 +85,7 @@ export default function UserSheet({ open, onOpenChange, user, onSuccess }: UserS
       queryClient.invalidateQueries({ queryKey: ['setup', 'users'] });
       onSuccess();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: isEditing ? 'Could not update user' : 'Could not create user' }),
   });
 
   function onSubmit(values: FormValues) {

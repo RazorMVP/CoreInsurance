@@ -18,6 +18,7 @@ import {
   type ProductDto,
 } from '@cia/api-client';
 import { INITIAL_CLAUSES } from '../clauses-shared';
+import { applyApiErrors } from '@/lib/form-errors';
 
 interface AdjustmentTypeDto { id: string; name: string; }
 type CustomerSummary = CustomerDto & { firstName?: string; lastName?: string; companyName?: string };
@@ -366,6 +367,7 @@ export default function MultiRiskQuoteSheet({ open, onOpenChange, onSuccess }: P
       onSuccess();
       form.reset();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not create quote' }),
   });
 
   function onSubmit(values: MultiRiskFormValues) {

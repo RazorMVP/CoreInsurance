@@ -9,6 +9,7 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@cia/api-client';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 const schema = z.object({
   failedLoginThreshold:   z.coerce.number().int().min(1).max(20),
@@ -71,6 +72,7 @@ export default function AlertConfigDialog({ open, onOpenChange }: Props) {
       queryClient.invalidateQueries({ queryKey: ['audit', 'alert-config'] });
       onOpenChange(false);
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not save alert config' }),
   });
 
   function onSubmit(values: FormValues) {

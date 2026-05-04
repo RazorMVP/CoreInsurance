@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 const ALL_PERMISSIONS = [
   { module: 'Setup',         perms: ['setup:view','setup:create','setup:update'] },
@@ -58,6 +59,7 @@ export default function AccessGroupSheet({ open, onOpenChange, group, onSuccess 
       queryClient.invalidateQueries({ queryKey: ['setup', 'access-groups'] });
       onSuccess();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: group ? 'Could not update access group' : 'Could not create access group' }),
   });
 
   function onSubmit(values: FormValues) {

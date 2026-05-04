@@ -10,6 +10,7 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@cia/api-client';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 interface PolicySummaryDto {
   id:            string;
@@ -107,6 +108,7 @@ export default function CreateEndorsementSheet({ open, onOpenChange, onSuccess }
       onSuccess();
       form.reset();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not create endorsement' }),
   });
 
   function onSubmit(values: FormValues) {

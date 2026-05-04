@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@cia/api-client';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 const EXPENSE_TYPES = [
   'Survey / Assessment Fee',
@@ -56,6 +57,7 @@ export default function AddExpenseDialog({ open, onOpenChange, claimId, claimNum
       form.reset();
       onSuccess();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not add expense' }),
   });
 
   function onSubmit(values: FormValues) {

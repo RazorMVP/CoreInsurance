@@ -10,6 +10,7 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@cia/api-client';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 interface TreatyDto { id: string; name: string; type: string; status: string; }
 
@@ -84,6 +85,7 @@ export default function BatchReallocationSheet({ open, onOpenChange, allocations
       onSuccess();
       form.reset();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not reallocate' }),
   });
 
   function onSubmit(values: FormValues) {

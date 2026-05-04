@@ -10,6 +10,7 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type BrokerDto } from '@cia/api-client';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 interface ReinsurerDto { id: string; name: string; }
 interface PolicyExcessDto {
@@ -123,6 +124,7 @@ export default function CreateFACOfferSheet({ open, onOpenChange, onSuccess }: P
       onSuccess();
       form.reset();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not create FAC offer' }),
   });
 
   function onSubmit(values: FormValues) {

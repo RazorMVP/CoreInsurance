@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@cia/api-client';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 const RESERVE_CATEGORIES = [
   'Own Damage — Vehicle Repairs',
@@ -57,6 +58,7 @@ export default function AddReserveDialog({ open, onOpenChange, claimId, claimNum
       form.reset();
       onSuccess();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not add reserve' }),
   });
 
   function onSubmit(values: FormValues) {

@@ -19,6 +19,7 @@ import {
   type ProductDto,
 } from '@cia/api-client';
 import { INITIAL_CLAUSES } from '../clauses-shared';
+import { applyApiErrors } from '@/lib/form-errors';
 
 interface AdjustmentTypeDto { id: string; name: string; }
 
@@ -240,6 +241,7 @@ export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: 
       onSuccess();
       form.reset();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not create quote' }),
   });
 
   function onSubmit(values: SingleRiskFormValues) {

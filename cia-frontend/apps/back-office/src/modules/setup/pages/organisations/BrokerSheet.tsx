@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 const schema = z.object({
   name:          z.string().min(2, 'Required'),
@@ -54,6 +55,7 @@ export default function BrokerSheet({ open, onOpenChange, broker, onSuccess }: P
       queryClient.invalidateQueries({ queryKey: ['setup', 'brokers'] });
       onSuccess();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: broker ? 'Could not update broker' : 'Could not add broker' }),
   });
 
   function onSubmit(values: FormValues) {

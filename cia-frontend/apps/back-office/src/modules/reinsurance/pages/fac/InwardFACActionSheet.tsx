@@ -9,6 +9,7 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@cia/api-client';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 interface InwardFAC {
   id:             string;
@@ -120,6 +121,7 @@ export default function InwardFACActionSheet({ open, onOpenChange, fac, mode, on
       queryClient.invalidateQueries({ queryKey: ['reinsurance', 'fac'] });
       onSuccess();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: isRenew ? 'Could not renew FAC' : 'Could not extend FAC' }),
   });
 
   function onSubmit(values: FormValues) {

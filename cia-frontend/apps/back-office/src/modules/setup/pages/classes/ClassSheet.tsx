@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 const schema = z.object({
   name: z.string().min(2, 'Required'),
@@ -45,6 +46,7 @@ export default function ClassSheet({ open, onOpenChange, cls, onSuccess }: Props
       queryClient.invalidateQueries({ queryKey: ['setup', 'classes-of-business'] });
       onSuccess();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: cls ? 'Could not update class' : 'Could not create class' }),
   });
 
   function onSubmit(values: FormValues) {

@@ -9,6 +9,7 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 const schema = z.object({
   companyName:         z.string().min(2, 'Required'),
@@ -84,6 +85,7 @@ export default function CompanySettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['setup', 'company-settings'] });
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not save settings' }),
   });
 
   function onSubmit(values: FormValues) {

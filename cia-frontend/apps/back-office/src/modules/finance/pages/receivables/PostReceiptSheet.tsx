@@ -11,6 +11,7 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 const schema = z.object({
   paymentDate:   z.string().min(1, 'Required'),
@@ -70,6 +71,7 @@ export default function PostReceiptSheet({ open, onOpenChange, debitNoteIds, bul
       onSuccess();
       form.reset();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not post receipt' }),
   });
 
   function onSubmit(values: FormValues) {

@@ -10,6 +10,7 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type CustomerDto, type ProductDto, type QuoteDto } from '@cia/api-client';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 type CustomerSummary = CustomerDto & { firstName?: string; lastName?: string; companyName?: string };
 function customerLabel(c: CustomerSummary): string {
@@ -85,6 +86,7 @@ function FromQuoteForm({ onSuccess, onCancel }: { onSuccess: () => void; onCance
       onSuccess();
       form.reset();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not bind policy from quote' }),
   });
 
   function onSubmit(values: FromQuoteValues) {
@@ -190,6 +192,7 @@ function DirectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: 
       onSuccess();
       form.reset();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not create policy' }),
   });
 
   function onSubmit(values: DirectValues) {

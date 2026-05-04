@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { applyApiErrors } from '@/lib/form-errors';
 
 // ── Product form schema ────────────────────────────────────────────────────
 const productSchema = z.object({
@@ -95,6 +96,7 @@ export default function ProductSheet({ open, onOpenChange, product, onSuccess }:
       queryClient.invalidateQueries({ queryKey: ['setup', 'products'] });
       onSuccess();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: product ? 'Could not update product' : 'Could not create product' }),
   });
 
   function onSubmit(values: ProductFormValues) {
@@ -131,6 +133,7 @@ export default function ProductSheet({ open, onOpenChange, product, onSuccess }:
       form.setValue('classOfBusinessId', created.id); // auto-select the new class
       setCreateClassOpen(false);
     },
+    onError: (e) => applyApiErrors(e, classForm, { defaultTitle: 'Could not create class' }),
   });
 
   function onCreateClass(values: ClassFormValues) {

@@ -10,6 +10,7 @@ import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@cia/api-client';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 interface PolicySummaryDto {
   id:           string;
@@ -71,6 +72,7 @@ export default function RegisterClaimSheet({ open, onOpenChange, onSuccess }: Pr
       onSuccess();
       form.reset();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not register claim' }),
   });
 
   function onSubmit(values: FormValues) {

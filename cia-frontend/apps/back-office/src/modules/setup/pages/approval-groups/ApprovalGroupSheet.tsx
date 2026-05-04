@@ -10,6 +10,7 @@ import { useEffect } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
+import { applyApiErrors } from '@/lib/form-errors';
 
 const levelSchema = z.object({
   minAmount:    z.coerce.number().min(0),
@@ -85,6 +86,7 @@ export default function ApprovalGroupSheet({ open, onOpenChange, group, onSucces
       queryClient.invalidateQueries({ queryKey: ['setup', 'approval-groups'] });
       onSuccess();
     },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: group ? 'Could not update approval group' : 'Could not create approval group' }),
   });
 
   function onSubmit(values: FormValues) {
