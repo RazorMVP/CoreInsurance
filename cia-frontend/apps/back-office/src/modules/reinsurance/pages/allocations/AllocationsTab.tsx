@@ -2,70 +2,127 @@ import { useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-  PageSection, Skeleton,
+  PageSection, Skeleton, toast,
 } from '@cia/ui';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@cia/api-client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
+import {
+  apiClient, validatedGet, AllocationDtoSchema, TreatyDtoSchema,
+  type ApiError, type ApiResponse,
+  type AllocationDto, type AllocationStatus, type ClassOfBusinessDto, type TreatyDto, type TreatyType,
+} from '@cia/api-client';
 import PolicyAllocationSheet  from './PolicyAllocationSheet';
 import BatchReallocationSheet from './BatchReallocationSheet';
 import CreateFACOfferSheet    from '../fac/CreateFACOfferSheet';
 
-type AllocStatus = 'AUTO_ALLOCATED' | 'CONFIRMED' | 'APPROVED' | 'EXCESS_CAPACITY';
+interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
 
-interface AllocationDto {
-  id:             string;
-  policyNumber:   string;
-  classOfBusiness:string;
-  sumInsured:     number;
-  retentionAmount:number;
-  cedingAmount:   number;
-  treatyName:     string;
-  treatyType:     string;
-  reinsurers:     string;
-  status:         AllocStatus;
-  treatyYear:     number;
-}
+const TYPE_LABELS: Record<TreatyType, string> = { SURPLUS: 'Surplus', QUOTA_SHARE: 'Quota Share', XOL: 'XOL' };
 
-// allow-mock: fallback while /reinsurance/allocations is in flight
-const mockAllocations: AllocationDto[] = [
-  { id: 'a1', policyNumber: 'POL-2026-00001', classOfBusiness: 'Motor (Private)',  sumInsured: 3_500_000,  retentionAmount: 2_000_000, cedingAmount: 1_500_000,  treatyName: 'Motor Surplus 2026', treatyType: 'Surplus',      reinsurers: 'Munich Re 60%, Swiss Re 40%',        status: 'CONFIRMED',       treatyYear: 2026 },
-  { id: 'a2', policyNumber: 'POL-2026-00002', classOfBusiness: 'Fire & Burglary',  sumInsured: 15_000_000, retentionAmount: 9_000_000, cedingAmount: 6_000_000,  treatyName: 'Fire QS 2026',       treatyType: 'Quota Share',  reinsurers: 'African Re 40%, Continental Re 60%', status: 'APPROVED',        treatyYear: 2026 },
-  { id: 'a3', policyNumber: 'POL-2026-00003', classOfBusiness: 'Motor (Private)',  sumInsured: 2_200_000,  retentionAmount: 2_000_000, cedingAmount: 200_000,    treatyName: 'Motor Surplus 2026', treatyType: 'Surplus',      reinsurers: 'Munich Re 60%, Swiss Re 40%',        status: 'AUTO_ALLOCATED',  treatyYear: 2026 },
-  { id: 'a4', policyNumber: 'POL-2026-00004', classOfBusiness: 'Marine Cargo',    sumInsured: 8_000_000,  retentionAmount: 5_000_000, cedingAmount: 3_000_000,  treatyName: 'Marine XOL 2026',    treatyType: 'XOL',          reinsurers: "Lloyd's 100%",                       status: 'AUTO_ALLOCATED',  treatyYear: 2026 },
-  { id: 'a5', policyNumber: 'POL-2026-00005', classOfBusiness: 'Fire & Burglary',  sumInsured: 35_000_000, retentionAmount: 9_000_000, cedingAmount: 26_000_000, treatyName: 'Fire QS 2026',       treatyType: 'Quota Share',  reinsurers: 'Pending FAC',                        status: 'EXCESS_CAPACITY', treatyYear: 2026 },
-];
+// Presentation status: backend has DRAFT/CONFIRMED/CANCELLED. The
+// "Excess Capacity" UI state is derived from excessAmount > 0 rather
+// than a backend status.
+type DisplayStatus = AllocationStatus | 'EXCESS_CAPACITY';
 
-const stVariant: Record<AllocStatus, 'active'|'pending'|'draft'|'rejected'> = {
-  AUTO_ALLOCATED:  'draft',
-  CONFIRMED:       'pending',
-  APPROVED:        'active',
+const STATUS_VARIANT: Record<DisplayStatus, 'active' | 'pending' | 'draft' | 'rejected'> = {
+  DRAFT:           'draft',
+  CONFIRMED:       'active',
+  CANCELLED:       'rejected',
   EXCESS_CAPACITY: 'rejected',
 };
 
-const stLabel: Record<AllocStatus, string> = {
-  AUTO_ALLOCATED:  'Auto-allocated',
+const STATUS_LABEL: Record<DisplayStatus, string> = {
+  DRAFT:           'Auto-allocated',
   CONFIRMED:       'Confirmed',
-  APPROVED:        'Approved',
+  CANCELLED:       'Cancelled',
   EXCESS_CAPACITY: 'Excess Capacity',
 };
 
+function displayStatus(a: AllocationDto): DisplayStatus {
+  if (a.excessAmount > 0 && a.status !== 'CANCELLED') return 'EXCESS_CAPACITY';
+  return a.status;
+}
+
+function reinsurersDisplay(a: AllocationDto): string {
+  if (!a.lines || a.lines.length === 0) return 'Pending FAC';
+  return a.lines.map(l => `${l.reinsuranceCompanyName} ${l.sharePercentage}%`).join(', ');
+}
+
+function showServerError(err: unknown, title: string) {
+  const ax = err as ApiHttpError;
+  const errors: ApiError[] = ax?.response?.data?.errors ?? [];
+  const description = errors.length > 0
+    ? errors.map(e => e.message).filter(Boolean).join('. ')
+    : ax?.message ?? 'An unexpected error occurred. Please try again.';
+  toast({ variant: 'destructive', title, description });
+}
+
 export default function AllocationsTab() {
+  const queryClient = useQueryClient();
+
   const allocationsQuery = useQuery<AllocationDto[]>({
-    queryKey: ['reinsurance', 'allocations'],
+    queryKey: ['ri', 'allocations'],
+    queryFn: () => validatedGet('/api/v1/ri/allocations', z.array(AllocationDtoSchema)),
+  });
+  const allocations = allocationsQuery.data ?? [];
+
+  // Auxiliary lookups so the UI can show class-of-business and treaty year
+  // (backend AllocationResponse only carries IDs).
+  const classesQuery = useQuery<ClassOfBusinessDto[]>({
+    queryKey: ['setup', 'classes-of-business'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: AllocationDto[] }>('/api/v1/reinsurance/allocations');
+      const res = await apiClient.get<{ data: ClassOfBusinessDto[] }>('/api/v1/setup/classes-of-business');
       return res.data.data;
     },
   });
-  const allocations = allocationsQuery.data ?? mockAllocations;
+  const classNameById = Object.fromEntries((classesQuery.data ?? []).map(c => [c.id, c.name]));
+
+  const treatiesQuery = useQuery<TreatyDto[]>({
+    queryKey: ['ri', 'treaties'],
+    queryFn: () => validatedGet('/api/v1/ri/treaties', z.array(TreatyDtoSchema)),
+  });
+  const treatyById = Object.fromEntries((treatiesQuery.data ?? []).map(t => [t.id, t]));
+
   const [viewAllocation, setViewAllocation] = useState<AllocationDto | null>(null);
   const [batchRealloc,   setBatchRealloc]   = useState(false);
   const [confirmAllOpen, setConfirmAllOpen] = useState(false);
   const [facOpen,        setFacOpen]        = useState(false);
 
-  const pendingConfirmation = allocations.filter(a => a.status === 'AUTO_ALLOCATED');
-  const excessCapacity      = allocations.filter(a => a.status === 'EXCESS_CAPACITY');
+  const pendingConfirmation = allocations.filter(a => displayStatus(a) === 'DRAFT');
+  const excessCapacity      = allocations.filter(a => displayStatus(a) === 'EXCESS_CAPACITY');
+
+  // Backend has no batch-confirm endpoint; fan out individual /confirm calls
+  // (closes G3 TODO 7). Settles with Promise.all so a single failure rolls
+  // back the optimistic toast.
+  const confirmBatch = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(
+        ids.map(id => apiClient.post(`/api/v1/ri/allocations/${id}/confirm`)),
+      );
+    },
+    onSuccess: (_data, ids) => {
+      queryClient.invalidateQueries({ queryKey: ['ri', 'allocations'] });
+      toast({ title: `Confirmed ${ids.length} allocation${ids.length === 1 ? '' : 's'}` });
+      setConfirmAllOpen(false);
+    },
+    onError: (err) => showServerError(err, 'Batch confirmation failed'),
+  });
+
+  function classNameFor(a: AllocationDto): string {
+    const treaty = a.treatyId ? treatyById[a.treatyId] : null;
+    if (treaty?.classOfBusinessId) return classNameById[treaty.classOfBusinessId] ?? '—';
+    return '—';
+  }
+
+  function treatyDisplayFor(a: AllocationDto): string {
+    if (!a.treatyId) return 'No treaty';
+    const treaty = treatyById[a.treatyId];
+    if (!treaty) return a.treatyId.slice(0, 8);
+    if (treaty.description) return treaty.description;
+    const cls = treaty.classOfBusinessId ? (classNameById[treaty.classOfBusinessId] ?? 'Treaty') : 'Treaty';
+    return `${cls} ${TYPE_LABELS[treaty.treatyType]} ${treaty.treatyYear}`;
+  }
 
   const columns: ColumnDef<AllocationDto>[] = [
     {
@@ -82,56 +139,59 @@ export default function AllocationsTab() {
       ),
     },
     {
-      accessorKey: 'classOfBusiness',
+      id:     'class',
       header: 'Class',
-      cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{getValue() as string}</span>,
+      cell: ({ row }) => <span className="text-sm text-muted-foreground">{classNameFor(row.original)}</span>,
     },
     {
-      accessorKey: 'sumInsured',
-      header: 'Sum Insured',
+      accessorKey: 'ourShareSumInsured',
+      header:      'Sum Insured',
       cell: ({ getValue }) => <span className="text-sm tabular-nums">₦{(getValue() as number).toLocaleString()}</span>,
     },
     {
-      accessorKey: 'retentionAmount',
-      header: 'Retention',
+      accessorKey: 'retainedAmount',
+      header:      'Retention',
       cell: ({ getValue }) => <span className="text-sm tabular-nums">₦{(getValue() as number).toLocaleString()}</span>,
     },
     {
-      accessorKey: 'cedingAmount',
-      header: 'Ceding',
+      accessorKey: 'cededAmount',
+      header:      'Ceding',
       cell: ({ getValue }) => <span className="text-sm font-medium tabular-nums text-primary">₦{(getValue() as number).toLocaleString()}</span>,
     },
     {
-      accessorKey: 'treatyName',
+      id:     'treaty',
       header: 'Treaty',
       cell: ({ row }) => (
         <div>
-          <p className="text-sm">{row.original.treatyName}</p>
-          <p className="text-xs text-muted-foreground">{row.original.reinsurers}</p>
+          <p className="text-sm">{treatyDisplayFor(row.original)}</p>
+          <p className="text-xs text-muted-foreground">{reinsurersDisplay(row.original)}</p>
         </div>
       ),
     },
     {
-      accessorKey: 'status',
+      id:     'status',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+      accessorFn: row => displayStatus(row),
       cell: ({ getValue }) => {
-        const s = getValue() as AllocStatus;
-        return <Badge variant={stVariant[s]} className="text-[10px] whitespace-nowrap">{stLabel[s]}</Badge>;
+        const s = getValue() as DisplayStatus;
+        return <Badge variant={STATUS_VARIANT[s]} className="text-[10px] whitespace-nowrap">{STATUS_LABEL[s]}</Badge>;
       },
     },
     {
       id: 'actions',
-      cell: ({ row }) => (
-        <DataTableRowActions
-          row={row as Row<AllocationDto>}
-          actions={[
-            ...(row.original.status === 'AUTO_ALLOCATED'  ? [{ label: 'Confirm allocation', onClick: () => setViewAllocation(row.original) }] : []),
-            ...(row.original.status === 'CONFIRMED'       ? [{ label: 'Approve', onClick: () => setViewAllocation(row.original) }, { label: 'Reject', onClick: () => setViewAllocation(row.original), className: 'text-destructive' }] : []),
-            ...(row.original.status === 'EXCESS_CAPACITY' ? [{ label: 'Create FAC cover', onClick: () => setFacOpen(true) }] : []),
-            { label: 'View details', onClick: () => setViewAllocation(row.original) },
-          ]}
-        />
-      ),
+      cell: ({ row }) => {
+        const ds = displayStatus(row.original);
+        return (
+          <DataTableRowActions
+            row={row as Row<AllocationDto>}
+            actions={[
+              ...(ds === 'DRAFT'           ? [{ label: 'Confirm allocation', onClick: () => setViewAllocation(row.original) }] : []),
+              ...(ds === 'EXCESS_CAPACITY' ? [{ label: 'Create FAC cover',    onClick: () => setFacOpen(true) }] : []),
+              { label: 'View details', onClick: () => setViewAllocation(row.original) },
+            ]}
+          />
+        );
+      },
     },
   ];
 
@@ -188,16 +248,28 @@ export default function AllocationsTab() {
         open={viewAllocation !== null}
         onOpenChange={(v) => { if (!v) setViewAllocation(null); }}
         allocation={viewAllocation}
-        onConfirm={() => setViewAllocation(null)}
-        onApprove={() => setViewAllocation(null)}
-        onReject={() => setViewAllocation(null)}
+        displayStatus={viewAllocation ? displayStatus(viewAllocation) : 'DRAFT'}
+        classOfBusinessName={viewAllocation ? classNameFor(viewAllocation) : '—'}
+        treatyDisplayName={viewAllocation ? treatyDisplayFor(viewAllocation) : ''}
+        treatyYear={viewAllocation && viewAllocation.treatyId
+          ? (treatyById[viewAllocation.treatyId]?.treatyYear ?? null)
+          : null}
+        reinsurersDisplay={viewAllocation ? reinsurersDisplay(viewAllocation) : ''}
+        onCreateFAC={() => setFacOpen(true)}
       />
 
       {/* Batch reallocation sheet */}
       <BatchReallocationSheet
         open={batchRealloc}
         onOpenChange={setBatchRealloc}
-        allocations={allocations}
+        allocations={allocations.map(a => ({
+          id:              a.id,
+          policyNumber:    a.policyNumber,
+          classOfBusiness: classNameFor(a),
+          sumInsured:      a.ourShareSumInsured,
+          treatyName:      treatyDisplayFor(a),
+          status:          displayStatus(a),
+        }))}
         onSuccess={() => setBatchRealloc(false)}
       />
 
@@ -208,13 +280,13 @@ export default function AllocationsTab() {
         onSuccess={() => setFacOpen(false)}
       />
 
-      {/* Confirm All dialog */}
+      {/* Confirm All dialog — fans out individual /confirm calls (G3 TODO 7) */}
       <Dialog open={confirmAllOpen} onOpenChange={setConfirmAllOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Confirm All Allocations</DialogTitle>
             <DialogDescription>
-              The following {pendingConfirmation.length} auto-allocated polic{pendingConfirmation.length === 1 ? 'y' : 'ies'} will be marked as Confirmed and sent for approval.
+              The following {pendingConfirmation.length} auto-allocated polic{pendingConfirmation.length === 1 ? 'y' : 'ies'} will be marked as Confirmed.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 max-h-56 overflow-y-auto py-1">
@@ -222,19 +294,21 @@ export default function AllocationsTab() {
               <div key={a.id} className="flex items-center justify-between rounded-md border px-3 py-2">
                 <div>
                   <p className="font-mono text-xs text-primary">{a.policyNumber}</p>
-                  <p className="text-xs text-muted-foreground">{a.classOfBusiness} · {a.treatyName}</p>
+                  <p className="text-xs text-muted-foreground">{classNameFor(a)} · {treatyDisplayFor(a)}</p>
                 </div>
-                <span className="text-xs tabular-nums text-muted-foreground">₦{a.cedingAmount.toLocaleString()} ceded</span>
+                <span className="text-xs tabular-nums text-muted-foreground">₦{a.cededAmount.toLocaleString()} ceded</span>
               </div>
             ))}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmAllOpen(false)}>Cancel</Button>
-            <Button onClick={() => {
-              // TODO: PATCH /api/v1/reinsurance/allocations/confirm-batch
-              setConfirmAllOpen(false);
-            }}>
-              Confirm {pendingConfirmation.length} Allocation{pendingConfirmation.length !== 1 ? 's' : ''}
+            <Button variant="outline" onClick={() => setConfirmAllOpen(false)} disabled={confirmBatch.isPending}>Cancel</Button>
+            <Button
+              disabled={confirmBatch.isPending || pendingConfirmation.length === 0}
+              onClick={() => confirmBatch.mutate(pendingConfirmation.map(a => a.id))}
+            >
+              {confirmBatch.isPending
+                ? `Confirming ${pendingConfirmation.length}…`
+                : `Confirm ${pendingConfirmation.length} Allocation${pendingConfirmation.length !== 1 ? 's' : ''}`}
             </Button>
           </DialogFooter>
         </DialogContent>
