@@ -4,7 +4,7 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
-## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5 wired)
+## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5, G8 wired)
 
 ### Context
 
@@ -20,6 +20,8 @@ fc6895c  chore(gitignore): ignore personal skills + tool working dirs
 de68d50  fix(finance): wire receipt + payment reversal to backend (G6)
 753f2c7  docs(log): session 53 — extend with G6 finance reverse wiring
 76983b9  fix(audit): wire alert acknowledge + client-side CSV export (G5)
+51d00ef  docs(log): session 53 — extend with G5 audit
+8cb2eec  fix(finance): sync frontend DTOs with backend contract (G8)
 ```
 
 ### Deep audit findings
@@ -77,6 +79,26 @@ Two TODOs in the audit module — but the underlying gaps were asymmetric:
 
 Honest scope for G5b: don't add a backend export endpoint. Don't wire the 6 report reads either (separate, larger task). Do replace the broken Export button with a client-side CSV generator using the same `Blob + createObjectURL` pattern already proven in `AuditLogTab.exportCSV` and `LoginLogTab.exportCSV`. Refactored `ExportButton` to take `{ filename, headers, rows }` and plumbed those props from each of the 6 tabs. When the report reads land later, the data flows through the same prop — no further changes to ExportButton needed.
 
+### Workstream — G8 finance DTO contract bug
+
+G8 was advertised as "verify whether finance 'decorative enrichment' allow-mocks correspond to a real backend gap or legitimate fallback. S effort." The investigation surfaced a much larger contract bug — the mocks weren't decorative; they were a band-aid over a broken contract.
+
+**The bug.** The frontend `DebitNoteDto` and `CreditNoteDto` had drifted from the backend response shapes. Frontend was reading `dto.number`, `dto.policyNumber`, `dto.sourceType`, `dto.sourceId` while the backend returns `debitNoteNumber`, `entityReference`, `entityType`, `entityId`. There is **no field-renaming axios interceptor** in [client.ts](cia-frontend/packages/api-client/src/client.ts) — the JSON passes through untouched. So at runtime, the list pages' "Debit Note" and "Policy" columns were rendering empty cells, and the detail dialogs' mock lookup keyed on `debitNote.policyNumber` always returned `undefined`. TypeScript couldn't catch the drift because `apiClient.get<{ data: DebitNoteDto[] }>` is a type assertion with no runtime validation.
+
+**Status enum drift too.** Backend `DebitNoteStatus` is `OUTSTANDING|PARTIAL|SETTLED|CANCELLED|VOID`; frontend had `OUTSTANDING|PARTIALLY_PAID|SETTLED`. Backend `CreditNoteStatus` is `OUTSTANDING|PARTIAL|SETTLED|CANCELLED`; frontend had `OUTSTANDING|PAID`. The frontend's status badge maps would have rendered `undefined` variant for any backend `PARTIAL`, `CANCELLED`, or `VOID` debit note.
+
+**Backend `FinanceEntityType`** is `POLICY|ENDORSEMENT|CLAIM|CLAIM_EXPENSE|COMMISSION|REINSURANCE`. Frontend had a smaller set: `CLAIM|ENDORSEMENT|COMMISSION|REINSURANCE` — missing `POLICY` and `CLAIM_EXPENSE`.
+
+**Files touched (7):**
+
+- `packages/api-client/src/modules/finance.ts` — DTOs fully rewritten, matched 1:1 to backend `dto/*` records. Exposed all the fields the backend already provides: `productName`, `description`, `taxAmount`, `totalAmount`, `paidAmount`, `outstandingAmount`, `currencyCode`, `dueDate`, `entityType`, `entityId`, `entityReference`, `beneficiaryId`, `beneficiaryName`, `brokerId`, `brokerName`. New `FinanceEntityType` exported as a top-level type.
+- `ReceivablesTab.tsx` + `PayablesTab.tsx` — column accessors, status variants, source labels, search column names. New "Outstanding" column shows the backend-provided `outstandingAmount`. `ENTITY_LABELS` covers all 6 entity types.
+- `DebitNoteDetailDialog.tsx` — drops the `MOCK_POLICY_DETAIL` keyed on the non-existent `policyNumber` field. Reads `productName` + `description` directly from the debit note. Adds a `useQuery` for `GET /api/v1/policies/{entityId}` to fill in `classOfBusinessName` + policy period (the only fields not on `DebitNoteResponse`). Query is gated on `entityType === 'POLICY'` and `enabled: open && isPolicyBacked` so it only fires when the dialog is open on a policy-backed debit note.
+- `CreditNoteDetailDialog.tsx` — drops `MOCK_SOURCE_DETAIL` entirely. Backend `CreditNoteResponse` already exposes `entityReference`, `description`, `beneficiaryName` — all the fields the mock was simulating.
+- `PostReceiptSheet.tsx` + `ProcessPaymentSheet.tsx` — read the new field names; default the receipt/payment amount to `outstandingAmount` (what the user actually owes), not the original gross `amount`.
+
+**Why this is bigger than the audit suggested.** The audit's "70 useQuery + 38 useMutation" count was *count of calls*, not *count of working calls*. A `useQuery` that fetches successfully but reads non-existent fields renders an empty UI without throwing. Future audits should sample-validate the shape of the JSON returned, not just count call sites.
+
 ### Housekeeping
 
 **`.gitignore` cleanup (`fc6895c`).** Repo had accumulated 7 personal skills under `.claude/skills/` (content-reviewer, gcloud-refresh, plan-week, post, post2, uat, uat-script-generator) plus `.playwright-mcp/` and `.superpowers/` working dirs as side effects of running tools cd'd here. Pattern `.claude/skills/*` + `!.claude/skills/cia/` ignores future bleed-through while keeping the project-canonical CIA skill tracked.
@@ -101,6 +123,13 @@ Honest scope for G5b: don't add a backend export endpoint. Don't wire the 6 repo
 | [PayablesTab.tsx](cia-frontend/apps/back-office/src/modules/finance/pages/payables/PayablesTab.tsx) | G6 — pass id + parentId to dialog |
 | [AlertsTab.tsx](cia-frontend/apps/back-office/src/modules/audit/pages/alerts/AlertsTab.tsx) | G5a — wire acknowledge useMutation + isPending guards |
 | [ReportsTab.tsx](cia-frontend/apps/back-office/src/modules/audit/pages/reports/ReportsTab.tsx) | G5b — client-side CSV via Blob + createObjectURL; ExportButton takes filename/headers/rows |
+| [finance.ts (api-client)](cia-frontend/packages/api-client/src/modules/finance.ts) | G8 — DTOs fully rewritten to match backend dto/* shape; new FinanceEntityType + corrected status enums |
+| [DebitNoteDetailDialog.tsx](cia-frontend/apps/back-office/src/modules/finance/pages/receivables/DebitNoteDetailDialog.tsx) | G8 — drop MOCK_POLICY_DETAIL; read productName/description from DTO; add gated policy lookup useQuery for class+period |
+| [CreditNoteDetailDialog.tsx](cia-frontend/apps/back-office/src/modules/finance/pages/payables/CreditNoteDetailDialog.tsx) | G8 — drop MOCK_SOURCE_DETAIL entirely; read entityReference/description/beneficiaryName from DTO |
+| ReceivablesTab.tsx (G8) | column accessors + status variants; new Outstanding column |
+| PayablesTab.tsx (G8) | column accessors + status variants + ENTITY_LABELS |
+| PostReceiptSheet.tsx (G8) | field accesses + default amount = outstandingAmount |
+| ProcessPaymentSheet.tsx (G8) | field accesses + default amount = outstandingAmount |
 
 ### Sequence B status
 
@@ -109,8 +138,8 @@ Honest scope for G5b: don't add a backend export endpoint. Don't wire the 6 repo
 | G7 — Setup quote-config | ✓ done (`5639820`) |
 | G6 — Finance reverse | ✓ done (`de68d50`) |
 | G5 — Audit (acknowledge + export) | ✓ done (`76983b9`) — backend export endpoint not added; client-side CSV used. Wiring the 6 report reads is a separate follow-up. |
-| G8 — Finance enrichment investigation | next |
-| G3 — Reinsurance (7 endpoints) | pending |
+| G8 — Finance DTO contract bug | ✓ done (`8cb2eec`) — broader than advertised; full sync of DebitNoteDto + CreditNoteDto + status enums + FinanceEntityType. List + dialogs + sheets all updated. |
+| G3 — Reinsurance (7 endpoints) | next |
 | G4 — Claims (6 endpoints) | pending |
 | G1 — cia-policy (11 endpoints) | pending |
 | G9 — Phase 3 Partner Portal (5 builds) | pending |
@@ -120,6 +149,8 @@ Honest scope for G5b: don't add a backend export endpoint. Don't wire the 6 repo
 - `QuoteDetailPage.tsx` still imports `MOCK_DISCOUNT_TYPES`/`MOCK_LOADING_TYPES`/`MOCK_QUOTE_CONFIG` for fallback rendering on the detail page. When that page is wired, the MOCK_ exports can be deleted entirely.
 - The audit's TODO list flagged the visible `// TODO:` comments but missed unwired CRUDs that didn't carry comments (the discount/loading types CRUD on this tab). Future audits should also flag local-state CRUD on pages that have a backend controller.
 - **Audit reports (6 tables) still hardcoded.** Backend endpoints exist (`/api/v1/audit/reports/{actions-by-user,actions-by-module,approvals,data-changes,login-security,user-activity}`) but the frontend renders mock arrays. Wiring those reads (and adding date-range filter forms) is a separate task — when done, ExportButton already works because the data flows through the same prop.
+- **PayablesTab payment Approve/Reject row actions are no-op handlers.** Not in any tracked gap; surfaced incidentally during G8 review. Wiring those endpoints (if they exist on the backend) belongs with a future TODO sweep on payment approval flow.
+- **Other modules likely have the same DTO drift.** G8 only synced finance DTOs. Audit found 70 useQuery calls; only ~10 of those have been runtime-validated. A general DTO-vs-backend audit (or an axios runtime validator) would catch silent contract bugs in other modules.
 
 ---
 
