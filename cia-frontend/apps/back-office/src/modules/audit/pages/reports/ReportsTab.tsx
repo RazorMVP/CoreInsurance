@@ -29,11 +29,26 @@ function Table({ headers, rows }: { headers: string[]; rows: (string | number)[]
   );
 }
 
-function ExportButton() {
+function exportCSV(filename: string, headers: string[], rows: (string | number)[][]) {
+  const csv = [headers, ...rows]
+    .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function ExportButton({ filename, headers, rows }: {
+  filename: string;
+  headers:  string[];
+  rows:     (string | number)[][];
+}) {
   return (
-    <Button variant="outline" size="sm" onClick={() => {
-      // TODO: GET /api/v1/audit/reports/{type}/export
-    }}>
+    <Button variant="outline" size="sm" onClick={() => exportCSV(filename, headers, rows)}>
       Export CSV
     </Button>
   );
@@ -99,6 +114,14 @@ const RISK_VARIANT: Record<string, 'active'|'pending'|'rejected'> = {
   Low: 'active', Medium: 'pending', High: 'rejected',
 };
 
+// ── Per-tab schema (headers + filename) — rows imported above ───────────────
+const ACTIONS_BY_USER_HEADERS    = ['Rank', 'User', 'Total', 'Creates', 'Updates', 'Deletes', 'Approvals', 'Last Active'];
+const ACTIONS_BY_MODULE_HEADERS  = ['Module', 'Total', 'Today', 'This Week', 'This Month'];
+const APPROVAL_TRAIL_HEADERS     = ['Entity', 'Type', 'Amount', 'Submitted By', 'Approved By', 'Approved At'];
+const DATA_CHANGES_HEADERS       = ['Entity', 'Field', 'Old Value', 'New Value', 'Changed By', 'Timestamp'];
+const LOGIN_SECURITY_HEADERS     = ['User', 'Email', 'Successful', 'Failed', 'Last Login', 'Risk'];
+const USER_ACTIVITY_HEADERS      = ['Rank', 'User', 'Total Actions', 'Most Common Action', 'Activity Score'];
+
 export default function ReportsTab() {
   return (
     <Tabs defaultValue="actions-by-user">
@@ -115,12 +138,9 @@ export default function ReportsTab() {
         <PageSection
           title="Actions by User"
           description="Total system activity ranked by user. Covers all modules."
-          actions={<ExportButton />}
+          actions={<ExportButton filename="audit-actions-by-user" headers={ACTIONS_BY_USER_HEADERS} rows={actionsByUser} />}
         >
-          <Table
-            headers={['Rank', 'User', 'Total', 'Creates', 'Updates', 'Deletes', 'Approvals', 'Last Active']}
-            rows={actionsByUser}
-          />
+          <Table headers={ACTIONS_BY_USER_HEADERS} rows={actionsByUser} />
         </PageSection>
       </TabsContent>
 
@@ -128,12 +148,9 @@ export default function ReportsTab() {
         <PageSection
           title="Actions by Module"
           description="Event volume per module — helps identify the most active areas of the system."
-          actions={<ExportButton />}
+          actions={<ExportButton filename="audit-actions-by-module" headers={ACTIONS_BY_MODULE_HEADERS} rows={actionsByModule} />}
         >
-          <Table
-            headers={['Module', 'Total', 'Today', 'This Week', 'This Month']}
-            rows={actionsByModule}
-          />
+          <Table headers={ACTIONS_BY_MODULE_HEADERS} rows={actionsByModule} />
         </PageSection>
       </TabsContent>
 
@@ -141,12 +158,9 @@ export default function ReportsTab() {
         <PageSection
           title="Approval Audit Trail"
           description="Record of all approval decisions — what was approved, by whom, and when."
-          actions={<ExportButton />}
+          actions={<ExportButton filename="audit-approval-trail" headers={APPROVAL_TRAIL_HEADERS} rows={approvalTrail} />}
         >
-          <Table
-            headers={['Entity', 'Type', 'Amount', 'Submitted By', 'Approved By', 'Approved At']}
-            rows={approvalTrail}
-          />
+          <Table headers={APPROVAL_TRAIL_HEADERS} rows={approvalTrail} />
         </PageSection>
       </TabsContent>
 
@@ -154,12 +168,9 @@ export default function ReportsTab() {
         <PageSection
           title="Data Change History"
           description="Field-level changes across all entities — before and after values."
-          actions={<ExportButton />}
+          actions={<ExportButton filename="audit-data-changes" headers={DATA_CHANGES_HEADERS} rows={dataChanges} />}
         >
-          <Table
-            headers={['Entity', 'Field', 'Old Value', 'New Value', 'Changed By', 'Timestamp']}
-            rows={dataChanges}
-          />
+          <Table headers={DATA_CHANGES_HEADERS} rows={dataChanges} />
         </PageSection>
       </TabsContent>
 
@@ -167,13 +178,13 @@ export default function ReportsTab() {
         <PageSection
           title="Login Security Report"
           description="Authentication health per user — successful vs failed attempts, last seen."
-          actions={<ExportButton />}
+          actions={<ExportButton filename="audit-login-security" headers={LOGIN_SECURITY_HEADERS} rows={loginSecurity} />}
         >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/40">
-                  {['User', 'Email', 'Successful', 'Failed', 'Last Login', 'Risk'].map(h => (
+                  {LOGIN_SECURITY_HEADERS.map(h => (
                     <th key={h} className="h-9 px-4 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -201,12 +212,9 @@ export default function ReportsTab() {
         <PageSection
           title="User Activity Summary"
           description="Ranked activity summary — total operations, most common action, and activity score."
-          actions={<ExportButton />}
+          actions={<ExportButton filename="audit-user-activity" headers={USER_ACTIVITY_HEADERS} rows={userActivity} />}
         >
-          <Table
-            headers={['Rank', 'User', 'Total Actions', 'Most Common Action', 'Activity Score']}
-            rows={userActivity}
-          />
+          <Table headers={USER_ACTIVITY_HEADERS} rows={userActivity} />
           <Separator className="my-4" />
           <p className="text-xs text-muted-foreground">
             Activity score is weighted: approvals (×3), creates (×2), updates (×1), deletes (×1). Calculated over the last 30 days.

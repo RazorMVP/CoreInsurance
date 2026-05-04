@@ -2,12 +2,14 @@ import { useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-  PageSection, Separator, Skeleton,
+  PageSection, Separator, Skeleton, toast,
 } from '@cia/ui';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@cia/api-client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient, type ApiError, type ApiResponse } from '@cia/api-client';
 import AlertConfigDialog from './AlertConfigDialog';
+
+interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
 
 type AlertType     = 'FAILED_LOGINS' | 'BULK_DELETE' | 'OFF_HOURS_ACTIVITY' | 'LARGE_FINANCIAL_APPROVAL';
 type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
@@ -78,6 +80,7 @@ const STATUS_VARIANT: Record<AlertStatus, 'active'|'draft'> = {
 };
 
 export default function AlertsTab() {
+  const queryClient = useQueryClient();
   const alertsQuery = useQuery<AuditAlert[]>({
     queryKey: ['audit', 'alerts'],
     queryFn: async () => {
@@ -88,6 +91,28 @@ export default function AlertsTab() {
   const alerts = alertsQuery.data ?? mockAlerts;
   const [configOpen,         setConfigOpen]         = useState(false);
   const [acknowledgeTarget,  setAcknowledgeTarget]  = useState<AuditAlert | null>(null);
+
+  const acknowledge = useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.post(`/api/v1/audit/alerts/${id}/acknowledge`);
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['audit', 'alerts'] });
+      toast({
+        title: 'Alert acknowledged',
+        description: `Alert ${id.slice(0, 8)} marked as reviewed.`,
+      });
+      setAcknowledgeTarget(null);
+    },
+    onError: (error) => {
+      const ax = error as ApiHttpError;
+      const errors: ApiError[] = ax?.response?.data?.errors ?? [];
+      const description = errors.length > 0
+        ? errors.map(e => e.message).filter(Boolean).join('. ')
+        : ax?.message ?? 'An unexpected error occurred. Please try again.';
+      toast({ variant: 'destructive', title: 'Acknowledge failed', description });
+    },
+  });
 
   const openAlerts = alerts.filter(a => a.status === 'OPEN').length;
 
@@ -236,12 +261,12 @@ export default function AlertsTab() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAcknowledgeTarget(null)}>Cancel</Button>
-            <Button onClick={() => {
-              // TODO: PATCH /api/v1/audit/alerts/{id}/acknowledge
-              setAcknowledgeTarget(null);
-            }}>
-              Acknowledge
+            <Button variant="outline" onClick={() => setAcknowledgeTarget(null)} disabled={acknowledge.isPending}>Cancel</Button>
+            <Button
+              onClick={() => acknowledgeTarget && acknowledge.mutate(acknowledgeTarget.id)}
+              disabled={acknowledge.isPending}
+            >
+              {acknowledge.isPending ? 'Acknowledging…' : 'Acknowledge'}
             </Button>
           </DialogFooter>
         </DialogContent>
