@@ -4,6 +4,121 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-04 — Session 52: Land all 17 session-51 review items + partner-api compile fix
+
+### Context
+
+Session 51 (cloud-based code reviewer agent) produced a 17-item punch list spanning the diff surface since Session 48: 3 Critical, 5 High, 7 Medium, 3 Low. User directive was absolute: **"We need to fix all items, let's start with C1, C2, C3 then fix (H2,H1,H3) and then every other known issue. It is critical that everything is fixed before we make further changes or updates."**
+
+This session lands all 17 items. Order followed the user's specification exactly: C1→C2→C3→H2→H1→H3→H4→H5→M1→M2→M3→M4→M5→M6→M7→L1→L2→L3, with one bonus fix to unblock cia-partner-api compilation.
+
+### Commits in this session
+
+```
+fdf0f0a  fix(critical): Rules-of-Hooks, render-body setValue, query-key mismatches  (C1, C2, C3)
+11a09ba  fix(forms): switch 22 forms from formState.isSubmitting to mutation.isPending  (H2)
+e004ef4  fix(security): validate pii-key at startup to block SQL injection            (H1)
+9288c15  fix(forms): map server field errors + toast fallback                          (H3)
+d49b47f  fix(partner-api): segment-aware route matching in PartnerScopeFilter          (H4 + M3)
+ab74eb1  fix(review-52): land remaining session-51 review items + partner controller compile fix  (H5, M1, M2, M4, M5, M6, M7, L1, L2, L3, bonus)
+```
+
+### What changed by review item
+
+**C1 — Rules of Hooks in ClaimDetailPage.** All 14 useState hooks moved above the loading-skeleton early-return so React doesn't see a different hook order on the first render.
+
+**C2 — setValue in render body in PostReceiptSheet.** Wrapped `form.setValue('amount', totalAmount)` in `useEffect`, gated on a value comparison so it doesn't re-fire when the user is typing.
+
+**C3 — Query-key mismatches.** Aligned `EditCustomerSheet` (`['customer', id]` → `['customers', id]`) and `ProcessPaymentSheet` (invalidate `['finance','payables']` → `['finance','credit-notes']`). Audit also caught a third file beyond the two originally flagged.
+
+**H1 — Hikari pii-key SQL injection.** New `PiiKeyValidator` (cia-common) implements `EnvironmentPostProcessor`, registered via `META-INF/spring/org.springframework.boot.env.EnvironmentPostProcessor.imports`. Validates `cia.security.pii-key` against `^[A-Za-z0-9+/=._\-]{12,256}$` before the DataSource bean is created. 17 unit tests including 12 SQL-injection vectors. Without this, a key containing `'`, `;`, or `\n` would inject SQL onto every pooled connection in every tenant.
+
+**H2 — formState.isSubmitting → mutation.isPending.** 22 forms migrated. RHF's `formState.isSubmitting` only flips true while `handleSubmit`'s callback is running — which finishes synchronously when the callback delegates to `useMutation`. Result: spinner disappears the instant the request leaves the browser, and a fast double-click submits twice. `mutation.isPending` stays true until the network response arrives.
+
+**H3 — Field-level error mapping.** New `applyApiErrors()` helper in `apps/back-office/src/lib/form-errors.ts`. For each `{ field, message }` in `response.data.errors`, calls `form.setError(field, ...)` so the error surfaces under the same `<FormMessage />` as Zod messages. Falls through to a destructive toast if no field-level errors (500s, network errors, form-level errors). Wired into all 22 form mutations + 2 multi-form variants. Mounted `<Toaster />` in AppShell.
+
+**H4 — PartnerScopeFilter map collision (+ M3 folded in).** `Map<String,String>` with `Map.ofEntries` is iteration-order-unspecified, and `path.startsWith(mapPath)` matches both `/policies` and `/policies/` prefixes. `POST /partner/v1/policies/p-1/claims` could resolve to either `policies:create` or `claims:create` depending on JVM. Fix: `List<Route>` (declaration-order priority) + Spring `AntPathMatcher` (single-segment `*` wildcards). Most-specific patterns first. Added 20-test `PartnerScopeFilterTest`. M3 folded in: `extractScopes` now wraps claim parse in try/catch returning empty list — malformed JWT scope claim now rejected as 403 (insufficient scope), never propagated as 500.
+
+**H5 — AlertConfigDialog form.reset clobbers input.** Added `keepDirtyValues: true` to `form.reset(configQuery.data, ...)`. RHF preserves any field the user has touched; remaining fields are populated from the refetch.
+
+**M1 — Report export silent truncation.** `ReportRunnerService` now fetches `EXPORT_MAX_ROWS + 1` rows so it can detect when the dataset exceeded the cap. New `CsvExport` and `PdfExport` records carry the truncation flag. `ReportController` surfaces it via `X-Report-Truncated` and `X-Report-Rows` response headers. Body shape unchanged (still valid CSV / valid PDF).
+
+**M2 — typeName resolution race.** SingleRiskQuoteSheet + MultiRiskQuoteSheet disable Save while `loadingTypesQuery.isLoading || discountTypesQuery.isLoading`. `resolveTypeName()` returns `''` when types haven't loaded; submitting that early would persist empty typeName strings into AdjustmentEntry JSONB on the backend.
+
+**M4 — ReportAccessService.upsert XOR.** Added explicit `IllegalArgumentException` when both `category` and `reportId` are non-null. Previously `reportId` silently won, hiding the caller's bug. The DB constraint on `report_access_policy` is XOR; service-layer validation now matches.
+
+**M5 — brokerOptions identity churn.** `useMemo` wrapping in three customer sheets: EditCustomerSheet (with NO_BROKER_OPTION sentinel prepended), CorporateOnboardingSheet, IndividualOnboardingSheet. Stops `<SelectItem>` from being re-keyed every parent render.
+
+**M6 — CI guard regex relaxed.** `check-api-wiring.sh` now matches `^[[:space:]]*const (mock|MOCK_)` (was column-0 only). Caught one real misnaming on first re-run: `DebitNoteAnalysisPage` had `const mockData = byPeriodQuery.data ?? []` — that's actual query data, not a mock. Renamed to `byPeriod`.
+
+**M7 — allow-mock proximity.** CI guard now accepts the `// allow-mock: <reason>` marker anywhere within the 3 lines preceding a declaration (was the immediately preceding line only). Multi-line reasons or a single intervening blank line are now fine.
+
+**L1 — MOCK_CUSTOMERS PII.** Replaced realistic Nigerian names, addresses, phone numbers, and ID numbers with obviously-synthetic placeholders ("Sample Individual N", "+000 000 000 000N", "*.test" emails, "SAMPLE-NIN-NNNN"). The fallback is still useful for layout, but a screenshot or accidental log can no longer resemble a real customer.
+
+**L2 — V24 perf note.** Migration header now documents that `ALTER COLUMN ... TYPE bytea USING pgp_sym_encrypt(...)` rewrites every row and locks ACCESS EXCLUSIVE. Operators planning rollouts for tenants with 100k+ customers can now size maintenance windows correctly. Includes a throughput estimate (10-30k rows/sec, CPU-bound).
+
+**L3 — PII key pre-flight runbook.** Added a 6-step operator checklist to `PiiKeyValidator` javadoc: (1) generate via `openssl rand -base64 32`, (2) store in a secret manager, (3) verify the env var is set pre-deploy, (4) back up to a separate vault location, (5) verify Flyway can read the same key, (6) rotation procedure (no automated path; manual maintenance window). The runbook lives next to the validation regex so they evolve together.
+
+### Bonus — PartnerCustomerController compile fix
+
+`mvn -pl cia-partner-api -am compile` had been failing since the initial commit because `PartnerCustomerController.createIndividual(request)` and `createCorporate(request)` called 1-arg signatures that don't exist — `CustomerService.createIndividual` requires `(IndividualCustomerRequest, MultipartFile)`, and `createCorporate` requires `(CorporateCustomerRequest, MultipartFile, List<MultipartFile>)`.
+
+Partner API is JSON-only by design — partners verify by ID number, not document upload. `uploadKycDocument()` already short-circuits on null files (line 542). Fix: pass `null` for the file args. Added inline comments explaining the design choice and noting that a separate multipart document-upload endpoint can be added later if regulators require originals on file. cia-partner-api now compiles cleanly.
+
+### Verification
+
+```
+mvn -pl cia-common,cia-reports,cia-partner-api -am clean compile  → BUILD SUCCESS
+mvn -pl cia-partner-api -am test -Dtest=PartnerScopeFilterTest    → 20 tests, 0 failures
+mvn -pl cia-common -am test -Dtest=PiiKeyValidatorTest            → 17 tests, 0 failures
+pnpm --filter @cia/back-office exec tsc --noEmit                  → no errors
+bash cia-frontend/scripts/check-api-wiring.sh                     → no violations
+```
+
+### Files modified (across the 6 session-52 commits)
+
+Backend:
+- `cia-backend/cia-api/src/main/resources/db/migration/V24__pii_encryption.sql` — V24 perf note
+- `cia-backend/cia-common/src/main/java/com/nubeero/cia/common/config/PiiKeyValidator.java` (new) — H1 + L3 runbook
+- `cia-backend/cia-common/src/main/resources/META-INF/spring/org.springframework.boot.env.EnvironmentPostProcessor.imports` (new) — H1 registration
+- `cia-backend/cia-common/src/test/java/com/nubeero/cia/common/config/PiiKeyValidatorTest.java` (new) — H1 tests
+- `cia-backend/cia-partner-api/src/main/java/com/nubeero/cia/partner/config/PartnerScopeFilter.java` — H4 + M3
+- `cia-backend/cia-partner-api/src/test/java/com/nubeero/cia/partner/config/PartnerScopeFilterTest.java` (new) — H4 tests
+- `cia-backend/cia-partner-api/src/main/java/com/nubeero/cia/partner/controller/PartnerCustomerController.java` — bonus compile fix
+- `cia-backend/cia-reports/src/main/java/com/nubeero/cia/reports/controller/ReportController.java` — M1
+- `cia-backend/cia-reports/src/main/java/com/nubeero/cia/reports/service/ReportRunnerService.java` — M1
+- `cia-backend/cia-reports/src/main/java/com/nubeero/cia/reports/service/ReportAccessService.java` — M4
+
+Frontend:
+- `cia-frontend/apps/back-office/src/lib/form-errors.ts` (new) — H3 helper
+- `cia-frontend/apps/back-office/src/app/layout/AppShell.tsx` — Toaster mount
+- `cia-frontend/apps/back-office/src/modules/claims/pages/detail/ClaimDetailPage.tsx` — C1
+- `cia-frontend/apps/back-office/src/modules/finance/pages/receivables/PostReceiptSheet.tsx` — C2 + H2 + H3
+- `cia-frontend/apps/back-office/src/modules/finance/pages/payables/ProcessPaymentSheet.tsx` — C3 + H2 + H3
+- `cia-frontend/apps/back-office/src/modules/customers/pages/detail/EditCustomerSheet.tsx` — C3 + M5
+- `cia-frontend/apps/back-office/src/modules/audit/pages/alerts/AlertConfigDialog.tsx` — H2 + H3 + H5
+- `cia-frontend/apps/back-office/src/modules/customers/pages/detail/CustomerDetailPage.tsx` — L1
+- `cia-frontend/apps/back-office/src/modules/customers/pages/corporate/CorporateOnboardingSheet.tsx` — M5
+- `cia-frontend/apps/back-office/src/modules/customers/pages/individual/IndividualOnboardingSheet.tsx` — M5
+- `cia-frontend/apps/back-office/src/modules/quotation/pages/create/SingleRiskQuoteSheet.tsx` — H2 + H3 + M2
+- `cia-frontend/apps/back-office/src/modules/quotation/pages/create/MultiRiskQuoteSheet.tsx` — H2 + H3 + M2
+- `cia-frontend/apps/back-office/src/modules/endorsements/pages/reports/DebitNoteAnalysisPage.tsx` — M6 misnaming fix
+- 19 other form files across audit, claims, endorsements, finance, policy, quotation, reinsurance, setup modules — H2 + H3
+
+CI:
+- `cia-frontend/scripts/check-api-wiring.sh` — M6 + M7
+
+### Postman collection regeneration
+
+Not required this session — no `/partner/v1/` endpoints added or modified at the surface level. PartnerScopeFilter is internal middleware; PartnerCustomerController signatures/contracts unchanged from the partner client's perspective (still JSON in, JSON out).
+
+### Follow-ups
+
+- A separate multipart-aware partner document-upload endpoint should be added if/when regulators require original ID documents on file at the partner-API tier. Currently partners can pass ID numbers but no document copy is captured — KYC verification still runs by number, which is the typical partner integration pattern.
+- Session-51 review surface only covered the diff since Session 48. A fresh full-codebase review may surface new findings as Phase 3 (Partner Portal) work proceeds.
+
+---
+
 ## 2026-05-03 — Session 50: API-wiring CI guard + final H2 misses
 
 ### Context
