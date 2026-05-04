@@ -5,3 +5,4 @@ export * from './policy';
 export * from './claims';
 export * from './finance';
 export * from './endorsement';
+export * from './reinsurance';
