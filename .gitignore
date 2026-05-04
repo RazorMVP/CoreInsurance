@@ -1,5 +1,13 @@
 # ─── Claude Code ─────────────────────────────────────────────────────────────
 .claude/settings.local.json
+# Skills: track only the project-canonical cia skill; ignore personal/global
+# skills that bleed into .claude/skills/ from the user's global workflow.
+.claude/skills/*
+!.claude/skills/cia/
+
+# ─── Claude tool working dirs (ephemeral) ────────────────────────────────────
+.playwright-mcp/
+.superpowers/
 
 # ─── Environment / secrets ───────────────────────────────────────────────────
 .env
