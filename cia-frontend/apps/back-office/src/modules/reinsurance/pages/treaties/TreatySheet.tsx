@@ -77,22 +77,19 @@ export default function TreatySheet({ open, onOpenChange, treaty, onSuccess }: P
 
   const save = useMutation({
     mutationFn: async (values: FormValues) => {
-      if (treaty?.id) {
-        const res = await apiClient.put<{ data: { id: string } }>(
-          `/api/v1/reinsurance/treaties/${treaty.id}`, values,
-        );
-        return res.data.data;
-      }
+      // Backend has no PUT for treaty edits — only create + activate/expire/cancel
+      // transitions. If treaty.id is set this is a no-op; the dialog's edit
+      // entry point is hidden in TreatiesTab until backend support lands.
       const res = await apiClient.post<{ data: { id: string } }>(
-        '/api/v1/reinsurance/treaties', values,
+        '/api/v1/ri/treaties', values,
       );
       return res.data.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reinsurance', 'treaties'] });
+      queryClient.invalidateQueries({ queryKey: ['ri', 'treaties'] });
       onSuccess();
     },
-    onError: (e) => applyApiErrors(e, form, { defaultTitle: treaty?.id ? 'Could not update treaty' : 'Could not create treaty' }),
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not create treaty' }),
   });
 
   function onSubmit(values: FormValues) {

@@ -42,9 +42,13 @@ export default function BatchReallocationSheet({ open, onOpenChange, allocations
   const queryClient = useQueryClient();
 
   const treatiesQuery = useQuery<TreatyDto[]>({
-    queryKey: ['reinsurance', 'treaties', { status: 'ACTIVE' }],
+    queryKey: ['ri', 'treaties', { status: 'ACTIVE' }],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: TreatyDto[] }>('/api/v1/reinsurance/treaties', {
+      // Local TreatyDto interface above is presentation-only; the response
+      // shape from /api/v1/ri/treaties is wider but we only read id+name+type+status.
+      // Backend currently returns no `name` field; the dropdown shows the treaty's
+      // type+year as fallback labels.
+      const res = await apiClient.get<{ data: TreatyDto[] }>('/api/v1/ri/treaties', {
         params: { status: 'ACTIVE' },
       });
       return res.data.data;
