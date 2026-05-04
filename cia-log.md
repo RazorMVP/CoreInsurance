@@ -4,7 +4,7 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
-## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5, G8 wired)
+## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5, G8 wired) + Step C runtime validation
 
 ### Context
 
@@ -22,6 +22,8 @@ de68d50  fix(finance): wire receipt + payment reversal to backend (G6)
 76983b9  fix(audit): wire alert acknowledge + client-side CSV export (G5)
 51d00ef  docs(log): session 53 — extend with G5 audit
 8cb2eec  fix(finance): sync frontend DTOs with backend contract (G8)
+55eab4a  docs(log): session 53 — extend with G8
+67fb69b  feat(api-client): runtime contract validation via zod (Step C)
 ```
 
 ### Deep audit findings
@@ -99,6 +101,22 @@ G8 was advertised as "verify whether finance 'decorative enrichment' allow-mocks
 
 **Why this is bigger than the audit suggested.** The audit's "70 useQuery + 38 useMutation" count was *count of calls*, not *count of working calls*. A `useQuery` that fetches successfully but reads non-existent fields renders an empty UI without throwing. Future audits should sample-validate the shape of the JSON returned, not just count call sites.
 
+### Pivot — Step C runtime contract validation (`67fb69b`)
+
+After landing G8 and immediately finding the **same drift in reinsurance** (URL paths wrong: frontend `/api/v1/reinsurance/...` vs backend `/api/v1/ri/...` — every reinsurance useQuery 404'ing at runtime, allow-mock fallbacks masking it), agreed with user on a strategy pivot: **C + B**.
+
+**C — runtime validation infrastructure.** Add a validation layer at the api-client boundary so future drift fails loudly instead of silently:
+
+- New `packages/api-client/src/validation.ts` exports `apiEnvelope(schema)` (wraps a data schema in the standard `{ data, meta?, errors? }` CIA response envelope) and `validatedGet/Post/Put/Patch` helpers. Each helper runs `apiClient.get/post/put/patch`, parses the response with the supplied zod schema, and returns the validated `data`. Throws `ZodError` on shape mismatch.
+- `zod ^4.3.6` added to api-client dependencies (already in workspace via `@cia/ui` and `@cia/back-office`; pnpm workspace-resolves).
+- Top-level usage doc in `packages/api-client/src/index.ts` points future callers at the validated path and explains why we validate (cite G8 + reinsurance discoveries).
+
+**Finance migrated as proof-of-concept.** Rewrote `modules/finance.ts` so schemas are the source of truth and types are derived (`type DebitNoteDto = z.infer<typeof DebitNoteDtoSchema>`). The four list useQueries (Receivables + Payables debit/credit notes + receipts + payments) now use `validatedGet`. Existing `apiClient.get` callers in other modules continue to work — migration is opt-in module by module under Step B.
+
+**zod 4 quirk.** zod 4's mapped types don't narrow cleanly through the generic `apiEnvelope<T>` helper — the parse result needed an explicit `as { data: z.infer<T> }` cast in `validatedGet`. Runtime is correct; cast just unblocks the type system. Documented inline.
+
+**Step B (next sessions).** Per-module sweeps to bring drift into compliance. Order: reinsurance (most severe drift) → claims → audit reports → cia-policy backend. Each sweep aligns URL paths + DTOs + status enums to backend, adds zod schemas, then the original gap's TODOs become the small tasks they were originally advertised as.
+
 ### Housekeeping
 
 **`.gitignore` cleanup (`fc6895c`).** Repo had accumulated 7 personal skills under `.claude/skills/` (content-reviewer, gcloud-refresh, plan-week, post, post2, uat, uat-script-generator) plus `.playwright-mcp/` and `.superpowers/` working dirs as side effects of running tools cd'd here. Pattern `.claude/skills/*` + `!.claude/skills/cia/` ignores future bleed-through while keeping the project-canonical CIA skill tracked.
@@ -130,6 +148,12 @@ G8 was advertised as "verify whether finance 'decorative enrichment' allow-mocks
 | PayablesTab.tsx (G8) | column accessors + status variants + ENTITY_LABELS |
 | PostReceiptSheet.tsx (G8) | field accesses + default amount = outstandingAmount |
 | ProcessPaymentSheet.tsx (G8) | field accesses + default amount = outstandingAmount |
+| [validation.ts (api-client)](cia-frontend/packages/api-client/src/validation.ts) | C — apiEnvelope + validatedGet/Post/Put/Patch helpers |
+| [api-client/package.json](cia-frontend/packages/api-client/package.json) | C — zod ^4.3.6 added |
+| [api-client/index.ts](cia-frontend/packages/api-client/src/index.ts) | C — exports + top-level pattern doc |
+| finance.ts (api-client) | C — schemas as source of truth, types derived via z.infer |
+| ReceivablesTab.tsx (C migration) | switch list useQueries to validatedGet |
+| PayablesTab.tsx (C migration) | switch list useQueries to validatedGet |
 
 ### Sequence B status
 
@@ -139,7 +163,8 @@ G8 was advertised as "verify whether finance 'decorative enrichment' allow-mocks
 | G6 — Finance reverse | ✓ done (`de68d50`) |
 | G5 — Audit (acknowledge + export) | ✓ done (`76983b9`) — backend export endpoint not added; client-side CSV used. Wiring the 6 report reads is a separate follow-up. |
 | G8 — Finance DTO contract bug | ✓ done (`8cb2eec`) — broader than advertised; full sync of DebitNoteDto + CreditNoteDto + status enums + FinanceEntityType. List + dialogs + sheets all updated. |
-| G3 — Reinsurance (7 endpoints) | next |
+| Step C — runtime contract validation | ✓ done (`67fb69b`) — apiEnvelope + validatedGet/Post/Put/Patch in api-client; finance migrated as proof-of-concept |
+| Step B1 — Reinsurance sweep (URLs + DTOs + G3 TODOs) | next |
 | G4 — Claims (6 endpoints) | pending |
 | G1 — cia-policy (11 endpoints) | pending |
 | G9 — Phase 3 Partner Portal (5 builds) | pending |
