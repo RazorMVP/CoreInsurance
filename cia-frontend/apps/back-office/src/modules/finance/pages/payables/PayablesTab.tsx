@@ -5,7 +5,11 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type CreditNoteDto, type FinanceEntityType, type PaymentDto } from '@cia/api-client';
+import { z } from 'zod';
+import {
+  validatedGet, CreditNoteDtoSchema, PaymentDtoSchema,
+  type CreditNoteDto, type FinanceEntityType, type PaymentDto,
+} from '@cia/api-client';
 import CreditNoteDetailDialog   from './CreditNoteDetailDialog';
 import ProcessPaymentSheet      from './ProcessPaymentSheet';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
@@ -36,19 +40,13 @@ const payStatusVariant: Record<PaymentDto['status'], 'active' | 'pending' | 'rej
 export default function PayablesTab() {
   const creditNotesQuery = useQuery<CreditNoteDto[]>({
     queryKey: ['finance', 'credit-notes'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: CreditNoteDto[] }>('/api/v1/finance/credit-notes');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/finance/credit-notes', z.array(CreditNoteDtoSchema)),
   });
   const creditNotes = creditNotesQuery.data ?? [];
 
   const paymentsQuery = useQuery<PaymentDto[]>({
     queryKey: ['finance', 'payments'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: PaymentDto[] }>('/api/v1/finance/payments');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/finance/payments', z.array(PaymentDtoSchema)),
   });
   const payments = paymentsQuery.data ?? [];
 

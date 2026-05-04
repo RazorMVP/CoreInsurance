@@ -5,7 +5,11 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type DebitNoteDto, type ReceiptDto } from '@cia/api-client';
+import { z } from 'zod';
+import {
+  validatedGet, DebitNoteDtoSchema, ReceiptDtoSchema,
+  type DebitNoteDto, type ReceiptDto,
+} from '@cia/api-client';
 import PostReceiptSheet         from './PostReceiptSheet';
 import DebitNoteDetailDialog    from './DebitNoteDetailDialog';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
@@ -33,19 +37,13 @@ export default function ReceivablesTab() {
 
   const debitNotesQuery = useQuery<DebitNoteDto[]>({
     queryKey: ['finance', 'debit-notes'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: DebitNoteDto[] }>('/api/v1/finance/debit-notes');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/finance/debit-notes', z.array(DebitNoteDtoSchema)),
   });
   const debitNotes = debitNotesQuery.data ?? [];
 
   const receiptsQuery = useQuery<ReceiptDto[]>({
     queryKey: ['finance', 'receipts'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: ReceiptDto[] }>('/api/v1/finance/receipts');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/finance/receipts', z.array(ReceiptDtoSchema)),
   });
   const receipts = receiptsQuery.data ?? [];
 
