@@ -4,6 +4,91 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-04 — Session 53: Build audit + start Sequence B (G7 wire-up)
+
+### Context
+
+After session 52 closed the session-51 review punch list, audit shifted to "what's left to build" rather than "what's broken." User asked for a deep audit, then chose **Sequence B** — small frontend wiring fixes first (G7→G6→G5→G8), then larger backend gaps (G3→G4→G1), then Phase 3 Partner Portal.
+
+### Commits in this session
+
+```
+31138ba  docs(arch): correct module count to 19 in container diagram
+fc6895c  chore(gitignore): ignore personal skills + tool working dirs
+5639820  fix(setup): wire QuotesConfigTab to backend (G7)
+```
+
+### Deep audit findings
+
+**Frontend (back-office, 10 modules):** CI guard clean (0 violations). 70 useQuery + 38 useMutation across modules — read wiring is real, not absent (the audit subagent's grep mismatched `useQuery<Type>(` and reported 0; manual verification corrected this). 20 allow-mock fallbacks (18 legitimate "in flight" patterns; 2 finance "decorative enrichment" worth a backend-existence check). 17 module-level TODOs naming concrete missing endpoints — these became gaps G3–G7.
+
+**Backend (11 business modules):** No stub markers anywhere. The single `UnsupportedOperationException` in `ProductService.java:124` is a defensive guard pointing to `PolicyNumberFormatService.generateNext()` — intentional. Real gap: **cia-policy at 12 endpoints vs 23 features** — missing risk details (bulk + modify), document send/ack/download, survey (assign/upload/approve/override), coinsurance shares, NIID upload, renewal automation. cia-endorsement (8 vs 10) and cia-reports (14 vs 20) are counting mismatches, not gaps. cia-reports V18 seed contains 55 SYSTEM reports as documented.
+
+**Doc drift:** CLAUDE.md container diagram listed "16 Maven modules" but 19 exist (cia-partner-api, cia-audit, cia-reports added since the diagram was written). Fixed in `31138ba`.
+
+### Gap inventory (decision-ready)
+
+| ID | Description | Impact | Effort |
+| --- | --- | --- | --- |
+| G1 | cia-policy backend — 11 missing endpoints | 🔴 high | L |
+| G3 | Reinsurance — 7 missing endpoints (treaty status, FAC, allocations) | 🔴 high | M |
+| G4 | Claims — 6 missing endpoints (inspection, cancel, doc bundle) | 🔴 high | M |
+| G5 | Audit — 2 endpoints (alert acknowledge, report export) | 🟡 med | S |
+| G6 | Finance — 1 endpoint (receipt/payment reverse) | 🟡 med | S |
+| G7 | Setup quote-config save | 🟢 low | S |
+| G8 | Finance "decorative enrichment" allow-mocks (verify backend has) | 🟢 low | S |
+| G9 | Phase 3 Partner Portal (5 builds) | 🔴 high to partners | L |
+
+### Workstream — Sequence B starts with G7
+
+**Surprise on first task:** `PUT /api/v1/setup/quote-config` was already wired in `QuoteConfigController.java:32`. The TODO at `QuotesConfigTab.tsx:162` was the visible symptom; the page actually had three full CRUD flows (config + discount types + loading types) with **zero persistence** — local-state-only edits backed by `MOCK_DISCOUNT_TYPES`/`MOCK_LOADING_TYPES`/`MOCK_QUOTE_CONFIG`. Backend has 9 controller mappings supporting all of it.
+
+Wired the whole tab in one commit:
+- 3 useQuery (config singleton + discount types list + loading types list)
+- 7 useMutation (config update + create/update/remove for both type lists)
+- Skeleton fallback while initial queries are in flight
+- Save button uses `updateConfigMutation.isPending` (matches H2 pattern)
+
+`MOCK_*` exports in `quote-config-types.ts` kept — still imported by `QuoteDetailPage.tsx` for separate concerns. That wiring is a follow-up.
+
+### Housekeeping
+
+**`.gitignore` cleanup (`fc6895c`).** Repo had accumulated 7 personal skills under `.claude/skills/` (content-reviewer, gcloud-refresh, plan-week, post, post2, uat, uat-script-generator) plus `.playwright-mcp/` and `.superpowers/` working dirs as side effects of running tools cd'd here. Pattern `.claude/skills/*` + `!.claude/skills/cia/` ignores future bleed-through while keeping the project-canonical CIA skill tracked.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` → exit 0 (clean)
+- `bash cia-frontend/scripts/check-api-wiring.sh` → 0 violations
+- `git ls-files .claude/skills/cia/` → still tracked after gitignore change
+
+### Files modified
+
+| File | Why |
+| --- | --- |
+| [CLAUDE.md](CLAUDE.md) | Container diagram count drift |
+| [.gitignore](.gitignore) | Personal skills + tool working dirs |
+| [QuotesConfigTab.tsx](cia-frontend/apps/back-office/src/modules/setup/pages/policy-specs/QuotesConfigTab.tsx) | G7 — wire all three CRUDs to backend |
+
+### Sequence B status
+
+| Gap | Status |
+| --- | --- |
+| G7 — Setup quote-config | ✓ done (`5639820`) |
+| G6 — Finance reverse | next |
+| G5 — Audit (acknowledge + export) | pending |
+| G8 — Finance enrichment investigation | pending |
+| G3 — Reinsurance (7 endpoints) | pending |
+| G4 — Claims (6 endpoints) | pending |
+| G1 — cia-policy (11 endpoints) | pending |
+| G9 — Phase 3 Partner Portal (5 builds) | pending |
+
+### Follow-ups
+
+- `QuoteDetailPage.tsx` still imports `MOCK_DISCOUNT_TYPES`/`MOCK_LOADING_TYPES`/`MOCK_QUOTE_CONFIG` for fallback rendering on the detail page. When that page is wired, the MOCK_ exports can be deleted entirely.
+- The audit's TODO list flagged the visible `// TODO:` comments but missed unwired CRUDs that didn't carry comments (the discount/loading types CRUD on this tab). Future audits should also flag local-state CRUD on pages that have a backend controller.
+
+---
+
 ## 2026-05-04 — Session 52: Land all 17 session-51 review items + partner-api compile fix
 
 ### Context
