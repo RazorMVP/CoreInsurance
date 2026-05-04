@@ -3,10 +3,11 @@
 # page hits useQuery, and no stale mock arrays sneak back in. Catches the H2/M1
 # regressions documented in CLAUDE.md (Frontend API wiring rules).
 #
-# Opt out a legitimate fallback by adding a comment immediately above the
-# declaration:
+# Opt out a legitimate fallback by adding a comment within the 3 lines
+# immediately above the declaration:
 #
 #   // allow-mock: <one-line reason>
+#   // (further explanation across multiple lines is fine)
 #   const mockFallback = [...]
 #
 # The reason ends up in `git blame` so future readers know why it survives.
@@ -36,11 +37,16 @@ report_with_optout() {
     line=$(printf '%s' "$match" | cut -d: -f2)
     content=$(printf '%s' "$match" | cut -d: -f3-)
 
-    # Check the previous line for the opt-out marker.
+    # Check the 3 lines immediately above the match for the opt-out marker.
+    # Allowing a small range (rather than just the previous line) lets the
+    # reason be written across multiple lines or sit above an intervening
+    # blank line.
     if [ "$line" -gt 1 ]; then
-      local prev
-      prev=$(sed -n "$((line - 1))p" "$file" 2>/dev/null || true)
-      if printf '%s' "$prev" | grep -qE '//[[:space:]]*allow-mock:'; then
+      local start prev_block
+      start=$(( line - 3 ))
+      [ "$start" -lt 1 ] && start=1
+      prev_block=$(sed -n "${start},$((line - 1))p" "$file" 2>/dev/null || true)
+      if printf '%s' "$prev_block" | grep -qE '//[[:space:]]*allow-mock:'; then
         continue
       fi
     fi
@@ -61,11 +67,12 @@ echo ""
 matches=$(grep -rEnH 'console\.log\(' --include='*.tsx' --include='*.ts' "$ROOT" 2>/dev/null || true)
 report_with_optout "console.log in module code (use logger or remove)" "$matches"
 
-# ── Rule 2: top-level mock array declarations ────────────────────────────────
-# Match `const mockX = [` or `const MOCK_X = [` at line start. Inline mocks
-# inside test files or hooks/helpers/ subdirs are out of scope — those
-# directories aren't covered by this scan.
-matches=$(grep -rEnH '^const (mock[A-Z][A-Za-z0-9_]*|MOCK_[A-Z0-9_]+)\s*[:=]' \
+# ── Rule 2: mock array declarations ──────────────────────────────────────────
+# Match `const mockX = [` or `const MOCK_X = [` — at line start OR indented
+# (mocks declared inside function bodies, branches, useEffect callbacks).
+# Inline mocks inside test files or hooks/helpers/ subdirs are out of scope —
+# those directories aren't covered by this scan.
+matches=$(grep -rEnH '^[[:space:]]*const (mock[A-Z][A-Za-z0-9_]*|MOCK_[A-Z0-9_]+)\s*[:=]' \
   --include='*.tsx' --include='*.ts' "$ROOT" 2>/dev/null || true)
 report_with_optout "top-level mock declaration (wire to useQuery or mark with // allow-mock:)" "$matches"
 

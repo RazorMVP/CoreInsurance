@@ -43,54 +43,56 @@ interface MockCustomer {
   directors?: { id: string; firstName: string; lastName: string; dateOfBirth?: string; idType?: string; idNumber?: string; idExpiryDate?: string }[];
 }
 
-// allow-mock: fallback while useQuery is in flight or for unknown ids
+// allow-mock: fallback while useQuery is in flight or for unknown ids.
+// Values are synthetic placeholders (not real PII) — keeps the layout
+// visible without shipping data that could be confused for real customers.
 const MOCK_CUSTOMERS: MockCustomer[] = [
   {
     id: 'c1', customerNumber: 'CUST/2026/IND/00000001', customerType: 'INDIVIDUAL',
-    displayName: 'Chioma Okafor', kycStatus: 'VERIFIED', status: 'ACTIVE',
-    email: 'chioma@email.ng', phone: '+234 803 111 0001',
-    address: '14 Adeola Odeku Street, Victoria Island, Lagos', createdAt: '2026-01-15',
-    dateOfBirth: '1990-05-12', idType: 'NIN', idNumber: '12345678901', occupation: 'Software Engineer',
+    displayName: 'Sample Individual 1', kycStatus: 'VERIFIED', status: 'ACTIVE',
+    email: 'sample-individual-1@example.test', phone: '+000 000 000 0001',
+    address: 'Sample Address 1', createdAt: '2026-01-15',
+    dateOfBirth: '1990-01-01', idType: 'NIN', idNumber: 'SAMPLE-NIN-0001', occupation: 'Sample Occupation',
   },
   {
     id: 'c2', customerNumber: 'CUST/2026/CORP/00000001', customerType: 'CORPORATE',
-    displayName: 'Alaba Trading Co.', kycStatus: 'VERIFIED', status: 'ACTIVE',
-    email: 'info@alaba.ng', phone: '+234 701 222 0002',
-    address: '7 Commerce Road, Apapa, Lagos', createdAt: '2026-01-20',
-    brokerName: 'Leadway Brokers',
-    companyName: 'Alaba Trading Co.', rcNumber: 'RC-123456', industry: 'Trading',
-    contactPerson: 'Tunde Alaba', directorName: 'Tunde Alaba / Bisi Alaba',
+    displayName: 'Sample Corporate 1', kycStatus: 'VERIFIED', status: 'ACTIVE',
+    email: 'sample-corp-1@example.test', phone: '+000 000 000 0002',
+    address: 'Sample Address 2', createdAt: '2026-01-20',
+    brokerName: 'Sample Broker',
+    companyName: 'Sample Corporate 1', rcNumber: 'SAMPLE-RC-0001', industry: 'Sample Industry',
+    contactPerson: 'Sample Contact', directorName: 'Sample Director A / Sample Director B',
     directors: [
-      { id: 'd1', firstName: 'Tunde', lastName: 'Alaba', dateOfBirth: '1975-04-10', idType: 'NIN',      idNumber: '22334455667' },
-      { id: 'd2', firstName: 'Bisi',  lastName: 'Alaba', dateOfBirth: '1978-09-22', idType: 'PASSPORT', idNumber: 'B98765432', idExpiryDate: '2030-06-15' },
+      { id: 'd1', firstName: 'Sample', lastName: 'DirectorA', dateOfBirth: '1975-01-01', idType: 'NIN',      idNumber: 'SAMPLE-NIN-0010' },
+      { id: 'd2', firstName: 'Sample', lastName: 'DirectorB', dateOfBirth: '1978-01-01', idType: 'PASSPORT', idNumber: 'SAMPLE-PP-0010', idExpiryDate: '2030-06-15' },
     ],
   },
   {
     id: 'c3', customerNumber: 'CUST/2026/IND/00000002', customerType: 'INDIVIDUAL',
-    displayName: 'Emeka Eze', kycStatus: 'PENDING', status: 'ACTIVE',
-    email: 'emeka@email.ng', phone: '+234 805 333 0003',
-    address: '22 Enugu Road, GRA, Enugu', createdAt: '2026-02-01',
-    dateOfBirth: '1985-11-20', idType: 'PASSPORT', idNumber: 'A12345678', idExpiryDate: '2029-03-15', occupation: 'Civil Servant',
+    displayName: 'Sample Individual 2', kycStatus: 'PENDING', status: 'ACTIVE',
+    email: 'sample-individual-2@example.test', phone: '+000 000 000 0003',
+    address: 'Sample Address 3', createdAt: '2026-02-01',
+    dateOfBirth: '1985-01-01', idType: 'PASSPORT', idNumber: 'SAMPLE-PP-0002', idExpiryDate: '2029-03-15', occupation: 'Sample Occupation',
   },
   {
     id: 'c4', customerNumber: 'CUST/2026/CORP/00000002', customerType: 'CORPORATE',
-    displayName: 'Danforth Logistics', kycStatus: 'FAILED', status: 'ACTIVE',
-    email: 'ops@danforth.ng', phone: '+234 809 444 0004',
-    address: '5 Industrial Layout, Trans-Amadi, Port Harcourt', createdAt: '2026-02-10',
-    companyName: 'Danforth Logistics Ltd', rcNumber: 'RC-789012', industry: 'Logistics',
-    contactPerson: 'David Danforth', directorName: 'David Danforth',
+    displayName: 'Sample Corporate 2', kycStatus: 'FAILED', status: 'ACTIVE',
+    email: 'sample-corp-2@example.test', phone: '+000 000 000 0004',
+    address: 'Sample Address 4', createdAt: '2026-02-10',
+    companyName: 'Sample Corporate 2 Ltd', rcNumber: 'SAMPLE-RC-0002', industry: 'Sample Industry',
+    contactPerson: 'Sample Contact', directorName: 'Sample Director C',
     directors: [
-      { id: 'd3', firstName: 'David',   lastName: 'Danforth', dateOfBirth: '1980-01-15', idType: 'DRIVERS_LICENSE', idNumber: 'DL-NG-0055123', idExpiryDate: '2028-03-20' },
-      { id: 'd4', firstName: 'Chidera', lastName: 'Obi',      dateOfBirth: '1983-07-30', idType: 'NIN',             idNumber: '33445566778' },
+      { id: 'd3', firstName: 'Sample', lastName: 'DirectorC', dateOfBirth: '1980-01-01', idType: 'DRIVERS_LICENSE', idNumber: 'SAMPLE-DL-0001', idExpiryDate: '2028-03-20' },
+      { id: 'd4', firstName: 'Sample', lastName: 'DirectorD', dateOfBirth: '1983-01-01', idType: 'NIN',             idNumber: 'SAMPLE-NIN-0011' },
     ],
   },
   {
     id: 'c5', customerNumber: 'CUST/2026/IND/00000003', customerType: 'INDIVIDUAL',
-    displayName: 'Ngozi Adeyemi', kycStatus: 'VERIFIED', status: 'INACTIVE',
-    email: 'ngozi@email.ng', phone: '+234 706 555 0005',
-    address: '8 Awolowo Avenue, Bodija, Ibadan', createdAt: '2026-02-15',
-    brokerName: 'Stanbic Brokers',
-    dateOfBirth: '1992-03-08', idType: 'DRIVERS_LICENSE', idNumber: 'DL-NG-0099871', idExpiryDate: '2027-11-30', occupation: 'Pharmacist',
+    displayName: 'Sample Individual 3', kycStatus: 'VERIFIED', status: 'INACTIVE',
+    email: 'sample-individual-3@example.test', phone: '+000 000 000 0005',
+    address: 'Sample Address 5', createdAt: '2026-02-15',
+    brokerName: 'Sample Broker',
+    dateOfBirth: '1992-01-01', idType: 'DRIVERS_LICENSE', idNumber: 'SAMPLE-DL-0002', idExpiryDate: '2027-11-30', occupation: 'Sample Occupation',
   },
 ];
 

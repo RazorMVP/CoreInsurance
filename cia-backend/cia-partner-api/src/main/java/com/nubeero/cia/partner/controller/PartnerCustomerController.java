@@ -42,9 +42,15 @@ public class PartnerCustomerController {
     })
     public ResponseEntity<ApiResponse<PartnerCustomerResponse>> createIndividual(
             @Valid @RequestBody IndividualCustomerRequest request) {
+        // Partner API is JSON-only by design — partners verify by ID number,
+        // not by uploading the document. uploadKycDocument() short-circuits
+        // on null, so the customer is created and KYC runs without a document
+        // copy on file. (See follow-up: a separate document-upload endpoint
+        // can be added if regulators require the original on file.)
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(
-                        PartnerCustomerResponse.from(customerService.createIndividual(request))));
+                        PartnerCustomerResponse.from(
+                                customerService.createIndividual(request, null))));
     }
 
     @PostMapping("/corporate")
@@ -61,9 +67,13 @@ public class PartnerCustomerController {
     })
     public ResponseEntity<ApiResponse<PartnerCustomerResponse>> createCorporate(
             @Valid @RequestBody CorporateCustomerRequest request) {
+        // Partner API is JSON-only by design — see note on createIndividual.
+        // CAC certificate and director ID document uploads can be added via
+        // a separate multipart endpoint if/when regulators require originals.
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(
-                        PartnerCustomerResponse.from(customerService.createCorporate(request))));
+                        PartnerCustomerResponse.from(
+                                customerService.createCorporate(request, null, null))));
     }
 
     @GetMapping("/{id}")

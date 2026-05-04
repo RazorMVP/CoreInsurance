@@ -24,6 +24,18 @@
 -- Production rollout note: rotate the key by (a) decrypting with the old
 -- key, (b) re-encrypting with the new key in a maintenance window. There
 -- is no automated rotation path here yet — that is a follow-up runbook.
+--
+-- Performance note: ALTER COLUMN ... TYPE bytea USING pgp_sym_encrypt(...)
+-- rewrites every row of the affected table. On a tenant with millions of
+-- customers, V24 runs in O(rows) and locks the table (ACCESS EXCLUSIVE) for
+-- the duration. Plan accordingly:
+--   - Apply during a maintenance window for tenants with > ~100k customers.
+--   - Each row also incurs a pgcrypto symmetric-encrypt call, which is
+--     CPU-bound. Expect ~10-30k rows/sec depending on hardware and key size.
+--   - Per-tenant Flyway migration runs sequentially; one slow tenant does
+--     not block other tenants from accepting traffic.
+-- For green-field tenants (empty tables) this migration is effectively
+-- instantaneous.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 

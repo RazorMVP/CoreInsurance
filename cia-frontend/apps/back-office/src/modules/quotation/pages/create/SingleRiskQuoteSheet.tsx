@@ -416,7 +416,19 @@ export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: 
 
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={createQuote.isPending}>
+              {/*
+                Disable Save while loading/discount type queries are in flight —
+                resolveTypeName() depends on them, and submitting too early would
+                persist empty typeName strings into AdjustmentEntry JSONB.
+              */}
+              <Button
+                type="submit"
+                disabled={
+                  createQuote.isPending
+                  || loadingTypesQuery.isLoading
+                  || discountTypesQuery.isLoading
+                }
+              >
                 {createQuote.isPending ? 'Saving…' : 'Save as Draft'}
               </Button>
             </SheetFooter>

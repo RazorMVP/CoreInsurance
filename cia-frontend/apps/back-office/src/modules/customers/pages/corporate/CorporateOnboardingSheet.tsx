@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Button, Checkbox, Form, FormControl, FormDescription, FormField,
@@ -75,7 +75,8 @@ export default function CorporateOnboardingSheet({ open, onOpenChange, onSuccess
     },
     enabled: open,
   });
-  const brokers = brokersQuery.data ?? [];
+  // Memoised so SelectItems aren't re-created on every parent render.
+  const brokers = useMemo(() => brokersQuery.data ?? [], [brokersQuery.data]);
 
   // CAC certificate
   const cacFileRef   = useRef<HTMLInputElement>(null);

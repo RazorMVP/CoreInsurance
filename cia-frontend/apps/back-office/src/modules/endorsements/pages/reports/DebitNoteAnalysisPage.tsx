@@ -27,13 +27,13 @@ export default function DebitNoteAnalysisPage() {
       return res.data.data;
     },
   });
-  const mockData = byPeriodQuery.data ?? [];
+  const byPeriod = byPeriodQuery.data ?? [];
   const byType   = byTypeQuery.data   ?? [];
 
-  const totalEndorsements = mockData.reduce((s, r) => s + r.endorsements, 0);
-  const totalDebits       = mockData.reduce((s, r) => s + r.debits, 0);
-  const totalCredits      = mockData.reduce((s, r) => s + r.credits, 0);
-  const totalNet          = mockData.reduce((s, r) => s + r.netPremium, 0);
+  const totalEndorsements = byPeriod.reduce((s, r) => s + r.endorsements, 0);
+  const totalDebits       = byPeriod.reduce((s, r) => s + r.debits, 0);
+  const totalCredits      = byPeriod.reduce((s, r) => s + r.credits, 0);
+  const totalNet          = byPeriod.reduce((s, r) => s + r.netPremium, 0);
 
   return (
     <div className="p-6 space-y-5 max-w-5xl">
@@ -66,8 +66,8 @@ export default function DebitNoteAnalysisPage() {
               ))}
             </tr></thead>
             <tbody>
-              {mockData.map((r,i)=>(
-                <tr key={r.period} className={i<mockData.length-1?'border-b':''}>
+              {byPeriod.map((r,i)=>(
+                <tr key={r.period} className={i<byPeriod.length-1?'border-b':''}>
                   <td className="px-4 py-3 font-medium">{r.period}</td>
                   <td className="px-4 py-3">{r.endorsements}</td>
                   <td className="px-4 py-3">{r.debits}</td>

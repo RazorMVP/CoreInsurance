@@ -49,8 +49,15 @@ public class ReportAccessService {
     public ReportAccessPolicy upsert(UUID accessGroupId, ReportCategory category,
                                      UUID reportId, boolean canView,
                                      boolean canExportCsv, boolean canExportPdf) {
+        // DB constraint on report_access_policy: category IS NOT NULL OR report_id IS NOT NULL,
+        // and the two are mutually exclusive (a row is either category-level or report-level,
+        // never both). Validate the XOR up-front instead of letting the constraint fail later.
         if (category == null && reportId == null) {
             throw new IllegalArgumentException("Either category or reportId must be set");
+        }
+        if (category != null && reportId != null) {
+            throw new IllegalArgumentException(
+                    "category and reportId are mutually exclusive — set exactly one");
         }
 
         ReportAccessPolicy policy = resolveExact(accessGroupId, category, reportId)

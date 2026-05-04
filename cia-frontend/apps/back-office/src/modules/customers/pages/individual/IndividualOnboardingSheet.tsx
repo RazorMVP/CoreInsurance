@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Button, Checkbox, Form, FormControl, FormDescription, FormField,
@@ -64,7 +64,8 @@ export default function IndividualOnboardingSheet({ open, onOpenChange, onSucces
     },
     enabled: open,
   });
-  const brokers = brokersQuery.data ?? [];
+  // Memoised so SelectItems aren't re-created on every parent render.
+  const brokers = useMemo(() => brokersQuery.data ?? [], [brokersQuery.data]);
 
   const form = useForm<FormValues>({
     resolver:      zodResolver(schema),

@@ -46,26 +46,46 @@ public class ReportRunnerService {
                 .build();
     }
 
+    /**
+     * Result of an export render. {@code truncated} is true when the underlying
+     * dataset contained more rows than {@link ReportQueryBuilder#EXPORT_MAX_ROWS} —
+     * the caller (controller) should surface this to the client so the user
+     * isn't silently shown a partial export.
+     */
+    public record CsvExport(StreamingResponseBody body, boolean truncated, int rowsRendered) {}
+
+    public record PdfExport(byte[] bytes, boolean truncated, int rowsRendered) {}
+
     @Transactional(readOnly = true)
-    public StreamingResponseBody runCsv(ReportRunRequest request) {
+    public CsvExport runCsv(ReportRunRequest request) {
         ReportDefinition definition = definitionService.get(request.getReportId());
+        // Fetch one extra row so we can detect when the dataset exceeded the cap.
         List<Map<String, Object>> rows = queryBuilder.execute(
-                definition, request.getFilters(), ReportQueryBuilder.EXPORT_MAX_ROWS);
+                definition, request.getFilters(), ReportQueryBuilder.EXPORT_MAX_ROWS + 1);
+        boolean truncated = rows.size() > ReportQueryBuilder.EXPORT_MAX_ROWS;
+        if (truncated) {
+            rows = rows.subList(0, ReportQueryBuilder.EXPORT_MAX_ROWS);
+        }
         List<ReportField> columns = definition.getConfig().getFields() != null
                 ? definition.getConfig().getFields()
                 : List.of();
-        return csvRenderer.render(columns, rows);
+        return new CsvExport(csvRenderer.render(columns, rows), truncated, rows.size());
     }
 
     @Transactional(readOnly = true)
-    public byte[] runPdf(ReportRunRequest request) {
+    public PdfExport runPdf(ReportRunRequest request) {
         ReportDefinition definition = definitionService.get(request.getReportId());
         List<Map<String, Object>> rows = queryBuilder.execute(
-                definition, request.getFilters(), ReportQueryBuilder.EXPORT_MAX_ROWS);
+                definition, request.getFilters(), ReportQueryBuilder.EXPORT_MAX_ROWS + 1);
+        boolean truncated = rows.size() > ReportQueryBuilder.EXPORT_MAX_ROWS;
+        if (truncated) {
+            rows = rows.subList(0, ReportQueryBuilder.EXPORT_MAX_ROWS);
+        }
         List<ReportField> columns = definition.getConfig().getFields() != null
                 ? definition.getConfig().getFields()
                 : List.of();
-        return pdfRenderer.render(definition, columns, rows, request.getFilters());
+        byte[] bytes = pdfRenderer.render(definition, columns, rows, request.getFilters());
+        return new PdfExport(bytes, truncated, rows.size());
     }
 
     // ── Pin management ─────────────────────────────────────────────────

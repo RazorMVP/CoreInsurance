@@ -20,6 +20,35 @@ import java.util.regex.Pattern;
  * resolution but <strong>before</strong> the DataSource bean is created.
  * Registered via
  * {@code META-INF/spring/org.springframework.boot.env.EnvironmentPostProcessor.imports}.
+ *
+ * <h2>Pre-flight runbook (operator checklist)</h2>
+ * Before promoting a tenant or environment to production:
+ * <ol>
+ *   <li><b>Generate a key.</b> Use {@code openssl rand -base64 32} (or a
+ *       secret-manager equivalent). 32 random bytes encoded as base64 yields
+ *       a 44-character string that satisfies the validator regex.</li>
+ *   <li><b>Store the key in a secret manager,</b> not in source-controlled
+ *       config files. AWS Secrets Manager, GCP Secret Manager, HashiCorp
+ *       Vault, or equivalent. Reference it from deployment manifests as
+ *       {@code PII_ENCRYPTION_KEY}.</li>
+ *   <li><b>Verify the key is set</b> in the running environment before
+ *       deploying: {@code echo "${PII_ENCRYPTION_KEY:-MISSING}"} should
+ *       print the key (or its length), not "MISSING". A missing key fails
+ *       startup loudly, which is the design — but catching it pre-deploy
+ *       avoids a false-fire incident.</li>
+ *   <li><b>Back up the key</b> in a separate vault location accessible to
+ *       at least two on-call engineers. Loss of the key is unrecoverable —
+ *       all encrypted PII (id_number, id_document_url, address) becomes
+ *       unreadable. There is no master backdoor.</li>
+ *   <li><b>Verify Flyway can read the key.</b> V24 encrypts existing rows
+ *       in place using {@code current_setting('app.pii_key')}. Both the
+ *       application and the migration share the Hikari pool, so if startup
+ *       passes this validator, V24 will see the same key.</li>
+ *   <li><b>Rotation:</b> there is no automated rotation path. To rotate,
+ *       schedule a maintenance window: decrypt with old key, re-encrypt
+ *       with new key, swap the secret. Plan for table-rewrite duration
+ *       (see V24 perf note in the migration file).</li>
+ * </ol>
  */
 public class PiiKeyValidator implements EnvironmentPostProcessor {
 

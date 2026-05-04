@@ -147,11 +147,15 @@ public class ReportController {
     public ResponseEntity<StreamingResponseBody> runCsv(
             @Valid @RequestBody ReportRunRequest request) {
         String filename = "report-" + LocalDate.now() + ".csv";
-        StreamingResponseBody body = runnerService.runCsv(request);
+        var export = runnerService.runCsv(request);
+        // X-Report-Truncated lets the UI tell the user the export hit the row cap;
+        // X-Report-Rows is the rendered row count for client-side display.
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .header("X-Report-Truncated", String.valueOf(export.truncated()))
+                .header("X-Report-Rows",      String.valueOf(export.rowsRendered()))
                 .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
-                .body(body);
+                .body(export.body());
     }
 
     @PostMapping("/run/pdf")
@@ -162,15 +166,17 @@ public class ReportController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
     })
     public ResponseEntity<byte[]> runPdf(@Valid @RequestBody ReportRunRequest request) {
-        byte[] pdf = runnerService.runPdf(request);
-        if (pdf == null) {
+        var export = runnerService.runPdf(request);
+        if (export.bytes() == null) {
             return ResponseEntity.internalServerError().build();
         }
         String filename = "report-" + LocalDate.now() + ".pdf";
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .header("X-Report-Truncated", String.valueOf(export.truncated()))
+                .header("X-Report-Rows",      String.valueOf(export.rowsRendered()))
                 .contentType(MediaType.APPLICATION_PDF)
-                .body(pdf);
+                .body(export.bytes());
     }
 
     // ── Pin management ─────────────────────────────────────────────────

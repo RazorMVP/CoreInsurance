@@ -58,7 +58,9 @@ export default function AlertConfigDialog({ open, onOpenChange }: Props) {
   });
 
   useEffect(() => {
-    if (configQuery.data) form.reset(configQuery.data);
+    // keepDirtyValues preserves any field the user is editing when the
+    // query refetches (e.g. on window focus) so we never clobber input.
+    if (configQuery.data) form.reset(configQuery.data, { keepDirtyValues: true });
   }, [configQuery.data, form]);
 
   const emailEnabled = form.watch('alertEmailEnabled');

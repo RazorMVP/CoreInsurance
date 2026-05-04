@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -153,7 +153,11 @@ export default function EditCustomerSheet({ open, onOpenChange, customer, onSucc
     enabled: open,
   });
   // Prepend the "no broker" sentinel so the select can represent "Direct".
-  const brokerOptions = [NO_BROKER_OPTION, ...((brokersQuery.data ?? []).map(b => ({ id: b.id, name: b.name })))];
+  // Memoised so child Selects don't re-key SelectItems on every parent render.
+  const brokerOptions = useMemo(
+    () => [NO_BROKER_OPTION, ...(brokersQuery.data ?? []).map(b => ({ id: b.id, name: b.name }))],
+    [brokersQuery.data],
+  );
 
   // Customer-level ID document
   const fileInputRef = useRef<HTMLInputElement>(null);
