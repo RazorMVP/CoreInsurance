@@ -4,7 +4,7 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
-## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5, G8 wired) + Step C runtime validation
+## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5, G8) + Step C validation + B1 reinsurance sweep
 
 ### Context
 
@@ -24,6 +24,11 @@ de68d50  fix(finance): wire receipt + payment reversal to backend (G6)
 8cb2eec  fix(finance): sync frontend DTOs with backend contract (G8)
 55eab4a  docs(log): session 53 — extend with G8
 67fb69b  feat(api-client): runtime contract validation via zod (Step C)
+b5de9ba  docs(log): session 53 — extend with Step C
+63f8a14  feat(api-client): add reinsurance schemas (B1.1)
+047f2ce  fix(reinsurance): wire treaties tab to backend (B1.2, closes G3 TODO 1)
+9adec51  fix(reinsurance): wire allocations tab to backend (B1.3, closes G3 TODO 7)
+0b2b0bc  fix(reinsurance): wire FAC outward to backend (B1.4, closes G3 TODOs 5+6)
 ```
 
 ### Deep audit findings
@@ -117,6 +122,56 @@ After landing G8 and immediately finding the **same drift in reinsurance** (URL 
 
 **Step B (next sessions).** Per-module sweeps to bring drift into compliance. Order: reinsurance (most severe drift) → claims → audit reports → cia-policy backend. Each sweep aligns URL paths + DTOs + status enums to backend, adds zod schemas, then the original gap's TODOs become the small tasks they were originally advertised as.
 
+### Workstream — B1 reinsurance sweep (4 commits)
+
+The reinsurance frontend was the most-broken module: every useQuery 404'd at runtime (frontend hit `/api/v1/reinsurance/...`, backend served `/api/v1/ri/...`), and the local presentation DTOs bore little resemblance to the backend response shapes. The sweep landed in 4 focused commits.
+
+**B1.1 (`63f8a14`) — schemas.** Pure additive: added `packages/api-client/src/modules/reinsurance.ts` with `TreatyDtoSchema`, `AllocationDtoSchema`, `FacCoverDtoSchema`, all enum schemas (`TreatyType`, `TreatyStatus`, `AllocationStatus`, `FacCoverStatus`), and derived types via `z.infer`. Top-of-file comment lists known backend gaps (inward FAC, treaty PUT, batch reallocation, FAC PDFs) so the next dev knows what's intentional.
+
+**B1.2 (`047f2ce`) — TreatiesTab + TreatySheet + BatchReallocationSheet read URL.** Closes G3 TODO 1.
+
+- URL: `/api/v1/ri/treaties`. useQuery via `validatedGet`.
+- Backend `Treaty` has UUIDs only (`productId`, `classOfBusinessId`) and no `name` field. Added a `setup/classes-of-business` lookup query and derived display name: `description ?? "{class} {type} {year}"`.
+- Status enum updated to backend's `DRAFT/ACTIVE/EXPIRED/CANCELLED`.
+- Reinsurers cell now reads `participants[]` (with `isLead` flag); old comma-separated `reinsurers` string was a frontend invention.
+- Retention/Capacity columns branch on `treatyType` and read backend fields per type (`retentionLimit + surplusCapacity` for SURPLUS; `xolPerRiskRetention + xolPerRiskLimit` for XOL).
+- Action menu: DRAFT → `/activate`, ACTIVE → `/cancel`. `expire` is automated by date and has no UI action.
+- "Edit treaty" removed (backend has no PUT). TreatySheet's PUT path also removed.
+
+**B1.3 (`9adec51`) — AllocationsTab + PolicyAllocationSheet.** Closes G3 TODO 7.
+
+- URL: `/api/v1/ri/allocations`. useQuery via `validatedGet`.
+- Auxiliary lookups: classes-of-business + treaties for class names + treaty display.
+- Status remap: backend's `DRAFT/CONFIRMED/CANCELLED` + a derived `EXCESS_CAPACITY` (when `excessAmount > 0`). Drops the frontend's invented `AUTO_ALLOCATED` and `APPROVED` (backend's `CONFIRMED` is terminal).
+- Reinsurers composed from `lines[]`; sum/retention/ceding columns read `ourShareSumInsured / retainedAmount / cededAmount`.
+- "Confirm All" dialog wired: backend has no `/confirm-batch`, so we fan out individual `/confirm` calls via `Promise.all`. Single failure rolls back the success toast.
+- `PolicyAllocationSheet` refactored to accept `AllocationDto` + auxiliary props (`displayStatus`, `classOfBusinessName`, `treatyDisplayName`, `treatyYear`, `reinsurersDisplay`, `onCreateFAC`). Confirm + Cancel mutations live in the sheet. The Approve/Reject pair is dropped — they were always no-op handlers; backend has no APPROVED status. Cancel now hits `/cancel` (backend supports it for both DRAFT and CONFIRMED allocations).
+
+**B1.4 (`0b2b0bc`) — FACTab outward + dialogs + CreateFACOfferSheet.** Closes G3 TODOs 5 and 6.
+
+- URL: `/api/v1/ri/fac-covers`. useQuery via `validatedGet`.
+- Outward tab fully migrated to `FacCoverDto`. Status remap: backend's `PENDING/CONFIRMED/CANCELLED` (was frontend-invented `OFFER_SENT/ACCEPTED/DECLINED/DRAFT`).
+- New "Net Premium" + "Period" columns reading `netPremium` and `coverFrom → coverTo`.
+- Cancel mutation wires `POST /api/v1/ri/fac-covers/{id}/cancel` with required `reason` body. The single backend endpoint covers both inward and outward UI flows (no direction in backend), so this single mutation closes both G3 TODOs 5 and 6.
+- `FACCreditNoteDialog` + `FACOfferSlipDialog` updated to read backend fields (`facReference`, `reinsuranceCompanyName`, `sumInsuredCeded`, `premiumCeded`, backend-computed `commissionRate / commissionAmount / netPremium`). Drops the hardcoded 5% commission constant — uses backend-persisted rate.
+- "Submit to Finance" + both "Download PDF" actions remain TODO comments — backend has no offer-slip-PDF, credit-note-create, or credit-note-PDF endpoints (G3 TODOs 2/3/4 — documented as backend gaps).
+- `CreateFACOfferSheet`: POST URL fixed to `/api/v1/ri/fac-covers`.
+- Inward FAC tab: backend has no inward FAC concept (`RiFacCover` is outward-only with no direction field). Tab now renders mock data with an explicit "Backend support pending" subtitle. Cancel-inward dialog is documentary — closes without dispatching.
+
+**G3 TODO closure summary:**
+
+| TODO | Status |
+|---|---|
+| 1 — PATCH /reinsurance/treaties/{id}/status | ✓ Replaced with proper transitions: `/activate`, `/cancel` |
+| 2 — GET /reinsurance/fac/outward/{id}/offer-slip | ⏳ Backend gap — endpoint doesn't exist |
+| 3 — GET /reinsurance/fac/outward/{id}/credit-note/pdf | ⏳ Backend gap |
+| 4 — POST /reinsurance/fac/outward/{id}/credit-note | ⏳ Backend gap |
+| 5 — DELETE /reinsurance/fac/outward/{id} | ✓ Wired to `POST /ri/fac-covers/{id}/cancel` with reason |
+| 6 — DELETE /reinsurance/fac/inward/{id} | ✓ Same single backend endpoint covers it (UI documentary for now since inward flow has no backend) |
+| 7 — PATCH /reinsurance/allocations/confirm-batch | ✓ Fanned out via `Promise.all(/confirm)` |
+
+Net: **4 of 7 closed; 3 deferred as backend gaps.** All other reinsurance reads now hit real backend (no more 404s + mock fallback).
+
 ### Housekeeping
 
 **`.gitignore` cleanup (`fc6895c`).** Repo had accumulated 7 personal skills under `.claude/skills/` (content-reviewer, gcloud-refresh, plan-week, post, post2, uat, uat-script-generator) plus `.playwright-mcp/` and `.superpowers/` working dirs as side effects of running tools cd'd here. Pattern `.claude/skills/*` + `!.claude/skills/cia/` ignores future bleed-through while keeping the project-canonical CIA skill tracked.
@@ -154,6 +209,16 @@ After landing G8 and immediately finding the **same drift in reinsurance** (URL 
 | finance.ts (api-client) | C — schemas as source of truth, types derived via z.infer |
 | ReceivablesTab.tsx (C migration) | switch list useQueries to validatedGet |
 | PayablesTab.tsx (C migration) | switch list useQueries to validatedGet |
+| [reinsurance.ts (api-client)](cia-frontend/packages/api-client/src/modules/reinsurance.ts) | B1.1 — schemas + types for treaties, allocations, FAC covers |
+| TreatiesTab.tsx (B1.2) | URL fix + auxiliary lookups + status remap + activate/cancel mutations |
+| TreatySheet.tsx (B1.2) | URL fix; PUT path removed (backend gap) |
+| BatchReallocationSheet.tsx (B1.2) | URL fix on treaty list read |
+| AllocationsTab.tsx (B1.3) | URL fix + status remap + Confirm All via Promise.all |
+| PolicyAllocationSheet.tsx (B1.3) | refactor to AllocationDto + own confirm/cancel mutations |
+| FACTab.tsx (B1.4) | URL fix + cancel mutation with reason; inward tab marked backend-pending |
+| FACCreditNoteDialog.tsx (B1.4) | reads FacCoverDto fields incl. backend-computed netPremium |
+| FACOfferSlipDialog.tsx (B1.4) | reads FacCoverDto + cover period |
+| CreateFACOfferSheet.tsx (B1.4) | POST URL fix to /api/v1/ri/fac-covers |
 
 ### Sequence B status
 
@@ -164,7 +229,8 @@ After landing G8 and immediately finding the **same drift in reinsurance** (URL 
 | G5 — Audit (acknowledge + export) | ✓ done (`76983b9`) — backend export endpoint not added; client-side CSV used. Wiring the 6 report reads is a separate follow-up. |
 | G8 — Finance DTO contract bug | ✓ done (`8cb2eec`) — broader than advertised; full sync of DebitNoteDto + CreditNoteDto + status enums + FinanceEntityType. List + dialogs + sheets all updated. |
 | Step C — runtime contract validation | ✓ done (`67fb69b`) — apiEnvelope + validatedGet/Post/Put/Patch in api-client; finance migrated as proof-of-concept |
-| Step B1 — Reinsurance sweep (URLs + DTOs + G3 TODOs) | next |
+| Step B1 — Reinsurance sweep | ✓ done (4 commits: `63f8a14`, `047f2ce`, `9adec51`, `0b2b0bc`) — schemas + URL fixes + 4 of 7 G3 TODOs closed; FAC PDFs + inward FAC + treaty PUT + batch-reallocation deferred as backend gaps |
+| Step B2 — Claims sweep + G4 TODOs | next |
 | G4 — Claims (6 endpoints) | pending |
 | G1 — cia-policy (11 endpoints) | pending |
 | G9 — Phase 3 Partner Portal (5 builds) | pending |
@@ -176,6 +242,8 @@ After landing G8 and immediately finding the **same drift in reinsurance** (URL 
 - **Audit reports (6 tables) still hardcoded.** Backend endpoints exist (`/api/v1/audit/reports/{actions-by-user,actions-by-module,approvals,data-changes,login-security,user-activity}`) but the frontend renders mock arrays. Wiring those reads (and adding date-range filter forms) is a separate task — when done, ExportButton already works because the data flows through the same prop.
 - **PayablesTab payment Approve/Reject row actions are no-op handlers.** Not in any tracked gap; surfaced incidentally during G8 review. Wiring those endpoints (if they exist on the backend) belongs with a future TODO sweep on payment approval flow.
 - **Other modules likely have the same DTO drift.** G8 only synced finance DTOs. Audit found 70 useQuery calls; only ~10 of those have been runtime-validated. A general DTO-vs-backend audit (or an axios runtime validator) would catch silent contract bugs in other modules.
+- **Reinsurance backend gaps to fill** (surfaced in B1 sweep): inward FAC entirely (list/create/renew/extend/cancel — backend `RiFacCover` has no direction field); treaty PUT for edits (only `/activate`, `/expire`, `/cancel` exist); `/confirm-batch` for allocations (currently fanned out client-side); `/batch-reallocate`; FAC offer-slip PDF; FAC credit-note creation + PDF; per-treaty allocation drilldown for BatchReallocationSheet; per-allocation policy detail enrichment (PolicyAllocationSheet currently lacks customer/product/period because that requires a `/policies/{id}` follow-up fetch).
+- **Claims + audit-reports + cia-policy modules** likely follow the same drift pattern. Step B2 / B3 / B4 sweeps will surface them similarly. Recommend doing them in the same shape: schemas first, then per-tab migrations.
 
 ---
 
