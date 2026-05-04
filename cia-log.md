@@ -4,7 +4,7 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
-## 2026-05-04 — Session 53: Build audit + start Sequence B (G7 wire-up)
+## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6 wired)
 
 ### Context
 
@@ -16,6 +16,8 @@ After session 52 closed the session-51 review punch list, audit shifted to "what
 31138ba  docs(arch): correct module count to 19 in container diagram
 fc6895c  chore(gitignore): ignore personal skills + tool working dirs
 5639820  fix(setup): wire QuotesConfigTab to backend (G7)
+9e6b1e1  docs(log): session 53 — build audit + start Sequence B (G7 wired)
+de68d50  fix(finance): wire receipt + payment reversal to backend (G6)
 ```
 
 ### Deep audit findings
@@ -51,6 +53,19 @@ Wired the whole tab in one commit:
 
 `MOCK_*` exports in `quote-config-types.ts` kept — still imported by `QuoteDetailPage.tsx` for separate concerns. That wiring is a follow-up.
 
+### Workstream — G6 finance reversal
+
+Same backend-already-built pattern as G7. `PaymentController.reverse` and `ReceiptController.reverse` both existed at `/{id}/reverse` under their nested resource paths (`/api/v1/debit-notes/{debitNoteId}/receipts` and `/api/v1/credit-notes/{creditNoteId}/payments`). The frontend dialog had a single `// TODO: POST` and no UUIDs to call it with — `ReverseTarget` carried only display strings (`reference`, `linkedRef`).
+
+Wired:
+
+- Extended `ReverseTarget` with `id` (receipt|payment UUID) and `parentId` (debit-note|credit-note UUID for the nested URL).
+- Both `ReceivablesTab` and `PayablesTab` populate the new fields from the row DTO (`row.original.id` + `row.original.debitNoteId`/`creditNoteId`).
+- Dialog gains a required `reason` Textarea — backend `ReverseRequest` is `@NotBlank`. Inline validation: empty reason on Confirm shows error, doesn't fire mutation.
+- `useMutation` POSTs to the correct nested URL based on `target.type`. On success, invalidates both the list query (`receipts`/`payments`) and the parent query (`debit-notes`/`credit-notes`) so the parent's status flips back to Outstanding.
+- Confirm + Cancel disabled while `mutation.isPending`. Server errors with `field === 'reason'` surface inline; everything else surfaces as a destructive toast.
+- `applyApiErrors` not used here — that helper requires a react-hook-form instance, and this dialog only has one field. Inlined a 5-line error parse instead.
+
 ### Housekeeping
 
 **`.gitignore` cleanup (`fc6895c`).** Repo had accumulated 7 personal skills under `.claude/skills/` (content-reviewer, gcloud-refresh, plan-week, post, post2, uat, uat-script-generator) plus `.playwright-mcp/` and `.superpowers/` working dirs as side effects of running tools cd'd here. Pattern `.claude/skills/*` + `!.claude/skills/cia/` ignores future bleed-through while keeping the project-canonical CIA skill tracked.
@@ -67,7 +82,11 @@ Wired the whole tab in one commit:
 | --- | --- |
 | [CLAUDE.md](CLAUDE.md) | Container diagram count drift |
 | [.gitignore](.gitignore) | Personal skills + tool working dirs |
+| [.markdownlint.json](.markdownlint.json) | Suppress MD024/MD040/MD032/MD060 — log-style false positives |
 | [QuotesConfigTab.tsx](cia-frontend/apps/back-office/src/modules/setup/pages/policy-specs/QuotesConfigTab.tsx) | G7 — wire all three CRUDs to backend |
+| [ReverseTransactionDialog.tsx](cia-frontend/apps/back-office/src/modules/finance/pages/ReverseTransactionDialog.tsx) | G6 — wire useMutation + reason field |
+| [ReceivablesTab.tsx](cia-frontend/apps/back-office/src/modules/finance/pages/receivables/ReceivablesTab.tsx) | G6 — pass id + parentId to dialog |
+| [PayablesTab.tsx](cia-frontend/apps/back-office/src/modules/finance/pages/payables/PayablesTab.tsx) | G6 — pass id + parentId to dialog |
 
 ### Sequence B status
 
