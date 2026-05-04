@@ -1,54 +1,48 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Badge, Button,
   DataTable, DataTableRowActions,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-  EmptyState, PageSection, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger,
+  EmptyState, Label, PageSection, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger,
+  Textarea, toast,
 } from '@cia/ui';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@cia/api-client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
+import {
+  apiClient, validatedGet, FacCoverDtoSchema,
+  type ApiError, type ApiResponse,
+  type FacCoverDto, type FacCoverStatus,
+} from '@cia/api-client';
 import CreateFACOfferSheet  from './CreateFACOfferSheet';
 import AddInwardFACSheet    from './AddInwardFACSheet';
 import FACCreditNoteDialog  from './FACCreditNoteDialog';
 import FACOfferSlipDialog   from './FACOfferSlipDialog';
 import InwardFACActionSheet, { type InwardFACMode } from './InwardFACActionSheet';
 
-// ── DTOs ─────────────────────────────────────────────────────────────────────
+interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
 
-interface FacOutwardDto {
-  id:           string;
-  reference:    string;
-  policyNumber: string;
-  reinsurer:    string;
-  sumInsured:   number;
-  premiumRate:  number;
-  status:       'OFFER_SENT' | 'ACCEPTED' | 'DECLINED' | 'DRAFT';
-  offerDate:    string;
-}
+// ── Inward FAC presentation type ───────────────────────────────────────────
+//
+// Backend has a single RiFacCover entity with no inward/outward direction
+// field — what the UI calls "Outward" maps directly; "Inward" has no backend
+// equivalent yet. Inward tab continues to render a static mock with the
+// allow-mock comment until backend support lands.
 
 interface FacInwardDto {
-  id:             string;
-  reference:      string;
-  cedingCompany:  string;
-  classOfBusiness:string;
-  sumInsured:     number;
-  ourShare:       number;
-  ourPremium:     number;
-  startDate:      string;
-  endDate:        string;
-  status:         'ACTIVE' | 'RENEWED' | 'EXPIRED';
+  id:              string;
+  reference:       string;
+  cedingCompany:   string;
+  classOfBusiness: string;
+  sumInsured:      number;
+  ourShare:        number;
+  ourPremium:      number;
+  startDate:       string;
+  endDate:         string;
+  status:          'ACTIVE' | 'RENEWED' | 'EXPIRED';
 }
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-
-// allow-mock: fallback while /reinsurance/fac/outward is in flight
-const mockOutward: FacOutwardDto[] = [
-  { id: 'fo1', reference: 'FAC-OUT-2026-001', policyNumber: 'POL-2026-00005', reinsurer: 'Munich Re',          sumInsured: 26_000_000, premiumRate: 0.8, status: 'ACCEPTED',   offerDate: '2026-02-15' },
-  { id: 'fo2', reference: 'FAC-OUT-2026-002', policyNumber: 'POL-2026-00006', reinsurer: "Lloyd's Syndicate",  sumInsured: 45_000_000, premiumRate: 1.2, status: 'OFFER_SENT', offerDate: '2026-03-10' },
-];
-
-// allow-mock: fallback while /reinsurance/fac/inward is in flight
+// allow-mock: inward FAC has no backend equivalent yet (backend RiFacCover models outward only)
 const mockInward: FacInwardDto[] = [
   { id: 'fi1', reference: 'FAC-IN-2026-001', cedingCompany: 'Leadway Assurance', classOfBusiness: 'Fire & Burglary', sumInsured: 20_000_000, ourShare: 30, ourPremium: 48_000, startDate: '2026-01-01', endDate: '2027-01-01', status: 'ACTIVE' },
   { id: 'fi2', reference: 'FAC-IN-2026-002', cedingCompany: 'AIICO Insurance',   classOfBusiness: 'Marine Cargo',    sumInsured: 12_000_000, ourShare: 25, ourPremium: 22_500, startDate: '2025-07-01', endDate: '2026-07-01', status: 'EXPIRED' },
@@ -56,44 +50,59 @@ const mockInward: FacInwardDto[] = [
 
 // ── Badge maps ────────────────────────────────────────────────────────────────
 
-const outSt: Record<FacOutwardDto['status'], 'active'|'pending'|'rejected'|'draft'> = {
-  ACCEPTED: 'active', OFFER_SENT: 'pending', DECLINED: 'rejected', DRAFT: 'draft',
+const OUT_STATUS_VARIANT: Record<FacCoverStatus, 'active' | 'pending' | 'rejected'> = {
+  PENDING:   'pending',
+  CONFIRMED: 'active',
+  CANCELLED: 'rejected',
 };
-const inSt: Record<FacInwardDto['status'], 'active'|'pending'|'cancelled'> = {
+
+const OUT_STATUS_LABEL: Record<FacCoverStatus, string> = {
+  PENDING:   'Pending',
+  CONFIRMED: 'Confirmed',
+  CANCELLED: 'Cancelled',
+};
+
+const inSt: Record<FacInwardDto['status'], 'active' | 'pending' | 'cancelled'> = {
   ACTIVE: 'active', RENEWED: 'pending', EXPIRED: 'cancelled',
 };
+
+function showServerError(err: unknown, title: string) {
+  const ax = err as ApiHttpError;
+  const errors: ApiError[] = ax?.response?.data?.errors ?? [];
+  const description = errors.length > 0
+    ? errors.map(e => e.message).filter(Boolean).join('. ')
+    : ax?.message ?? 'An unexpected error occurred. Please try again.';
+  toast({ variant: 'destructive', title, description });
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function FACTab() {
-  // New offer / inward forms
+  const queryClient = useQueryClient();
+
+  // Form sheets
   const [facOfferOpen,  setFacOfferOpen]  = useState(false);
   const [inwardFACOpen, setInwardFACOpen] = useState(false);
 
-  const outwardQuery = useQuery<FacOutwardDto[]>({
-    queryKey: ['reinsurance', 'fac', 'outward'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: FacOutwardDto[] }>('/api/v1/reinsurance/fac/outward');
-      return res.data.data;
-    },
+  const outwardQuery = useQuery<FacCoverDto[]>({
+    queryKey: ['ri', 'fac-covers'],
+    queryFn: () => validatedGet('/api/v1/ri/fac-covers', z.array(FacCoverDtoSchema)),
   });
-  const outward = outwardQuery.data ?? mockOutward;
+  const outward = outwardQuery.data ?? [];
+  const inward  = mockInward;
 
-  const inwardQuery = useQuery<FacInwardDto[]>({
-    queryKey: ['reinsurance', 'fac', 'inward'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: FacInwardDto[] }>('/api/v1/reinsurance/fac/inward');
-      return res.data.data;
-    },
-  });
-  const inward = inwardQuery.data ?? mockInward;
+  // Outward action targets
+  const [creditNoteTarget, setCreditNoteTarget] = useState<FacCoverDto | null>(null);
+  const [offerSlipTarget,  setOfferSlipTarget]  = useState<FacCoverDto | null>(null);
+  const [cancelTarget,     setCancelTarget]     = useState<FacCoverDto | null>(null);
+  const [cancelReason,     setCancelReason]     = useState('');
+  const [cancelReasonErr,  setCancelReasonErr]  = useState<string | null>(null);
 
-  // Outward actions
-  const [creditNoteTarget, setCreditNoteTarget] = useState<FacOutwardDto | null>(null);
-  const [offerSlipTarget,  setOfferSlipTarget]  = useState<FacOutwardDto | null>(null);
-  const [cancelFACTarget,  setCancelFACTarget]  = useState<FacOutwardDto | null>(null);
+  useEffect(() => {
+    if (cancelTarget === null) { setCancelReason(''); setCancelReasonErr(null); }
+  }, [cancelTarget]);
 
-  // Inward actions
+  // Inward action targets (no backend support yet — kept for UI parity)
   const [inwardActionTarget, setInwardActionTarget] = useState<FacInwardDto | null>(null);
   const [inwardActionMode,   setInwardActionMode]   = useState<InwardFACMode>('RENEW');
   const [cancelInwardTarget, setCancelInwardTarget] = useState<FacInwardDto | null>(null);
@@ -103,10 +112,34 @@ export default function FACTab() {
     setInwardActionMode(mode);
   }
 
+  // Backend cancel endpoint takes { reason } and the same path serves both
+  // the Outward UI's "Cancel FAC" and (when wired in future) the Inward UI's
+  // cancel — closes G3 TODOs 5 + 6.
+  const cancelFac = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      await apiClient.post(`/api/v1/ri/fac-covers/${id}/cancel`, { reason });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ri', 'fac-covers'] });
+      toast({ title: 'FAC cover cancelled' });
+      setCancelTarget(null);
+    },
+    onError: (err) => showServerError(err, 'Could not cancel FAC cover'),
+  });
+
+  function handleCancelConfirm() {
+    if (!cancelTarget) return;
+    if (!cancelReason.trim()) {
+      setCancelReasonErr('Reason is required.');
+      return;
+    }
+    cancelFac.mutate({ id: cancelTarget.id, reason: cancelReason });
+  }
+
   // ── Outward columns ──────────────────────────────────────────────────────
-  const outColumns: ColumnDef<FacOutwardDto>[] = [
+  const outColumns: ColumnDef<FacCoverDto>[] = [
     {
-      accessorKey: 'reference',
+      accessorKey: 'facReference',
       header: 'Reference',
       cell: ({ getValue }) => <span className="font-mono text-xs text-primary">{getValue() as string}</span>,
     },
@@ -116,13 +149,13 @@ export default function FACTab() {
       cell: ({ getValue }) => <span className="font-mono text-xs text-muted-foreground">{getValue() as string}</span>,
     },
     {
-      accessorKey: 'reinsurer',
+      accessorKey: 'reinsuranceCompanyName',
       header: 'Reinsurer',
       cell: ({ getValue }) => <span className="text-sm">{getValue() as string}</span>,
     },
     {
-      accessorKey: 'sumInsured',
-      header: 'Sum Insured',
+      accessorKey: 'sumInsuredCeded',
+      header: 'Sum Insured (Ceded)',
       cell: ({ getValue }) => <span className="text-sm tabular-nums">₦{(getValue() as number).toLocaleString()}</span>,
     },
     {
@@ -131,45 +164,54 @@ export default function FACTab() {
       cell: ({ getValue }) => <span className="text-sm">{getValue() as number}%</span>,
     },
     {
+      accessorKey: 'netPremium',
+      header: 'Net Premium',
+      cell: ({ getValue }) => <span className="text-sm tabular-nums text-primary">₦{(getValue() as number).toLocaleString()}</span>,
+    },
+    {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ getValue }) => {
-        const s = getValue() as FacOutwardDto['status'];
-        return <Badge variant={outSt[s]} className="text-[10px]">{s.replace('_', ' ').toLowerCase()}</Badge>;
+        const s = getValue() as FacCoverStatus;
+        return <Badge variant={OUT_STATUS_VARIANT[s]} className="text-[10px]">{OUT_STATUS_LABEL[s]}</Badge>;
       },
     },
     {
-      accessorKey: 'offerDate',
-      header: 'Offer Date',
-      cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{getValue() as string}</span>,
+      id: 'period',
+      header: 'Period',
+      cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {row.original.coverFrom} → {row.original.coverTo}
+        </span>
+      ),
     },
     {
       id: 'actions',
       cell: ({ row }) => (
         <DataTableRowActions
-          row={row as Row<FacOutwardDto>}
+          row={row as Row<FacCoverDto>}
           actions={[
-            ...(row.original.status === 'ACCEPTED' ? [{
+            ...(row.original.status === 'CONFIRMED' ? [{
               label: 'Generate credit note',
-              onClick: (r: Row<FacOutwardDto>) => setCreditNoteTarget(r.original),
+              onClick: (r: Row<FacCoverDto>) => setCreditNoteTarget(r.original),
             }] : []),
             {
               label: 'Download offer slip',
-              onClick: (r: Row<FacOutwardDto>) => setOfferSlipTarget(r.original),
+              onClick: (r: Row<FacCoverDto>) => setOfferSlipTarget(r.original),
             },
-            {
-              label: 'Cancel FAC',
-              onClick: (r: Row<FacOutwardDto>) => setCancelFACTarget(r.original),
+            ...(row.original.status !== 'CANCELLED' ? [{
+              label:     'Cancel FAC',
+              onClick:   (r: Row<FacCoverDto>) => setCancelTarget(r.original),
               separator: true,
               className: 'text-destructive',
-            },
+            }] : []),
           ]}
         />
       ),
     },
   ];
 
-  // ── Inward columns ───────────────────────────────────────────────────────
+  // ── Inward columns (backend-less; mock-driven) ───────────────────────────
   const inColumns: ColumnDef<FacInwardDto>[] = [
     {
       accessorKey: 'reference',
@@ -216,14 +258,8 @@ export default function FACTab() {
           row={row as Row<FacInwardDto>}
           actions={[
             ...(row.original.status === 'ACTIVE' ? [
-              {
-                label: 'Renew',
-                onClick: (r: Row<FacInwardDto>) => openInwardAction(r.original, 'RENEW'),
-              },
-              {
-                label: 'Extend period',
-                onClick: (r: Row<FacInwardDto>) => openInwardAction(r.original, 'EXTEND'),
-              },
+              { label: 'Renew',         onClick: (r: Row<FacInwardDto>) => openInwardAction(r.original, 'RENEW') },
+              { label: 'Extend period', onClick: (r: Row<FacInwardDto>) => openInwardAction(r.original, 'EXTEND') },
             ] : []),
             {
               label: row.original.status === 'EXPIRED' ? 'View expired' : 'Cancel',
@@ -264,12 +300,10 @@ export default function FACTab() {
         <TabsContent value="inward" className="mt-4">
           <PageSection
             title="Inward Facultative"
-            description="Facultative risks accepted from other ceding companies."
+            description="Facultative risks accepted from other ceding companies. (Backend support pending — current view is illustrative.)"
             actions={<Button size="sm" onClick={() => setInwardFACOpen(true)}>Add Inward FAC</Button>}
           >
-            {inwardQuery.isLoading
-              ? <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
-              : inward.length === 0
+            {inward.length === 0
               ? <EmptyState title="No inward FAC policies" />
               : <DataTable columns={inColumns} data={inward} toolbar={{ searchColumn: 'cedingCompany', searchPlaceholder: 'Search…' }} />
             }
@@ -301,24 +335,37 @@ export default function FACTab() {
         fac={offerSlipTarget}
       />
 
-      {/* Cancel outward FAC confirmation */}
-      <Dialog open={cancelFACTarget !== null} onOpenChange={(v) => { if (!v) setCancelFACTarget(null); }}>
+      {/* Cancel outward FAC confirmation — wires backend cancel with reason */}
+      <Dialog open={cancelTarget !== null} onOpenChange={(v) => { if (!v) setCancelTarget(null); }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Cancel FAC Cover</DialogTitle>
             <DialogDescription>
-              {cancelFACTarget && (
-                <>Cancel <span className="font-medium text-foreground">{cancelFACTarget.reference}</span> placed with <span className="font-medium text-foreground">{cancelFACTarget.reinsurer}</span>? This cannot be undone.</>
+              {cancelTarget && (
+                <>Cancel <span className="font-medium text-foreground">{cancelTarget.facReference}</span> placed with <span className="font-medium text-foreground">{cancelTarget.reinsuranceCompanyName}</span>? This cannot be undone.</>
               )}
             </DialogDescription>
           </DialogHeader>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="fac-cancel-reason">Reason for cancellation</Label>
+            <Textarea
+              id="fac-cancel-reason"
+              placeholder="e.g. risk lapsed / cover declined by reinsurer / replaced by treaty allocation"
+              rows={3}
+              value={cancelReason}
+              onChange={e => { setCancelReason(e.target.value); if (cancelReasonErr) setCancelReasonErr(null); }}
+              disabled={cancelFac.isPending}
+            />
+            {cancelReasonErr && <p className="text-xs text-destructive">{cancelReasonErr}</p>}
+          </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCancelFACTarget(null)}>Keep FAC</Button>
-            <Button variant="destructive" onClick={() => {
-              // TODO: DELETE /api/v1/reinsurance/fac/outward/{id}
-              setCancelFACTarget(null);
-            }}>
-              Cancel FAC
+            <Button variant="outline" onClick={() => setCancelTarget(null)} disabled={cancelFac.isPending}>
+              Keep FAC
+            </Button>
+            <Button variant="destructive" disabled={cancelFac.isPending} onClick={handleCancelConfirm}>
+              {cancelFac.isPending ? 'Cancelling…' : 'Cancel FAC'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -333,24 +380,22 @@ export default function FACTab() {
         onSuccess={() => setInwardActionTarget(null)}
       />
 
-      {/* Cancel inward FAC confirmation */}
+      {/* Cancel inward FAC confirmation — backend lacks an inward FAC concept,
+          so this stays a UI confirmation that doesn't dispatch yet. */}
       <Dialog open={cancelInwardTarget !== null} onOpenChange={(v) => { if (!v) setCancelInwardTarget(null); }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Cancel Inward FAC</DialogTitle>
             <DialogDescription>
               {cancelInwardTarget && (
-                <>Cancel <span className="font-medium text-foreground">{cancelInwardTarget.reference}</span> from <span className="font-medium text-foreground">{cancelInwardTarget.cedingCompany}</span>? This cannot be undone.</>
+                <>Cancel <span className="font-medium text-foreground">{cancelInwardTarget.reference}</span> from <span className="font-medium text-foreground">{cancelInwardTarget.cedingCompany}</span>? Inward FAC backend support is pending.</>
               )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCancelInwardTarget(null)}>Keep Cover</Button>
-            <Button variant="destructive" onClick={() => {
-              // TODO: DELETE /api/v1/reinsurance/fac/inward/{id}
-              setCancelInwardTarget(null);
-            }}>
-              Cancel Cover
+            <Button variant="destructive" onClick={() => setCancelInwardTarget(null)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

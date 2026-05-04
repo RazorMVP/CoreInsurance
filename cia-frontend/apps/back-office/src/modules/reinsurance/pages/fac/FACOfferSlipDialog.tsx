@@ -2,31 +2,24 @@ import {
   Badge, Button, Separator,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@cia/ui';
+import type { FacCoverDto, FacCoverStatus } from '@cia/api-client';
 
-type OutwardStatus = 'OFFER_SENT' | 'ACCEPTED' | 'DECLINED' | 'DRAFT';
-
-interface FacOutward {
-  id:           string;
-  reference:    string;
-  policyNumber: string;
-  reinsurer:    string;
-  sumInsured:   number;
-  premiumRate:  number;
-  status:       OutwardStatus;
-  offerDate:    string;
-}
-
-const STATUS_VARIANT: Record<OutwardStatus, 'active'|'pending'|'rejected'|'draft'> = {
-  ACCEPTED: 'active', OFFER_SENT: 'pending', DECLINED: 'rejected', DRAFT: 'draft',
+const STATUS_VARIANT: Record<FacCoverStatus, 'active' | 'pending' | 'rejected'> = {
+  PENDING:   'pending',
+  CONFIRMED: 'active',
+  CANCELLED: 'rejected',
 };
-const STATUS_LABEL: Record<OutwardStatus, string> = {
-  ACCEPTED: 'Accepted', OFFER_SENT: 'Offer sent', DECLINED: 'Declined', DRAFT: 'Draft',
+
+const STATUS_LABEL: Record<FacCoverStatus, string> = {
+  PENDING:   'Pending',
+  CONFIRMED: 'Confirmed',
+  CANCELLED: 'Cancelled',
 };
 
 interface Props {
   open:         boolean;
   onOpenChange: (v: boolean) => void;
-  fac:          FacOutward | null;
+  fac:          FacCoverDto | null;
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
@@ -41,8 +34,6 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 export default function FACOfferSlipDialog({ open, onOpenChange, fac }: Props) {
   if (!fac) return null;
 
-  const grossPremium = (fac.sumInsured * fac.premiumRate) / 100;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -56,34 +47,35 @@ export default function FACOfferSlipDialog({ open, onOpenChange, fac }: Props) {
         <div className="rounded-lg border overflow-hidden">
           <div className="bg-muted/40 px-4 py-2 flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Offer Slip — {fac.reference}
+              Offer Slip — {fac.facReference}
             </p>
             <Badge variant={STATUS_VARIANT[fac.status]} className="text-[10px]">
               {STATUS_LABEL[fac.status]}
             </Badge>
           </div>
           <div className="px-4 pb-2">
-            <DetailRow label="Policy"         value={fac.policyNumber} />
-            <DetailRow label="Reinsurer"      value={fac.reinsurer} />
+            <DetailRow label="Policy"     value={fac.policyNumber} />
+            <DetailRow label="Reinsurer"  value={fac.reinsuranceCompanyName} />
           </div>
 
           <Separator />
           <div className="px-4 pb-2">
-            <DetailRow label="Sum Insured"    value={`₦${fac.sumInsured.toLocaleString()}`} />
-            <DetailRow label="Premium Rate"   value={`${fac.premiumRate}%`} />
-            <DetailRow label="Gross Premium"  value={`₦${grossPremium.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} />
+            <DetailRow label="Sum Insured Ceded" value={`₦${fac.sumInsuredCeded.toLocaleString()}`} />
+            <DetailRow label="Premium Rate"      value={`${fac.premiumRate}%`} />
+            <DetailRow label="Gross Premium"     value={`₦${fac.premiumCeded.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} />
           </div>
 
           <Separator />
           <div className="px-4 pb-2">
-            <DetailRow label="Offer Date"     value={fac.offerDate} />
+            <DetailRow label="Cover Period" value={`${fac.coverFrom} → ${fac.coverTo}`} />
+            {fac.offerSlipReference && <DetailRow label="Offer Ref" value={fac.offerSlipReference} />}
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           <Button onClick={() => {
-            // TODO: GET /api/v1/reinsurance/fac/outward/{id}/offer-slip
+            // TODO (backend gap): GET /api/v1/ri/fac-covers/{id}/offer-slip
             onOpenChange(false);
           }}>
             Download PDF

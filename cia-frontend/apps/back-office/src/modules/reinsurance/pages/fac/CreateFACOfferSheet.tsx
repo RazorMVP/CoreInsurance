@@ -115,12 +115,12 @@ export default function CreateFACOfferSheet({ open, onOpenChange, onSuccess }: P
   const create = useMutation({
     mutationFn: async (values: FormValues) => {
       const res = await apiClient.post<{ data: { id: string } }>(
-        '/api/v1/reinsurance/fac/outward', values,
+        '/api/v1/ri/fac-covers', values,
       );
       return res.data.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reinsurance', 'fac'] });
+      queryClient.invalidateQueries({ queryKey: ['ri', 'fac-covers'] });
       onSuccess();
       form.reset();
     },
