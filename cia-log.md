@@ -4,7 +4,7 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
-## 2026-05-04 — Session 53: Build audit + Sequence B closed + B5 frontend wiring of B4 endpoints
+## 2026-05-04 — Session 53: Sequence B closed + B5 cia-policy wiring + audit cleanup (b/c/d)
 
 ### Context
 
@@ -44,6 +44,10 @@ f27ff9a  docs(log): session 53 — extend with B4.3 cia-policy survey workflow
 601e76d  docs(log): session 53 — extend with B4.4 coinsurance + B4 fully closed
 d4ddad7  fix(policy): sync frontend PolicyDto with backend (B5.1)
 c8435de  fix(policy): wire B4 backend endpoints into PolicyDetailPage (B5.2)
+f866dbc  docs(log): session 53 — extend with B5.1+B5.2 frontend wiring of B4
+32dc4c1  fix(audit): sync AlertsTab DTO with backend (item b)
+f4c4ca1  fix(audit): sync log + login-log tabs with backend (item c)
+6acfcad  fix(audit): wire 3 deferred audit reports + filter pickers (item d)
 ```
 
 ### Deep audit findings
@@ -363,6 +367,30 @@ Buttons that previously had no `onClick` now hit real backend:
 
 These are pieces of new UI rather than wire-ups; tackled as a separate slice when the broader frontend storage upload pattern is decided.
 
+### Workstream — audit-module cleanup (b / c / d)
+
+Three small-to-medium audit-module fixes following B5.
+
+**(b) AlertsTab DTO drift (`32dc4c1`).** Local `AuditAlert` interface dropped in favour of the canonical `AuditAlertDto` from api-client (added in B3). Drift fixed: `alertType` `FAILED_LOGINS` (plural) → backend `FAILED_LOGIN` (singular); `severity` strict-enum → backend `string` (lookup with `'draft'` fallback); `detectedAt` → `triggeredAt`; `status: 'OPEN'|'ACKNOWLEDGED'` → `acknowledged: boolean`; `entityRef` field removed (backend doesn't expose it; userName carries the entity hint where available). Acknowledge mutation (already wired in G5) continues working — only the read side + display fields needed alignment. Also: GET endpoint returns Spring `Page<T>` which the previous code read as a flat array; now uses `pageSchema(AuditAlertDtoSchema)` to unwrap `content[]`.
+
+**(c) AuditLogTab + LoginLogTab full sync (`f4c4ca1`).**
+
+- `AuditEventDetailSheet`: dropped local `AuditLogEntry` interface and re-exports `AuditLogDto` from api-client (so the sibling `AuditLogTab` import works unchanged). `ACTION_VARIANT` + `ACTION_LABEL` rebuilt around the canonical 10-value backend `AuditAction` enum (CREATE / UPDATE / DELETE / APPROVE / REJECT / SUBMIT / SEND / CANCEL / REVERSE / EXECUTE). Old maps had `EXPORT` / `LOGIN` / `LOGOUT` (not on backend) and missed `SUBMIT` / `CANCEL` / `REVERSE` / `EXECUTE`. Backend stores `oldValue` / `newValue` as JSON-serialised strings, not objects — `JsonPanel` now accepts `string | null` and runs `JSON.parse` with a try/catch fallback to displaying the raw value (so we never silently swallow auditable data).
+- `AuditLogTab`: type binding switched to `AuditLogDto`; queryFn uses `pageSchema(AuditLogDtoSchema)` to unwrap. Mock data updated to JSON strings (matching wire format); `entityRef` removed (synthesised from `entityId.slice(0,8)` for display). Filter input "Entity ID or reference" → "Entity ID" with matching state name. ACTIONS list includes the missing backend values.
+- `LoginLogTab`: type binding switched to `LoginAuditLogDto`; pageSchema unwrap. Drops `email` field (not on backend). Renames `reason` → `failureReason`. New explicit "Status" column reads backend's `success: boolean`. Filter haystack switched to userName / userId.
+
+Backend gaps surfaced (deferred): `entityRef` synthesis is just a UUID slice — a real friendly-reference resolver (e.g. `POL-2026-00001` from a policy_id UUID) requires a backend addition (denormalise reference into `AuditLog`) or a frontend lookup map. `userId` / `userName` are nullable on backend — system events display as "—" until we add a "system" account record.
+
+**(d) 3 deferred audit reports (`6acfcad`).** The Approval Trail, Login Security and User Activity tabs were wired in B3; this commit closes the remaining three with the appropriate filter pickers.
+
+- **Actions by User** — userId text input (UUID, paste from Audit Log tab; no `/users` endpoint exists since users live in Keycloak). useQuery gated on `userIdFilter.trim()`. Renders raw events: Timestamp, Entity (type · id-slice), Action, IP. Previous mock columns (Total / Creates / Updates / Deletes / Approvals / Last Active) were aggregations the User Activity tab already covers.
+- **Actions by Module** — module Select dropdown over the canonical 10-value backend entity-type list. useQuery gated on `moduleFilter`. Per-module count breakdowns require a future aggregation endpoint; this view shows raw filtered events.
+- **Data Change History** — entityType Select + entityId text input (both required). useQuery gated on both. Renders one row per changed field by JSON-parsing the `oldValue`/`newValue` snapshots and diffing keys; falls back to a `(action)` row when the payload has no diff.
+
+Empty / loading / error states added per tab — no filters → instructional message, isPending → Skeleton, isError → destructive message, `[]` → "No events found". CSV export disabled until rows are loaded.
+
+All 6 audit report tabs now hit real backend.
+
 ### Housekeeping
 
 **`.gitignore` cleanup (`fc6895c`).** Repo had accumulated 7 personal skills under `.claude/skills/` (content-reviewer, gcloud-refresh, plan-week, post, post2, uat, uat-script-generator) plus `.playwright-mcp/` and `.superpowers/` working dirs as side effects of running tools cd'd here. Pattern `.claude/skills/*` + `!.claude/skills/cia/` ignores future bleed-through while keeping the project-canonical CIA skill tracked.
@@ -455,7 +483,10 @@ These are pieces of new UI rather than wire-ups; tackled as a separate slice whe
 | Step B5.1 — frontend PolicyDto schema sync | ✓ done (`d4ddad7`) — schema-derived types; status enum gains REJECTED + REINSTATED; quotation BusinessType de-duplicated |
 | Step B5.2 — wire B4 endpoints into PolicyDetailPage | ✓ done (`c8435de`) — 8 mutations + streaming PDF download + Override Survey dialog |
 | Step B5.3 — survey assign + report + risks editor + coinsurance editor | pending — needs new UI pieces |
-| Step (b) — AlertsTab DTO drift | next |
+| Step (b) — AlertsTab DTO drift | ✓ done (`32dc4c1`) |
+| Step (c) — AuditLogTab + LoginLogTab full sync | ✓ done (`f4c4ca1`) |
+| Step (d) — 3 deferred audit reports + filter pickers | ✓ done (`6acfcad`) — all 6 audit report tabs now live |
+| Step (e) — claims inspection workflow | next — building (e.1) as a B6 slice (new ClaimInspection entity, V27 migration, dedicated service, document filter + bundle endpoints, frontend wire-up) |
 | G4 — Claims (6 endpoints) | pending |
 | G1 — cia-policy (11 endpoints) | pending |
 | G9 — Phase 3 Partner Portal (5 builds) | pending |
