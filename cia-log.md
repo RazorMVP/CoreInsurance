@@ -4,7 +4,7 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
-## 2026-05-04 — Session 53: Build audit + Sequence B fully closed (frontend sweeps + cia-policy backend gap)
+## 2026-05-04 — Session 53: Build audit + Sequence B closed + B5 frontend wiring of B4 endpoints
 
 ### Context
 
@@ -41,6 +41,9 @@ e8a383f  docs(log): session 53 — extend with B4.2 cia-policy document endpoint
 cbb854c  feat(policy): pre-loss survey workflow (B4.3)
 f27ff9a  docs(log): session 53 — extend with B4.3 cia-policy survey workflow
 826859b  feat(policy): coinsurance participants update (B4.4)
+601e76d  docs(log): session 53 — extend with B4.4 coinsurance + B4 fully closed
+d4ddad7  fix(policy): sync frontend PolicyDto with backend (B5.1)
+c8435de  fix(policy): wire B4 backend endpoints into PolicyDetailPage (B5.2)
 ```
 
 ### Deep audit findings
@@ -322,6 +325,44 @@ Final slice of the cia-policy backend gap. Single endpoint that closes the audit
 
 The frontend's PolicyDetailPage tabs (Document, Inspection, NAICOM/NIID, Coinsurance) now have backend support for every action they expose. Remaining work is purely frontend wiring + the file-upload UI for the survey report.
 
+### Workstream — B5 frontend wiring of B4 endpoints
+
+Two-commit slice landing the frontend half of B4.
+
+**B5.1 (`d4ddad7`) — sync `PolicyDto` to backend.** Same shape as G8/B2 — frontend `PolicyDto` carried fields that don't exist on backend (`sumInsured`/`premium`/`startDate`/`endDate`/`niidUid`/`documentPath`/`debitNoteId`/`updatedAt`) while missing many that do. Schema rewrite to match `PolicyResponse` 1:1, including:
+
+- `PolicyStatusSchema` gains `REJECTED` + `REINSTATED` (was missing — without these the status badge cell rendered `undefined` for those statuses).
+- `BusinessTypeSchema` centralised in `policy.ts`. Removed the local definition in `quotation.ts` (which had `INWARD_FAC` instead of backend's `INWARD_FACULTATIVE` — drift).
+- New `SurveyStatusSchema` (`ASSIGNED | REPORT_SUBMITTED | APPROVED | OVERRIDDEN`) for the B4.3 survey object.
+- `PolicyRiskDtoSchema`, `PolicyCoinsuranceParticipantDtoSchema`, `PolicySurveyDtoSchema` added — frontend previously had no participants/survey types.
+- `PolicyDto` adopts the full backend shape including `documentSentAt/By` + `documentAcknowledgedAt/By` (B4.2), `survey` (B4.3), `risks[]` + `coinsuranceParticipants[]`.
+- `PolicySummaryDtoSchema` added for the lighter list-endpoint shape.
+
+Consumer fixes: `PolicyDetailPage` field renames (`startDate` → `policyStartDate`, `sumInsured` → `totalSumInsured`, `documentPath` → `policyDocumentPath`, `niidUid` → `niidRef`, etc.); status variant maps gain `REJECTED` + `REINSTATED`; `DebitNoteDetailDialog` reads `policyStartDate`/`policyEndDate` (was `startDate`/`endDate`).
+
+**B5.2 (`c8435de`) — wire 8 mutations + 1 streaming download on PolicyDetailPage.**
+
+Buttons that previously had no `onClick` now hit real backend:
+
+- Submit / Approve / Reject — POST to `/submit`, `/approve`, `/reject`
+- Send to Insured (B4.2) — POST `/document/send`; persisted `documentSentAt` shown as label, button disables once set
+- Acknowledge Receipt (B4.2) — POST `/document/acknowledge`; requires `documentSentAt` to already be set
+- NAICOM Upload + NIID Upload (B4.1) — single "Trigger Manual Upload" button split into two; NIID button hidden unless class is Motor or Marine
+- Approve Survey (B4.3) — POST `/survey/approve`; disabled unless `survey.status === 'REPORT_SUBMITTED'`
+- Override Survey Requirement (B4.3) — POST `/survey/override` with reason ≥5 chars, captured via a new dialog
+- Add Endorsement / Register Claim header buttons gain `navigate()` to their respective module routes (cross-module navigation, not policy-specific)
+
+**Streaming Download PDF.** GET `/document` (B4.2) via `apiClient.get` with `responseType: 'blob'`, wrapped in a client-side Blob + ObjectURL, triggers a download with the policy number as filename.
+
+**Deferred to B5.3:**
+
+- Upload Survey Report — needs file-upload + reportPath plumbing (frontend storage upload pattern not yet established)
+- Request Survey Anyway — needs surveyor picker dialog
+- Risk update / bulk-add — needs a risks editor UI
+- Coinsurance update — needs a participants editor UI
+
+These are pieces of new UI rather than wire-ups; tackled as a separate slice when the broader frontend storage upload pattern is decided.
+
 ### Housekeeping
 
 **`.gitignore` cleanup (`fc6895c`).** Repo had accumulated 7 personal skills under `.claude/skills/` (content-reviewer, gcloud-refresh, plan-week, post, post2, uat, uat-script-generator) plus `.playwright-mcp/` and `.superpowers/` working dirs as side effects of running tools cd'd here. Pattern `.claude/skills/*` + `!.claude/skills/cia/` ignores future bleed-through while keeping the project-canonical CIA skill tracked.
@@ -389,6 +430,11 @@ The frontend's PolicyDetailPage tabs (Document, Inspection, NAICOM/NIID, Coinsur
 | [V26__policy_surveys.sql](cia-backend/cia-api/src/main/resources/db/migration/V26__policy_surveys.sql) | B4.3 — Flyway migration creates policy_surveys table |
 | Survey DTOs (5 new) | B4.3 — Assign/Report/Approve/Override requests + PolicySurveyResponse |
 | PolicyController.java + PolicyService.java (B4.4) | added PUT /coinsurance endpoint + updateCoinsurance service method |
+| [policy.ts (api-client)](cia-frontend/packages/api-client/src/modules/policy.ts) | B5.1 — full schema rewrite (status enum + BusinessType + survey + risks + coinsurance participants); types via z.infer |
+| [quotation.ts (api-client)](cia-frontend/packages/api-client/src/modules/quotation.ts) | B5.1 — re-export BusinessType from policy.ts (drop drifted local definition) |
+| PolicyListPage.tsx (B5.1) | status variant gains REJECTED + REINSTATED |
+| PolicyDetailPage.tsx (B5.1+B5.2) | field renames + 8 useMutation wires + streaming PDF download + Override Survey dialog |
+| DebitNoteDetailDialog.tsx (B5.1) | policyQuery field renames startDate/endDate → policyStartDate/policyEndDate |
 
 ### Sequence B status
 
@@ -406,6 +452,10 @@ The frontend's PolicyDetailPage tabs (Document, Inspection, NAICOM/NIID, Coinsur
 | Step B4.2 — document send/ack/download endpoints | ✓ done (`62106eb`) — 3 endpoints + V25 schema; cia-policy 17 endpoints |
 | Step B4.3 — survey workflow | ✓ done (`cbb854c`) — 5 endpoints + V26 schema + new entity/repo/service; cia-policy 22 endpoints |
 | Step B4.4 — coinsurance shares update | ✓ done (`826859b`) — 1 endpoint; cia-policy 23 endpoints. **B4 cia-policy backend gap fully closed.** |
+| Step B5.1 — frontend PolicyDto schema sync | ✓ done (`d4ddad7`) — schema-derived types; status enum gains REJECTED + REINSTATED; quotation BusinessType de-duplicated |
+| Step B5.2 — wire B4 endpoints into PolicyDetailPage | ✓ done (`c8435de`) — 8 mutations + streaming PDF download + Override Survey dialog |
+| Step B5.3 — survey assign + report + risks editor + coinsurance editor | pending — needs new UI pieces |
+| Step (b) — AlertsTab DTO drift | next |
 | G4 — Claims (6 endpoints) | pending |
 | G1 — cia-policy (11 endpoints) | pending |
 | G9 — Phase 3 Partner Portal (5 builds) | pending |
