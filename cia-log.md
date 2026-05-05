@@ -50,6 +50,10 @@ f4c4ca1  fix(audit): sync log + login-log tabs with backend (item c)
 6acfcad  fix(audit): wire 3 deferred audit reports + filter pickers (item d)
 4dd22a2  feat(claims): post-loss inspection workflow + document filter/bundle (B6 backend)
 4df3ad6  feat(claims): wire inspection tab to B6 backend (approve/decline/override + bundle)
+d0c20eb  feat(claims): richer claim detail + DV state on entity (B7 backend)
+fa1a6ca  fix(claims): drop MockClaim invented fields, wire DV to backend (B7 frontend)
+b9f4e91  feat(claims): inspection assign + submit-report dialogs (B8)
+4ac35cd  feat(policy): survey + coinsurance + risks editor dialogs (B5.3)
 ```
 
 ### Deep audit findings
@@ -423,10 +427,84 @@ api-client gained `InspectionStatusSchema` + `ClaimInspectionDtoSchema` in `clai
 
 **Verification.** `pnpm --filter @cia/back-office exec tsc --noEmit` exit 0; `bash cia-frontend/scripts/check-api-wiring.sh` 0 violations.
 
-**Open against B6.** Three pieces deferred:
-- **Inspection assignment dialog from ClaimDetailPage** — currently the Inspection tab assumes someone (or the claim register flow) has already picked a surveyor; UI for `POST /inspection/assign` lives with B5.3-style work.
-- **Submit-report upload** — `POST /inspection/report` is wired on the backend but no frontend control exists yet (the surveyor-facing portal would need it). When that surfaces, it can re-use the existing per-doc upload endpoint to put the actual report into storage.
+**Open against B6.** Two pieces still deferred (the inspection-assignment + submit-report dialog gap was closed in B8 below):
 - **`/documents/{id}` GET path harmonisation** — frontend's commented-out fetch for inspection documents was originally written against `/inspection/documents/{id}`. Backend now serves it from `/documents/{id}/content`. The frontend uses the latter path; the legacy assumption is dead code.
+- **Comments + RequiredDocs sub-aggregates** — separate slice; needs ClaimComment + ClaimRequiredDocument entities. Frontend has dropped both as part of B7.
+
+### Workstream — B7 richer ClaimDetailResponse + DV workflow (`d0c20eb` backend + `fa1a6ca` frontend)
+
+Closes the simple-add half of the G4 "richer detail" gap. The frontend MockClaim shape carried 9 fields not on `ClaimResponse`; B7 promotes 8 of them (the entity-column-shaped ones) to the backend and retires the MockClaim type. Two — `comments` and `requiredDocs` — remain deferred since they're 1:many sub-aggregates that need their own entity tables.
+
+**B7.1 backend (`d0c20eb`).** V28 migration adds 8 columns to `claims`:
+- `nature_of_loss`, `cause_of_loss` — incident classification
+- `contact_name`, `contact_phone` — claimant contact captured at registration
+- `dv_type`, `dv_amount`, `dv_generated_at`, `dv_executed_at` — DV workflow state
+
+New `DvType` enum: `OWN_DAMAGE` / `THIRD_PARTY` / `EX_GRATIA`. `RegisterClaimRequest` + `UpdateClaimRequest` accept the 4 metadata fields (all optional). `ClaimResponse` exposes all 8 plus existing `dv_document_path`. `ClaimService.register` + `updateDetails` carry them through.
+
+Two new endpoints for the DV workflow:
+- `POST /api/v1/claims/{id}/dv/generate` — `{ dvType, amount? }` — sets `dvType`, `dvAmount` (defaults to `approvedAmount` when omitted), and stamps `dvGeneratedAt`. Allowed in APPROVED or SETTLED status.
+- `POST /api/v1/claims/{id}/dv/execute` — stamps `dvExecutedAt`; rejects if already executed or not yet generated.
+
+The DV PDF itself was already generated at approval time inside `ClaimService.approve()` — these endpoints capture the *business* DV workflow (type chosen, amount confirmed, formal execution recorded). They don't conflict with the existing PDF generation.
+
+**B7.2 frontend (`fa1a6ca`).** `ClaimDetailPage` now reads `natureOfLoss`/`causeOfLoss`/`contactName`/`contactPhone`/DV state directly from `ClaimDto`. The MockClaim type is removed; what's left is a `fallbackClaim: ClaimDto` (allow-mock) for the in-flight window. Header description, Summary card, and DV tab all switched to backend field names — `c.policyProduct` → `c.productName`, `c.location` → `c.lossLocation`. The DV tab's local `dvGenerated`/`dvType`/`dvAmount` state replaced by two new mutations against the new endpoints; the amount input falls back to `approvedAmount`. Documents tab no longer renders a checklist (the `requiredDocs` mock is gone) — it now lists actual `ClaimDocument` entries from `GET /api/v1/claims/{id}/documents`. AddCommentDialog import + state removed (Comments aggregate deferred).
+
+api-client: `ClaimDtoSchema` gains 4 detail fields + 5 DV fields, plus a new `DvTypeSchema` enum. Module header re-points the deferred-gaps list — Comments + RequiredDocs flagged as still-pending sub-aggregates; the obsolete "inspection sub-workflow not modelled" note (closed in B6) corrected.
+
+### Workstream — B8 inspection assign + submit-report UI (`b9f4e91`)
+
+Closes the inspection-UI half of G4. Two new dialogs in `claims/pages/detail/`:
+
+- **AssignInspectorDialog** — surveyor type toggle (Internal/External), filtered surveyor picker from `GET /api/v1/setup/surveyors` (size=200), posts to `POST /api/v1/claims/{id}/inspection/assign` with the resolved `surveyorName` so the audit log captures human-readable identity.
+- **SubmitInspectionReportDialog** — `reportPath` + `notes` textarea, refined zod schema enforces backend's at-least-one-required rule. Posts to `POST /api/v1/claims/{id}/inspection/report`.
+
+Inspection tab CTAs now follow the full `ClaimInspection` lifecycle:
+
+| Status | CTAs visible |
+| --- | --- |
+| no record           | Assign Inspector |
+| ASSIGNED            | Submit Report, Override |
+| REPORT_SUBMITTED    | Approve, Decline, Override |
+| DECLINED            | Submit Report, Re-assign Inspector, Override |
+| APPROVED            | Download Report (if any) |
+| OVERRIDDEN          | Download Report (if any) |
+
+Outer gate widened from `c.surveyorId` to `inspection || c.surveyorId` so the new assignment flow drives the UI even when the legacy denormalised `claim.surveyorId` field is null.
+
+api-client: `SurveyorDto` + `SurveyorType` added to setup module — shared between this slice and B5.3 cia-policy survey dialogs.
+
+### Workstream — B5.3 cia-policy survey + coinsurance + risks dialogs (`4ac35cd`)
+
+Closes the deferred B5.3 work that B5.1+B5.2 had carried as "needs new UI pieces." Four new dialog components in `policy/pages/detail/`:
+
+- **AssignSurveyorDialog** — same shape as `AssignInspectorDialog` but for policy survey; posts to `POST /api/v1/policies/{id}/survey/assign`. Reachable both when a survey is required and via "Request Survey Anyway" on a sub-threshold policy.
+- **SubmitSurveyReportDialog** — `reportPath` + `notes`; posts to `POST /api/v1/policies/{id}/survey/report`.
+- **CoinsuranceEditorDialog** (Sheet — wider canvas) — manages the participant list with insurance-company picker (`GET /api/v1/setup/insurance-companies`) and per-row share % inputs. Validation requires shares to sum to exactly 100% before Save enables. PUTs the full list to `/policies/{id}/coinsurance`.
+- **RisksEditorDialog** (Sheet) — table-style editor for the per-item risk schedule. Existing rows go through `PUT /risks/{riskId}` only when actually changed (per-field diff against the original); new rows go through `POST /risks/bulk` in one batch. Vehicle reg-number column gates on motor classes.
+
+Survey tab CTAs now follow the full `PolicySurvey` lifecycle:
+
+| Status | CTAs visible |
+| --- | --- |
+| not required        | Request Survey Anyway, Override |
+| required, no record | Assign Surveyor, Override |
+| ASSIGNED            | Submit Report, Override |
+| REPORT_SUBMITTED    | Approve, Override |
+| APPROVED            | (read-only) |
+| OVERRIDDEN          | Re-assign Surveyor |
+
+Policy Details tab gains a Risk Schedule card with the live risks table + Edit Risks CTA. A Coinsurance Participants card appears only when `businessType` is `DIRECT_WITH_COINSURANCE` or `INWARD_COINSURANCE`, listing each insurer + share with an Edit Shares CTA.
+
+api-client: `InsuranceCompanyDto` added to setup module — parallel to the `SurveyorDto` added in B8 for the same setup-picker pattern.
+
+**Verification (B7 + B8 + B5.3 collectively).** `mvn -pl cia-api -am compile` exit 0; `pnpm --filter @cia/back-office exec tsc --noEmit` exit 0; `bash cia-frontend/scripts/check-api-wiring.sh` 0 violations.
+
+**Open after B7/B8/B5.3.**
+- **Risk DELETE** — `RisksEditorDialog` removes rows visually but the backend has no `DELETE /api/v1/policies/{id}/risks/{riskId}` endpoint; removed rows survive in the database. Either add the DELETE endpoint or rework the editor to do a full PUT-replace of the schedule.
+- **Comments + RequiredDocs sub-aggregates** — still deferred; need new entities + endpoints + frontend reads.
+- **Document upload contract mismatch** — `UploadDocumentDialog` posts a `FormData` with `file` + `documentName` but the backend `POST /claims/{id}/documents` takes `documentType` / `fileName` / `filePath` / `fileSize` as request params. The dialog has been pre-existing broken; B7's "Upload Document" wiring is reachable but the actual upload still fails. Needs a separate slice to harmonise the contract (likely server-side multipart handling + storage step + DocumentResponse return).
+- **Inspection-tab `c.surveyorId` denormalisation** — the dual gate `inspection || c.surveyorId` is a transitional shim. As `cia-claims` matures, the legacy denormalised field on Claim should be deprecated in favour of `ClaimInspection` as the single source of truth.
 
 ### Housekeeping
 
@@ -513,6 +591,26 @@ api-client gained `InspectionStatusSchema` + `ClaimInspectionDtoSchema` in `clai
 | [cia-claims/pom.xml](cia-backend/cia-claims/pom.xml) | B6 — explicit cia-storage dependency |
 | [claims.ts (api-client)](cia-frontend/packages/api-client/src/modules/claims.ts) | B6 — InspectionStatusSchema + ClaimInspectionDtoSchema (z.infer types) |
 | ClaimDetailPage.tsx (B6) | inspectionQuery + surveyDocsQuery + 3 mutations (approve/decline/override) + status-conditional CTA gating + bundle/per-doc download |
+| [DvType.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/DvType.java) | B7 — new DV type enum (OWN_DAMAGE / THIRD_PARTY / EX_GRATIA) |
+| [Claim.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/Claim.java) | B7 — 8 new columns: nature/cause of loss, contact name/phone, dv_type, dv_amount, dv_generated_at, dv_executed_at |
+| [V28__claim_detail_fields.sql](cia-backend/cia-api/src/main/resources/db/migration/V28__claim_detail_fields.sql) | B7 — Flyway migration adds 8 columns to claims |
+| [GenerateDvRequest.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/dto/GenerateDvRequest.java) | B7 — new request: { dvType, amount? } with @Positive amount |
+| [RegisterClaimRequest.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/dto/RegisterClaimRequest.java) | B7 — accepts natureOfLoss, causeOfLoss, contactName, contactPhone (all optional) |
+| [UpdateClaimRequest.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/dto/UpdateClaimRequest.java) | B7 — same 4 metadata fields |
+| [ClaimResponse.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/dto/ClaimResponse.java) | B7 — exposes 4 metadata fields + 5 DV fields |
+| ClaimController.java (B7) | + POST /dv/generate, POST /dv/execute, mapper updated |
+| ClaimService.java (B7) | + generateDv, executeDv (status guards); register/update map the new fields |
+| claims.ts (api-client) — B7 | DvTypeSchema + 4 metadata + 5 DV fields on ClaimDtoSchema; comment block updated |
+| ClaimDetailPage.tsx (B7) | MockClaim retired; Documents tab now lists actual ClaimDocument; DV tab driven by 2 new mutations + backend timestamps |
+| [AssignInspectorDialog.tsx](cia-frontend/apps/back-office/src/modules/claims/pages/detail/AssignInspectorDialog.tsx) | B8 — surveyor type radio + filtered picker, posts /inspection/assign |
+| [SubmitInspectionReportDialog.tsx](cia-frontend/apps/back-office/src/modules/claims/pages/detail/SubmitInspectionReportDialog.tsx) | B8 — reportPath + notes with at-least-one zod refine, posts /inspection/report |
+| ClaimDetailPage.tsx (B8) | mounts both new dialogs; lifecycle CTA wiring; outer gate widened to `inspection \|\| c.surveyorId` |
+| [setup.ts (api-client)](cia-frontend/packages/api-client/src/modules/setup.ts) | B8 + B5.3 — SurveyorDto + SurveyorType + InsuranceCompanyDto |
+| [AssignSurveyorDialog.tsx](cia-frontend/apps/back-office/src/modules/policy/pages/detail/AssignSurveyorDialog.tsx) | B5.3a — same shape as inspector dialog, posts /survey/assign |
+| [SubmitSurveyReportDialog.tsx](cia-frontend/apps/back-office/src/modules/policy/pages/detail/SubmitSurveyReportDialog.tsx) | B5.3b — reportPath + notes, posts /survey/report |
+| [CoinsuranceEditorDialog.tsx](cia-frontend/apps/back-office/src/modules/policy/pages/detail/CoinsuranceEditorDialog.tsx) | B5.3c — Sheet, sum-to-100% validation, PUTs full participant list |
+| [RisksEditorDialog.tsx](cia-frontend/apps/back-office/src/modules/policy/pages/detail/RisksEditorDialog.tsx) | B5.3d — Sheet, per-row diff against original, PUT changed rows + POST bulk new |
+| PolicyDetailPage.tsx (B5.3) | mounts 4 new dialogs, lifecycle CTAs on Survey tab, Risk Schedule + Coinsurance Participants cards on Details tab |
 
 ### Sequence B status
 
@@ -532,13 +630,15 @@ api-client gained `InspectionStatusSchema` + `ClaimInspectionDtoSchema` in `clai
 | Step B4.4 — coinsurance shares update | ✓ done (`826859b`) — 1 endpoint; cia-policy 23 endpoints. **B4 cia-policy backend gap fully closed.** |
 | Step B5.1 — frontend PolicyDto schema sync | ✓ done (`d4ddad7`) — schema-derived types; status enum gains REJECTED + REINSTATED; quotation BusinessType de-duplicated |
 | Step B5.2 — wire B4 endpoints into PolicyDetailPage | ✓ done (`c8435de`) — 8 mutations + streaming PDF download + Override Survey dialog |
-| Step B5.3 — survey assign + report + risks editor + coinsurance editor | pending — needs new UI pieces |
+| Step B5.3 — survey assign + report + risks editor + coinsurance editor | ✓ done (`4ac35cd`) — 4 new dialog components in `policy/pages/detail/`; full survey lifecycle CTAs wired; risks + coinsurance editors as Sheet-style bulk editors; closes G1 cia-policy frontend gap |
 | Step (b) — AlertsTab DTO drift | ✓ done (`32dc4c1`) |
 | Step (c) — AuditLogTab + LoginLogTab full sync | ✓ done (`f4c4ca1`) |
 | Step (d) — 3 deferred audit reports + filter pickers | ✓ done (`6acfcad`) — all 6 audit report tabs now live |
 | Step (e) — claims inspection workflow | ✓ done as **B6** (`4dd22a2` backend + `4df3ad6` frontend) — full slice: ClaimInspection entity, V27 migration, dedicated service, 6 endpoints, document filter + zip bundle, ClaimDetailPage Inspection tab driven by live state |
-| G4 — Claims (6 endpoints) | pending |
-| G1 — cia-policy (11 endpoints) | pending |
+| Step B7 — richer ClaimDetailResponse + DV workflow | ✓ done (`d0c20eb` backend + `fa1a6ca` frontend) — 7 new claim columns + 2 DV endpoints + V28 migration; MockClaim retired, DV tab now backend-driven; closes the simple-add half of G4 richer-detail |
+| Step B8 — inspection assign + submit-report UI | ✓ done (`b9f4e91`) — 2 new dialogs (AssignInspectorDialog + SubmitInspectionReportDialog), full ClaimInspection lifecycle CTAs wired, inspection-tab outer gate widened beyond legacy `claim.surveyorId`; closes the inspection-UI half of G4 |
+| G4 — Claims richer-detail + inspection UI | ✓ closed via B7 + B8 (4 of 6 G4 endpoints closed by B6, remaining 2 closed here as backend extension + frontend dialogs) |
+| G1 — cia-policy (frontend) | ✓ closed via B5.3 |
 | G9 — Phase 3 Partner Portal (5 builds) | pending |
 
 ### Follow-ups
