@@ -55,6 +55,10 @@ fa1a6ca  fix(claims): drop MockClaim invented fields, wire DV to backend (B7 fro
 b9f4e91  feat(claims): inspection assign + submit-report dialogs (B8)
 4ac35cd  feat(policy): survey + coinsurance + risks editor dialogs (B5.3)
 1e85d6e  feat(policy): add DELETE /risks/{riskId} + wire editor to use it (B9)
+2542788  docs(log): session 53 — extend with B9 risk DELETE endpoint
+52c9f93  docs(site): comprehensive sync — internal-api.json + V25–V28 migrations
+6435271  docs: session 53 gate-closure updates (CLAUDE.md / SKILL.md / cia-log title)
+be54587  feat(back-office): demo-mode escape hatch for stakeholder Vercel preview (B10)
 ```
 
 ### Deep audit findings
@@ -506,6 +510,39 @@ api-client: `InsuranceCompanyDto` added to setup module — parallel to the `Sur
 - **Document upload contract mismatch** — `UploadDocumentDialog` posts a `FormData` with `file` + `documentName` but the backend `POST /claims/{id}/documents` takes `documentType` / `fileName` / `filePath` / `fileSize` as request params. The dialog has been pre-existing broken; B7's "Upload Document" wiring is reachable but the actual upload still fails. Needs a separate slice to harmonise the contract (likely server-side multipart handling + storage step + DocumentResponse return).
 - **Inspection-tab `c.surveyorId` denormalisation** — the dual gate `inspection || c.surveyorId` is a transitional shim. As `cia-claims` matures, the legacy denormalised field on Claim should be deprecated in favour of `ClaimInspection` as the single source of truth.
 
+### Workstream — B10 demo-mode escape hatch for Vercel preview (`be54587`)
+
+User flagged that `back-office-blush-six.vercel.app` "doesn't load at all" while localhost (5173) works fine. Investigation:
+
+- `curl -sI` → 200 OK, current bundle `index-BBm_6LYY.js` served, last-modified matches latest deploy. Vercel CI green.
+- `grep "VITE_KEYCLOAK_URL is required" bundle.js` → present. Confirmed runtime crash on init.
+- `vercel env ls production` → 0 env vars set.
+
+Root cause: the production Keycloak guard added in Session 49 (`main.tsx:35-43`) throws on init when `VITE_KEYCLOAK_URL` is unset. Vite cannot tree-shake the throw because `import.meta.env.DEV` is `false` in prod and `keycloakConfigured` is also `false` — so the `else if (!DEV)` branch is statically reachable and the error is baked into every prod bundle. The site has been blanking for every visitor since Session 49. CI green-checked every push because the failure is runtime, not build-time, and there is no smoke test against the deployed URL.
+
+**Fix.** Add a `VITE_DEMO_MODE` escape hatch:
+
+```tsx
+const demoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+// throw branch: if (!keycloakConfigured && !DEV && !demoMode) throw
+const AuthWrapper = keycloakConfigured ? AuthProvider : DevAuthProvider;
+```
+
+When set to `'true'` at build time, Vite tree-shakes the throw branch (verified — the error string is no longer in the bundle). DevAuthProvider is then used instead of AuthProvider, so the demo URL ships with mocked auth. Reserved strictly for the public stakeholder preview URL — guarded against tenant misuse by an amber "Demo" banner rendered above AppShell whenever the flag is on.
+
+**Vercel config.** `VITE_DEMO_MODE=true` set on the back-office project (production env) via `vercel env add`. Pushing the commit triggered a fresh build that picked up the variable. New bundle `index-2QP1w5ie.js` no longer carries the error string; the demo banner string is present.
+
+**Verification.**
+- `pnpm --filter @cia/back-office exec tsc --noEmit` → exit 0
+- `bash cia-frontend/scripts/check-api-wiring.sh` → 0 violations
+- `gh run watch 25405139793` → success in 1m08s
+- `curl https://back-office-blush-six.vercel.app/assets/index-2QP1w5ie.js | grep "VITE_KEYCLOAK_URL is required"` → 0 matches (throw stripped)
+- `curl ... | grep "Stakeholder preview"` → match (banner shipped)
+
+**Open follow-ups.**
+- The deploy pipeline still has no smoke test against the live URL — a future visit-the-site-and-check-for-`#root`-children CI step would have caught this in Session 49 instead of letting it sit broken for 4 sessions. Worth a small dedicated slice when Phase 3 starts standing up real infrastructure.
+- The demo URL still hits a non-existent backend at `VITE_API_BASE_URL`'s default (`http://localhost:8080`). All useQuery calls will 4xx in the demo. Mocking the API at the network layer (MSW or similar) is a separate decision — for now the page-shells render but data tables show empty/error states. That's acceptable for a UI-only stakeholder preview; if not, MSW is the next step.
+
 ### Workstream — B9 risk DELETE endpoint (`1e85d6e`)
 
 Closes the (c) follow-up flagged after B5.3. Backend gains `DELETE /api/v1/policies/{id}/risks/{riskId}`:
@@ -624,6 +661,9 @@ Frontend `RisksEditorDialog.save` now reconciles in three phases: PUT changed ro
 | PolicyService.java (B9) | + deleteRisk (DRAFT-only + last-risk guards, soft-delete via BaseEntity, recomputePolicyTotals, AuditAction.DELETE) |
 | PolicyController.java (B9) | + DELETE /api/v1/policies/{id}/risks/{riskId} |
 | RisksEditorDialog.tsx (B9) | save mutation reconciles in PUT/POST/DELETE order; deletes any rows dropped from the editor |
+| [main.tsx](cia-frontend/apps/back-office/src/main.tsx) | B10 — VITE_DEMO_MODE escape hatch; throw branch only fires when neither DEV nor demoMode are true |
+| [AppShell.tsx](cia-frontend/apps/back-office/src/app/layout/AppShell.tsx) | B10 — amber "Demo" banner rendered above the layout when VITE_DEMO_MODE=true |
+| CLAUDE.md (B10) | + VITE_DEMO_MODE row in env-vars table; + Production preview note describing the back-office-blush-six.vercel.app demo posture |
 
 ### Sequence B status
 
@@ -645,6 +685,7 @@ Frontend `RisksEditorDialog.save` now reconciles in three phases: PUT changed ro
 | Step B5.2 — wire B4 endpoints into PolicyDetailPage | ✓ done (`c8435de`) — 8 mutations + streaming PDF download + Override Survey dialog |
 | Step B5.3 — survey assign + report + risks editor + coinsurance editor | ✓ done (`4ac35cd`) — 4 new dialog components in `policy/pages/detail/`; full survey lifecycle CTAs wired; risks + coinsurance editors as Sheet-style bulk editors; closes G1 cia-policy frontend gap |
 | Step B9 — DELETE /policies/{id}/risks/{riskId} | ✓ done (`1e85d6e`) — backend endpoint + service with DRAFT-only + last-risk guards; RisksEditorDialog reconciles in PUT/POST/DELETE order so wholesale replacement passes the last-risk check |
+| Step B10 — demo-mode escape hatch | ✓ done (`be54587`) — VITE_DEMO_MODE flag in main.tsx allows production bundle to use DevAuthProvider when Keycloak isn't configured; AppShell renders amber "Demo" banner; VITE_DEMO_MODE=true set on Vercel; closes a 4-session-old Session-49 regression that had been blanking the public Vercel URL |
 | Step (b) — AlertsTab DTO drift | ✓ done (`32dc4c1`) |
 | Step (c) — AuditLogTab + LoginLogTab full sync | ✓ done (`f4c4ca1`) |
 | Step (d) — 3 deferred audit reports + filter pickers | ✓ done (`6acfcad`) — all 6 audit report tabs now live |
