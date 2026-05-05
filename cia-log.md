@@ -61,6 +61,10 @@ b9f4e91  feat(claims): inspection assign + submit-report dialogs (B8)
 be54587  feat(back-office): demo-mode escape hatch for stakeholder Vercel preview (B10)
 f8ba60e  docs(log): session 53 — extend with B10 Vercel demo-mode fix
 56f803d  feat(claims): comments + required-docs + multipart upload (B11/B12/B13)
+8c7ad63  docs: session 53 — extend log + sync docs-site for B11/B12/B13
+65fa9f2  docs(log): bump session 53 date range to 2026-05-06
+d47fe19  docs: session 53 gate-closure updates for B11/B12/B13
+0c56410  feat(api): mount internal Swagger UI at /internal/docs alias (B14)
 ```
 
 ### Deep audit findings
@@ -512,6 +516,27 @@ api-client: `InsuranceCompanyDto` added to setup module — parallel to the `Sur
 - **Document upload contract mismatch** — `UploadDocumentDialog` posts a `FormData` with `file` + `documentName` but the backend `POST /claims/{id}/documents` takes `documentType` / `fileName` / `filePath` / `fileSize` as request params. The dialog has been pre-existing broken; B7's "Upload Document" wiring is reachable but the actual upload still fails. Needs a separate slice to harmonise the contract (likely server-side multipart handling + storage step + DocumentResponse return).
 - **Inspection-tab `c.surveyorId` denormalisation** — the dual gate `inspection || c.surveyorId` is a transitional shim. As `cia-claims` matures, the legacy denormalised field on Claim should be deprecated in favour of `ClaimInspection` as the single source of truth.
 
+### Workstream — B14 internal Swagger UI alias (`0c56410`)
+
+User asked for a Swagger link to the internal APIs after the gate-closure docs round. The `InternalApiOpenApiConfig` `GroupedOpenApi` bean has been in the codebase since the partner-api buildout, so the internal API spec is already exposed via the dropdown at `/partner/docs`. Two issues prevented it from being a usable internal-team URL: the friendly path is `/partner/docs` (confusing for staff), and loading it without a query string lands on `partner-api` by default.
+
+**Fix.** New `InternalDocsAliasConfig` (WebMvcConfigurer) registers two redirect view controllers:
+
+| Alias | Target |
+| --- | --- |
+| `GET /internal/docs` | `302 /partner/docs?urls.primaryName=internal-api` |
+| `GET /internal/v3/api-docs` | `302 /partner/v3/api-docs/internal-api` |
+
+`SecurityConfig` adds the new paths to the public allow-list — the redirect itself fires after the security filter, so the original `/internal/docs` request must be permitted for the 302 to reach the browser. Also tightened the existing `/partner/docs` matcher to cover both the exact path and `/**` (was missing the bare path before).
+
+`docs-site/docs-internal/api-reference.md` gains an "Interactive Swagger UI" callout listing the new URLs alongside the static OpenAPI JSON URL on the docs site.
+
+**Verification.** `mvn -pl cia-api -am compile` exit 0. End-to-end smoke test deferred — the local backend (Postgres + Keycloak + Temporal + MinIO) is not running in this session. The change uses standard Spring MVC + Springdoc primitives (`addRedirectViewController`, documented `urls.primaryName` Swagger UI param), so runtime risk is minimal.
+
+**Open after B14.**
+- **Live smoke test** — when next someone runs `mvn spring-boot:run -pl cia-api -Pdev`, hit `http://localhost:8090/internal/docs` and confirm Swagger UI lands on the internal-api group. If the `urls.primaryName` query param doesn't survive the redirect, fall back to a one-page static HTML mount that loads Swagger UI directly.
+- **Internal Swagger on the public docs site** — Phase-3 follow-up. Once `https://api.cia.app` is live, the same redirect will work there. For now, `https://cia-docs.vercel.app/internal-api.json` remains the canonical static spec.
+
 ### Workstream — B11/B12/B13 (`56f803d`) — pre-Phase-3 backlog closed
 
 User chose to close the three pre-Phase-3 follow-ups flagged after B9: (a) Comments + RequiredDocs sub-aggregates, (b) document-upload contract mismatch. Bundled into one commit because all three slices touch ClaimDetailPage and splitting risks broken intermediate states; cia-log entry below describes each independently.
@@ -731,6 +756,9 @@ Frontend `RisksEditorDialog.save` now reconciles in three phases: PUT changed ro
 | [AddCommentDialog.tsx](cia-frontend/apps/back-office/src/modules/claims/pages/detail/AddCommentDialog.tsx) | B11 — payload `{text}` → `{body}`, ≥2-char gate, server-error toast |
 | [UploadDocumentDialog.tsx](cia-frontend/apps/back-office/src/modules/claims/pages/detail/UploadDocumentDialog.tsx) | B13 — documentType picker, FormData (`file` only), invalidates documents+required-documents+claim |
 | ClaimDetailPage.tsx (B11+B12+B13) | + commentsQuery + Comments card; + requiredDocsQuery + Required Documents card; missing-mandatory header badge; UploadDocumentDialog prop simplified |
+| [InternalDocsAliasConfig.java](cia-backend/cia-api/src/main/java/com/nubeero/cia/config/InternalDocsAliasConfig.java) | B14 — WebMvcConfigurer with redirect view controllers for `/internal/docs` + `/internal/v3/api-docs` |
+| SecurityConfig.java (B14) | permits the `/internal/docs` + `/internal/v3/api-docs` aliases; tightens the existing `/partner/docs` matcher to cover both exact + `/**` |
+| docs-site/docs-internal/api-reference.md (B14) | + "Interactive Swagger UI" callout pointing at the new URLs |
 
 ### Sequence B status
 
@@ -756,6 +784,7 @@ Frontend `RisksEditorDialog.save` now reconciles in three phases: PUT changed ro
 | Step B11 — ClaimComment aggregate | ✓ done (`56f803d`) — new entity, V29 migration, append-only service, GET+POST controller; AddCommentDialog rewired from broken `{text}` to backend `{body}`; Comments card re-added on Processing tab |
 | Step B12 — RequiredDocs derived checklist | ✓ done (`56f803d`) — V30 adds documentType column to claim_document_requirements; ClaimRequiredDocumentService computes per-claim status at request time (no new entity); new GET /required-documents endpoint; Required Documents card on Documents tab with missing-mandatory badge in header |
 | Step B13 — Multipart upload contract | ✓ done (`56f803d`) — POST /claims/{id}/documents now consumes multipart/form-data + MultipartFile, streams bytes through DocumentStorageService; UploadDocumentDialog refactored with documentType picker; closes (b) document-upload mismatch from the Phase-3 backlog |
+| Step B14 — internal Swagger UI alias | ✓ done (`0c56410`) — InternalDocsAliasConfig adds `/internal/docs` + `/internal/v3/api-docs` redirect aliases; SecurityConfig permits both; api-reference.md surfaces the new URLs; closes the user-facing "where's the Swagger link for the internal API" question |
 | Step (b) — AlertsTab DTO drift | ✓ done (`32dc4c1`) |
 | Step (c) — AuditLogTab + LoginLogTab full sync | ✓ done (`f4c4ca1`) |
 | Step (d) — 3 deferred audit reports + filter pickers | ✓ done (`6acfcad`) — all 6 audit report tabs now live |
