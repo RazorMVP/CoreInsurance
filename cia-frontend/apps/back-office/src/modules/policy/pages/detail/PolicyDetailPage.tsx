@@ -1,10 +1,24 @@
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Badge, Button, Card, CardContent, CardHeader, CardTitle, PageHeader,
   Separator, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Label, Textarea, toast,
 } from '@cia/ui';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient, type PolicyDto } from '@cia/api-client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient, type ApiError, type ApiResponse, type PolicyDto } from '@cia/api-client';
+
+interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
+
+function showServerError(err: unknown, title: string) {
+  const ax = err as ApiHttpError;
+  const errors: ApiError[] = ax?.response?.data?.errors ?? [];
+  const description = errors.length > 0
+    ? errors.map(e => e.message).filter(Boolean).join('. ')
+    : ax?.message ?? 'An unexpected error occurred. Please try again.';
+  toast({ variant: 'destructive', title, description });
+}
 
 type MockPolicy = PolicyDto & {
   riskDescription: string;
@@ -78,8 +92,9 @@ function NaicomStatus({ uid, label }: { uid?: string; label: string }) {
 }
 
 export default function PolicyDetailPage() {
-  const navigate  = useNavigate();
-  const { id }    = useParams<{ id: string }>();
+  const navigate    = useNavigate();
+  const { id }      = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
 
   const policyQuery = useQuery<MockPolicy>({
     queryKey: ['policies', id],
@@ -94,6 +109,82 @@ export default function PolicyDetailPage() {
   // page renderable mid-prototype while the backend wires up.
   const p = policyQuery.data ?? mockPolicy;
 
+  // ─── Mutations (B5.2 — wire B4 endpoints) ─────────────────────────────
+  const onSuccess = (title: string) => () => {
+    queryClient.invalidateQueries({ queryKey: ['policies', id] });
+    toast({ title });
+  };
+
+  const submit  = useMutation({
+    mutationFn: () => apiClient.post(`/api/v1/policies/${id}/submit`),
+    onSuccess: onSuccess('Submitted for approval'),
+    onError:   (e) => showServerError(e, 'Could not submit policy'),
+  });
+  const approve = useMutation({
+    mutationFn: () => apiClient.post(`/api/v1/policies/${id}/approve`),
+    onSuccess: onSuccess('Policy approved'),
+    onError:   (e) => showServerError(e, 'Could not approve policy'),
+  });
+  const reject = useMutation({
+    mutationFn: () => apiClient.post(`/api/v1/policies/${id}/reject`),
+    onSuccess: onSuccess('Policy rejected'),
+    onError:   (e) => showServerError(e, 'Could not reject policy'),
+  });
+  const sendDoc = useMutation({
+    mutationFn: () => apiClient.post(`/api/v1/policies/${id}/document/send`),
+    onSuccess: onSuccess('Policy document sent to insured'),
+    onError:   (e) => showServerError(e, 'Could not send policy document'),
+  });
+  const ackDoc = useMutation({
+    mutationFn: () => apiClient.post(`/api/v1/policies/${id}/document/acknowledge`),
+    onSuccess: onSuccess('Receipt acknowledged'),
+    onError:   (e) => showServerError(e, 'Could not record acknowledgement'),
+  });
+  const naicom = useMutation({
+    mutationFn: () => apiClient.post(`/api/v1/policies/${id}/naicom-upload`),
+    onSuccess: onSuccess('NAICOM upload triggered'),
+    onError:   (e) => showServerError(e, 'Could not trigger NAICOM upload'),
+  });
+  const niid = useMutation({
+    mutationFn: () => apiClient.post(`/api/v1/policies/${id}/niid-upload`),
+    onSuccess: onSuccess('NIID upload triggered'),
+    onError:   (e) => showServerError(e, 'Could not trigger NIID upload'),
+  });
+  const approveSurvey = useMutation({
+    mutationFn: () => apiClient.post(`/api/v1/policies/${id}/survey/approve`),
+    onSuccess: onSuccess('Survey approved'),
+    onError:   (e) => showServerError(e, 'Could not approve survey'),
+  });
+
+  // Override-survey dialog
+  const [overrideOpen,    setOverrideOpen]    = useState(false);
+  const [overrideReason,  setOverrideReason]  = useState('');
+  const [overrideErr,     setOverrideErr]     = useState<string | null>(null);
+  useEffect(() => { if (!overrideOpen) { setOverrideReason(''); setOverrideErr(null); } }, [overrideOpen]);
+  const overrideSurvey = useMutation({
+    mutationFn: (reason: string) =>
+      apiClient.post(`/api/v1/policies/${id}/survey/override`, { reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['policies', id] });
+      toast({ title: 'Survey requirement overridden' });
+      setOverrideOpen(false);
+    },
+    onError:   (e) => showServerError(e, 'Could not override survey'),
+  });
+
+  function downloadPdf() {
+    apiClient.get(`/api/v1/policies/${id}/document`, { responseType: 'blob' })
+      .then(res => {
+        const blob = new Blob([res.data as Blob], { type: 'application/pdf' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = `${p.policyNumber ?? id}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      })
+      .catch(e => showServerError(e, 'Could not download policy document'));
+  }
+
   if (policyQuery.isLoading && !policyQuery.data) {
     return (
       <div className="p-6 space-y-4 max-w-5xl">
@@ -107,6 +198,7 @@ export default function PolicyDetailPage() {
   const canSubmit  = p.status === 'DRAFT';
   const canApprove = p.status === 'PENDING_APPROVAL';
   const isActive   = p.status === 'ACTIVE';
+  const niidEligible = p.classOfBusinessName === 'Motor (Private)' || p.classOfBusinessName === 'Marine Cargo';
 
   return (
     <div className="p-6 space-y-5 max-w-5xl">
@@ -121,12 +213,12 @@ export default function PolicyDetailPage() {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant={statusVariant[p.status]}>{p.status.toLowerCase().replace('_', ' ')}</Badge>
-            {canSubmit  && <Button size="sm">Submit for Approval</Button>}
-            {canApprove && <Button size="sm" variant="outline">Reject</Button>}
-            {canApprove && <Button size="sm">Approve Policy</Button>}
-            {isActive   && <Button size="sm" variant="outline">Add Endorsement</Button>}
-            {isActive   && <Button size="sm">Register Claim</Button>}
-            {p.policyDocumentPath && <Button size="sm" variant="outline">Download PDF</Button>}
+            {canSubmit  && <Button size="sm" disabled={submit.isPending}  onClick={() => submit.mutate()}>{submit.isPending ? 'Submitting…' : 'Submit for Approval'}</Button>}
+            {canApprove && <Button size="sm" variant="outline" disabled={reject.isPending}  onClick={() => reject.mutate()}>Reject</Button>}
+            {canApprove && <Button size="sm" disabled={approve.isPending} onClick={() => approve.mutate()}>{approve.isPending ? 'Approving…' : 'Approve Policy'}</Button>}
+            {isActive   && <Button size="sm" variant="outline" onClick={() => navigate('/endorsements/create')}>Add Endorsement</Button>}
+            {isActive   && <Button size="sm" onClick={() => navigate('/claims/register')}>Register Claim</Button>}
+            {p.policyDocumentPath && <Button size="sm" variant="outline" onClick={downloadPdf}>Download PDF</Button>}
           </div>
         }
       />
@@ -177,7 +269,7 @@ export default function PolicyDetailPage() {
                 <CardTitle>Policy Document</CardTitle>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm">Edit Template</Button>
-                  {p.policyDocumentPath && <Button size="sm">Download PDF</Button>}
+                  {p.policyDocumentPath && <Button size="sm" onClick={downloadPdf}>Download PDF</Button>}
                 </div>
               </div>
             </CardHeader>
@@ -210,8 +302,25 @@ export default function PolicyDetailPage() {
               </div>
               {p.policyDocumentPath && (
                 <div className="flex gap-2">
-                  <Button size="sm">Send to Insured</Button>
-                  <Button size="sm" variant="outline">Acknowledge Receipt</Button>
+                  <Button
+                    size="sm"
+                    disabled={sendDoc.isPending || !!p.documentSentAt}
+                    onClick={() => sendDoc.mutate()}
+                  >
+                    {p.documentSentAt
+                      ? `Sent ${new Date(p.documentSentAt).toLocaleDateString()}`
+                      : sendDoc.isPending ? 'Sending…' : 'Send to Insured'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={ackDoc.isPending || !p.documentSentAt || !!p.documentAcknowledgedAt}
+                    onClick={() => ackDoc.mutate()}
+                  >
+                    {p.documentAcknowledgedAt
+                      ? `Acknowledged ${new Date(p.documentAcknowledgedAt).toLocaleDateString()}`
+                      : ackDoc.isPending ? 'Recording…' : 'Acknowledge Receipt'}
+                  </Button>
                 </div>
               )}
             </CardContent>
@@ -256,19 +365,34 @@ export default function PolicyDetailPage() {
                   <p className="text-sm text-muted-foreground">
                     No pre-loss survey is required for this policy based on the sum insured threshold.
                   </p>
-                  <Button variant="outline" size="sm">Request Survey Anyway</Button>
-                  <Button variant="outline" size="sm" className="ml-2">Override Survey Requirement</Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="ml-2"
+                    onClick={() => setOverrideOpen(true)}
+                  >
+                    Override Survey Requirement
+                  </Button>
+                  {/* Request Survey Anyway is deferred — needs the surveyor-picker dialog (B5.3). */}
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <Row label="Survey Type"    value="External Surveyor" />
-                  <Row label="Surveyor"       value="Maxwell & Partners Ltd" />
-                  <Row label="Assigned Date"  value="2026-01-31" />
-                  <Row label="Report Status"  value="Pending submission" />
+                  <Row label="Survey Type"    value={p.survey?.surveyorType ?? '—'} />
+                  <Row label="Surveyor"       value={p.survey?.surveyorName ?? '—'} />
+                  <Row label="Assigned Date"  value={p.survey?.assignedAt?.split('T')[0] ?? '—'} />
+                  <Row label="Report Status"  value={p.survey?.status ?? 'Pending submission'} />
                   <div className="mt-4 flex gap-2">
-                    <Button size="sm">Upload Survey Report</Button>
-                    <Button size="sm" variant="outline">Approve Survey</Button>
-                    <Button size="sm" variant="outline">Override</Button>
+                    {/* Upload Survey Report — deferred until file-upload UI lands (B5.3). */}
+                    <Button
+                      size="sm"
+                      disabled={approveSurvey.isPending || p.survey?.status !== 'REPORT_SUBMITTED'}
+                      onClick={() => approveSurvey.mutate()}
+                    >
+                      {approveSurvey.isPending ? 'Approving…' : 'Approve Survey'}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setOverrideOpen(true)}>
+                      Override
+                    </Button>
                   </div>
                 </div>
               )}
@@ -282,7 +406,26 @@ export default function PolicyDetailPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Regulatory Upload</CardTitle>
-                <Button variant="outline" size="sm">Trigger Manual Upload</Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={naicom.isPending || !isActive}
+                    onClick={() => naicom.mutate()}
+                  >
+                    {naicom.isPending ? 'Uploading…' : 'NAICOM Upload'}
+                  </Button>
+                  {niidEligible && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={niid.isPending || !isActive}
+                      onClick={() => niid.mutate()}
+                    >
+                      {niid.isPending ? 'Uploading…' : 'NIID Upload'}
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -301,6 +444,51 @@ export default function PolicyDetailPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Override Survey dialog */}
+      <Dialog open={overrideOpen} onOpenChange={setOverrideOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Override Survey Requirement</DialogTitle>
+            <DialogDescription>
+              Waiving the pre-loss survey requirement is permanent and recorded against the policy.
+              Provide a reason before confirming.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="survey-override-reason">Reason</Label>
+            <Textarea
+              id="survey-override-reason"
+              placeholder="e.g. Risk previously surveyed under prior policy / standard product / executive override"
+              rows={3}
+              value={overrideReason}
+              onChange={e => { setOverrideReason(e.target.value); if (overrideErr) setOverrideErr(null); }}
+              disabled={overrideSurvey.isPending}
+            />
+            {overrideErr && <p className="text-xs text-destructive">{overrideErr}</p>}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOverrideOpen(false)} disabled={overrideSurvey.isPending}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={overrideSurvey.isPending}
+              onClick={() => {
+                if (overrideReason.trim().length < 5) {
+                  setOverrideErr('Reason must be at least 5 characters.');
+                  return;
+                }
+                overrideSurvey.mutate(overrideReason);
+              }}
+            >
+              {overrideSurvey.isPending ? 'Overriding…' : 'Override'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
