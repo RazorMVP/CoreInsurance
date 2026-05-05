@@ -54,6 +54,7 @@ d0c20eb  feat(claims): richer claim detail + DV state on entity (B7 backend)
 fa1a6ca  fix(claims): drop MockClaim invented fields, wire DV to backend (B7 frontend)
 b9f4e91  feat(claims): inspection assign + submit-report dialogs (B8)
 4ac35cd  feat(policy): survey + coinsurance + risks editor dialogs (B5.3)
+1e85d6e  feat(policy): add DELETE /risks/{riskId} + wire editor to use it (B9)
 ```
 
 ### Deep audit findings
@@ -500,11 +501,20 @@ api-client: `InsuranceCompanyDto` added to setup module — parallel to the `Sur
 
 **Verification (B7 + B8 + B5.3 collectively).** `mvn -pl cia-api -am compile` exit 0; `pnpm --filter @cia/back-office exec tsc --noEmit` exit 0; `bash cia-frontend/scripts/check-api-wiring.sh` 0 violations.
 
-**Open after B7/B8/B5.3.**
-- **Risk DELETE** — `RisksEditorDialog` removes rows visually but the backend has no `DELETE /api/v1/policies/{id}/risks/{riskId}` endpoint; removed rows survive in the database. Either add the DELETE endpoint or rework the editor to do a full PUT-replace of the schedule.
+**Open after B7/B8/B5.3.** (Risk DELETE closed below in B9.)
 - **Comments + RequiredDocs sub-aggregates** — still deferred; need new entities + endpoints + frontend reads.
 - **Document upload contract mismatch** — `UploadDocumentDialog` posts a `FormData` with `file` + `documentName` but the backend `POST /claims/{id}/documents` takes `documentType` / `fileName` / `filePath` / `fileSize` as request params. The dialog has been pre-existing broken; B7's "Upload Document" wiring is reachable but the actual upload still fails. Needs a separate slice to harmonise the contract (likely server-side multipart handling + storage step + DocumentResponse return).
 - **Inspection-tab `c.surveyorId` denormalisation** — the dual gate `inspection || c.surveyorId` is a transitional shim. As `cia-claims` matures, the legacy denormalised field on Claim should be deprecated in favour of `ClaimInspection` as the single source of truth.
+
+### Workstream — B9 risk DELETE endpoint (`1e85d6e`)
+
+Closes the (c) follow-up flagged after B5.3. Backend gains `DELETE /api/v1/policies/{id}/risks/{riskId}`:
+
+- `PolicyService.deleteRisk` soft-deletes the row via `BaseEntity.softDelete()` and triggers `recomputePolicyTotals(policy)`.
+- Two guards: `INVALID_POLICY_STATUS` (DRAFT only — risk schedule is locked once the policy is submitted, mirroring `updateRisk`/`addRisksBulk`), and `LAST_RISK` (refuses to remove the last active risk so policies always carry ≥1 line item).
+- `AuditAction.DELETE` on PolicyRisk with the policy snapshot as before/after — same shape as `updateRisk`.
+
+Frontend `RisksEditorDialog.save` now reconciles in three phases: PUT changed rows, POST new rows, DELETE removed rows. Order matters — the backend `LAST_RISK` guard would reject a wholesale replacement (drop all old + add all new) if DELETE ran first; running DELETE last lets the new rows backfill before old ones are removed. Client-side validation already required `rows.length > 0`, so the editor's Save button blocks the user from triggering the guard with an empty schedule.
 
 ### Housekeeping
 
@@ -611,6 +621,9 @@ api-client: `InsuranceCompanyDto` added to setup module — parallel to the `Sur
 | [CoinsuranceEditorDialog.tsx](cia-frontend/apps/back-office/src/modules/policy/pages/detail/CoinsuranceEditorDialog.tsx) | B5.3c — Sheet, sum-to-100% validation, PUTs full participant list |
 | [RisksEditorDialog.tsx](cia-frontend/apps/back-office/src/modules/policy/pages/detail/RisksEditorDialog.tsx) | B5.3d — Sheet, per-row diff against original, PUT changed rows + POST bulk new |
 | PolicyDetailPage.tsx (B5.3) | mounts 4 new dialogs, lifecycle CTAs on Survey tab, Risk Schedule + Coinsurance Participants cards on Details tab |
+| PolicyService.java (B9) | + deleteRisk (DRAFT-only + last-risk guards, soft-delete via BaseEntity, recomputePolicyTotals, AuditAction.DELETE) |
+| PolicyController.java (B9) | + DELETE /api/v1/policies/{id}/risks/{riskId} |
+| RisksEditorDialog.tsx (B9) | save mutation reconciles in PUT/POST/DELETE order; deletes any rows dropped from the editor |
 
 ### Sequence B status
 
@@ -631,6 +644,7 @@ api-client: `InsuranceCompanyDto` added to setup module — parallel to the `Sur
 | Step B5.1 — frontend PolicyDto schema sync | ✓ done (`d4ddad7`) — schema-derived types; status enum gains REJECTED + REINSTATED; quotation BusinessType de-duplicated |
 | Step B5.2 — wire B4 endpoints into PolicyDetailPage | ✓ done (`c8435de`) — 8 mutations + streaming PDF download + Override Survey dialog |
 | Step B5.3 — survey assign + report + risks editor + coinsurance editor | ✓ done (`4ac35cd`) — 4 new dialog components in `policy/pages/detail/`; full survey lifecycle CTAs wired; risks + coinsurance editors as Sheet-style bulk editors; closes G1 cia-policy frontend gap |
+| Step B9 — DELETE /policies/{id}/risks/{riskId} | ✓ done (`1e85d6e`) — backend endpoint + service with DRAFT-only + last-risk guards; RisksEditorDialog reconciles in PUT/POST/DELETE order so wholesale replacement passes the last-risk check |
 | Step (b) — AlertsTab DTO drift | ✓ done (`32dc4c1`) |
 | Step (c) — AuditLogTab + LoginLogTab full sync | ✓ done (`f4c4ca1`) |
 | Step (d) — 3 deferred audit reports + filter pickers | ✓ done (`6acfcad`) — all 6 audit report tabs now live |
