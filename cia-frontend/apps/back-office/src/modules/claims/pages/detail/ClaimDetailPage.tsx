@@ -4,9 +4,26 @@ import {
   Badge, Button, Card, CardContent, CardHeader, CardTitle, PageHeader,
   Separator, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  toast,
 } from '@cia/ui';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient, type ClaimDto, type ClaimReserveDto, type ClaimExpenseDto } from '@cia/api-client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  apiClient,
+  type ApiError, type ApiResponse,
+  type ClaimDto, type ClaimReserveDto, type ClaimExpenseDto, type ClaimInspectionDto,
+  type ClaimDocumentDto,
+} from '@cia/api-client';
+
+interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
+
+function showServerError(err: unknown, title: string) {
+  const ax = err as ApiHttpError;
+  const errors: ApiError[] = ax?.response?.data?.errors ?? [];
+  const description = errors.length > 0
+    ? errors.map(e => e.message).filter(Boolean).join('. ')
+    : ax?.message ?? 'An unexpected error occurred. Please try again.';
+  toast({ variant: 'destructive', title, description });
+}
 import SubmitClaimDialog    from './SubmitClaimDialog';
 import CancelClaimDialog    from './CancelClaimDialog';
 import AddReserveDialog     from './AddReserveDialog';
@@ -110,8 +127,9 @@ const DV_LABELS: Record<DvType, string> = {
 };
 
 export default function ClaimDetailPage() {
-  const navigate = useNavigate();
-  const { id }   = useParams<{ id: string }>();
+  const navigate    = useNavigate();
+  const { id }      = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
 
   const claimQuery = useQuery<MockClaim>({
     queryKey: ['claims', id],
@@ -121,6 +139,81 @@ export default function ClaimDetailPage() {
     },
     enabled: !!id,
   });
+
+  // ─── Inspection (B6) ──────────────────────────────────────────────────
+  // Backend returns 404 when no inspection has been assigned yet, which
+  // is a valid state (no surveyor scheduled). Suppress retries to avoid
+  // hammering, and treat 404 as "no inspection yet" rather than an error.
+  const inspectionQuery = useQuery<ClaimInspectionDto | null>({
+    queryKey: ['claims', id, 'inspection'],
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get<{ data: ClaimInspectionDto }>(`/api/v1/claims/${id}/inspection`);
+        return res.data.data;
+      } catch (e) {
+        if ((e as ApiHttpError)?.response?.data?.errors?.some(err => err.code === 'NOT_FOUND')) return null;
+        throw e;
+      }
+    },
+    enabled: !!id,
+    retry: false,
+  });
+  const inspection = inspectionQuery.data ?? null;
+
+  // Survey-report documents only (filtered) — used by the Download Reports
+  // dialog. Endpoint paginates; size=100 covers any realistic claim.
+  const surveyDocsQuery = useQuery<ClaimDocumentDto[]>({
+    queryKey: ['claims', id, 'documents', 'SURVEY_REPORT'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: { content: ClaimDocumentDto[] } }>(
+        `/api/v1/claims/${id}/documents`,
+        { params: { documentType: 'SURVEY_REPORT', size: 100 } },
+      );
+      return res.data.data.content ?? [];
+    },
+    enabled: !!id,
+  });
+
+  const onInspectionSuccess = (title: string) => () => {
+    queryClient.invalidateQueries({ queryKey: ['claims', id, 'inspection'] });
+    queryClient.invalidateQueries({ queryKey: ['claims', id] });
+    toast({ title });
+  };
+
+  const approveInspection = useMutation({
+    mutationFn: () => apiClient.post(`/api/v1/claims/${id}/inspection/approve`),
+    onSuccess: onInspectionSuccess('Inspection approved'),
+    onError:   (e) => showServerError(e, 'Could not approve inspection'),
+  });
+  const declineInspection = useMutation({
+    mutationFn: (reason: string) =>
+      apiClient.post(`/api/v1/claims/${id}/inspection/decline`, { reason }),
+    onSuccess: onInspectionSuccess('Inspection declined'),
+    onError:   (e) => showServerError(e, 'Could not decline inspection'),
+  });
+  const overrideInspection = useMutation({
+    mutationFn: (reason: string) =>
+      apiClient.post(`/api/v1/claims/${id}/inspection/override`, { reason }),
+    onSuccess: onInspectionSuccess('Inspection requirement overridden'),
+    onError:   (e) => showServerError(e, 'Could not override inspection'),
+  });
+
+  function downloadBlob(url: string, filename: string, errTitle: string) {
+    apiClient.get(url, { responseType: 'blob' })
+      .then(res => {
+        const blob = new Blob([res.data as Blob]);
+        const objUrl = URL.createObjectURL(blob);
+        const a      = document.createElement('a');
+        a.href = objUrl; a.download = filename;
+        a.click();
+        URL.revokeObjectURL(objUrl);
+      })
+      .catch(e => showServerError(e, errTitle));
+  }
+  const downloadDocument = (docId: string, filename: string) =>
+    downloadBlob(`/api/v1/claims/${id}/documents/${docId}/content`, filename, 'Could not download document');
+  const downloadInspectionBundle = () =>
+    downloadBlob(`/api/v1/claims/${id}/inspection/documents/bundle`, `${id}-survey-reports.zip`, 'Could not download bundle');
   const reservesQuery = useQuery<ClaimReserveDto[]>({
     queryKey: ['claims', id, 'reserves'],
     queryFn: async () => {
@@ -159,6 +252,7 @@ export default function ClaimDetailPage() {
   const [approveInspectOpen,  setApproveInspectOpen]  = useState(false);
   const [overrideInspectOpen, setOverrideInspectOpen] = useState(false);
   const [overrideReason,      setOverrideReason]      = useState('');
+  const [declineReason,       setDeclineReason]       = useState('');
   const [downloadReportOpen,  setDownloadReportOpen]  = useState(false);
 
   const c = claimQuery.data ?? mockClaim;
@@ -441,28 +535,51 @@ export default function ClaimDetailPage() {
               )}
               {c.surveyorId ? (
                 <>
-                  <Row label="Surveyor"      value={c.surveyorName ?? '—'} />
-                  <Row label="Type"          value="External Surveyor" />
-                  <Row label="Assigned Date" value="2026-03-12" />
-                  <Row label="Report Status" value="Submitted — awaiting claim officer review" />
+                  <Row label="Surveyor"      value={inspection?.surveyorName ?? c.surveyorName ?? '—'} />
+                  <Row label="Type"          value={inspection?.surveyorType ?? 'External Surveyor'} />
+                  <Row label="Assigned Date" value={inspection?.assignedAt?.slice(0, 10) ?? '—'} />
+                  <Row
+                    label="Report Status"
+                    value={
+                      inspection?.status === 'REPORT_SUBMITTED'
+                        ? 'Submitted — awaiting claim officer review'
+                        : inspection?.status === 'APPROVED'
+                        ? 'Approved'
+                        : inspection?.status === 'DECLINED'
+                        ? `Declined — ${inspection.declineReason ?? 'no reason recorded'}`
+                        : inspection?.status === 'OVERRIDDEN'
+                        ? `Overridden — ${inspection.overrideReason ?? 'no reason recorded'}`
+                        : inspection?.status === 'ASSIGNED'
+                        ? 'Assigned — awaiting report submission'
+                        : 'No inspection record'
+                    }
+                  />
                   <div className="flex gap-2 mt-4 flex-wrap">
-                    <Button size="sm" onClick={() => setApproveInspectOpen(true)}>
-                      Approve Inspection Report
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-destructive"
-                      onClick={() => setDeclineInspectOpen(true)}
-                    >
-                      Decline Report
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setOverrideInspectOpen(true)}>
-                      Override Requirement
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setDownloadReportOpen(true)}>
-                      Download Report
-                    </Button>
+                    {inspection?.status === 'REPORT_SUBMITTED' && (
+                      <Button size="sm" onClick={() => setApproveInspectOpen(true)}>
+                        Approve Inspection Report
+                      </Button>
+                    )}
+                    {inspection?.status === 'REPORT_SUBMITTED' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-destructive"
+                        onClick={() => setDeclineInspectOpen(true)}
+                      >
+                        Decline Report
+                      </Button>
+                    )}
+                    {inspection && inspection.status !== 'APPROVED' && inspection.status !== 'OVERRIDDEN' && (
+                      <Button size="sm" variant="outline" onClick={() => setOverrideInspectOpen(true)}>
+                        Override Requirement
+                      </Button>
+                    )}
+                    {(surveyDocsQuery.data?.length ?? 0) > 0 && (
+                      <Button size="sm" variant="outline" onClick={() => setDownloadReportOpen(true)}>
+                        Download Report
+                      </Button>
+                    )}
                   </div>
                 </>
               ) : (
@@ -641,12 +758,14 @@ export default function ClaimDetailPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setApproveInspectOpen(false)}>Cancel</Button>
-            <Button onClick={() => {
-              // TODO: PATCH /api/v1/claims/{id}/inspection/approve
-              setApproveInspectOpen(false);
-            }}>
-              Approve Report
+            <Button variant="outline" onClick={() => setApproveInspectOpen(false)} disabled={approveInspection.isPending}>
+              Cancel
+            </Button>
+            <Button
+              disabled={approveInspection.isPending}
+              onClick={() => approveInspection.mutate(undefined, { onSuccess: () => setApproveInspectOpen(false) })}
+            >
+              {approveInspection.isPending ? 'Approving…' : 'Approve Report'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -682,16 +801,22 @@ export default function ClaimDetailPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setOverrideReason(''); setOverrideInspectOpen(false); }}>Cancel</Button>
             <Button
-              disabled={overrideReason.trim().length < 10}
-              onClick={() => {
-                // TODO: PATCH /api/v1/claims/{id}/inspection/override
-                setOverrideReason('');
-                setOverrideInspectOpen(false);
-              }}
+              variant="outline"
+              onClick={() => { setOverrideReason(''); setOverrideInspectOpen(false); }}
+              disabled={overrideInspection.isPending}
             >
-              Confirm Override
+              Cancel
+            </Button>
+            <Button
+              disabled={overrideInspection.isPending || overrideReason.trim().length < 10}
+              onClick={() =>
+                overrideInspection.mutate(overrideReason, {
+                  onSuccess: () => { setOverrideReason(''); setOverrideInspectOpen(false); },
+                })
+              }
+            >
+              {overrideInspection.isPending ? 'Overriding…' : 'Confirm Override'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -708,39 +833,51 @@ export default function ClaimDetailPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="rounded-lg border overflow-hidden divide-y divide-border">
-            {[
-              { name: 'Inspection Report — Vehicle Assessment', size: '1.2 MB', type: 'PDF', date: '2026-03-14', id: 'rpt1' },
-              { name: 'Repair Cost Estimate — Mercedes-Benz',   size: '340 KB', type: 'PDF', date: '2026-03-14', id: 'rpt2' },
-              { name: 'Photo Evidence — Damage Documentation',  size: '8.4 MB', type: 'ZIP', date: '2026-03-14', id: 'rpt3' },
-            ].map((doc) => (
-              <div key={doc.id} className="flex items-center gap-3 px-4 py-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
-                  <span className="text-[10px] font-bold text-muted-foreground">{doc.type}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{doc.name}</p>
-                  <p className="text-xs text-muted-foreground">{doc.size} · {doc.date}</p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0"
-                  onClick={() => {
-                    // TODO: GET /api/v1/claims/{id}/inspection/documents/{doc.id}
-                  }}
-                >
-                  Download
-                </Button>
-              </div>
-            ))}
-          </div>
+          {surveyDocsQuery.isLoading ? (
+            <div className="space-y-3 py-4"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+          ) : (surveyDocsQuery.data ?? []).length === 0 ? (
+            <div className="rounded-lg border px-4 py-6 text-center">
+              <p className="text-sm text-muted-foreground">No survey reports uploaded yet.</p>
+            </div>
+          ) : (
+            <div className="rounded-lg border overflow-hidden divide-y divide-border">
+              {(surveyDocsQuery.data ?? []).map((doc) => {
+                const ext = doc.fileName.split('.').pop()?.toUpperCase() ?? 'FILE';
+                const sizeKb = doc.fileSize ? Math.round(doc.fileSize / 1024) : null;
+                const sizeLabel = sizeKb == null ? '—'
+                                : sizeKb < 1024 ? `${sizeKb} KB`
+                                : `${(sizeKb / 1024).toFixed(1)} MB`;
+                return (
+                  <div key={doc.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
+                      <span className="text-[10px] font-bold text-muted-foreground">{ext}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{doc.fileName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {sizeLabel} · {doc.createdAt.split('T')[0]}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0"
+                      onClick={() => downloadDocument(doc.id, doc.fileName)}
+                    >
+                      Download
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setDownloadReportOpen(false)}>Close</Button>
-            <Button onClick={() => {
-              // TODO: GET /api/v1/claims/{id}/inspection/documents/bundle
-            }}>
+            <Button
+              onClick={downloadInspectionBundle}
+              disabled={(surveyDocsQuery.data ?? []).length === 0}
+            >
               Download All
             </Button>
           </DialogFooter>
@@ -748,7 +885,7 @@ export default function ClaimDetailPage() {
       </Dialog>
 
       {/* Decline inspection report confirmation */}
-      <Dialog open={declineInspectOpen} onOpenChange={setDeclineInspectOpen}>
+      <Dialog open={declineInspectOpen} onOpenChange={(v) => { if (!v) setDeclineReason(''); setDeclineInspectOpen(v); }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Decline Inspection Report</DialogTitle>
@@ -756,6 +893,18 @@ export default function ClaimDetailPage() {
               Declining the report from <span className="font-medium text-foreground">{c.surveyorName}</span> will require them to resubmit. This action cannot be modified after the claim is submitted for approval.
             </DialogDescription>
           </DialogHeader>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">Reason for declining</label>
+            <textarea
+              value={declineReason}
+              onChange={(e) => setDeclineReason(e.target.value)}
+              placeholder="e.g. Photos missing for damaged areas / Repair estimate inconsistent with damage / Surveyor not on approved panel"
+              rows={3}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+          </div>
+
           <div className="rounded-lg bg-[var(--status-rejected-bg)] px-4 py-3">
             <p className="text-xs font-semibold text-[var(--status-rejected-fg)]">Cannot be undone after submission</p>
             <p className="text-xs text-[var(--status-rejected-fg)]/80 mt-0.5">
@@ -763,12 +912,23 @@ export default function ClaimDetailPage() {
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeclineInspectOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => {
-              // TODO: PATCH /api/v1/claims/{id}/inspection/decline
-              setDeclineInspectOpen(false);
-            }}>
-              Decline Report
+            <Button
+              variant="outline"
+              onClick={() => { setDeclineReason(''); setDeclineInspectOpen(false); }}
+              disabled={declineInspection.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={declineInspection.isPending || declineReason.trim().length < 5}
+              onClick={() =>
+                declineInspection.mutate(declineReason, {
+                  onSuccess: () => { setDeclineReason(''); setDeclineInspectOpen(false); },
+                })
+              }
+            >
+              {declineInspection.isPending ? 'Declining…' : 'Decline Report'}
             </Button>
           </DialogFooter>
         </DialogContent>

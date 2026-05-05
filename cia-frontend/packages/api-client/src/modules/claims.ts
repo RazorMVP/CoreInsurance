@@ -48,6 +48,11 @@ export const ClaimDocumentTypeSchema = z.enum([
 ]);
 export type ClaimDocumentType = z.infer<typeof ClaimDocumentTypeSchema>;
 
+export const InspectionStatusSchema = z.enum([
+  'ASSIGNED', 'REPORT_SUBMITTED', 'APPROVED', 'DECLINED', 'OVERRIDDEN',
+]);
+export type InspectionStatus = z.infer<typeof InspectionStatusSchema>;
+
 // ── Claim ─────────────────────────────────────────────────────────────────
 
 export const ClaimDtoSchema = z.object({
@@ -134,3 +139,37 @@ export const ClaimDocumentDtoSchema = z.object({
   createdAt:    z.string(),
 });
 export type ClaimDocumentDto = z.infer<typeof ClaimDocumentDtoSchema>;
+
+// ── Inspection (B6) ───────────────────────────────────────────────────────
+
+export const ClaimInspectionDtoSchema = z.object({
+  id:                z.string(),
+  claimId:           z.string(),
+  status:            InspectionStatusSchema,
+
+  surveyorType:      z.string().nullable().optional(),
+  surveyorId:        z.string().nullable().optional(),
+  surveyorName:      z.string().nullable().optional(),
+  assignedBy:        z.string().nullable().optional(),
+  assignedAt:        z.string().nullable().optional(),
+
+  reportPath:        z.string().nullable().optional(),
+  reportNotes:       z.string().nullable().optional(),
+  reportUploadedBy:  z.string().nullable().optional(),
+  reportUploadedAt:  z.string().nullable().optional(),
+
+  approvedBy:        z.string().nullable().optional(),
+  approvedAt:        z.string().nullable().optional(),
+  approvalNotes:     z.string().nullable().optional(),
+
+  declinedBy:        z.string().nullable().optional(),
+  declinedAt:        z.string().nullable().optional(),
+  declineReason:     z.string().nullable().optional(),
+
+  overrideReason:    z.string().nullable().optional(),
+  overriddenBy:      z.string().nullable().optional(),
+  overriddenAt:      z.string().nullable().optional(),
+
+  createdAt:         z.string(),
+});
+export type ClaimInspectionDto = z.infer<typeof ClaimInspectionDtoSchema>;
