@@ -23,7 +23,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PolicyController {
 
-    private final PolicyService service;
+    private final PolicyService       service;
+    private final PolicySurveyService surveyService;
 
     @GetMapping
     @PreAuthorize("hasRole('UNDERWRITING_VIEW')")
@@ -160,5 +161,45 @@ public class PolicyController {
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"" + download.filename() + "\"")
                 .body(new InputStreamResource(download.content()));
+    }
+
+    // ─── Pre-loss survey workflow (DRAFT or PENDING_APPROVAL only) ────────
+
+    @GetMapping("/{id}/survey")
+    @PreAuthorize("hasRole('UNDERWRITING_VIEW')")
+    public ApiResponse<PolicySurveyResponse> getSurvey(@PathVariable UUID id) {
+        return ApiResponse.success(surveyService.get(id));
+    }
+
+    @PostMapping("/{id}/survey/assign")
+    @PreAuthorize("hasRole('UNDERWRITING_UPDATE')")
+    public ApiResponse<PolicySurveyResponse> assignSurveyor(
+            @PathVariable UUID id,
+            @Valid @RequestBody AssignSurveyorRequest request) {
+        return ApiResponse.success(surveyService.assignSurveyor(id, request));
+    }
+
+    @PostMapping("/{id}/survey/report")
+    @PreAuthorize("hasRole('UNDERWRITING_UPDATE')")
+    public ApiResponse<PolicySurveyResponse> submitSurveyReport(
+            @PathVariable UUID id,
+            @Valid @RequestBody SurveyReportRequest request) {
+        return ApiResponse.success(surveyService.submitReport(id, request));
+    }
+
+    @PostMapping("/{id}/survey/approve")
+    @PreAuthorize("hasRole('UNDERWRITING_APPROVE')")
+    public ApiResponse<PolicySurveyResponse> approveSurvey(
+            @PathVariable UUID id,
+            @RequestBody(required = false) ApproveSurveyRequest request) {
+        return ApiResponse.success(surveyService.approve(id, request));
+    }
+
+    @PostMapping("/{id}/survey/override")
+    @PreAuthorize("hasRole('UNDERWRITING_APPROVE')")
+    public ApiResponse<PolicySurveyResponse> overrideSurvey(
+            @PathVariable UUID id,
+            @Valid @RequestBody OverrideSurveyRequest request) {
+        return ApiResponse.success(surveyService.override(id, request));
     }
 }

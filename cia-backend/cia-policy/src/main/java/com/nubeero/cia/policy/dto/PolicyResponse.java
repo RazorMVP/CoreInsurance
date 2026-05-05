@@ -76,6 +76,7 @@ public class PolicyResponse {
 
     private List<PolicyRiskResponse> risks;
     private List<PolicyCoinsuranceParticipantResponse> coinsuranceParticipants;
+    private PolicySurveyResponse survey;
 
     private Instant createdAt;
     private Instant updatedAt;

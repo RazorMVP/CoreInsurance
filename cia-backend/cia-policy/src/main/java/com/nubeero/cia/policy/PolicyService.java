@@ -66,6 +66,7 @@ public class PolicyService {
     private final ApplicationEventPublisher eventPublisher;
     private final DocumentGenerationService documentGenerationService;
     private final DocumentStorageService    documentStorageService;
+    private final PolicySurveyService       policySurveyService;
 
     // ─── Queries ──────────────────────────────────────────────────────────
 
@@ -830,6 +831,7 @@ public class PolicyService {
                 .documentSentAt(p.getDocumentSentAt()).documentSentBy(p.getDocumentSentBy())
                 .documentAcknowledgedAt(p.getDocumentAcknowledgedAt())
                 .documentAcknowledgedBy(p.getDocumentAcknowledgedBy())
+                .survey(policySurveyService.getOrNull(p.getId()))
                 .risks(risks).coinsuranceParticipants(participants)
                 .createdAt(p.getCreatedAt()).updatedAt(p.getUpdatedAt())
                 .build();
