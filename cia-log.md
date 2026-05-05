@@ -65,6 +65,8 @@ f8ba60e  docs(log): session 53 — extend with B10 Vercel demo-mode fix
 65fa9f2  docs(log): bump session 53 date range to 2026-05-06
 d47fe19  docs: session 53 gate-closure updates for B11/B12/B13
 0c56410  feat(api): mount internal Swagger UI at /internal/docs alias (B14)
+8be2b0d  docs(log): session 53 — extend with B14 internal Swagger UI alias
+1fe1732  fix(api): disable JPA schema validation in dev profile (V24 bytea/varchar mismatch)
 ```
 
 ### Deep audit findings
@@ -533,8 +535,17 @@ User asked for a Swagger link to the internal APIs after the gate-closure docs r
 
 **Verification.** `mvn -pl cia-api -am compile` exit 0. End-to-end smoke test deferred — the local backend (Postgres + Keycloak + Temporal + MinIO) is not running in this session. The change uses standard Spring MVC + Springdoc primitives (`addRedirectViewController`, documented `urls.primaryName` Swagger UI param), so runtime risk is minimal.
 
-**Open after B14.**
-- **Live smoke test** — when next someone runs `mvn spring-boot:run -pl cia-api -Pdev`, hit `http://localhost:8090/internal/docs` and confirm Swagger UI lands on the internal-api group. If the `urls.primaryName` query param doesn't survive the redirect, fall back to a one-page static HTML mount that loads Swagger UI directly.
+**Live smoke test (passed).** Backend started with `SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run -pl cia-api -Dspring-boot.run.profiles=dev`. End-to-end verified:
+
+- `GET /internal/docs` → 302 → 302 → 200 HTML (Swagger UI shell with `urls.primaryName=internal-api`)
+- `GET /internal/v3/api-docs` → 302 → 200 JSON (live OpenAPI 3.0.1 spec, 194 paths)
+- `/partner/v3/api-docs/swagger-config` confirms the dropdown contains both `internal-api` and `partner-api` groups in the correct order
+- Spot-check on the running spec: B6 inspection workflow (`/inspection/*`), B7 DV (`/dv/{generate,execute}`), B11 Comments, B12 Required Documents, B13 multipart `/documents`, and B5.3+B9 risk PUT+DELETE all present
+
+**Open after B14.** Two pre-existing issues surfaced during the smoke test, both unrelated to B14 itself:
+
+- **V24 PII bytea/varchar schema-validation mismatch (`1fe1732` quick-fix).** The V24 migration changed four columns (`customer.address`, `customer.id_document_url`, `customer_directors.id_number`, `customer_directors.id_document_url`) to bytea while the entities still map them as `String` with `@ColumnTransformer` + `columnDefinition = "bytea"`. Hibernate's schema validator doesn't honour `columnDefinition` on `@ColumnTransformer` fields and reports a varchar(500)/bytea type mismatch on every dev startup, breaking `mvn spring-boot:run` outright. Quick-fixed by overriding `spring.jpa.hibernate.ddl-auto: none` in `application-dev.yml`; production (`application.yml` default `validate`) is unchanged. **Proper fix deferred:** add `@JdbcTypeCode(SqlTypes.BLOB)` to the four fields, or wrap them in a custom UserType.
+- **Stale m2 SNAPSHOT trap.** `mvn spring-boot:run -pl cia-api -am` does NOT install module jars to `~/.m2/repository`; it relies on inter-reactor classpath resolution. A previous `mvn install` from April 25 had pinned cia-claims at that vintage in the local repo, and the running backend silently loaded the stale jar — Springdoc reported 163 paths instead of 194 and none of the post-April-25 endpoints. Recovered by running `mvn -DskipTests install -pl cia-api -am`. **Workflow note:** after non-trivial backend changes, always `install` rather than just `compile` before running spring-boot:run.
 - **Internal Swagger on the public docs site** — Phase-3 follow-up. Once `https://api.cia.app` is live, the same redirect will work there. For now, `https://cia-docs.vercel.app/internal-api.json` remains the canonical static spec.
 
 ### Workstream — B11/B12/B13 (`56f803d`) — pre-Phase-3 backlog closed
