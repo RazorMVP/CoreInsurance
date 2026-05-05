@@ -4,7 +4,7 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
-## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5, G8) + Step C validation + B1 reinsurance sweep
+## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5, G8) + Step C validation + B1 reinsurance + B2 claims sweep
 
 ### Context
 
@@ -29,6 +29,8 @@ b5de9ba  docs(log): session 53 — extend with Step C
 047f2ce  fix(reinsurance): wire treaties tab to backend (B1.2, closes G3 TODO 1)
 9adec51  fix(reinsurance): wire allocations tab to backend (B1.3, closes G3 TODO 7)
 0b2b0bc  fix(reinsurance): wire FAC outward to backend (B1.4, closes G3 TODOs 5+6)
+7294123  docs(log): session 53 — extend with B1 reinsurance sweep
+9386c11  fix(claims): sync DTOs to backend + wire withdraw mutation (B2)
 ```
 
 ### Deep audit findings
@@ -172,6 +174,39 @@ The reinsurance frontend was the most-broken module: every useQuery 404'd at run
 
 Net: **4 of 7 closed; 3 deferred as backend gaps.** All other reinsurance reads now hit real backend (no more 404s + mock fallback).
 
+### Workstream — B2 claims sweep (`9386c11`)
+
+Same DTO contract drift as G8 finance + B1 reinsurance, less severe (URL paths were correct — `/api/v1/claims/...` matches backend) but the field names and status enum had drifted.
+
+**Schema rewrite (`packages/api-client/src/modules/claims.ts`).**
+
+- `ClaimStatusSchema` now matches backend enum: `REGISTERED | UNDER_INVESTIGATION | RESERVED | PENDING_APPROVAL | APPROVED | SETTLED | REJECTED | WITHDRAWN`. Removed frontend's invented `PROCESSING` (≈ `UNDER_INVESTIGATION`) and `CLOSED` (not on backend at all). Added `RESERVED`.
+- `ClaimDto` adopts the full backend `ClaimResponse` shape — adds `policyStartDate`, `policyEndDate`, `productName`, `classOfBusinessName`, `brokerId`/`brokerName`, `lossLocation`, `approvedAmount`, `currencyCode`, `surveyorAssignedAt`, full approval/rejection/withdrawal/settlement audit fields. Drops `paidAmount` (backend has `approvedAmount`; true paid status is in cia-finance via the credit-note + payment chain) and `updatedAt` (not on backend). Renames `registeredDate` → `reportedDate`.
+- `ClaimReserveDto` matches backend: drops `claimId` (nested route already scopes), renames `category` → `reason`, adds `previousAmount` + `createdBy`.
+- `ClaimExpenseDto` matches backend: renames `type` → `expenseType` (now an enum, not free text), adds `vendorId`/`vendorName`/`description` + audit fields. Status enum: `PENDING | APPROVED | CANCELLED` (was `PENDING | APPROVED | PAID` — `PAID` was a frontend invention).
+- `ClaimDocumentDto` added (frontend didn't have one before).
+- New enum schemas: `ClaimExpenseTypeSchema`, `ClaimDocumentTypeSchema`.
+
+**Consumer updates.**
+
+- `ClaimsListPage` migrated to `validatedGet`; status variant + action menu remapped; new "Approved" column + "Total Approved (YTD)" StatCard reading `approvedAmount`. The `!SETTLED && !CLOSED` cancel-allowed condition switched to `!SETTLED && !WITHDRAWN && !REJECTED` since `CLOSED` is no longer a status.
+- `ClaimDetailPage` mock data + status checks updated. New `EXPENSE_TYPE_LABELS` map renders the enum values. Reserves table reads `r.reason` instead of `r.category`. Expense status badge handles `CANCELLED`.
+- `SubmitClaimDialog`: `registeredDate` → `reportedDate`.
+- `CancelClaimDialog` rewritten to wire `useMutation` against `POST /api/v1/claims/{id}/withdraw` (backend uses `/withdraw`, not `/cancel` — the frontend audit's TODO had the wrong verb). Required reason ≥ 5 chars; mutation `isPending` guards both buttons; errors surface as destructive toast. **Closes G4 TODO 6.**
+
+**G4 TODO closure summary:**
+
+| TODO | Status |
+|---|---|
+| 1 — PATCH /claims/{id}/inspection/approve | ⏳ Backend gap — claim approval is `/approve` (whole-claim, no separate inspection step) |
+| 2 — PATCH /claims/{id}/inspection/override | ⏳ Backend gap |
+| 3 — PATCH /claims/{id}/inspection/decline | ⏳ Backend gap |
+| 4 — GET /claims/{id}/inspection/documents/{doc.id} | ⏳ Frontend filter concern; backend has `/documents/{id}` — not yet wired |
+| 5 — GET /claims/{id}/inspection/documents/bundle | ⏳ Backend gap — no bundle endpoint |
+| 6 — PATCH /claims/{id}/cancel | ✓ Wired to `POST /claims/{id}/withdraw` with reason |
+
+Net: **1 of 6 closed; 5 deferred** (4 backend gaps + 1 wireable-but-deferred document download). The inspection workflow as a separate UI step doesn't exist on backend yet — backend has a single `/approve` for the whole claim.
+
 ### Housekeeping
 
 **`.gitignore` cleanup (`fc6895c`).** Repo had accumulated 7 personal skills under `.claude/skills/` (content-reviewer, gcloud-refresh, plan-week, post, post2, uat, uat-script-generator) plus `.playwright-mcp/` and `.superpowers/` working dirs as side effects of running tools cd'd here. Pattern `.claude/skills/*` + `!.claude/skills/cia/` ignores future bleed-through while keeping the project-canonical CIA skill tracked.
@@ -219,6 +254,11 @@ Net: **4 of 7 closed; 3 deferred as backend gaps.** All other reinsurance reads 
 | FACCreditNoteDialog.tsx (B1.4) | reads FacCoverDto fields incl. backend-computed netPremium |
 | FACOfferSlipDialog.tsx (B1.4) | reads FacCoverDto + cover period |
 | CreateFACOfferSheet.tsx (B1.4) | POST URL fix to /api/v1/ri/fac-covers |
+| [claims.ts (api-client)](cia-frontend/packages/api-client/src/modules/claims.ts) | B2 — full DTO rewrite to match backend; new ClaimDocumentDto; ExpenseType + DocumentType enums |
+| ClaimsListPage.tsx (B2) | validatedGet; status remap; Approved column from approvedAmount |
+| ClaimDetailPage.tsx (B2) | mock + status checks; reserve.reason; expense.expenseType |
+| SubmitClaimDialog.tsx (B2) | registeredDate → reportedDate |
+| CancelClaimDialog.tsx (B2) | wired POST /api/v1/claims/{id}/withdraw with reason |
 
 ### Sequence B status
 
@@ -230,7 +270,8 @@ Net: **4 of 7 closed; 3 deferred as backend gaps.** All other reinsurance reads 
 | G8 — Finance DTO contract bug | ✓ done (`8cb2eec`) — broader than advertised; full sync of DebitNoteDto + CreditNoteDto + status enums + FinanceEntityType. List + dialogs + sheets all updated. |
 | Step C — runtime contract validation | ✓ done (`67fb69b`) — apiEnvelope + validatedGet/Post/Put/Patch in api-client; finance migrated as proof-of-concept |
 | Step B1 — Reinsurance sweep | ✓ done (4 commits: `63f8a14`, `047f2ce`, `9adec51`, `0b2b0bc`) — schemas + URL fixes + 4 of 7 G3 TODOs closed; FAC PDFs + inward FAC + treaty PUT + batch-reallocation deferred as backend gaps |
-| Step B2 — Claims sweep + G4 TODOs | next |
+| Step B2 — Claims sweep | ✓ done (`9386c11`) — claims DTOs synced + status remap + cancel→withdraw wired (closes G4 TODO 6); 4 inspection-workflow + 1 document-bundle TODOs deferred as backend gaps |
+| Step B3 — Audit reports sweep (6 hardcoded report tables) | next |
 | G4 — Claims (6 endpoints) | pending |
 | G1 — cia-policy (11 endpoints) | pending |
 | G9 — Phase 3 Partner Portal (5 builds) | pending |
@@ -244,6 +285,7 @@ Net: **4 of 7 closed; 3 deferred as backend gaps.** All other reinsurance reads 
 - **Other modules likely have the same DTO drift.** G8 only synced finance DTOs. Audit found 70 useQuery calls; only ~10 of those have been runtime-validated. A general DTO-vs-backend audit (or an axios runtime validator) would catch silent contract bugs in other modules.
 - **Reinsurance backend gaps to fill** (surfaced in B1 sweep): inward FAC entirely (list/create/renew/extend/cancel — backend `RiFacCover` has no direction field); treaty PUT for edits (only `/activate`, `/expire`, `/cancel` exist); `/confirm-batch` for allocations (currently fanned out client-side); `/batch-reallocate`; FAC offer-slip PDF; FAC credit-note creation + PDF; per-treaty allocation drilldown for BatchReallocationSheet; per-allocation policy detail enrichment (PolicyAllocationSheet currently lacks customer/product/period because that requires a `/policies/{id}` follow-up fetch).
 - **Claims + audit-reports + cia-policy modules** likely follow the same drift pattern. Step B2 / B3 / B4 sweeps will surface them similarly. Recommend doing them in the same shape: schemas first, then per-tab migrations.
+- **Claims backend gaps to fill** (surfaced in B2 sweep): inspection sub-workflow (frontend treats inspection approve/decline/override as a separate step from claim approval; backend collapses to a single `/approve`); inspection-document bundle download endpoint; inspection-document GET path that the frontend wants under `/inspection/documents/{id}` rather than the existing `/documents/{id}`; ClaimDetailPage's MockClaim adds presentation fields the backend doesn't supply (policyProduct, natureOfLoss, causeOfLoss, contactName/Phone, comments, requiredDocs, dvType/Amount) — proper migration needs either a richer backend `ClaimDetailResponse` or auxiliary `/policies/{id}` + `/customers/{id}` lookups.
 
 ---
 
