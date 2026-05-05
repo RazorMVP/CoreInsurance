@@ -10,6 +10,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -97,9 +98,22 @@ public class ClaimDocumentService {
     /** Download payload — content stream + suggested filename. */
     public record DocumentDownload(InputStream content, String filename) {}
 
+    /**
+     * Upload a claim document end-to-end: stream the bytes to object storage
+     * (under {@code claims/{claimId}/{uuid}-{originalFilename}}), then persist
+     * a {@link ClaimDocument} pointing at the resulting storage key.
+     *
+     * <p>The original filename is preserved on the row for display; the storage
+     * key prepends a UUID so collisions are impossible. File size is read from
+     * the multipart part rather than trusted from the client.
+     */
     @Transactional
-    public ClaimDocument upload(UUID claimId, ClaimDocumentType documentType,
-                                 String fileName, String filePath, Long fileSize) {
+    public ClaimDocument upload(UUID claimId, ClaimDocumentType documentType, MultipartFile file)
+            throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessRuleException("EMPTY_FILE", "Uploaded file is empty");
+        }
+
         Claim claim = claimRepository.findByIdAndDeletedAtIsNull(claimId)
                 .orElseThrow(() -> new ResourceNotFoundException("Claim", claimId));
 
@@ -109,12 +123,22 @@ public class ClaimDocumentService {
                     "Cannot upload documents to a " + claim.getStatus() + " claim");
         }
 
+        String originalName = file.getOriginalFilename();
+        if (originalName == null || originalName.isBlank()) originalName = "upload";
+        String safeName = originalName.replaceAll("[^A-Za-z0-9._-]", "_");
+        String path = "claims/" + claimId + "/" + UUID.randomUUID() + "-" + safeName;
+
+        String contentType = file.getContentType();
+        if (contentType == null || contentType.isBlank()) contentType = "application/octet-stream";
+
+        storageService.upload(TenantContext.getTenantId(), path, file.getInputStream(), contentType);
+
         ClaimDocument doc = ClaimDocument.builder()
                 .claim(claim)
                 .documentType(documentType)
-                .fileName(fileName)
-                .filePath(filePath)
-                .fileSize(fileSize)
+                .fileName(originalName)
+                .filePath(path)
+                .fileSize(file.getSize())
                 .uploadedBy(currentUser())
                 .build();
 

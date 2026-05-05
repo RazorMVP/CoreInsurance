@@ -2,9 +2,21 @@ import { useState } from 'react';
 import {
   Button,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  toast,
 } from '@cia/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@cia/api-client';
+import { apiClient, type ApiError, type ApiResponse } from '@cia/api-client';
+
+interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
+
+function showServerError(err: unknown, title: string) {
+  const ax = err as ApiHttpError;
+  const errors: ApiError[] = ax?.response?.data?.errors ?? [];
+  const description = errors.length > 0
+    ? errors.map(e => e.message).filter(Boolean).join('. ')
+    : ax?.message ?? 'An unexpected error occurred. Please try again.';
+  toast({ variant: 'destructive', title, description });
+}
 
 interface Props {
   open:         boolean;
@@ -24,22 +36,23 @@ export default function AddCommentDialog({ open, onOpenChange, claimId, claimNum
   }
 
   const addComment = useMutation({
-    mutationFn: async (comment: string) => {
+    mutationFn: async (body: string) => {
       const res = await apiClient.post<{ data: { id: string } }>(
         `/api/v1/claims/${claimId}/comments`,
-        { text: comment },
+        { body },
       );
       return res.data.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['claims', claimId] });
+      queryClient.invalidateQueries({ queryKey: ['claims', claimId, 'comments'] });
       setText('');
       onSuccess();
     },
+    onError: (e) => showServerError(e, 'Could not add comment'),
   });
 
   function handleSubmit() {
-    if (text.trim().length < 3) return;
+    if (text.trim().length < 2) return;
     addComment.mutate(text.trim());
   }
 
@@ -68,7 +81,7 @@ export default function AddCommentDialog({ open, onOpenChange, claimId, claimNum
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose}>Cancel</Button>
-          <Button disabled={text.trim().length < 3 || addComment.isPending} onClick={handleSubmit}>
+          <Button disabled={text.trim().length < 2 || addComment.isPending} onClick={handleSubmit}>
             {addComment.isPending ? 'Saving…' : 'Add Comment'}
           </Button>
         </DialogFooter>

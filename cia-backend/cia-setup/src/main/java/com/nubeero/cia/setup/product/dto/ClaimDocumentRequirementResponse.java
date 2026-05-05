@@ -13,6 +13,7 @@ public class ClaimDocumentRequirementResponse {
     private UUID productId;
     private String documentName;
     private boolean mandatory;
+    private String documentType;
     private Instant createdAt;
     private Instant updatedAt;
 }

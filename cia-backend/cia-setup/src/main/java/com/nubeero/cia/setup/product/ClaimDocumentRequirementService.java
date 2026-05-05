@@ -38,6 +38,7 @@ public class ClaimDocumentRequirementService {
                 .product(product)
                 .documentName(request.getDocumentName())
                 .isMandatory(request.isMandatory())
+                .documentType(normaliseType(request.getDocumentType()))
                 .build();
         ClaimDocumentRequirement saved = repository.save(entity);
         auditService.log("ClaimDocumentRequirement", saved.getId().toString(), AuditAction.CREATE, null, saved);
@@ -49,9 +50,22 @@ public class ClaimDocumentRequirementService {
         ClaimDocumentRequirement entity = findOrThrow(productId, id);
         entity.setDocumentName(request.getDocumentName());
         entity.setMandatory(request.isMandatory());
+        entity.setDocumentType(normaliseType(request.getDocumentType()));
         ClaimDocumentRequirement saved = repository.save(entity);
         auditService.log("ClaimDocumentRequirement", id.toString(), AuditAction.UPDATE, null, saved);
         return toResponse(saved);
+    }
+
+    /**
+     * Trim + uppercase the inbound documentType string so storage is canonical
+     * (matches the {@code ClaimDocumentType} enum's name() output). Returns
+     * null for blank inputs so the database stores NULL rather than an
+     * empty string.
+     */
+    private String normaliseType(String raw) {
+        if (raw == null) return null;
+        String trimmed = raw.trim();
+        return trimmed.isEmpty() ? null : trimmed.toUpperCase();
     }
 
     @Transactional
@@ -82,6 +96,7 @@ public class ClaimDocumentRequirementService {
         return ClaimDocumentRequirementResponse.builder()
                 .id(e.getId()).productId(e.getProduct().getId())
                 .documentName(e.getDocumentName()).mandatory(e.isMandatory())
+                .documentType(e.getDocumentType())
                 .createdAt(e.getCreatedAt()).updatedAt(e.getUpdatedAt())
                 .build();
     }

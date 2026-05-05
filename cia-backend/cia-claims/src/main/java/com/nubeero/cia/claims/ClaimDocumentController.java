@@ -14,7 +14,9 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.UUID;
 
 @RestController
@@ -58,17 +60,14 @@ public class ClaimDocumentController {
         return ApiResponse.success(toResponse(service.findOrThrow(id)));
     }
 
-    @PostMapping
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('CLAIMS_CREATE')")
     public ApiResponse<ClaimDocumentResponse> upload(
             @PathVariable UUID claimId,
             @RequestParam ClaimDocumentType documentType,
-            @RequestParam String fileName,
-            @RequestParam String filePath,
-            @RequestParam(required = false) Long fileSize) {
-        return ApiResponse.success(toResponse(
-                service.upload(claimId, documentType, fileName, filePath, fileSize)));
+            @RequestParam("file") MultipartFile file) throws IOException {
+        return ApiResponse.success(toResponse(service.upload(claimId, documentType, file)));
     }
 
     @DeleteMapping("/{id}")

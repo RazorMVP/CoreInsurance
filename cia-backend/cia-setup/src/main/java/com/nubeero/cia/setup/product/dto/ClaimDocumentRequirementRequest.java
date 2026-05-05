@@ -10,4 +10,11 @@ public class ClaimDocumentRequirementRequest {
     private String documentName;
 
     private boolean mandatory;
+
+    /**
+     * Optional ClaimDocumentType enum name (CLAIM_FORM, POLICE_REPORT, etc.).
+     * When present the per-claim checklist auto-matches this requirement
+     * against uploaded documents of the same type.
+     */
+    private String documentType;
 }

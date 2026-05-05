@@ -22,4 +22,13 @@ public class ClaimDocumentRequirement extends BaseEntity {
 
     @Column(name = "is_mandatory", nullable = false)
     private boolean isMandatory;
+
+    /**
+     * Optional link to the {@code ClaimDocumentType} enum so a per-claim
+     * checklist can match this requirement to an uploaded document.
+     * Stored as the enum name (e.g. {@code POLICE_REPORT}); NULL means
+     * the requirement is informational only and won't be auto-matched.
+     */
+    @Column(name = "document_type", length = 50)
+    private String documentType;
 }

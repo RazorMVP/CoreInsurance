@@ -11,7 +11,8 @@ import {
   apiClient,
   type ApiError, type ApiResponse,
   type ClaimDto, type ClaimReserveDto, type ClaimExpenseDto, type ClaimInspectionDto,
-  type ClaimDocumentDto, type DvType,
+  type ClaimDocumentDto, type ClaimCommentDto, type ClaimRequiredDocumentDto,
+  type DvType,
 } from '@cia/api-client';
 
 interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
@@ -29,6 +30,7 @@ import CancelClaimDialog    from './CancelClaimDialog';
 import AddReserveDialog     from './AddReserveDialog';
 import AddExpenseDialog     from './AddExpenseDialog';
 import UploadDocumentDialog          from './UploadDocumentDialog';
+import AddCommentDialog              from './AddCommentDialog';
 import AssignInspectorDialog         from './AssignInspectorDialog';
 import SubmitInspectionReportDialog  from './SubmitInspectionReportDialog';
 
@@ -218,6 +220,7 @@ export default function ClaimDetailPage() {
   const [addReserveOpen,      setAddReserveOpen]      = useState(false);
   const [addExpenseOpen,      setAddExpenseOpen]      = useState(false);
   const [uploadOpen,          setUploadOpen]          = useState(false);
+  const [addCommentOpen,      setAddCommentOpen]      = useState(false);
   const [assignInspectOpen,   setAssignInspectOpen]   = useState(false);
   const [submitReportOpen,    setSubmitReportOpen]    = useState(false);
   const [declineInspectOpen,  setDeclineInspectOpen]  = useState(false);
@@ -271,6 +274,33 @@ export default function ClaimDetailPage() {
     enabled: !!id,
   });
 
+  // ─── Claim comments query (B11) ───────────────────────────────────────
+  const commentsQuery = useQuery<ClaimCommentDto[]>({
+    queryKey: ['claims', id, 'comments'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: { content: ClaimCommentDto[] } }>(
+        `/api/v1/claims/${id}/comments`,
+        { params: { size: 100 } },
+      );
+      return res.data.data.content ?? [];
+    },
+    enabled: !!id,
+  });
+
+  // ─── Required documents query (B12) ───────────────────────────────────
+  // Derived backend-side from product setup + uploaded claim documents.
+  // Returns a flat array (no pagination) since the list is small.
+  const requiredDocsQuery = useQuery<ClaimRequiredDocumentDto[]>({
+    queryKey: ['claims', id, 'required-documents'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ClaimRequiredDocumentDto[] }>(
+        `/api/v1/claims/${id}/required-documents`,
+      );
+      return res.data.data;
+    },
+    enabled: !!id,
+  });
+
   const c = claimQuery.data ?? fallbackClaim;
 
   if (claimQuery.isLoading && !claimQuery.data) {
@@ -290,6 +320,8 @@ export default function ClaimDetailPage() {
   const reserves = reservesQuery.data ?? fallbackReserves;
   const expenses = expensesQuery.data ?? fallbackExpenses;
   const documents = documentsQuery.data ?? [];
+  const requiredDocs = requiredDocsQuery.data ?? [];
+  const missingMandatory = requiredDocs.filter(r => r.mandatory && !r.received);
   const totalReserve  = reserves.reduce((s, r) => s + r.amount, 0);
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
   const dvGenerated = !!c.dvGeneratedAt;
@@ -308,6 +340,11 @@ export default function ClaimDetailPage() {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant={statusVariant[c.status]}>{c.status.toLowerCase().replace('_', ' ')}</Badge>
+            {missingMandatory.length > 0 && (
+              <Badge variant="pending" className="text-[10px]">
+                {missingMandatory.length} doc(s) missing
+              </Badge>
+            )}
             {canSubmit  && <Button size="sm" onClick={() => setSubmitOpen(true)}>Submit for Approval</Button>}
             {canApprove && <Button size="sm" variant="outline">Reject</Button>}
             {canApprove && <Button size="sm">Approve Claim</Button>}
@@ -456,10 +493,108 @@ export default function ClaimDetailPage() {
             </CardContent>
           </Card>
 
+          {/* Comments (B11) */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Comments</CardTitle>
+                <Button size="sm" variant="outline" onClick={() => setAddCommentOpen(true)}>
+                  Add Comment
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {commentsQuery.isLoading ? (
+                <Skeleton className="h-20 w-full" />
+              ) : (commentsQuery.data?.length ?? 0) === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  No comments yet. Add a note to capture decisions, calls with the insured,
+                  or surveyor follow-ups.
+                </p>
+              ) : (
+                commentsQuery.data!.map((cmt) => (
+                  <div key={cmt.id} className="rounded-lg bg-muted/40 p-3 space-y-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold text-foreground">
+                        {cmt.authorName ?? cmt.createdBy ?? 'Unknown'}
+                      </p>
+                      <p className="text-xs text-muted-foreground tabular-nums">
+                        {cmt.createdAt.replace('T', ' ').slice(0, 16)}
+                      </p>
+                    </div>
+                    <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{cmt.body}</p>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
         </TabsContent>
 
         {/* ── Documents ────────────────────────────────────────────────── */}
-        <TabsContent value="documents" className="mt-4">
+        <TabsContent value="documents" className="mt-4 space-y-4">
+          {/* Required documents (B12) */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Required Documents</CardTitle>
+                {missingMandatory.length > 0 && (
+                  <Badge variant="pending" className="text-xs">
+                    {missingMandatory.length} mandatory outstanding
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {requiredDocsQuery.isLoading ? (
+                <Skeleton className="h-24 w-full" />
+              ) : requiredDocs.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  No required-document checklist configured for this product. Configure it in
+                  Setup → Products → {c.productName ?? 'product'} → Required Documents.
+                </p>
+              ) : (
+                requiredDocs.map((req) => (
+                  <div
+                    key={req.requirementId}
+                    className="flex items-center justify-between rounded-lg border p-3"
+                    style={!req.received && req.mandatory ? { background: 'var(--status-pending-bg)' } : undefined}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`h-5 w-5 rounded-full flex items-center justify-center text-xs ${req.received ? 'bg-primary text-primary-foreground' : 'border-2 border-[var(--status-pending-fg)]'}`}>
+                        {req.received && '✓'}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {req.documentName}
+                          {req.mandatory && <span className="ml-1.5 text-xs text-destructive">*</span>}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {req.documentType ?? (req.mappable ? '—' : 'Not auto-tracked (no type set in setup)')}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {req.received ? (
+                        <p className="text-xs text-muted-foreground">{req.receivedAt?.slice(0, 10)}</p>
+                      ) : req.mappable ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => setUploadOpen(true)}
+                        >
+                          Upload
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Uploaded documents (B7) */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -720,8 +855,15 @@ export default function ClaimDetailPage() {
         open={uploadOpen}
         onOpenChange={setUploadOpen}
         claimId={c.id}
-        documentName="Claim Document"
         onSuccess={() => setUploadOpen(false)}
+      />
+
+      <AddCommentDialog
+        open={addCommentOpen}
+        onOpenChange={setAddCommentOpen}
+        claimId={c.id}
+        claimNumber={c.claimNumber}
+        onSuccess={() => setAddCommentOpen(false)}
       />
 
       <AssignInspectorDialog

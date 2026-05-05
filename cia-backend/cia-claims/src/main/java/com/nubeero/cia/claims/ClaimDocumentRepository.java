@@ -19,4 +19,7 @@ public interface ClaimDocumentRepository extends JpaRepository<ClaimDocument, UU
 
     List<ClaimDocument> findAllByClaim_IdAndDocumentTypeAndDeletedAtIsNull(
             UUID claimId, ClaimDocumentType documentType);
+
+    /** Used by the required-documents derivation (B12) — flat list, no pagination. */
+    List<ClaimDocument> findAllByClaim_IdAndDeletedAtIsNull(UUID claimId);
 }

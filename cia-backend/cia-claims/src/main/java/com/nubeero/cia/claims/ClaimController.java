@@ -23,9 +23,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ClaimController {
 
-    private final ClaimService           service;
-    private final ClaimInspectionService inspectionService;
-    private final ClaimDocumentService   documentService;
+    private final ClaimService                service;
+    private final ClaimInspectionService      inspectionService;
+    private final ClaimDocumentService        documentService;
+    private final ClaimRequiredDocumentService requiredDocumentService;
 
     @GetMapping
     @PreAuthorize("hasRole('CLAIMS_VIEW')")
@@ -133,6 +134,20 @@ public class ClaimController {
     @PreAuthorize("hasRole('CLAIMS_APPROVE')")
     public ApiResponse<ClaimResponse> executeDv(@PathVariable UUID id) {
         return ApiResponse.success(toResponse(service.executeDv(id)));
+    }
+
+    // ─── Required documents (B12) ────────────────────────────────────────
+
+    /**
+     * Per-claim required-document checklist — derived at request time from
+     * the product's {@code claim_document_requirements} setup joined with
+     * uploaded {@code claim_documents}. See {@link ClaimRequiredDocumentService}.
+     */
+    @GetMapping("/{id}/required-documents")
+    @PreAuthorize("hasRole('CLAIMS_VIEW')")
+    public ApiResponse<java.util.List<com.nubeero.cia.claims.dto.ClaimRequiredDocumentResponse>>
+            listRequiredDocuments(@PathVariable UUID id) {
+        return ApiResponse.success(requiredDocumentService.list(id));
     }
 
     @GetMapping("/{id}/reserves")

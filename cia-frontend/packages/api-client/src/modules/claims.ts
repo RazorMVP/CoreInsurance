@@ -9,13 +9,12 @@
 //   const claims = await validatedGet('/api/v1/claims', z.array(ClaimDtoSchema));
 //
 // Backend gaps NOT modelled here (require future backend work):
-//   - Comments aggregate — would need a ClaimComment entity (1:many)
-//     and /api/v1/claims/{id}/comments CRUD endpoints
-//   - Required-document checklist — needs ClaimRequiredDocument entity
-//     tied to the per-product checklist defined in setup module
 //   - "Paid amount" — backend exposes `approvedAmount` (the amount
 //     approved for payment). Actual paid status is tracked via the
 //     credit-note + payment chain in cia-finance.
+//
+// Comments aggregate IS modelled (B11: ClaimCommentDtoSchema +
+// /api/v1/claims/{id}/comments GET + POST).
 //
 // Inspection sub-workflow IS modelled (B6: ClaimInspectionDtoSchema +
 // /api/v1/claims/{id}/inspection/* endpoints). Document bundle download
@@ -189,3 +188,35 @@ export const ClaimInspectionDtoSchema = z.object({
   createdAt:         z.string(),
 });
 export type ClaimInspectionDto = z.infer<typeof ClaimInspectionDtoSchema>;
+
+// ── Claim comment (B11) ──────────────────────────────────────────────────
+
+export const ClaimCommentDtoSchema = z.object({
+  id:         z.string(),
+  claimId:    z.string(),
+  body:       z.string(),
+  authorName: z.string().nullable().optional(),
+  createdBy:  z.string().nullable().optional(),
+  createdAt:  z.string(),
+});
+export type ClaimCommentDto = z.infer<typeof ClaimCommentDtoSchema>;
+
+// ── Required-document checklist row (B12) ────────────────────────────────
+//
+// Derived at request time on the backend from claim_document_requirements
+// (per-product setup) joined with claim_documents (already uploaded).
+// `mappable=false` rows have no documentType configured in setup and can't
+// be auto-tracked — frontend should render them as informational.
+
+export const ClaimRequiredDocumentDtoSchema = z.object({
+  requirementId: z.string(),
+  documentName:  z.string(),
+  mandatory:     z.boolean(),
+  documentType:  ClaimDocumentTypeSchema.nullable().optional(),
+  mappable:      z.boolean(),
+  received:      z.boolean(),
+  documentId:    z.string().nullable().optional(),
+  fileName:      z.string().nullable().optional(),
+  receivedAt:    z.string().nullable().optional(),
+});
+export type ClaimRequiredDocumentDto = z.infer<typeof ClaimRequiredDocumentDtoSchema>;
