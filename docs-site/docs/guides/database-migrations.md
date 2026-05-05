@@ -45,7 +45,9 @@ db/migration/
 ├── V25__policy_document_audit_fields.sql  # 4 new policy columns: documentSentAt/By, documentAcknowledgedAt/By
 ├── V26__policy_surveys.sql                 # policy_surveys table (1:1 with policy via UNIQUE policy_id) — pre-loss survey workflow
 ├── V27__claim_inspections.sql              # claim_inspections table (1:1 with claim via UNIQUE claim_id) — post-loss inspection with DECLINED state
-└── V28__claim_detail_fields.sql            # 8 new claim columns: nature/cause of loss, contact name/phone, dv_type/amount/generated_at/executed_at
+├── V28__claim_detail_fields.sql            # 8 new claim columns: nature/cause of loss, contact name/phone, dv_type/amount/generated_at/executed_at
+├── V29__claim_comments.sql                 # claim_comments table — append-only feed, indexed (claim_id, created_at DESC)
+└── V30__claim_document_requirement_type.sql # adds document_type column to claim_document_requirements (links per-product checklist to ClaimDocumentType enum)
 ```
 
 ### Naming Convention

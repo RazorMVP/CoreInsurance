@@ -3,7 +3,7 @@
   "info": {
     "title": "CIA Internal API",
     "description": "Internal REST API for the Core Insurance Application \u2014 staff, System Auditors, and system-to-system use. Authentication via Keycloak JWT (Bearer token). All endpoints require `isAuthenticated()`; fine-grained access uses module-level roles.",
-    "version": "2.1.0",
+    "version": "2.2.0",
     "contact": {
       "name": "Nubeero Engineering",
       "email": "engineering@nubeero.com"
@@ -1925,6 +1925,39 @@
         }
       }
     },
+    "/audit/exporttext/csv": {
+      "get": {
+        "summary": "Export csv",
+        "operationId": "exportCsv",
+        "tags": [
+          "Audit Export"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
     "/audit/login-logs": {
       "get": {
         "summary": "List login & session logs",
@@ -2613,7 +2646,7 @@
         }
       }
     },
-    "/claims/{claimId}/documents": {
+    "/claims/{claimId}/comments": {
       "get": {
         "summary": "List",
         "operationId": "list",
@@ -2659,8 +2692,8 @@
         }
       },
       "post": {
-        "summary": "Upload",
-        "operationId": "upload",
+        "summary": "Add",
+        "operationId": "add",
         "tags": [
           "Claims"
         ],
@@ -2710,6 +2743,137 @@
             "application/json": {
               "schema": {
                 "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/claims/{claimId}/documents": {
+      "get": {
+        "summary": "List",
+        "operationId": "list",
+        "tags": [
+          "Claims"
+        ],
+        "parameters": [
+          {
+            "name": "claimId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "post": {
+        "summary": "Upload claim document (multipart)",
+        "operationId": "upload",
+        "tags": [
+          "Claims"
+        ],
+        "parameters": [
+          {
+            "name": "claimId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "documentType",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "CLAIM_FORM",
+                "POLICE_REPORT",
+                "SURVEY_REPORT",
+                "MEDICAL_REPORT",
+                "PHOTOS",
+                "REPAIR_ESTIMATE",
+                "DISCHARGE_VOUCHER",
+                "OTHER"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "400": {
+            "description": "Validation error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "PDF/image/Word \u2014 max 10MB"
+                  }
+                }
               }
             }
           }
@@ -3971,6 +4135,52 @@
                   "properties": {
                     "data": {
                       "$ref": "#/components/schemas/ClaimSummary"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/claims/{id}/required-documents": {
+      "get": {
+        "summary": "List required documents",
+        "operationId": "listRequiredDocuments",
+        "tags": [
+          "Claims"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object"
                     }
                   }
                 }

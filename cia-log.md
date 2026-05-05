@@ -59,6 +59,8 @@ b9f4e91  feat(claims): inspection assign + submit-report dialogs (B8)
 52c9f93  docs(site): comprehensive sync — internal-api.json + V25–V28 migrations
 6435271  docs: session 53 gate-closure updates (CLAUDE.md / SKILL.md / cia-log title)
 be54587  feat(back-office): demo-mode escape hatch for stakeholder Vercel preview (B10)
+f8ba60e  docs(log): session 53 — extend with B10 Vercel demo-mode fix
+56f803d  feat(claims): comments + required-docs + multipart upload (B11/B12/B13)
 ```
 
 ### Deep audit findings
@@ -510,6 +512,51 @@ api-client: `InsuranceCompanyDto` added to setup module — parallel to the `Sur
 - **Document upload contract mismatch** — `UploadDocumentDialog` posts a `FormData` with `file` + `documentName` but the backend `POST /claims/{id}/documents` takes `documentType` / `fileName` / `filePath` / `fileSize` as request params. The dialog has been pre-existing broken; B7's "Upload Document" wiring is reachable but the actual upload still fails. Needs a separate slice to harmonise the contract (likely server-side multipart handling + storage step + DocumentResponse return).
 - **Inspection-tab `c.surveyorId` denormalisation** — the dual gate `inspection || c.surveyorId` is a transitional shim. As `cia-claims` matures, the legacy denormalised field on Claim should be deprecated in favour of `ClaimInspection` as the single source of truth.
 
+### Workstream — B11/B12/B13 (`56f803d`) — pre-Phase-3 backlog closed
+
+User chose to close the three pre-Phase-3 follow-ups flagged after B9: (a) Comments + RequiredDocs sub-aggregates, (b) document-upload contract mismatch. Bundled into one commit because all three slices touch ClaimDetailPage and splitting risks broken intermediate states; cia-log entry below describes each independently.
+
+#### B11 ClaimComment aggregate
+
+Greenfield. New `ClaimComment` entity (claim_id FK, body TEXT, denormalised author_name to avoid Keycloak round-trips per row), V29 migration with composite index `(claim_id, created_at DESC)`. `ClaimCommentService` exposes `list` (paged, newest-first) + `add` — comments are append-only by design, an audit trail rather than editable correspondence; soft-delete via BaseEntity stays available for compliance moderation but isn't routed through the controller.
+
+Endpoints on `/api/v1/claims/{claimId}/comments`:
+- `GET` (CLAIMS_VIEW) — paged Page<ClaimCommentResponse>
+- `POST` (CLAIMS_UPDATE) — `AddClaimCommentRequest` `{body: NotBlank, 2–4000 chars}`
+
+Frontend: `ClaimCommentDtoSchema` in api-client. The pre-existing `AddCommentDialog.tsx` was wired to a non-existent endpoint with the wrong payload (`{text}` vs backend `{body}`); rewired to the correct shape with backend-matched ≥2-char validation. Comments card re-added below Expenses on the Processing tab, reads from a new `commentsQuery`. Author display falls back through JWT `name` → `preferred_username` → subject.
+
+#### B12 RequiredDocs derived view
+
+Setup side — extending the existing `claim_document_requirements` table: V30 adds a `document_type VARCHAR(50)` column. `ClaimDocumentRequirement` entity + DTOs + Service all gain `documentType`, normalised to upper-case at write-time so storage matches the `ClaimDocumentType.name()` output. The column is nullable for back-compat with rows seeded before V30.
+
+Claims side — derived (no new table): new `ClaimRequiredDocumentService` reads requirements from the product's setup, joins to the claim's uploaded `ClaimDocument` rows by enum match, and returns a list shaped as `[{requirementId, documentName, mandatory, documentType, mappable, received, documentId?, fileName?, receivedAt?}]`. Tolerant enum lookup means legacy/invalid stored types resolve to `null` (mappable=false) rather than throwing. O(R + D) per call, R ≈ 5–10 requirements per product, D ≈ docs per claim — small enough to derive without caching.
+
+New endpoint: `GET /api/v1/claims/{id}/required-documents` (CLAIMS_VIEW).
+
+Frontend: `ClaimRequiredDocumentDtoSchema`. New "Required Documents" card on the Documents tab above "Uploaded Documents", with mandatory asterisks + "Not auto-tracked" subtitle for unmappable rows. Header gains a "N doc(s) missing" badge counting unreceived mandatory rows.
+
+#### B13 Multipart upload contract
+
+The pre-existing `POST /api/v1/claims/{claimId}/documents` took `documentType` + `fileName` + `filePath` + `fileSize` as request params and assumed the file had been uploaded to storage in a prior step that did not exist. The frontend dialog posted FormData with `file` + `documentName` — neither side matched. Net result: every Upload Document click silently 4xx'd.
+
+Refactor: switched the controller to `consumes = MULTIPART_FORM_DATA_VALUE` taking `documentType` enum + `MultipartFile file`. `ClaimDocumentService.upload(claimId, documentType, file)` streams the bytes through `DocumentStorageService.upload` to `claims/{claimId}/{uuid}-{safeFilename}`, derives `fileSize` and `contentType` server-side, and persists `ClaimDocument` with the resulting storage key. Filenames are sanitised to `[A-Za-z0-9._-]` for the storage path; the original is kept on the row for display. Pattern mirrors the existing `DocumentTemplateController` upload.
+
+Frontend `UploadDocumentDialog`: dropped the `documentName` prop, added a documentType picker over the 8-value enum, sends `documentType` (as a query param so Spring can bind it) + `file` (multipart). Invalidates 3 query keys on success: `documents`, `required-documents`, the claim itself.
+
+#### Verification
+
+- `mvn -pl cia-claims -am compile` exit 0
+- `mvn -pl cia-api -am compile` exit 0
+- `pnpm --filter @cia/back-office exec tsc --noEmit` exit 0
+- `bash cia-frontend/scripts/check-api-wiring.sh` 0 violations
+
+#### Open after B11/B12/B13
+
+- **Setup-side UI for required-doc types** — frontend has no editor for the new `documentType` field on `ClaimDocumentRequirement`. Until added, requirements must be edited via the API directly (or seeded via a Flyway data migration). The `ClaimsSetupPage > Documents` skeleton tab is the natural home; that's a separate small slice.
+- **Comments edit/delete** — explicitly out of scope (PRD models comments as audit trail). If business need surfaces, the soft-delete column is already available; an API addition would be straightforward.
+- **Inspection denormalisation shim** — still on the books; same as flagged after B8.
+
 ### Workstream — B10 demo-mode escape hatch for Vercel preview (`be54587`)
 
 User flagged that `back-office-blush-six.vercel.app` "doesn't load at all" while localhost (5173) works fine. Investigation:
@@ -664,6 +711,26 @@ Frontend `RisksEditorDialog.save` now reconciles in three phases: PUT changed ro
 | [main.tsx](cia-frontend/apps/back-office/src/main.tsx) | B10 — VITE_DEMO_MODE escape hatch; throw branch only fires when neither DEV nor demoMode are true |
 | [AppShell.tsx](cia-frontend/apps/back-office/src/app/layout/AppShell.tsx) | B10 — amber "Demo" banner rendered above the layout when VITE_DEMO_MODE=true |
 | CLAUDE.md (B10) | + VITE_DEMO_MODE row in env-vars table; + Production preview note describing the back-office-blush-six.vercel.app demo posture |
+| [ClaimComment.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/ClaimComment.java) | B11 — new entity, claim_id FK, body TEXT, denormalised author_name |
+| [ClaimCommentRepository.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/ClaimCommentRepository.java) | B11 — paged newest-first by claim_id |
+| [ClaimCommentService.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/ClaimCommentService.java) | B11 — list + add (append-only); JWT name → preferred_username → subject fallback |
+| [ClaimCommentController.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/ClaimCommentController.java) | B11 — GET (CLAIMS_VIEW) + POST (CLAIMS_UPDATE) on /claims/{claimId}/comments |
+| Comment DTOs (2 new) | B11 — AddClaimCommentRequest (NotBlank, 2–4000 chars) + ClaimCommentResponse |
+| [V29__claim_comments.sql](cia-backend/cia-api/src/main/resources/db/migration/V29__claim_comments.sql) | B11 — claim_comments table + composite index (claim_id, created_at DESC) |
+| [ClaimDocumentRequirement.java](cia-backend/cia-setup/src/main/java/com/nubeero/cia/setup/product/ClaimDocumentRequirement.java) | B12 — + documentType field (nullable enum-name string) |
+| [ClaimDocumentRequirementService.java](cia-backend/cia-setup/src/main/java/com/nubeero/cia/setup/product/ClaimDocumentRequirementService.java) | B12 — create + update pass through documentType, normalised to upper-case |
+| ClaimDocumentRequirement DTOs | B12 — Request + Response gain documentType |
+| [V30__claim_document_requirement_type.sql](cia-backend/cia-api/src/main/resources/db/migration/V30__claim_document_requirement_type.sql) | B12 — adds document_type column |
+| [ClaimRequiredDocumentService.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/ClaimRequiredDocumentService.java) | B12 — derives the per-claim checklist; tolerant enum lookup; O(R+D) per call |
+| [ClaimRequiredDocumentResponse.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/dto/ClaimRequiredDocumentResponse.java) | B12 — derived row shape |
+| ClaimController.java (B12) | + GET /claims/{id}/required-documents endpoint + injection |
+| ClaimDocumentRepository.java (B12) | + flat findAllByClaim_IdAndDeletedAtIsNull |
+| [ClaimDocumentController.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/ClaimDocumentController.java) | B13 — POST switched to consumes=multipart/form-data + MultipartFile |
+| ClaimDocumentService.java (B13) | upload(claimId, documentType, MultipartFile) — streams bytes through DocumentStorageService, sanitises filename, derives fileSize+contentType server-side |
+| claims.ts (api-client) — B11+B12 | + ClaimCommentDtoSchema + ClaimRequiredDocumentDtoSchema; module-header gaps note updated |
+| [AddCommentDialog.tsx](cia-frontend/apps/back-office/src/modules/claims/pages/detail/AddCommentDialog.tsx) | B11 — payload `{text}` → `{body}`, ≥2-char gate, server-error toast |
+| [UploadDocumentDialog.tsx](cia-frontend/apps/back-office/src/modules/claims/pages/detail/UploadDocumentDialog.tsx) | B13 — documentType picker, FormData (`file` only), invalidates documents+required-documents+claim |
+| ClaimDetailPage.tsx (B11+B12+B13) | + commentsQuery + Comments card; + requiredDocsQuery + Required Documents card; missing-mandatory header badge; UploadDocumentDialog prop simplified |
 
 ### Sequence B status
 
@@ -686,6 +753,9 @@ Frontend `RisksEditorDialog.save` now reconciles in three phases: PUT changed ro
 | Step B5.3 — survey assign + report + risks editor + coinsurance editor | ✓ done (`4ac35cd`) — 4 new dialog components in `policy/pages/detail/`; full survey lifecycle CTAs wired; risks + coinsurance editors as Sheet-style bulk editors; closes G1 cia-policy frontend gap |
 | Step B9 — DELETE /policies/{id}/risks/{riskId} | ✓ done (`1e85d6e`) — backend endpoint + service with DRAFT-only + last-risk guards; RisksEditorDialog reconciles in PUT/POST/DELETE order so wholesale replacement passes the last-risk check |
 | Step B10 — demo-mode escape hatch | ✓ done (`be54587`) — VITE_DEMO_MODE flag in main.tsx allows production bundle to use DevAuthProvider when Keycloak isn't configured; AppShell renders amber "Demo" banner; VITE_DEMO_MODE=true set on Vercel; closes a 4-session-old Session-49 regression that had been blanking the public Vercel URL |
+| Step B11 — ClaimComment aggregate | ✓ done (`56f803d`) — new entity, V29 migration, append-only service, GET+POST controller; AddCommentDialog rewired from broken `{text}` to backend `{body}`; Comments card re-added on Processing tab |
+| Step B12 — RequiredDocs derived checklist | ✓ done (`56f803d`) — V30 adds documentType column to claim_document_requirements; ClaimRequiredDocumentService computes per-claim status at request time (no new entity); new GET /required-documents endpoint; Required Documents card on Documents tab with missing-mandatory badge in header |
+| Step B13 — Multipart upload contract | ✓ done (`56f803d`) — POST /claims/{id}/documents now consumes multipart/form-data + MultipartFile, streams bytes through DocumentStorageService; UploadDocumentDialog refactored with documentType picker; closes (b) document-upload mismatch from the Phase-3 backlog |
 | Step (b) — AlertsTab DTO drift | ✓ done (`32dc4c1`) |
 | Step (c) — AuditLogTab + LoginLogTab full sync | ✓ done (`f4c4ca1`) |
 | Step (d) — 3 deferred audit reports + filter pickers | ✓ done (`6acfcad`) — all 6 audit report tabs now live |
