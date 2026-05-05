@@ -314,7 +314,7 @@ Quotes support multiple per-item loadings and discounts, plus quote-level adjust
 ## Data Model Highlights
 
 ### Core entities (per tenant schema)
-`customers`, `customer_directors`, `customer_documents`, `customer_number_format`, `policies`, `policy_risks`, `policy_coinsurance_participants`, `policy_surveys`, `quotes`, `endorsements`, `claims`, `claim_reserves`, `claim_expenses`, `claim_documents`, `claim_inspections`, `reinsurance_treaties`, `ri_allocations`, `ri_fac_covers`, `debit_notes`, `credit_notes`, `receipts`, `payments`, `products`, `classes_of_business`, `brokers`, `users`, `access_groups`, `approval_groups`, `document_templates`, `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`, `audit_log`, `login_audit_log`, `audit_alert`, `audit_alert_config`, `report_definition`, `report_pin`, `report_access_policy`, `policy_number_formats`, `quote_discount_types`, `quote_loading_types`, `quote_config`.
+`customers`, `customer_directors`, `customer_documents`, `customer_number_format`, `policies`, `policy_risks`, `policy_coinsurance_participants`, `policy_surveys`, `quotes`, `endorsements`, `claims`, `claim_reserves`, `claim_expenses`, `claim_documents`, `claim_inspections`, `claim_comments`, `claim_document_requirements`, `reinsurance_treaties`, `ri_allocations`, `ri_fac_covers`, `debit_notes`, `credit_notes`, `receipts`, `payments`, `products`, `classes_of_business`, `brokers`, `users`, `access_groups`, `approval_groups`, `document_templates`, `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`, `audit_log`, `login_audit_log`, `audit_alert`, `audit_alert_config`, `report_definition`, `report_pin`, `report_access_policy`, `policy_number_formats`, `quote_discount_types`, `quote_loading_types`, `quote_config`.
 
 ### Key relationships
 - `policies` → `customers` (many-to-one)
@@ -324,7 +324,9 @@ Quotes support multiple per-item loadings and discounts, plus quote-level adjust
 - `policy_surveys` → `policies` (one-to-one via UNIQUE policy_id; ASSIGNED → REPORT_SUBMITTED → APPROVED | OVERRIDDEN)
 - `claims` → `policies`
 - `claim_inspections` → `claims` (one-to-one via UNIQUE claim_id; ASSIGNED → REPORT_SUBMITTED → APPROVED | DECLINED | OVERRIDDEN — note DECLINED state vs PolicySurvey)
-- `claim_documents` → `claims` (one-to-many; SURVEY_REPORT subset zip-bundled at /inspection/documents/bundle)
+- `claim_documents` → `claims` (one-to-many; SURVEY_REPORT subset zip-bundled at /inspection/documents/bundle; multipart upload via DocumentStorageService — B13)
+- `claim_comments` → `claims` (one-to-many; append-only audit-trail feed; indexed (claim_id, created_at DESC) — B11)
+- `claim_document_requirements` → `products` (one-to-many; per-product checklist; `document_type` column links a requirement to ClaimDocumentType for the per-claim derived "Required Documents" view in `ClaimRequiredDocumentService` — B12)
 - `endorsements` → `policies`
 - `ri_allocations` → `policies` → `reinsurance_treaties`
 - `ri_fac_covers` → `policies` (separate aggregate for facultative inward + outward)

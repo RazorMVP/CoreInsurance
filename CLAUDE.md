@@ -1142,9 +1142,9 @@ bash cia-frontend/scripts/check-api-wiring.sh
 | `[x]` | Bulk Claim Registration | BulkClaimPage — CSV drag-and-drop, validation results with error row detail, template download |
 | `[x]` | Claim Dashboard | ClaimsListPage — StatCard row: Open Claims, Total Reserve (₦), Total Paid YTD |
 | `[x]` | Claim Detail | ClaimDetailPage 5-tab layout (Summary, Processing, Documents, Inspection, DV); detail rendered from real backend ClaimDto (B7) — natureOfLoss / causeOfLoss / contactName / contactPhone / DV state all from entity columns, not MockClaim |
-| `[x]` | Claim Processing | Processing tab: Reserves table (add/total), Expenses table (approve/reject). Comments feed deferred — needs ClaimComment 1:many aggregate (separate slice) |
+| `[x]` | Claim Processing | Processing tab: Reserves table (add/total), Expenses table (approve/reject), Comments card backed by ClaimComment aggregate (B11) — append-only feed via AddCommentDialog, GET /comments paged read |
 | `[x]` | Loss Inspection | Inspection tab driven by live ClaimInspection record (B6); AssignInspectorDialog + SubmitInspectionReportDialog (B8) + Approve/Decline/Override + zip bundle download; full lifecycle CTA gating |
-| `[x]` | Claim Approval | Submit/Approve/Reject buttons conditional on status; status badge in header (required-docs checklist deferred — see follow-ups in cia-log) |
+| `[x]` | Claim Approval | Submit/Approve/Reject buttons conditional on status; status badge in header; "N doc(s) missing" pending-mandatory badge driven by RequiredDocsService (B12) |
 | `[x]` | DV Generation | DV tab: Own Damage / Third Party / Ex-gratia type selection cards; DV amount input (defaults to approvedAmount); wired to POST /api/v1/claims/{id}/dv/generate (B7) |
 | `[x]` | DV Execution | Execute DV button wired to POST /api/v1/claims/{id}/dv/execute (B7); status row shows executed-on date; Download DV gated on dvDocumentPath |
 
