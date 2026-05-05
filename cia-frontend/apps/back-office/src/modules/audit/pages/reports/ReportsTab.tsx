@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Badge, Button, Input, Label, PageSection, Separator, Skeleton,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@cia/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -10,6 +11,8 @@ import {
   AuditLogDtoSchema, LoginAuditLogDtoSchema, UserActivitySummaryDtoSchema, pageSchema,
   type AuditLogDto, type LoginAuditLogDto, type UserActivitySummaryDto,
 } from '@cia/api-client';
+
+const MODULES = ['POLICY', 'CLAIM', 'CUSTOMER', 'ENDORSEMENT', 'QUOTE', 'RECEIPT', 'PAYMENT', 'USER', 'REINSURANCE', 'PARTNER_APP'] as const;
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 function Table({ headers, rows }: { headers: string[]; rows: (string | number)[][] }) {
@@ -63,54 +66,17 @@ function ExportButton({ filename, headers, rows, disabled }: {
   );
 }
 
-// ── Mock data — kept for the tabs whose backend wiring is deferred ───────────
-//
-// The 3 tabs below remain on mock data because:
-//   • actions-by-user — overlaps with /audit/reports/user-activity (which is
-//     already wired in the User Activity tab); also requires a userId param
-//     for the per-user-events endpoint, which has no UI picker yet.
-//   • actions-by-module — backend has no per-module aggregation endpoint;
-//     /audit/reports/actions-by-module returns raw events filtered by
-//     entityType, not the count breakdown the table expects.
-//   • data-changes — backend requires entityType + entityId query params;
-//     the UI has no entity picker yet.
-// allow-mock: deferred — see above
-
-const mockActionsByUser = [
-  ['1', 'Akinwale Nubeero', '145', '42', '67', '8', '28', 'Today'],
-  ['2', 'Adaeze Nwosu',    '98',  '31', '54', '0', '13', 'Yesterday'],
-  ['3', 'Emeka Eze',       '64',  '18', '39', '1',  '6', '2 days ago'],
-  ['4', 'Ngozi Adeyemi',   '41',  '12', '24', '0',  '5', '3 days ago'],
-  ['5', 'Chukwudi Obi',    '27',   '8', '15', '0',  '4', '5 days ago'],
-];
-
-// allow-mock: backend has no per-module aggregation endpoint
-const mockActionsByModule = [
-  ['Policies',     '287', '12', '68', '287'],
-  ['Claims',       '234',  '8', '52', '234'],
-  ['Customers',    '186',  '5', '41', '186'],
-  ['Endorsements', '112',  '3', '28', '112'],
-  ['Finance',       '89',  '4', '21',  '89'],
-  ['Reinsurance',   '67',  '2', '15',  '67'],
-  ['Quotation',     '54',  '1', '12',  '54'],
-];
-
-// allow-mock: data-changes endpoint requires entityType+entityId; no entity picker in UI yet
-const mockDataChanges = [
-  ['POL-2026-00001', 'status',             'PENDING_APPROVAL', 'ACTIVE',      'Akinwale Nubeero', '2026-02-01 10:05'],
-  ['CLM-2026-00001', 'status',             'REGISTERED',       'PROCESSING',  'Adaeze Nwosu',     '2026-03-14 15:44'],
-  ['CLM-2026-00001', 'reserveAmount',      '0',                '650,000',     'Adaeze Nwosu',     '2026-03-14 15:44'],
-  ['CLM-2026-00001', 'status',             'PROCESSING',       'APPROVED',    'Akinwale Nubeero', '2026-03-22 09:07'],
-  ['USER:u3',        'accessGroupId',      'ag2',              'ag3',         'Akinwale Nubeero', '2026-02-10 08:47'],
-  ['END-2026-00001', 'newSumInsured',      '3,500,000',        '4,000,000',   'Adaeze Nwosu',     '2026-02-15 14:02'],
-  ['CUSTOMER:c1',    'kycStatus',          'PENDING',          'VERIFIED',    'Akinwale Nubeero', '2026-01-30 10:00'],
-];
-
 // ── Headers ───────────────────────────────────────────────────────────────────
-const ACTIONS_BY_USER_HEADERS    = ['Rank', 'User', 'Total', 'Creates', 'Updates', 'Deletes', 'Approvals', 'Last Active'];
-const ACTIONS_BY_MODULE_HEADERS  = ['Module', 'Total', 'Today', 'This Week', 'This Month'];
+//
+// Backend events flow as raw AuditLogResponse for the per-user, per-module,
+// and data-changes endpoints. We project them to the existing column shapes
+// where possible and drop columns the backend can't supply (e.g. count
+// breakdowns from the previous mock-only views).
+
+const ACTIONS_BY_USER_HEADERS    = ['Timestamp', 'Entity', 'Action', 'IP Address'];
+const ACTIONS_BY_MODULE_HEADERS  = ['Timestamp', 'Entity ID', 'Action', 'User'];
 const APPROVAL_TRAIL_HEADERS     = ['Entity', 'Type', 'Action', 'Amount', 'Performed By', 'When'];
-const DATA_CHANGES_HEADERS       = ['Entity', 'Field', 'Old Value', 'New Value', 'Changed By', 'Timestamp'];
+const DATA_CHANGES_HEADERS       = ['Field/Action', 'Old Value', 'New Value', 'Changed By', 'Timestamp'];
 const LOGIN_SECURITY_HEADERS     = ['User', 'Event', 'Status', 'IP Address', 'Timestamp'];
 const USER_ACTIVITY_HEADERS      = ['Rank', 'User', 'Total Actions'];
 
@@ -132,6 +98,14 @@ function fmtTimestamp(iso: string): string {
 // ── Component ────────────────────────────────────────────────────────────────
 export default function ReportsTab() {
   const [range, setRange] = useState(defaultRange);
+
+  // Tab-specific filter state. The 3 tabs that need extra inputs (per-user,
+  // per-module, data-changes) gate their queries on the relevant filter
+  // being non-empty so we don't fire wide-net fetches.
+  const [userIdFilter, setUserIdFilter]               = useState('');
+  const [moduleFilter, setModuleFilter]               = useState<typeof MODULES[number] | ''>('');
+  const [dcEntityType, setDcEntityType]               = useState<typeof MODULES[number] | ''>('');
+  const [dcEntityId,   setDcEntityId]                 = useState('');
 
   function rangeQueryParams() {
     return { from: isoStart(new Date(range.from)), to: isoEnd(new Date(range.to)) };
@@ -172,6 +146,45 @@ export default function ReportsTab() {
     },
   });
 
+  // Actions by user — Page<AuditLogResponse>; gated on userIdFilter
+  const actionsByUserQuery = useQuery<AuditLogDto[]>({
+    queryKey: ['audit', 'reports', 'actions-by-user', userIdFilter, range],
+    enabled: !!userIdFilter.trim(),
+    queryFn: async () => {
+      const res = await apiClient.get('/api/v1/audit/reports/actions-by-user', {
+        params: { userId: userIdFilter.trim(), ...rangeQueryParams(), size: 100 },
+      });
+      const page = pageSchema(AuditLogDtoSchema).parse(res.data.data);
+      return page.content;
+    },
+  });
+
+  // Actions by module — Page<AuditLogResponse>; gated on moduleFilter
+  const actionsByModuleQuery = useQuery<AuditLogDto[]>({
+    queryKey: ['audit', 'reports', 'actions-by-module', moduleFilter, range],
+    enabled: !!moduleFilter,
+    queryFn: async () => {
+      const res = await apiClient.get('/api/v1/audit/reports/actions-by-module', {
+        params: { entityType: moduleFilter, ...rangeQueryParams(), size: 100 },
+      });
+      const page = pageSchema(AuditLogDtoSchema).parse(res.data.data);
+      return page.content;
+    },
+  });
+
+  // Data changes — Page<AuditLogResponse>; gated on both entityType + entityId
+  const dataChangesQuery = useQuery<AuditLogDto[]>({
+    queryKey: ['audit', 'reports', 'data-changes', dcEntityType, dcEntityId],
+    enabled: !!dcEntityType && !!dcEntityId.trim(),
+    queryFn: async () => {
+      const res = await apiClient.get('/api/v1/audit/reports/data-changes', {
+        params: { entityType: dcEntityType, entityId: dcEntityId.trim(), size: 100 },
+      });
+      const page = pageSchema(AuditLogDtoSchema).parse(res.data.data);
+      return page.content;
+    },
+  });
+
   // Backend → table-row projections
   const approvalRows = useMemo(() => (approvalsQuery.data ?? []).map(e => [
     e.entityId ?? '—',
@@ -195,6 +208,46 @@ export default function ReportsTab() {
     e.userName ?? e.userId ?? '—',
     String(e.actionCount),
   ]), [userActivityQuery.data]);
+
+  const actionsByUserRows = useMemo(() => (actionsByUserQuery.data ?? []).map(e => [
+    fmtTimestamp(e.timestamp),
+    `${e.entityType}${e.entityId ? ` · ${e.entityId.slice(0, 8)}` : ''}`,
+    e.action,
+    e.ipAddress ?? '—',
+  ]), [actionsByUserQuery.data]);
+
+  const actionsByModuleRows = useMemo(() => (actionsByModuleQuery.data ?? []).map(e => [
+    fmtTimestamp(e.timestamp),
+    e.entityId ?? '—',
+    e.action,
+    e.userName ?? e.userId ?? '—',
+  ]), [actionsByModuleQuery.data]);
+
+  // Data changes — projection diffs the JSON-encoded oldValue/newValue
+  // strings into a row per changed field. Shows "(action)" when the
+  // payload is a non-object (e.g. APPROVE with no diff).
+  function parseSnapshot(s: string | null | undefined): Record<string, unknown> | null {
+    if (!s) return null;
+    try {
+      const parsed = JSON.parse(s) as unknown;
+      return typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : null;
+    } catch { return null; }
+  }
+  const dataChangesRows = useMemo(() => (dataChangesQuery.data ?? []).flatMap(e => {
+    const before = parseSnapshot(e.oldValue);
+    const after  = parseSnapshot(e.newValue);
+    const keys   = new Set<string>([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]);
+    if (keys.size === 0) {
+      return [[`(${e.action.toLowerCase()})`, '—', '—', e.userName ?? '—', fmtTimestamp(e.timestamp)]];
+    }
+    return Array.from(keys).map(k => [
+      k,
+      before && k in before ? String(before[k]) : '—',
+      after  && k in after  ? String(after[k])  : '—',
+      e.userName ?? '—',
+      fmtTimestamp(e.timestamp),
+    ]);
+  }), [dataChangesQuery.data]);
 
   const dateFilter = (
     <div className="flex items-end gap-2">
@@ -223,25 +276,68 @@ export default function ReportsTab() {
         {dateFilter}
       </div>
 
-      {/* ── Actions by User (deferred — backend wiring needs a userId picker) ── */}
+      {/* ── Actions by User (raw events for a specific userId in the date range) ── */}
       <TabsContent value="actions-by-user" className="mt-4">
         <PageSection
           title="Actions by User"
-          description="Per-user activity breakdown. Backend wiring deferred — see User Activity tab for the available aggregation."
-          actions={<ExportButton filename="audit-actions-by-user" headers={ACTIONS_BY_USER_HEADERS} rows={mockActionsByUser} />}
+          description="All audited events performed by a specific user in the selected date range. Enter a userId (UUID) — find one in the Audit Log tab. The User Activity tab shows the aggregated counts."
+          actions={<ExportButton filename="audit-actions-by-user" headers={ACTIONS_BY_USER_HEADERS} rows={actionsByUserRows} disabled={!userIdFilter.trim()} />}
         >
-          <Table headers={ACTIONS_BY_USER_HEADERS} rows={mockActionsByUser} />
+          <div className="flex items-end gap-2 mb-3">
+            <div className="space-y-1 flex-1 max-w-md">
+              <Label htmlFor="user-id-filter" className="text-xs">User ID</Label>
+              <Input
+                id="user-id-filter"
+                placeholder="Paste a userId (UUID) from the Audit Log…"
+                value={userIdFilter}
+                onChange={e => setUserIdFilter(e.target.value)}
+                className="h-8 font-mono text-xs"
+              />
+            </div>
+          </div>
+          {!userIdFilter.trim() ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              Enter a user ID above to load their event history.
+            </p>
+          ) : actionsByUserQuery.isLoading
+            ? <div className="space-y-3"><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" /></div>
+            : actionsByUserQuery.isError
+            ? <p className="text-sm text-destructive">Failed to load events for that user.</p>
+            : actionsByUserRows.length === 0
+            ? <p className="text-sm text-muted-foreground py-4 text-center">No events found for that user in the selected date range.</p>
+            : <Table headers={ACTIONS_BY_USER_HEADERS} rows={actionsByUserRows} />}
         </PageSection>
       </TabsContent>
 
-      {/* ── Actions by Module (deferred — backend has no aggregation endpoint) ── */}
+      {/* ── Actions by Module (raw events filtered by entityType) ──────────────── */}
       <TabsContent value="actions-by-module" className="mt-4">
         <PageSection
           title="Actions by Module"
-          description="Event volume per module. Backend wiring deferred — no aggregation endpoint exists; backend returns raw events filtered by entityType."
-          actions={<ExportButton filename="audit-actions-by-module" headers={ACTIONS_BY_MODULE_HEADERS} rows={mockActionsByModule} />}
+          description="All audit events for a specific module (entityType) in the selected date range. Backend returns raw events; per-module count breakdowns require a future aggregation endpoint."
+          actions={<ExportButton filename="audit-actions-by-module" headers={ACTIONS_BY_MODULE_HEADERS} rows={actionsByModuleRows} disabled={!moduleFilter} />}
         >
-          <Table headers={ACTIONS_BY_MODULE_HEADERS} rows={mockActionsByModule} />
+          <div className="flex items-end gap-2 mb-3">
+            <div className="space-y-1 max-w-xs">
+              <Label htmlFor="module-filter" className="text-xs">Module</Label>
+              <Select value={moduleFilter || undefined} onValueChange={(v) => setModuleFilter(v as typeof MODULES[number])}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select a module" /></SelectTrigger>
+                <SelectContent>
+                  {MODULES.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {!moduleFilter ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              Select a module above to load its event history.
+            </p>
+          ) : actionsByModuleQuery.isLoading
+            ? <div className="space-y-3"><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" /></div>
+            : actionsByModuleQuery.isError
+            ? <p className="text-sm text-destructive">Failed to load events for that module.</p>
+            : actionsByModuleRows.length === 0
+            ? <p className="text-sm text-muted-foreground py-4 text-center">No events found for that module in the selected date range.</p>
+            : <Table headers={ACTIONS_BY_MODULE_HEADERS} rows={actionsByModuleRows} />}
         </PageSection>
       </TabsContent>
 
@@ -260,14 +356,45 @@ export default function ReportsTab() {
         </PageSection>
       </TabsContent>
 
-      {/* ── Data Changes (deferred — needs entity picker) ─────────────────────── */}
+      {/* ── Data Changes (full before/after diff for one entity) ─────────────── */}
       <TabsContent value="data-changes" className="mt-4">
         <PageSection
           title="Data Change History"
-          description="Backend wiring deferred — endpoint requires entityType + entityId query params; no entity picker yet."
-          actions={<ExportButton filename="audit-data-changes" headers={DATA_CHANGES_HEADERS} rows={mockDataChanges} />}
+          description="Field-level before/after history for a specific entity. Each AUDIT row is expanded into one display row per changed key."
+          actions={<ExportButton filename="audit-data-changes" headers={DATA_CHANGES_HEADERS} rows={dataChangesRows} disabled={!dcEntityType || !dcEntityId.trim()} />}
         >
-          <Table headers={DATA_CHANGES_HEADERS} rows={mockDataChanges} />
+          <div className="flex items-end gap-2 mb-3 flex-wrap">
+            <div className="space-y-1 min-w-[140px]">
+              <Label htmlFor="dc-entity-type" className="text-xs">Entity Type</Label>
+              <Select value={dcEntityType || undefined} onValueChange={(v) => setDcEntityType(v as typeof MODULES[number])}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Module" /></SelectTrigger>
+                <SelectContent>
+                  {MODULES.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1 flex-1 max-w-md">
+              <Label htmlFor="dc-entity-id" className="text-xs">Entity ID</Label>
+              <Input
+                id="dc-entity-id"
+                placeholder="UUID — paste from a list page or audit log…"
+                value={dcEntityId}
+                onChange={e => setDcEntityId(e.target.value)}
+                className="h-8 font-mono text-xs"
+              />
+            </div>
+          </div>
+          {!dcEntityType || !dcEntityId.trim() ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              Select an entity type and paste an entity ID to load its change history.
+            </p>
+          ) : dataChangesQuery.isLoading
+            ? <div className="space-y-3"><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" /></div>
+            : dataChangesQuery.isError
+            ? <p className="text-sm text-destructive">Failed to load change history.</p>
+            : dataChangesRows.length === 0
+            ? <p className="text-sm text-muted-foreground py-4 text-center">No changes recorded for that entity.</p>
+            : <Table headers={DATA_CHANGES_HEADERS} rows={dataChangesRows} />}
         </PageSection>
       </TabsContent>
 
