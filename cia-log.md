@@ -4,7 +4,7 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
-## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5, G8) + Step C + B1 reinsurance + B2 claims + B3 audit reports + B4.1+B4.2 cia-policy
+## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5, G8) + Step C + B1 reinsurance + B2 claims + B3 audit reports + B4.1+B4.2+B4.3 cia-policy
 
 ### Context
 
@@ -37,6 +37,8 @@ f124a90  fix(audit): wire 3 of 6 audit reports to backend (B3)
 38a7ba4  feat(policy): add NIID manual trigger + risk update + bulk-add (B4.1)
 138563a  docs(log): session 53 — extend with B4.1 cia-policy slice
 62106eb  feat(policy): add document send/acknowledge/download endpoints (B4.2)
+e8a383f  docs(log): session 53 — extend with B4.2 cia-policy document endpoints
+cbb854c  feat(policy): pre-loss survey workflow (B4.3)
 ```
 
 ### Deep audit findings
@@ -272,6 +274,30 @@ Second slice of the cia-policy backend gap. Three endpoints supporting the polic
 
 **Net:** cia-policy controller now 17 endpoints (was 14, was 12 pre-B4). Backend gap narrows from ~8 to ~5 remaining — survey workflow (4 endpoints, needs new `PolicySurvey` entity) and coinsurance shares update (1 endpoint).
 
+### Workstream — B4.3 cia-policy survey workflow (`cbb854c`)
+
+Third slice of the cia-policy backend gap. Pre-loss survey workflow from the frontend's PolicyDetailPage Inspection tab. Largest B4 slice so far — new entity, new repository, new dedicated service, V26 migration, 5 endpoints.
+
+**Lifecycle:** `ASSIGNED → REPORT_SUBMITTED → APPROVED`. Anywhere → `OVERRIDDEN` if the underwriter waives the requirement (terminal). Re-assignment of a surveyor mid-cycle resets status to `ASSIGNED` and clears the prior report fields so the new surveyor's submission isn't merged into the previous attempt.
+
+**Status guards:** all survey actions are gated to `DRAFT` or `PENDING_APPROVAL` — once the policy is `ACTIVE` the survey is locked.
+
+**Endpoints (under `/api/v1/policies/{id}/survey`):**
+
+- `GET /` — current survey or 404 (also exposed inline on `PolicyResponse.survey` for the detail page)
+- `POST /assign` — `{ surveyorType, surveyorId, surveyorName }`
+- `POST /report` — `{ reportPath?, notes? }` (at least one required)
+- `POST /approve` — `{ notes? }`; requires `REPORT_SUBMITTED`
+- `POST /override` — `{ reason }`; reason ≥ 5 chars; terminal
+
+**Schema (V26 Flyway).** New `policy_surveys` table — one row per policy (unique constraint on `policy_id`), full audit-trail columns (`assigned_by/at`, `report_uploaded_by/at`, `approved_by/at` + `approval_notes`, `overridden_by/at` + `override_reason`). FK cascade-deletes survey rows on policy hard-delete. Indexes on `policy_id` and `status` (partial — `deleted_at IS NULL`).
+
+**Module wiring.** `PolicySurveyService` is a separate Spring service — `PolicyService` is already 700+ lines and the survey workflow is cohesive enough to live independently. Both services are wired into `PolicyController`. `PolicyResponse` gains a nullable `survey` field populated via `policySurveyService.getOrNull(policyId)` inside `PolicyService.toResponse`.
+
+**Audit log:** `PolicySurvey UPDATE` for assign/re-assign/submit/override; `PolicySurvey APPROVE` for approval.
+
+**Net:** cia-policy controller now 22 endpoints (was 17, was 12 pre-B4). Backend gap narrows to **1 remaining** — coinsurance shares update (B4.4). One frontend follow-up: the "upload report file" UI flow is deferred — current contract takes a pre-uploaded `reportPath`, expecting the frontend to use the existing storage upload mechanism separately.
+
 ### Housekeeping
 
 **`.gitignore` cleanup (`fc6895c`).** Repo had accumulated 7 personal skills under `.claude/skills/` (content-reviewer, gcloud-refresh, plan-week, post, post2, uat, uat-script-generator) plus `.playwright-mcp/` and `.superpowers/` working dirs as side effects of running tools cd'd here. Pattern `.claude/skills/*` + `!.claude/skills/cia/` ignores future bleed-through while keeping the project-canonical CIA skill tracked.
@@ -332,6 +358,12 @@ Second slice of the cia-policy backend gap. Three endpoints supporting the polic
 | [PolicyResponse.java](cia-backend/cia-policy/src/main/java/com/nubeero/cia/policy/dto/PolicyResponse.java) | B4.2 — exposes the 4 new document delivery fields |
 | [V25__policy_document_audit_fields.sql](cia-backend/cia-api/src/main/resources/db/migration/V25__policy_document_audit_fields.sql) | B4.2 — Flyway migration adds 4 columns to policies |
 | [cia-policy/pom.xml](cia-backend/cia-policy/pom.xml) | B4.2 — explicit cia-storage dependency |
+| [SurveyStatus.java](cia-backend/cia-policy/src/main/java/com/nubeero/cia/policy/SurveyStatus.java) | B4.3 — new enum (ASSIGNED, REPORT_SUBMITTED, APPROVED, OVERRIDDEN) |
+| [PolicySurvey.java](cia-backend/cia-policy/src/main/java/com/nubeero/cia/policy/PolicySurvey.java) | B4.3 — new entity (1:1 with Policy via unique policy_id) |
+| [PolicySurveyRepository.java](cia-backend/cia-policy/src/main/java/com/nubeero/cia/policy/PolicySurveyRepository.java) | B4.3 — new repository |
+| [PolicySurveyService.java](cia-backend/cia-policy/src/main/java/com/nubeero/cia/policy/PolicySurveyService.java) | B4.3 — new service (5 methods + helpers) |
+| [V26__policy_surveys.sql](cia-backend/cia-api/src/main/resources/db/migration/V26__policy_surveys.sql) | B4.3 — Flyway migration creates policy_surveys table |
+| Survey DTOs (5 new) | B4.3 — Assign/Report/Approve/Override requests + PolicySurveyResponse |
 
 ### Sequence B status
 
@@ -347,8 +379,8 @@ Second slice of the cia-policy backend gap. Three endpoints supporting the polic
 | Step B3 — Audit reports sweep | ✓ done (`f124a90`) — schemas + 3 of 6 reports wired (Approval Trail, Login Security, User Activity); 3 deferred (Actions by User, Actions by Module, Data Changes) — need additional UI filter pickers or backend aggregation endpoints |
 | Step B4.1 — cia-policy NIID trigger + risk CRUD | ✓ done (`38a7ba4`) — 3 endpoints added; cia-policy 14 endpoints |
 | Step B4.2 — document send/ack/download endpoints | ✓ done (`62106eb`) — 3 endpoints + V25 schema; cia-policy 17 endpoints |
-| Step B4.3 — survey workflow (4 endpoints, new entity) | next |
-| Step B4.4 — coinsurance shares update | pending |
+| Step B4.3 — survey workflow | ✓ done (`cbb854c`) — 5 endpoints + V26 schema + new entity/repo/service; cia-policy 22 endpoints |
+| Step B4.4 — coinsurance shares update | next (1 endpoint) |
 | G4 — Claims (6 endpoints) | pending |
 | G1 — cia-policy (11 endpoints) | pending |
 | G9 — Phase 3 Partner Portal (5 builds) | pending |
