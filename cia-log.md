@@ -4,7 +4,7 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
-## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5, G8) + Step C validation + B1 reinsurance + B2 claims sweep
+## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5, G8) + Step C validation + B1 reinsurance + B2 claims + B3 audit reports
 
 ### Context
 
@@ -31,6 +31,8 @@ b5de9ba  docs(log): session 53 — extend with Step C
 0b2b0bc  fix(reinsurance): wire FAC outward to backend (B1.4, closes G3 TODOs 5+6)
 7294123  docs(log): session 53 — extend with B1 reinsurance sweep
 9386c11  fix(claims): sync DTOs to backend + wire withdraw mutation (B2)
+9b4d0f5  docs(log): session 53 — extend with B2 claims sweep
+f124a90  fix(audit): wire 3 of 6 audit reports to backend (B3)
 ```
 
 ### Deep audit findings
@@ -207,6 +209,32 @@ Same DTO contract drift as G8 finance + B1 reinsurance, less severe (URL paths w
 
 Net: **1 of 6 closed; 5 deferred** (4 backend gaps + 1 wireable-but-deferred document download). The inspection workflow as a separate UI step doesn't exist on backend yet — backend has a single `/approve` for the whole claim.
 
+### Workstream — B3 audit reports sweep (`f124a90`)
+
+The audit ReportsTab had 6 hardcoded mock arrays — listed as a follow-up after G5 closed the alert acknowledge + CSV export pieces. Backend already exposes 6 corresponding endpoints (`/api/v1/audit/reports/{actions-by-user, actions-by-module, approvals, data-changes, login-security, user-activity}`) — but only 3 of them work without additional UI filter pickers.
+
+**Schemas (new `packages/api-client/src/modules/audit.ts`).**
+
+- `AuditActionSchema`, `LoginEventTypeSchema`, `AlertTypeSchema` — backend enums.
+- `AuditLogDtoSchema`, `LoginAuditLogDtoSchema`, `UserActivitySummaryDtoSchema`, `AuditAlertDtoSchema` — match backend response records 1:1. Notable corrections from existing hand-rolled types in the audit pages: backend `AlertType` enum is `FAILED_LOGIN` (singular), the existing `AlertsTab` interface had `FAILED_LOGINS` (plural) — drift; backend `severity` is a `String`, not the `LOW | MEDIUM | HIGH | CRITICAL` enum the existing AlertsTab assumes.
+- `pageSchema<T>()` helper for endpoints that return Spring `Page<T>` — unwraps `{ content, totalElements, ... }` and exposes `content[]`.
+
+**Wired tabs (3 of 6):**
+
+- **Approval Trail** → `GET /audit/reports/approvals` (paged AuditLogResponse, filtered to APPROVE/REJECT events). Backend AuditLog only carries the user who performed the action, not the chain submitter→approver — so the "Submitted By" column the previous mock had was dropped. New "Action" column to distinguish APPROVE from REJECT.
+- **Login Security** → `GET /audit/reports/login-security` (paged LoginAuditLogResponse, raw events). Collapsed to event-list view (User, Event, Status, IP, Timestamp). The previous per-user aggregation (success/failure counts, last-login, risk badge) needs client-side aggregation — deferred.
+- **User Activity** → `GET /audit/reports/user-activity` (flat List<UserActivitySummary>). Kept Rank + User + Total Actions only. Previous "Most Common Action" + weighted "Activity Score" columns required aggregation the backend doesn't expose.
+
+Date-range filter (default last 30 days) lives at the tab strip level — `from`/`to` date inputs feed all three queries via the queryKey, so changing the range refetches automatically.
+
+**Deferred tabs (3 of 6) — kept on mock with `// allow-mock:` comments:**
+
+- **Actions by User** — overlaps with User Activity; per-user-events endpoint requires a `userId` param; no UI picker.
+- **Actions by Module** — backend has no aggregation endpoint; the `/actions-by-module` endpoint returns raw events filtered by `entityType`, not the count breakdown the table expects.
+- **Data Changes** — endpoint requires `entityType` + `entityId` query params; no entity picker in the UI.
+
+**Net: 3 of 6 reports wired; CSV export now exports real data** (it always exported "whatever the table is showing" — now that's backend-fed data for half the tabs).
+
 ### Housekeeping
 
 **`.gitignore` cleanup (`fc6895c`).** Repo had accumulated 7 personal skills under `.claude/skills/` (content-reviewer, gcloud-refresh, plan-week, post, post2, uat, uat-script-generator) plus `.playwright-mcp/` and `.superpowers/` working dirs as side effects of running tools cd'd here. Pattern `.claude/skills/*` + `!.claude/skills/cia/` ignores future bleed-through while keeping the project-canonical CIA skill tracked.
@@ -259,6 +287,8 @@ Net: **1 of 6 closed; 5 deferred** (4 backend gaps + 1 wireable-but-deferred doc
 | ClaimDetailPage.tsx (B2) | mock + status checks; reserve.reason; expense.expenseType |
 | SubmitClaimDialog.tsx (B2) | registeredDate → reportedDate |
 | CancelClaimDialog.tsx (B2) | wired POST /api/v1/claims/{id}/withdraw with reason |
+| [audit.ts (api-client)](cia-frontend/packages/api-client/src/modules/audit.ts) | B3 — schemas for AuditLog, LoginAuditLog, UserActivitySummary, AuditAlert; pageSchema<T> helper |
+| ReportsTab.tsx (B3) | wired Approval Trail + Login Security + User Activity; date-range filter; 3 tabs deferred with allow-mock |
 
 ### Sequence B status
 
@@ -271,7 +301,8 @@ Net: **1 of 6 closed; 5 deferred** (4 backend gaps + 1 wireable-but-deferred doc
 | Step C — runtime contract validation | ✓ done (`67fb69b`) — apiEnvelope + validatedGet/Post/Put/Patch in api-client; finance migrated as proof-of-concept |
 | Step B1 — Reinsurance sweep | ✓ done (4 commits: `63f8a14`, `047f2ce`, `9adec51`, `0b2b0bc`) — schemas + URL fixes + 4 of 7 G3 TODOs closed; FAC PDFs + inward FAC + treaty PUT + batch-reallocation deferred as backend gaps |
 | Step B2 — Claims sweep | ✓ done (`9386c11`) — claims DTOs synced + status remap + cancel→withdraw wired (closes G4 TODO 6); 4 inspection-workflow + 1 document-bundle TODOs deferred as backend gaps |
-| Step B3 — Audit reports sweep (6 hardcoded report tables) | next |
+| Step B3 — Audit reports sweep | ✓ done (`f124a90`) — schemas + 3 of 6 reports wired (Approval Trail, Login Security, User Activity); 3 deferred (Actions by User, Actions by Module, Data Changes) — need additional UI filter pickers or backend aggregation endpoints |
+| Step B4 — cia-policy backend (G1) | next |
 | G4 — Claims (6 endpoints) | pending |
 | G1 — cia-policy (11 endpoints) | pending |
 | G9 — Phase 3 Partner Portal (5 builds) | pending |
@@ -286,6 +317,7 @@ Net: **1 of 6 closed; 5 deferred** (4 backend gaps + 1 wireable-but-deferred doc
 - **Reinsurance backend gaps to fill** (surfaced in B1 sweep): inward FAC entirely (list/create/renew/extend/cancel — backend `RiFacCover` has no direction field); treaty PUT for edits (only `/activate`, `/expire`, `/cancel` exist); `/confirm-batch` for allocations (currently fanned out client-side); `/batch-reallocate`; FAC offer-slip PDF; FAC credit-note creation + PDF; per-treaty allocation drilldown for BatchReallocationSheet; per-allocation policy detail enrichment (PolicyAllocationSheet currently lacks customer/product/period because that requires a `/policies/{id}` follow-up fetch).
 - **Claims + audit-reports + cia-policy modules** likely follow the same drift pattern. Step B2 / B3 / B4 sweeps will surface them similarly. Recommend doing them in the same shape: schemas first, then per-tab migrations.
 - **Claims backend gaps to fill** (surfaced in B2 sweep): inspection sub-workflow (frontend treats inspection approve/decline/override as a separate step from claim approval; backend collapses to a single `/approve`); inspection-document bundle download endpoint; inspection-document GET path that the frontend wants under `/inspection/documents/{id}` rather than the existing `/documents/{id}`; ClaimDetailPage's MockClaim adds presentation fields the backend doesn't supply (policyProduct, natureOfLoss, causeOfLoss, contactName/Phone, comments, requiredDocs, dvType/Amount) — proper migration needs either a richer backend `ClaimDetailResponse` or auxiliary `/policies/{id}` + `/customers/{id}` lookups.
+- **Audit backend / frontend gaps to fill** (surfaced in B3 sweep): per-module aggregation endpoint for "Actions by Module" tab; per-user-events endpoint already exists but needs a userId picker on the frontend; `data-changes` needs an entityType + entityId picker; client-side aggregation of login-security raw events would restore the previous per-user success/failure/risk view; AlertsTab's hand-rolled DTO is drifted from `AuditAlertResponse` (severity is `string` not strict enum on backend; `acknowledged: boolean` not `status: 'OPEN' | 'ACKNOWLEDGED'`; `triggeredAt` not `detectedAt`; AlertType is `FAILED_LOGIN` singular not `FAILED_LOGINS` plural); audit-log + login-log pages may also have similar paged-Page-of-T response shape mismatches that have been silently rendering empty cells — worth a follow-up audit.
 
 ---
 
