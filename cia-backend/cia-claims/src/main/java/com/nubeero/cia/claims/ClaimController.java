@@ -4,10 +4,15 @@ import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.claims.dto.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,7 +23,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ClaimController {
 
-    private final ClaimService service;
+    private final ClaimService           service;
+    private final ClaimInspectionService inspectionService;
+    private final ClaimDocumentService   documentService;
 
     @GetMapping
     @PreAuthorize("hasRole('CLAIMS_VIEW')")
@@ -130,6 +137,70 @@ public class ClaimController {
                                 java.util.stream.Collectors.toList(),
                                 list -> new org.springframework.data.domain.PageImpl<>(
                                         list, pageable, list.size()))));
+    }
+
+    // ─── Post-loss inspection workflow (B6) ───────────────────────────────
+
+    @GetMapping("/{id}/inspection")
+    @PreAuthorize("hasRole('CLAIMS_VIEW')")
+    public ApiResponse<ClaimInspectionResponse> getInspection(@PathVariable UUID id) {
+        return ApiResponse.success(inspectionService.get(id));
+    }
+
+    @PostMapping("/{id}/inspection/assign")
+    @PreAuthorize("hasRole('CLAIMS_UPDATE')")
+    public ApiResponse<ClaimInspectionResponse> assignInspector(
+            @PathVariable UUID id,
+            @Valid @RequestBody AssignInspectorRequest request) {
+        return ApiResponse.success(inspectionService.assignInspector(id, request));
+    }
+
+    @PostMapping("/{id}/inspection/report")
+    @PreAuthorize("hasRole('CLAIMS_UPDATE')")
+    public ApiResponse<ClaimInspectionResponse> submitInspectionReport(
+            @PathVariable UUID id,
+            @Valid @RequestBody InspectionReportRequest request) {
+        return ApiResponse.success(inspectionService.submitReport(id, request));
+    }
+
+    @PostMapping("/{id}/inspection/approve")
+    @PreAuthorize("hasRole('CLAIMS_APPROVE')")
+    public ApiResponse<ClaimInspectionResponse> approveInspection(
+            @PathVariable UUID id,
+            @RequestBody(required = false) ApproveInspectionRequest request) {
+        return ApiResponse.success(inspectionService.approve(id, request));
+    }
+
+    @PostMapping("/{id}/inspection/decline")
+    @PreAuthorize("hasRole('CLAIMS_APPROVE')")
+    public ApiResponse<ClaimInspectionResponse> declineInspection(
+            @PathVariable UUID id,
+            @Valid @RequestBody DeclineInspectionRequest request) {
+        return ApiResponse.success(inspectionService.decline(id, request));
+    }
+
+    @PostMapping("/{id}/inspection/override")
+    @PreAuthorize("hasRole('CLAIMS_APPROVE')")
+    public ApiResponse<ClaimInspectionResponse> overrideInspection(
+            @PathVariable UUID id,
+            @Valid @RequestBody OverrideInspectionRequest request) {
+        return ApiResponse.success(inspectionService.override(id, request));
+    }
+
+    /**
+     * Zip + stream every SURVEY_REPORT document for the claim. Underlying
+     * docs live in object storage; the service composes a zip in memory
+     * (claim-doc volumes are small in practice).
+     */
+    @GetMapping("/{id}/inspection/documents/bundle")
+    @PreAuthorize("hasRole('CLAIMS_VIEW')")
+    public ResponseEntity<Resource> downloadInspectionBundle(@PathVariable UUID id) {
+        ClaimDocumentService.DocumentDownload dl = documentService.streamInspectionBundle(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + dl.filename() + "\"")
+                .body(new InputStreamResource(dl.content()));
     }
 
     // ─── Mapping ──────────────────────────────────────────────────────────
