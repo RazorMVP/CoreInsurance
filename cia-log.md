@@ -48,6 +48,8 @@ f866dbc  docs(log): session 53 — extend with B5.1+B5.2 frontend wiring of B4
 32dc4c1  fix(audit): sync AlertsTab DTO with backend (item b)
 f4c4ca1  fix(audit): sync log + login-log tabs with backend (item c)
 6acfcad  fix(audit): wire 3 deferred audit reports + filter pickers (item d)
+4dd22a2  feat(claims): post-loss inspection workflow + document filter/bundle (B6 backend)
+4df3ad6  feat(claims): wire inspection tab to B6 backend (approve/decline/override + bundle)
 ```
 
 ### Deep audit findings
@@ -391,6 +393,41 @@ Empty / loading / error states added per tab — no filters → instructional me
 
 All 6 audit report tabs now hit real backend.
 
+### Workstream — B6 claims inspection workflow (`4dd22a2` backend + `4df3ad6` frontend)
+
+User chose **(e.1) Build it now** — full inspection slice rather than deferring to a later session. This closes 4 of the 6 G4 claims gaps in one go (the inspection-workflow trio + zip bundle); the remaining two G4 items (richer ClaimDetailResponse / inspection-document GET path harmonisation) stay open as separate follow-ups.
+
+**B6.1–B6.3 backend (`4dd22a2`).** New `ClaimInspection` aggregate, separate from the existing one-shot `Claim.surveyorId` denormalisation. The legacy field is preserved (Claims module assigns the surveyor at claim level; the inspection record tracks workflow state per visit). Five-value `InspectionStatus` enum: `ASSIGNED → REPORT_SUBMITTED → APPROVED | DECLINED | OVERRIDDEN`. Differs from `PolicySurvey` by the additional `DECLINED` state — a claim's inspection report can be sent back for re-submission, where a policy survey can only be approved or overridden.
+
+`ClaimInspectionService` exposes `get / getOrNull / assignInspector / submitReport / approve / decline / override`. `requireMutableStatus` guard blocks transitions when the parent claim is `APPROVED / SETTLED / REJECTED / WITHDRAWN`. Re-assignment after a decline clears prior report fields + decline notes (so the next assignee starts clean). Audit actions: `UPDATE` for assign/submit/override, `APPROVE` for approval, `REJECT` for decline.
+
+Six new endpoints on `ClaimController`:
+
+- `GET    /api/v1/claims/{id}/inspection` — current inspection record (404 when none assigned)
+- `POST   /api/v1/claims/{id}/inspection/assign`    — `AssignInspectorRequest` (surveyorType, surveyorId, surveyorName)
+- `POST   /api/v1/claims/{id}/inspection/report`    — `InspectionReportRequest` (reportPath, notes — both optional)
+- `POST   /api/v1/claims/{id}/inspection/approve`   — `ApproveInspectionRequest` (notes optional)
+- `POST   /api/v1/claims/{id}/inspection/decline`   — `DeclineInspectionRequest` (reason, ≥5 chars)
+- `POST   /api/v1/claims/{id}/inspection/override`  — `OverrideInspectionRequest` (reason, ≥5 chars)
+- `GET    /api/v1/claims/{id}/inspection/documents/bundle` — zip stream of every `SURVEY_REPORT` document on the claim (claim-number-prefixed filename)
+
+`ClaimDocumentService` extended with `findByClaimIdAndType` (paged), `streamDocument` (single, with claim-belonging guard), and `streamInspectionBundle` (in-memory `ZipOutputStream` composition — claim doc volumes are small in practice). `ClaimDocumentController` now exposes `?documentType=` filter on the list endpoint and `GET /{id}/content` for per-doc streaming. `cia-claims/pom.xml` gained an explicit `cia-storage` dep (was transitively present but not declared).
+
+Migration `V27__claim_inspections.sql` creates the `claim_inspections` table with `UNIQUE(claim_id)` and a cascade-delete FK to `claims`, plus indexes on `policy_id` and `status`.
+
+**B6.4 frontend (`4df3ad6`).** `ClaimDetailPage` Inspection tab CTAs now driven by the live `ClaimInspection` record from the new GET endpoint, not by the legacy `claim.surveyorId` field. Status-conditional rendering: Approve + Decline only appear when `inspection?.status === 'REPORT_SUBMITTED'`; Override hides once `APPROVED` or `OVERRIDDEN`; Download Report only renders when at least one `SURVEY_REPORT` document exists. The Report Status row reflects the workflow state with the actual decline / override reason inline. Surveyor name, type, and assigned date are pulled from the inspection record (with `c.surveyorName` as a graceful fallback).
+
+Three mutations wired to the new endpoints (Approve / Decline / Override) — Decline + Override require ≥5 char reasons (matched to backend Bean Validation). Download Reports dialog now reads a paged `useQuery` against `GET /documents?documentType=SURVEY_REPORT&size=100` instead of a hardcoded array, with per-doc download via `GET /documents/{id}/content` and bundle via `GET /inspection/documents/bundle` (Blob → `URL.createObjectURL` → anchor-click pattern).
+
+api-client gained `InspectionStatusSchema` + `ClaimInspectionDtoSchema` in `claims.ts`, with types via `z.infer`. `ClaimDocumentDto` was already exported from B2; the frontend re-uses it for the survey-docs query.
+
+**Verification.** `pnpm --filter @cia/back-office exec tsc --noEmit` exit 0; `bash cia-frontend/scripts/check-api-wiring.sh` 0 violations.
+
+**Open against B6.** Three pieces deferred:
+- **Inspection assignment dialog from ClaimDetailPage** — currently the Inspection tab assumes someone (or the claim register flow) has already picked a surveyor; UI for `POST /inspection/assign` lives with B5.3-style work.
+- **Submit-report upload** — `POST /inspection/report` is wired on the backend but no frontend control exists yet (the surveyor-facing portal would need it). When that surfaces, it can re-use the existing per-doc upload endpoint to put the actual report into storage.
+- **`/documents/{id}` GET path harmonisation** — frontend's commented-out fetch for inspection documents was originally written against `/inspection/documents/{id}`. Backend now serves it from `/documents/{id}/content`. The frontend uses the latter path; the legacy assumption is dead code.
+
 ### Housekeeping
 
 **`.gitignore` cleanup (`fc6895c`).** Repo had accumulated 7 personal skills under `.claude/skills/` (content-reviewer, gcloud-refresh, plan-week, post, post2, uat, uat-script-generator) plus `.playwright-mcp/` and `.superpowers/` working dirs as side effects of running tools cd'd here. Pattern `.claude/skills/*` + `!.claude/skills/cia/` ignores future bleed-through while keeping the project-canonical CIA skill tracked.
@@ -463,6 +500,19 @@ All 6 audit report tabs now hit real backend.
 | PolicyListPage.tsx (B5.1) | status variant gains REJECTED + REINSTATED |
 | PolicyDetailPage.tsx (B5.1+B5.2) | field renames + 8 useMutation wires + streaming PDF download + Override Survey dialog |
 | DebitNoteDetailDialog.tsx (B5.1) | policyQuery field renames startDate/endDate → policyStartDate/policyEndDate |
+| [InspectionStatus.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/InspectionStatus.java) | B6 — new 5-value enum (ASSIGNED, REPORT_SUBMITTED, APPROVED, DECLINED, OVERRIDDEN) |
+| [ClaimInspection.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/ClaimInspection.java) | B6 — new entity (1:1 with Claim via unique claim_id) |
+| [ClaimInspectionRepository.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/ClaimInspectionRepository.java) | B6 — new repository |
+| [ClaimInspectionService.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/ClaimInspectionService.java) | B6 — new service (get/getOrNull/assignInspector/submitReport/approve/decline/override + requireMutableStatus guard) |
+| Inspection DTOs (6 new) | B6 — Assign/Report/Approve/Decline/Override requests + ClaimInspectionResponse |
+| [V27__claim_inspections.sql](cia-backend/cia-api/src/main/resources/db/migration/V27__claim_inspections.sql) | B6 — Flyway migration creates claim_inspections with UNIQUE(claim_id) + cascade-delete FK |
+| [ClaimController.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/ClaimController.java) | B6 — 6 new endpoints (GET inspection, assign/report/approve/decline/override, GET documents/bundle) + documentService injection |
+| [ClaimDocumentController.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/ClaimDocumentController.java) | B6 — `?documentType=` filter + per-doc `GET /{id}/content` streaming |
+| [ClaimDocumentService.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/ClaimDocumentService.java) | B6 — DocumentStorageService injection + findByClaimIdAndType + streamDocument + streamInspectionBundle (zip composition) + DocumentDownload record |
+| [ClaimDocumentRepository.java](cia-backend/cia-claims/src/main/java/com/nubeero/cia/claims/ClaimDocumentRepository.java) | B6 — paged + flat findAllByClaim_IdAndDocumentTypeAndDeletedAtIsNull |
+| [cia-claims/pom.xml](cia-backend/cia-claims/pom.xml) | B6 — explicit cia-storage dependency |
+| [claims.ts (api-client)](cia-frontend/packages/api-client/src/modules/claims.ts) | B6 — InspectionStatusSchema + ClaimInspectionDtoSchema (z.infer types) |
+| ClaimDetailPage.tsx (B6) | inspectionQuery + surveyDocsQuery + 3 mutations (approve/decline/override) + status-conditional CTA gating + bundle/per-doc download |
 
 ### Sequence B status
 
@@ -486,7 +536,7 @@ All 6 audit report tabs now hit real backend.
 | Step (b) — AlertsTab DTO drift | ✓ done (`32dc4c1`) |
 | Step (c) — AuditLogTab + LoginLogTab full sync | ✓ done (`f4c4ca1`) |
 | Step (d) — 3 deferred audit reports + filter pickers | ✓ done (`6acfcad`) — all 6 audit report tabs now live |
-| Step (e) — claims inspection workflow | next — building (e.1) as a B6 slice (new ClaimInspection entity, V27 migration, dedicated service, document filter + bundle endpoints, frontend wire-up) |
+| Step (e) — claims inspection workflow | ✓ done as **B6** (`4dd22a2` backend + `4df3ad6` frontend) — full slice: ClaimInspection entity, V27 migration, dedicated service, 6 endpoints, document filter + zip bundle, ClaimDetailPage Inspection tab driven by live state |
 | G4 — Claims (6 endpoints) | pending |
 | G1 — cia-policy (11 endpoints) | pending |
 | G9 — Phase 3 Partner Portal (5 builds) | pending |
