@@ -4,7 +4,7 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
-## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5, G8) + Step C + B1 reinsurance + B2 claims + B3 audit reports + B4.1 cia-policy
+## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5, G8) + Step C + B1 reinsurance + B2 claims + B3 audit reports + B4.1+B4.2 cia-policy
 
 ### Context
 
@@ -35,6 +35,8 @@ b5de9ba  docs(log): session 53 — extend with Step C
 f124a90  fix(audit): wire 3 of 6 audit reports to backend (B3)
 6213960  docs(log): session 53 — extend with B3 audit reports sweep
 38a7ba4  feat(policy): add NIID manual trigger + risk update + bulk-add (B4.1)
+138563a  docs(log): session 53 — extend with B4.1 cia-policy slice
+62106eb  feat(policy): add document send/acknowledge/download endpoints (B4.2)
 ```
 
 ### Deep audit findings
@@ -254,6 +256,22 @@ First slice of the cia-policy backend gap (G1) — the audit identified ~11 miss
 
 **Net:** cia-policy controller now 14 endpoints (was 12). Backend gap target list narrows from ~11 to ~8 remaining — document send/ack/download (3), survey workflow (4), coinsurance shares update (1), possibly renewal-notice trigger and risk-delete. Subsequent B4 slices will ship those incrementally.
 
+### Workstream — B4.2 cia-policy document delivery (`62106eb`)
+
+Second slice of the cia-policy backend gap. Three endpoints supporting the policy-document delivery lifecycle from the frontend's PolicyDetailPage Document tab. The PDF itself was already being generated on approval (`PolicyService` writes to `policy_document_path`); B4.2 adds dispatch + acknowledgement audit trail and the public download endpoint.
+
+**`POST /api/v1/policies/{id}/document/send`.** Records that the policy document was dispatched to the insured. Status guard: ACTIVE or REINSTATED. Requires `policy_document_path` to be set. Sets `document_sent_at` + `document_sent_by` from the JWT subject. Audit action: `SEND`.
+
+**`POST /api/v1/policies/{id}/document/acknowledge`.** Records the insured's confirmation of receipt. Status guard same as `/send`. Requires `document_sent_at` to be set first (cannot acknowledge a document that hasn't been sent).
+
+**`GET /api/v1/policies/{id}/document`.** Streams the generated PDF from object storage. Returns `ResponseEntity<Resource>` with `Content-Type: application/pdf` and `Content-Disposition: attachment; filename=POL-...pdf`. Wraps `DocumentStorageService.download()` — fetches from whichever backend (MinIO/S3/GCS) is active.
+
+**Schema (V25 Flyway migration).** Adds 4 nullable columns to the `policies` table: `document_sent_at`, `document_sent_by`, `document_acknowledged_at`, `document_acknowledged_by`. Entity + DTO + `toResponse()` carry the new fields.
+
+**Module wiring.** `cia-policy/pom.xml` gains an explicit `cia-storage` dependency (was transitive via `cia-documents`). New `PolicyService.PolicyDocumentDownload(InputStream, filename)` record carries the download stream + filename across the service boundary so the controller can build the streamed response without leaking InputStream into the service signature.
+
+**Net:** cia-policy controller now 17 endpoints (was 14, was 12 pre-B4). Backend gap narrows from ~8 to ~5 remaining — survey workflow (4 endpoints, needs new `PolicySurvey` entity) and coinsurance shares update (1 endpoint).
+
 ### Housekeeping
 
 **`.gitignore` cleanup (`fc6895c`).** Repo had accumulated 7 personal skills under `.claude/skills/` (content-reviewer, gcloud-refresh, plan-week, post, post2, uat, uat-script-generator) plus `.playwright-mcp/` and `.superpowers/` working dirs as side effects of running tools cd'd here. Pattern `.claude/skills/*` + `!.claude/skills/cia/` ignores future bleed-through while keeping the project-canonical CIA skill tracked.
@@ -308,8 +326,12 @@ First slice of the cia-policy backend gap (G1) — the audit identified ~11 miss
 | CancelClaimDialog.tsx (B2) | wired POST /api/v1/claims/{id}/withdraw with reason |
 | [audit.ts (api-client)](cia-frontend/packages/api-client/src/modules/audit.ts) | B3 — schemas for AuditLog, LoginAuditLog, UserActivitySummary, AuditAlert; pageSchema<T> helper |
 | ReportsTab.tsx (B3) | wired Approval Trail + Login Security + User Activity; date-range filter; 3 tabs deferred with allow-mock |
-| [PolicyController.java](cia-backend/cia-policy/src/main/java/com/nubeero/cia/policy/PolicyController.java) | B4.1 — added 3 endpoints (NIID trigger, PUT risk, POST risks bulk) |
-| [PolicyService.java](cia-backend/cia-policy/src/main/java/com/nubeero/cia/policy/PolicyService.java) | B4.1 — triggerNiidUpload, updateRisk, addRisksBulk + resolveSectionName + recomputePolicyTotals helpers |
+| [PolicyController.java](cia-backend/cia-policy/src/main/java/com/nubeero/cia/policy/PolicyController.java) | B4.1 — added 3 endpoints (NIID trigger, PUT risk, POST risks bulk); B4.2 — added 3 endpoints (document send/ack/download) |
+| [PolicyService.java](cia-backend/cia-policy/src/main/java/com/nubeero/cia/policy/PolicyService.java) | B4.1 — triggerNiidUpload, updateRisk, addRisksBulk + helpers; B4.2 — sendPolicyDocument, acknowledgePolicyDocument, downloadPolicyDocument + DocumentStorageService injection |
+| [Policy.java](cia-backend/cia-policy/src/main/java/com/nubeero/cia/policy/Policy.java) | B4.2 — 4 new fields (documentSentAt/By, documentAcknowledgedAt/By) |
+| [PolicyResponse.java](cia-backend/cia-policy/src/main/java/com/nubeero/cia/policy/dto/PolicyResponse.java) | B4.2 — exposes the 4 new document delivery fields |
+| [V25__policy_document_audit_fields.sql](cia-backend/cia-api/src/main/resources/db/migration/V25__policy_document_audit_fields.sql) | B4.2 — Flyway migration adds 4 columns to policies |
+| [cia-policy/pom.xml](cia-backend/cia-policy/pom.xml) | B4.2 — explicit cia-storage dependency |
 
 ### Sequence B status
 
@@ -323,9 +345,9 @@ First slice of the cia-policy backend gap (G1) — the audit identified ~11 miss
 | Step B1 — Reinsurance sweep | ✓ done (4 commits: `63f8a14`, `047f2ce`, `9adec51`, `0b2b0bc`) — schemas + URL fixes + 4 of 7 G3 TODOs closed; FAC PDFs + inward FAC + treaty PUT + batch-reallocation deferred as backend gaps |
 | Step B2 — Claims sweep | ✓ done (`9386c11`) — claims DTOs synced + status remap + cancel→withdraw wired (closes G4 TODO 6); 4 inspection-workflow + 1 document-bundle TODOs deferred as backend gaps |
 | Step B3 — Audit reports sweep | ✓ done (`f124a90`) — schemas + 3 of 6 reports wired (Approval Trail, Login Security, User Activity); 3 deferred (Actions by User, Actions by Module, Data Changes) — need additional UI filter pickers or backend aggregation endpoints |
-| Step B4.1 — cia-policy NIID trigger + risk CRUD | ✓ done (`38a7ba4`) — 3 endpoints added; cia-policy now 14 endpoints (was 12) |
-| Step B4.2 — document send/ack/download endpoints | next |
-| Step B4.3 — survey workflow (4 endpoints, new entity) | pending |
+| Step B4.1 — cia-policy NIID trigger + risk CRUD | ✓ done (`38a7ba4`) — 3 endpoints added; cia-policy 14 endpoints |
+| Step B4.2 — document send/ack/download endpoints | ✓ done (`62106eb`) — 3 endpoints + V25 schema; cia-policy 17 endpoints |
+| Step B4.3 — survey workflow (4 endpoints, new entity) | next |
 | Step B4.4 — coinsurance shares update | pending |
 | G4 — Claims (6 endpoints) | pending |
 | G1 — cia-policy (11 endpoints) | pending |
