@@ -41,7 +41,11 @@ db/migration/
 ├── V21__quote_config_tables.sql            # quote_discount_types, quote_loading_types, quote_config; seeded defaults
 ├── V22__quote_adjustments.sql              # rate/loadings/discounts JSONB on quote_risks; quote_loadings/discounts/clause_ids/inputter/approver on quotes
 ├── V23__audit_log_index_and_customer_number_backfill.sql # composite index on audit_log (user_id,action,timestamp); backfill customer_number for pre-V20 rows
-└── V24__pii_encryption.sql                 # NDPR pgcrypto encryption for id_number, id_document_url, address on customers + directors
+├── V24__pii_encryption.sql                 # NDPR pgcrypto encryption for id_number, id_document_url, address on customers + directors
+├── V25__policy_document_audit_fields.sql  # 4 new policy columns: documentSentAt/By, documentAcknowledgedAt/By
+├── V26__policy_surveys.sql                 # policy_surveys table (1:1 with policy via UNIQUE policy_id) — pre-loss survey workflow
+├── V27__claim_inspections.sql              # claim_inspections table (1:1 with claim via UNIQUE claim_id) — post-loss inspection with DECLINED state
+└── V28__claim_detail_fields.sql            # 8 new claim columns: nature/cause of loss, contact name/phone, dv_type/amount/generated_at/executed_at
 ```
 
 ### Naming Convention
