@@ -4,7 +4,7 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
-## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5, G8) + Step C + B1 reinsurance + B2 claims + B3 audit reports + B4.1+B4.2+B4.3 cia-policy
+## 2026-05-04 — Session 53: Build audit + Sequence B fully closed (frontend sweeps + cia-policy backend gap)
 
 ### Context
 
@@ -39,6 +39,8 @@ f124a90  fix(audit): wire 3 of 6 audit reports to backend (B3)
 62106eb  feat(policy): add document send/acknowledge/download endpoints (B4.2)
 e8a383f  docs(log): session 53 — extend with B4.2 cia-policy document endpoints
 cbb854c  feat(policy): pre-loss survey workflow (B4.3)
+f27ff9a  docs(log): session 53 — extend with B4.3 cia-policy survey workflow
+826859b  feat(policy): coinsurance participants update (B4.4)
 ```
 
 ### Deep audit findings
@@ -298,6 +300,28 @@ Third slice of the cia-policy backend gap. Pre-loss survey workflow from the fro
 
 **Net:** cia-policy controller now 22 endpoints (was 17, was 12 pre-B4). Backend gap narrows to **1 remaining** — coinsurance shares update (B4.4). One frontend follow-up: the "upload report file" UI flow is deferred — current contract takes a pre-uploaded `reportPath`, expecting the frontend to use the existing storage upload mechanism separately.
 
+### Workstream — B4.4 cia-policy coinsurance update (`826859b`)
+
+Final slice of the cia-policy backend gap. Single endpoint that closes the audit's last identified shortfall.
+
+**`PUT /api/v1/policies/{id}/coinsurance`.** Replaces the participant list on a DRAFT policy. Body: `List<PolicyCoinsuranceParticipantRequest>` (insuranceCompanyId + sharePercentage per row).
+
+**Reused infrastructure.** `applyCoinsuranceParticipants` and `validateCoinsuranceShares` private helpers were already in `PolicyService` for the create/update flows. The new `updateCoinsurance` method delegates to them. Adds two guards on top of the existing `requireDraftStatus`:
+
+- Business-type guard: `DIRECT_WITH_COINSURANCE` only — coinsurance participants don't apply to plain `DIRECT`, `INWARD_COINSURANCE` (lead is external), or `INWARD_FACULTATIVE` policies.
+- Audit log: `Policy UPDATE`.
+
+**Net.** cia-policy controller now **23 endpoints** (was 22, was 12 pre-B4). The original audit identified **11 missing endpoints** in cia-policy; B4 closed all of them across 4 focused slices:
+
+| Slice | Endpoints | Schema | New entity |
+| --- | --- | --- | --- |
+| B4.1 | NIID trigger, PUT risk, POST risks bulk (3) | — | — |
+| B4.2 | document send/ack/download (3) | V25 (4 columns) | — |
+| B4.3 | survey assign/report/approve/override + GET (5) | V26 (new table) | PolicySurvey |
+| B4.4 | coinsurance update (1) | — | — |
+
+The frontend's PolicyDetailPage tabs (Document, Inspection, NAICOM/NIID, Coinsurance) now have backend support for every action they expose. Remaining work is purely frontend wiring + the file-upload UI for the survey report.
+
 ### Housekeeping
 
 **`.gitignore` cleanup (`fc6895c`).** Repo had accumulated 7 personal skills under `.claude/skills/` (content-reviewer, gcloud-refresh, plan-week, post, post2, uat, uat-script-generator) plus `.playwright-mcp/` and `.superpowers/` working dirs as side effects of running tools cd'd here. Pattern `.claude/skills/*` + `!.claude/skills/cia/` ignores future bleed-through while keeping the project-canonical CIA skill tracked.
@@ -364,6 +388,7 @@ Third slice of the cia-policy backend gap. Pre-loss survey workflow from the fro
 | [PolicySurveyService.java](cia-backend/cia-policy/src/main/java/com/nubeero/cia/policy/PolicySurveyService.java) | B4.3 — new service (5 methods + helpers) |
 | [V26__policy_surveys.sql](cia-backend/cia-api/src/main/resources/db/migration/V26__policy_surveys.sql) | B4.3 — Flyway migration creates policy_surveys table |
 | Survey DTOs (5 new) | B4.3 — Assign/Report/Approve/Override requests + PolicySurveyResponse |
+| PolicyController.java + PolicyService.java (B4.4) | added PUT /coinsurance endpoint + updateCoinsurance service method |
 
 ### Sequence B status
 
@@ -380,7 +405,7 @@ Third slice of the cia-policy backend gap. Pre-loss survey workflow from the fro
 | Step B4.1 — cia-policy NIID trigger + risk CRUD | ✓ done (`38a7ba4`) — 3 endpoints added; cia-policy 14 endpoints |
 | Step B4.2 — document send/ack/download endpoints | ✓ done (`62106eb`) — 3 endpoints + V25 schema; cia-policy 17 endpoints |
 | Step B4.3 — survey workflow | ✓ done (`cbb854c`) — 5 endpoints + V26 schema + new entity/repo/service; cia-policy 22 endpoints |
-| Step B4.4 — coinsurance shares update | next (1 endpoint) |
+| Step B4.4 — coinsurance shares update | ✓ done (`826859b`) — 1 endpoint; cia-policy 23 endpoints. **B4 cia-policy backend gap fully closed.** |
 | G4 — Claims (6 endpoints) | pending |
 | G1 — cia-policy (11 endpoints) | pending |
 | G9 — Phase 3 Partner Portal (5 builds) | pending |
