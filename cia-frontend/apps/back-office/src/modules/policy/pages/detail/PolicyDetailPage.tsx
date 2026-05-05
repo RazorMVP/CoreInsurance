@@ -8,6 +8,10 @@ import {
 } from '@cia/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type ApiError, type ApiResponse, type PolicyDto } from '@cia/api-client';
+import AssignSurveyorDialog       from './AssignSurveyorDialog';
+import SubmitSurveyReportDialog   from './SubmitSurveyReportDialog';
+import CoinsuranceEditorDialog    from './CoinsuranceEditorDialog';
+import RisksEditorDialog          from './RisksEditorDialog';
 
 interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
 
@@ -161,6 +165,12 @@ export default function PolicyDetailPage() {
   const [overrideReason,  setOverrideReason]  = useState('');
   const [overrideErr,     setOverrideErr]     = useState<string | null>(null);
   useEffect(() => { if (!overrideOpen) { setOverrideReason(''); setOverrideErr(null); } }, [overrideOpen]);
+
+  // B5.3 dialogs
+  const [assignSurveyorOpen,  setAssignSurveyorOpen]  = useState(false);
+  const [submitReportOpen,    setSubmitReportOpen]    = useState(false);
+  const [coinsuranceOpen,     setCoinsuranceOpen]     = useState(false);
+  const [risksEditorOpen,     setRisksEditorOpen]     = useState(false);
   const overrideSurvey = useMutation({
     mutationFn: (reason: string) =>
       apiClient.post(`/api/v1/policies/${id}/survey/override`, { reason }),
@@ -233,7 +243,7 @@ export default function PolicyDetailPage() {
         </TabsList>
 
         {/* ── Details ───────────────────────────────────────────────────── */}
-        <TabsContent value="details" className="mt-4">
+        <TabsContent value="details" className="mt-4 space-y-4">
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader><CardTitle>Policy Details</CardTitle></CardHeader>
@@ -259,6 +269,80 @@ export default function PolicyDetailPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* ── Risk schedule (B5.3d) ─────────────────────────────────── */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Risk Schedule</CardTitle>
+                <Button size="sm" variant="outline" onClick={() => setRisksEditorOpen(true)}>
+                  Edit Risks
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {p.risks.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">
+                  No risks recorded. Click Edit Risks to add line items.
+                </p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b bg-muted/40">
+                    {['Description', 'Reg No.', 'Sum Insured', 'Premium'].map(h => (
+                      <th key={h} className="h-9 px-4 text-left text-xs font-semibold text-muted-foreground">{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {p.risks.map((r, i) => (
+                      <tr key={r.id} className={i < p.risks.length - 1 ? 'border-b' : ''}>
+                        <td className="px-4 py-3">{r.description}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{r.vehicleRegNumber ?? '—'}</td>
+                        <td className="px-4 py-3 font-medium tabular-nums">₦{r.sumInsured.toLocaleString()}</td>
+                        <td className="px-4 py-3 font-medium tabular-nums">₦{r.premium.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── Coinsurance shares (B5.3c) — only relevant for coinsurance policies */}
+          {(p.businessType === 'DIRECT_WITH_COINSURANCE' || p.businessType === 'INWARD_COINSURANCE') && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Coinsurance Participants</CardTitle>
+                  <Button size="sm" variant="outline" onClick={() => setCoinsuranceOpen(true)}>
+                    Edit Shares
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {p.coinsuranceParticipants.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-6 text-center">
+                    No participants recorded yet.
+                  </p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b bg-muted/40">
+                      {['Insurer', 'Share %'].map(h => (
+                        <th key={h} className="h-9 px-4 text-left text-xs font-semibold text-muted-foreground">{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {p.coinsuranceParticipants.map((cp, i) => (
+                        <tr key={cp.id} className={i < p.coinsuranceParticipants.length - 1 ? 'border-b' : ''}>
+                          <td className="px-4 py-3">{cp.insuranceCompanyName}</td>
+                          <td className="px-4 py-3 font-medium tabular-nums">{cp.sharePercentage.toFixed(2)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* ── Document ─────────────────────────────────────────────────── */}
@@ -365,15 +449,28 @@ export default function PolicyDetailPage() {
                   <p className="text-sm text-muted-foreground">
                     No pre-loss survey is required for this policy based on the sum insured threshold.
                   </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="ml-2"
-                    onClick={() => setOverrideOpen(true)}
-                  >
-                    Override Survey Requirement
-                  </Button>
-                  {/* Request Survey Anyway is deferred — needs the surveyor-picker dialog (B5.3). */}
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setAssignSurveyorOpen(true)}>
+                      Request Survey Anyway
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setOverrideOpen(true)}>
+                      Override Survey Requirement
+                    </Button>
+                  </div>
+                </div>
+              ) : !p.survey ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Survey required but no surveyor has been assigned yet.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => setAssignSurveyorOpen(true)}>
+                      Assign Surveyor
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setOverrideOpen(true)}>
+                      Override
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -381,18 +478,31 @@ export default function PolicyDetailPage() {
                   <Row label="Surveyor"       value={p.survey?.surveyorName ?? '—'} />
                   <Row label="Assigned Date"  value={p.survey?.assignedAt?.split('T')[0] ?? '—'} />
                   <Row label="Report Status"  value={p.survey?.status ?? 'Pending submission'} />
-                  <div className="mt-4 flex gap-2">
-                    {/* Upload Survey Report — deferred until file-upload UI lands (B5.3). */}
-                    <Button
-                      size="sm"
-                      disabled={approveSurvey.isPending || p.survey?.status !== 'REPORT_SUBMITTED'}
-                      onClick={() => approveSurvey.mutate()}
-                    >
-                      {approveSurvey.isPending ? 'Approving…' : 'Approve Survey'}
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setOverrideOpen(true)}>
-                      Override
-                    </Button>
+                  <div className="mt-4 flex gap-2 flex-wrap">
+                    {p.survey.status === 'ASSIGNED' && (
+                      <Button size="sm" onClick={() => setSubmitReportOpen(true)}>
+                        Submit Report
+                      </Button>
+                    )}
+                    {p.survey.status === 'REPORT_SUBMITTED' && (
+                      <Button
+                        size="sm"
+                        disabled={approveSurvey.isPending}
+                        onClick={() => approveSurvey.mutate()}
+                      >
+                        {approveSurvey.isPending ? 'Approving…' : 'Approve Survey'}
+                      </Button>
+                    )}
+                    {p.survey.status !== 'APPROVED' && p.survey.status !== 'OVERRIDDEN' && (
+                      <Button size="sm" variant="outline" onClick={() => setOverrideOpen(true)}>
+                        Override
+                      </Button>
+                    )}
+                    {p.survey.status === 'OVERRIDDEN' && (
+                      <Button size="sm" variant="outline" onClick={() => setAssignSurveyorOpen(true)}>
+                        Re-assign Surveyor
+                      </Button>
+                    )}
                   </div>
                 </div>
               )}
@@ -489,6 +599,41 @@ export default function PolicyDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AssignSurveyorDialog
+        open={assignSurveyorOpen}
+        onOpenChange={setAssignSurveyorOpen}
+        policyId={p.id}
+        policyNumber={p.policyNumber ?? p.id}
+        onSuccess={() => setAssignSurveyorOpen(false)}
+      />
+
+      <SubmitSurveyReportDialog
+        open={submitReportOpen}
+        onOpenChange={setSubmitReportOpen}
+        policyId={p.id}
+        policyNumber={p.policyNumber ?? p.id}
+        onSuccess={() => setSubmitReportOpen(false)}
+      />
+
+      <CoinsuranceEditorDialog
+        open={coinsuranceOpen}
+        onOpenChange={setCoinsuranceOpen}
+        policyId={p.id}
+        policyNumber={p.policyNumber ?? p.id}
+        participants={p.coinsuranceParticipants}
+        onSuccess={() => setCoinsuranceOpen(false)}
+      />
+
+      <RisksEditorDialog
+        open={risksEditorOpen}
+        onOpenChange={setRisksEditorOpen}
+        policyId={p.id}
+        policyNumber={p.policyNumber ?? p.id}
+        risks={p.risks}
+        isMotor={p.classOfBusinessName.toLowerCase().includes('motor')}
+        onSuccess={() => setRisksEditorOpen(false)}
+      />
     </div>
   );
 }

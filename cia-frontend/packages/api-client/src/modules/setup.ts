@@ -103,3 +103,17 @@ export interface SurveyorDto {
   createdAt:      string;
   updatedAt?:     string | null;
 }
+
+// Used by policy/coinsurance for the participant picker.
+// Mirrors com.nubeero.cia.setup.org.dto.InsuranceCompanyResponse.
+export interface InsuranceCompanyDto {
+  id:             string;
+  name:           string;
+  rcNumber?:      string | null;
+  naicomLicense?: string | null;
+  address?:       string | null;
+  email?:         string | null;
+  phone?:         string | null;
+  createdAt:      string;
+  updatedAt?:     string | null;
+}
