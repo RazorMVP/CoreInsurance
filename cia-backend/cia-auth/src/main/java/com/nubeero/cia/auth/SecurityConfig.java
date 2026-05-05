@@ -33,9 +33,16 @@ public class SecurityConfig {
                         .requestMatchers(
                                 new AntPathRequestMatcher("/actuator/health"),
                                 new AntPathRequestMatcher("/actuator/info"),
+                                // Swagger UI + OpenAPI specs — the actual mount is
+                                // under /partner/* (see application.yml). The
+                                // /internal/* paths are friendly redirect aliases
+                                // for the internal-api GroupedOpenApi.
                                 new AntPathRequestMatcher("/partner/docs/**"),
+                                new AntPathRequestMatcher("/partner/docs"),
                                 new AntPathRequestMatcher("/partner/swagger-ui/**"),
                                 new AntPathRequestMatcher("/partner/v3/api-docs/**"),
+                                new AntPathRequestMatcher("/internal/docs"),
+                                new AntPathRequestMatcher("/internal/v3/api-docs"),
                                 new AntPathRequestMatcher("/webjars/**"),
                                 new AntPathRequestMatcher("/api/v1/auth/login/failed")
                         ).permitAll()

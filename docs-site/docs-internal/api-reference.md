@@ -8,6 +8,14 @@ sidebar_label: API Reference
 
 All endpoints use the base path `https://api.cia.app/api/v1` in production. For local development use `http://localhost:8090/api/v1`.
 
+**Interactive Swagger UI** (Springdoc, when the backend is running):
+
+- Local: `http://localhost:8090/internal/docs` — Swagger UI with the internal API group pre-selected
+- Local raw OpenAPI JSON: `http://localhost:8090/internal/v3/api-docs`
+- Production (when deployed): `https://api.cia.app/internal/docs`
+
+The same Swagger UI also exposes the `partner-api` group via the dropdown — `/internal/docs` and `/partner/docs` are friendly aliases that simply default-select different groups. The static, build-time-generated OpenAPI JSON is also published with the docs site at [`/internal-api.json`](pathname:///internal-api.json).
+
 **Authentication:** Keycloak JWT Bearer token — `Authorization: Bearer <token>` — required on all endpoints except `POST /api/v1/auth/login/failed`.  
 **Tenant context:** Resolved automatically from the `tenant_id` claim in the JWT. Never passed in the request body.  
 **Response envelope:** `{ "data": ..., "meta": { "page": 0, "size": 20, "totalElements": N }, "errors": [...] }`  
