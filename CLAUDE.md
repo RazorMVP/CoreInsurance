@@ -1012,8 +1012,11 @@ bash cia-frontend/scripts/check-api-wiring.sh
 | `VITE_KEYCLOAK_URL` | Keycloak server URL | `http://localhost:8180` |
 | `VITE_KEYCLOAK_REALM` | Keycloak realm name | `cia-dev` |
 | `VITE_KEYCLOAK_CLIENT_ID` | Keycloak client for back office | `cia-back-office` |
+| `VITE_DEMO_MODE` | When `'true'`, allow production builds to use `DevAuthProvider` (mocked auth) instead of throwing on absent Keycloak config. Set on the public stakeholder-preview Vercel URL only. Renders an amber "Demo" banner above the AppShell. NEVER enable for tenant environments. | unset |
 
 **Local dev note:** When `import.meta.env.DEV` is true, `main.tsx` uses `DevAuthProvider` (mock user, no Keycloak) instead of `AuthProvider`. All `VITE_KEYCLOAK_*` vars are ignored in dev mode.
+
+**Production preview note:** The public Vercel URL (`back-office-blush-six.vercel.app`) runs in demo mode (`VITE_DEMO_MODE=true`). Until real Keycloak + backend infrastructure is deployed, this URL is a frontend-only demo; mutations succeed locally but data does not persist to a real tenant DB.
 
 ---
 
