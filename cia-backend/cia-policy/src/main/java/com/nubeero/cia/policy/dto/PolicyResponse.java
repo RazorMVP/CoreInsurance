@@ -69,6 +69,11 @@ public class PolicyResponse {
 
     private String policyDocumentPath;
 
+    private Instant documentSentAt;
+    private String  documentSentBy;
+    private Instant documentAcknowledgedAt;
+    private String  documentAcknowledgedBy;
+
     private List<PolicyRiskResponse> risks;
     private List<PolicyCoinsuranceParticipantResponse> coinsuranceParticipants;
 

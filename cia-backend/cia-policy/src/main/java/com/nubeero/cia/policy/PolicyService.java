@@ -4,6 +4,7 @@ import com.nubeero.cia.common.audit.AuditAction;
 import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.documents.DocumentGenerationService;
 import com.nubeero.cia.documents.PolicyDocumentContext;
+import com.nubeero.cia.storage.DocumentStorageService;
 import com.nubeero.cia.common.event.PolicyApprovedEvent;
 import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
@@ -64,6 +65,7 @@ public class PolicyService {
     private final WorkflowClient workflowClient;
     private final ApplicationEventPublisher eventPublisher;
     private final DocumentGenerationService documentGenerationService;
+    private final DocumentStorageService    documentStorageService;
 
     // ─── Queries ──────────────────────────────────────────────────────────
 
@@ -509,6 +511,63 @@ public class PolicyService {
         return toResponse(policy);
     }
 
+    // ─── Policy document — send / acknowledge / download ──────────────────
+
+    @Transactional
+    public PolicyResponse sendPolicyDocument(UUID id) {
+        Policy policy = findOrThrow(id);
+        if (policy.getStatus() != PolicyStatus.ACTIVE && policy.getStatus() != PolicyStatus.REINSTATED) {
+            throw new BusinessRuleException("INVALID_POLICY_STATUS",
+                    "Policy document can only be sent for an active policy: " + id);
+        }
+        if (policy.getPolicyDocumentPath() == null || policy.getPolicyDocumentPath().isBlank()) {
+            throw new BusinessRuleException("DOCUMENT_NOT_GENERATED",
+                    "Policy document has not been generated yet for: " + id);
+        }
+        policy.setDocumentSentAt(Instant.now());
+        policy.setDocumentSentBy(currentUserId());
+        auditService.log("Policy", id.toString(), AuditAction.SEND, null, policy);
+        return toResponse(policy);
+    }
+
+    @Transactional
+    public PolicyResponse acknowledgePolicyDocument(UUID id) {
+        Policy policy = findOrThrow(id);
+        if (policy.getStatus() != PolicyStatus.ACTIVE && policy.getStatus() != PolicyStatus.REINSTATED) {
+            throw new BusinessRuleException("INVALID_POLICY_STATUS",
+                    "Policy document acknowledgement requires an active policy: " + id);
+        }
+        if (policy.getDocumentSentAt() == null) {
+            throw new BusinessRuleException("DOCUMENT_NOT_SENT",
+                    "Cannot acknowledge a document that hasn't been sent: " + id);
+        }
+        policy.setDocumentAcknowledgedAt(Instant.now());
+        policy.setDocumentAcknowledgedBy(currentUserId());
+        auditService.log("Policy", id.toString(), AuditAction.UPDATE, null, policy);
+        return toResponse(policy);
+    }
+
+    /**
+     * Stream the generated policy document PDF. The file lives in object
+     * storage at {@link Policy#getPolicyDocumentPath()}; we pass through
+     * the {@link DocumentStorageService} for the actual byte read.
+     */
+    @Transactional(readOnly = true)
+    public PolicyDocumentDownload downloadPolicyDocument(UUID id) {
+        Policy policy = findOrThrow(id);
+        if (policy.getPolicyDocumentPath() == null || policy.getPolicyDocumentPath().isBlank()) {
+            throw new BusinessRuleException("DOCUMENT_NOT_GENERATED",
+                    "Policy document has not been generated yet for: " + id);
+        }
+        java.io.InputStream stream = documentStorageService.download(
+                TenantContext.getTenantId(), policy.getPolicyDocumentPath());
+        String filename = (policy.getPolicyNumber() != null ? policy.getPolicyNumber() : id.toString()) + ".pdf";
+        return new PolicyDocumentDownload(stream, filename);
+    }
+
+    /** Carrier for the controller — keeps Spring response types out of the service. */
+    public record PolicyDocumentDownload(java.io.InputStream content, String filename) {}
+
     private String resolveSectionName(Product product, UUID sectionId) {
         if (sectionId == null) return null;
         return product.getSections().stream()
@@ -768,6 +827,9 @@ public class PolicyService {
                 .naicomCertificatePath(p.getNaicomCertificatePath())
                 .niidRef(p.getNiidRef()).niidUploadedAt(p.getNiidUploadedAt())
                 .policyDocumentPath(p.getPolicyDocumentPath())
+                .documentSentAt(p.getDocumentSentAt()).documentSentBy(p.getDocumentSentBy())
+                .documentAcknowledgedAt(p.getDocumentAcknowledgedAt())
+                .documentAcknowledgedBy(p.getDocumentAcknowledgedBy())
                 .risks(risks).coinsuranceParticipants(participants)
                 .createdAt(p.getCreatedAt()).updatedAt(p.getUpdatedAt())
                 .build();

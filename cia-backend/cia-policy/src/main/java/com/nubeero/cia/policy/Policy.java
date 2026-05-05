@@ -158,6 +158,19 @@ public class Policy extends BaseEntity {
     @Column(name = "policy_document_path", length = 500)
     private String policyDocumentPath;
 
+    // ── Document delivery / acknowledgement ─────────────────────────────
+    @Column(name = "document_sent_at")
+    private Instant documentSentAt;
+
+    @Column(name = "document_sent_by", length = 100)
+    private String documentSentBy;
+
+    @Column(name = "document_acknowledged_at")
+    private Instant documentAcknowledgedAt;
+
+    @Column(name = "document_acknowledged_by", length = 100)
+    private String documentAcknowledgedBy;
+
     // ── Relationships ─────────────────────────────────────────────────────
     @OneToMany(mappedBy = "policy", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orderNo ASC")

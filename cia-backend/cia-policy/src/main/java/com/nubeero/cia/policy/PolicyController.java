@@ -4,10 +4,15 @@ import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.policy.dto.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -130,5 +135,30 @@ public class PolicyController {
             @PathVariable UUID id,
             @Valid @RequestBody java.util.List<PolicyRiskRequest> requests) {
         return ApiResponse.success(service.addRisksBulk(id, requests));
+    }
+
+    // ─── Policy document delivery / acknowledgement / download ────────────
+
+    @PostMapping("/{id}/document/send")
+    @PreAuthorize("hasRole('UNDERWRITING_UPDATE')")
+    public ApiResponse<PolicyResponse> sendPolicyDocument(@PathVariable UUID id) {
+        return ApiResponse.success(service.sendPolicyDocument(id));
+    }
+
+    @PostMapping("/{id}/document/acknowledge")
+    @PreAuthorize("hasRole('UNDERWRITING_UPDATE')")
+    public ApiResponse<PolicyResponse> acknowledgePolicyDocument(@PathVariable UUID id) {
+        return ApiResponse.success(service.acknowledgePolicyDocument(id));
+    }
+
+    @GetMapping("/{id}/document")
+    @PreAuthorize("hasRole('UNDERWRITING_VIEW')")
+    public ResponseEntity<Resource> downloadPolicyDocument(@PathVariable UUID id) {
+        PolicyService.PolicyDocumentDownload download = service.downloadPolicyDocument(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + download.filename() + "\"")
+                .body(new InputStreamResource(download.content()));
     }
 }
