@@ -71,12 +71,13 @@ export default function RisksEditorDialog({
     setRows(rows.filter((_, i) => i !== idx));
   }
 
-  // Bulk replace: hit POST /risks/bulk for new rows. Existing rows that have
-  // changed go through PUT /risks/{riskId}. Removed rows are deferred — the
-  // backend has no DELETE endpoint yet (see follow-ups).
+  // Bulk reconcile order matters: PUT changes first, POST new rows next,
+  // DELETE removed rows last. The backend rejects deleting the last active
+  // risk on a policy, so wholesale replacement (drop all old + add all new)
+  // would fail if DELETE ran before POST.
   const save = useMutation({
     mutationFn: async () => {
-      // PUT existing edited rows
+      // 1. PUT existing edited rows
       for (const r of rows) {
         if (!r.id) continue;
         const original = risks.find(o => o.id === r.id);
@@ -95,7 +96,7 @@ export default function RisksEditorDialog({
           },
         );
       }
-      // POST any new rows in one bulk call
+      // 2. POST any new rows in one bulk call
       const newRows = rows.filter(r => !r.id);
       if (newRows.length > 0) {
         await apiClient.post<{ data: unknown }>(
@@ -105,6 +106,14 @@ export default function RisksEditorDialog({
             sumInsured:       Number(r.sumInsured),
             vehicleRegNumber: r.vehicleRegNumber.trim() || null,
           })),
+        );
+      }
+      // 3. DELETE rows that were dropped from the editor
+      const keptIds = new Set(rows.map(r => r.id).filter((x): x is string => !!x));
+      const removed = risks.filter(o => !keptIds.has(o.id));
+      for (const r of removed) {
+        await apiClient.delete<{ data: unknown }>(
+          `/api/v1/policies/${policyId}/risks/${r.id}`,
         );
       }
     },

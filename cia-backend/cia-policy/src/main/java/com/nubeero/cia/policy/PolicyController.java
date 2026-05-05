@@ -138,6 +138,14 @@ public class PolicyController {
         return ApiResponse.success(service.addRisksBulk(id, requests));
     }
 
+    @DeleteMapping("/{id}/risks/{riskId}")
+    @PreAuthorize("hasRole('UNDERWRITING_UPDATE')")
+    public ApiResponse<PolicyResponse> deleteRisk(
+            @PathVariable UUID id,
+            @PathVariable UUID riskId) {
+        return ApiResponse.success(service.deleteRisk(id, riskId));
+    }
+
     @PutMapping("/{id}/coinsurance")
     @PreAuthorize("hasRole('UNDERWRITING_UPDATE')")
     public ApiResponse<PolicyResponse> updateCoinsurance(

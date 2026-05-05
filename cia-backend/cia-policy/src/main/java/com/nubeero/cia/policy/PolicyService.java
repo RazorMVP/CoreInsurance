@@ -474,6 +474,35 @@ public class PolicyService {
     }
 
     @Transactional
+    public PolicyResponse deleteRisk(UUID policyId, UUID riskId) {
+        Policy policy = findOrThrow(policyId);
+        if (policy.getStatus() != PolicyStatus.DRAFT) {
+            throw new BusinessRuleException("INVALID_POLICY_STATUS",
+                    "Risks can only be removed while the policy is in DRAFT");
+        }
+        PolicyRisk risk = policy.getRisks().stream()
+                .filter(r -> r.getId() != null && r.getId().equals(riskId) && r.getDeletedAt() == null)
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("PolicyRisk", riskId.toString()));
+
+        long activeRisks = policy.getRisks().stream()
+                .filter(r -> r.getDeletedAt() == null)
+                .count();
+        if (activeRisks <= 1) {
+            throw new BusinessRuleException("LAST_RISK",
+                    "Cannot remove the last risk on a policy — every policy must keep at least one risk item");
+        }
+
+        Policy beforeSnapshot = policy;
+        risk.softDelete();
+
+        recomputePolicyTotals(policy);
+
+        auditService.log("PolicyRisk", riskId.toString(), AuditAction.DELETE, beforeSnapshot, policy);
+        return toResponse(policy);
+    }
+
+    @Transactional
     public PolicyResponse addRisksBulk(UUID policyId, List<PolicyRiskRequest> requests) {
         Policy policy = findOrThrow(policyId);
         if (policy.getStatus() != PolicyStatus.DRAFT) {
