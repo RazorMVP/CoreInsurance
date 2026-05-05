@@ -12,6 +12,10 @@ public record RegisterClaimRequest(
         @NotNull LocalDate incidentDate,
         @NotNull LocalDate reportedDate,
         String lossLocation,
+        String natureOfLoss,
+        String causeOfLoss,
+        String contactName,
+        String contactPhone,
         @NotBlank String description,
         BigDecimal estimatedLoss,
         String notes

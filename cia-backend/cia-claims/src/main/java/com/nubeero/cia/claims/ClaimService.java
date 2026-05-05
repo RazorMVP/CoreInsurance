@@ -97,6 +97,10 @@ public class ClaimService {
                 .incidentDate(req.incidentDate())
                 .reportedDate(req.reportedDate())
                 .lossLocation(req.lossLocation())
+                .natureOfLoss(req.natureOfLoss())
+                .causeOfLoss(req.causeOfLoss())
+                .contactName(req.contactName())
+                .contactPhone(req.contactPhone())
                 .description(req.description())
                 .estimatedLoss(req.estimatedLoss())
                 .notes(req.notes())
@@ -111,10 +115,14 @@ public class ClaimService {
     public Claim updateDetails(UUID id, UpdateClaimRequest req) {
         Claim claim = findOrThrow(id);
         requireDraftOrInvestigation(claim);
-        if (req.lossLocation() != null) claim.setLossLocation(req.lossLocation());
-        if (req.description() != null) claim.setDescription(req.description());
+        if (req.lossLocation()  != null) claim.setLossLocation(req.lossLocation());
+        if (req.natureOfLoss()  != null) claim.setNatureOfLoss(req.natureOfLoss());
+        if (req.causeOfLoss()   != null) claim.setCauseOfLoss(req.causeOfLoss());
+        if (req.contactName()   != null) claim.setContactName(req.contactName());
+        if (req.contactPhone()  != null) claim.setContactPhone(req.contactPhone());
+        if (req.description()   != null) claim.setDescription(req.description());
         if (req.estimatedLoss() != null) claim.setEstimatedLoss(req.estimatedLoss());
-        if (req.notes() != null) claim.setNotes(req.notes());
+        if (req.notes()         != null) claim.setNotes(req.notes());
         return claimRepository.save(claim);
     }
 
@@ -287,6 +295,48 @@ public class ClaimService {
         claim.setWithdrawnBy(currentUser());
         claim.setWithdrawnAt(Instant.now());
         claim.setWithdrawalReason(reason);
+        return claimRepository.save(claim);
+    }
+
+    // ─── DV — generate / execute ──────────────────────────────────────────
+    //
+    // The DV PDF itself is rendered at approval time (see approve() above);
+    // these two actions capture the *business* DV state — what type of DV
+    // it is, the payable amount (defaults to approvedAmount), and whether
+    // it has been formally executed (e.g. signed by the insured / posted
+    // through the online portal).
+
+    @Transactional
+    public Claim generateDv(UUID id, com.nubeero.cia.claims.dto.GenerateDvRequest req) {
+        Claim claim = findOrThrow(id);
+        if (claim.getStatus() != ClaimStatus.APPROVED && claim.getStatus() != ClaimStatus.SETTLED) {
+            throw new BusinessRuleException("INVALID_STATUS",
+                    "DV can only be generated for APPROVED or SETTLED claims");
+        }
+        claim.setDvType(req.dvType());
+        if (req.amount() != null) {
+            claim.setDvAmount(req.amount());
+        } else if (claim.getDvAmount() == null) {
+            claim.setDvAmount(claim.getApprovedAmount());
+        }
+        if (claim.getDvGeneratedAt() == null) {
+            claim.setDvGeneratedAt(Instant.now());
+        }
+        return claimRepository.save(claim);
+    }
+
+    @Transactional
+    public Claim executeDv(UUID id) {
+        Claim claim = findOrThrow(id);
+        if (claim.getDvType() == null || claim.getDvGeneratedAt() == null) {
+            throw new BusinessRuleException("DV_NOT_GENERATED",
+                    "Cannot execute a DV that has not been generated");
+        }
+        if (claim.getDvExecutedAt() != null) {
+            throw new BusinessRuleException("DV_ALREADY_EXECUTED",
+                    "DV was already executed at " + claim.getDvExecutedAt());
+        }
+        claim.setDvExecutedAt(Instant.now());
         return claimRepository.save(claim);
     }
 

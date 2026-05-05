@@ -78,6 +78,18 @@ public class Claim extends BaseEntity {
     @Column(name = "loss_location", length = 500)
     private String lossLocation;
 
+    @Column(name = "nature_of_loss", length = 100)
+    private String natureOfLoss;
+
+    @Column(name = "cause_of_loss", length = 100)
+    private String causeOfLoss;
+
+    @Column(name = "contact_name", length = 200)
+    private String contactName;
+
+    @Column(name = "contact_phone", length = 50)
+    private String contactPhone;
+
     @Column(nullable = false, columnDefinition = "TEXT")
     private String description;
 
@@ -143,7 +155,20 @@ public class Claim extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
-    // ── Document ─────────────────────────────────────────────────────────
+    // ── Discharge Voucher ────────────────────────────────────────────────
+    @Enumerated(EnumType.STRING)
+    @Column(name = "dv_type", length = 20)
+    private DvType dvType;
+
+    @Column(name = "dv_amount", precision = 18, scale = 2)
+    private BigDecimal dvAmount;
+
+    @Column(name = "dv_generated_at")
+    private Instant dvGeneratedAt;
+
+    @Column(name = "dv_executed_at")
+    private Instant dvExecutedAt;
+
     @Column(name = "dv_document_path", length = 500)
     private String dvDocumentPath;
 

@@ -1,6 +1,7 @@
 package com.nubeero.cia.claims.dto;
 
 import com.nubeero.cia.claims.ClaimStatus;
+import com.nubeero.cia.claims.DvType;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -24,6 +25,10 @@ public record ClaimResponse(
         LocalDate incidentDate,
         LocalDate reportedDate,
         String lossLocation,
+        String natureOfLoss,
+        String causeOfLoss,
+        String contactName,
+        String contactPhone,
         String description,
         BigDecimal estimatedLoss,
         BigDecimal reserveAmount,
@@ -41,6 +46,11 @@ public record ClaimResponse(
         Instant withdrawnAt,
         String withdrawalReason,
         Instant settledAt,
+        DvType dvType,
+        BigDecimal dvAmount,
+        Instant dvGeneratedAt,
+        Instant dvExecutedAt,
+        String dvDocumentPath,
         String notes,
         Instant createdAt
 ) {}

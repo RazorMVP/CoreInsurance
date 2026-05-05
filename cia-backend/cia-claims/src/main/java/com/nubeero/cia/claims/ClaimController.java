@@ -121,6 +121,20 @@ public class ClaimController {
         return ApiResponse.success(toResponse(service.markSettled(id)));
     }
 
+    @PostMapping("/{id}/dv/generate")
+    @PreAuthorize("hasRole('CLAIMS_APPROVE')")
+    public ApiResponse<ClaimResponse> generateDv(
+            @PathVariable UUID id,
+            @Valid @RequestBody GenerateDvRequest req) {
+        return ApiResponse.success(toResponse(service.generateDv(id, req)));
+    }
+
+    @PostMapping("/{id}/dv/execute")
+    @PreAuthorize("hasRole('CLAIMS_APPROVE')")
+    public ApiResponse<ClaimResponse> executeDv(@PathVariable UUID id) {
+        return ApiResponse.success(toResponse(service.executeDv(id)));
+    }
+
     @GetMapping("/{id}/reserves")
     @PreAuthorize("hasRole('CLAIMS_VIEW')")
     public ApiResponse<Page<ClaimReserveResponse>> reserves(
@@ -214,14 +228,20 @@ public class ClaimController {
                 c.getProductName(), c.getClassOfBusinessName(),
                 c.getBrokerId(), c.getBrokerName(),
                 c.getIncidentDate(), c.getReportedDate(),
-                c.getLossLocation(), c.getDescription(),
+                c.getLossLocation(),
+                c.getNatureOfLoss(), c.getCauseOfLoss(),
+                c.getContactName(), c.getContactPhone(),
+                c.getDescription(),
                 c.getEstimatedLoss(), c.getReserveAmount(), c.getApprovedAmount(),
                 c.getCurrencyCode(),
                 c.getSurveyorId(), c.getSurveyorName(), c.getSurveyorAssignedAt(),
                 c.getApprovedBy(), c.getApprovedAt(),
                 c.getRejectedBy(), c.getRejectedAt(), c.getRejectionReason(),
                 c.getWithdrawnBy(), c.getWithdrawnAt(), c.getWithdrawalReason(),
-                c.getSettledAt(), c.getNotes(), c.getCreatedAt()
+                c.getSettledAt(),
+                c.getDvType(), c.getDvAmount(),
+                c.getDvGeneratedAt(), c.getDvExecutedAt(), c.getDvDocumentPath(),
+                c.getNotes(), c.getCreatedAt()
         );
     }
 }
