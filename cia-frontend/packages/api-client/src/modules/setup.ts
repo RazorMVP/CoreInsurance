@@ -88,3 +88,18 @@ export interface CurrencyDto {
   code:   string;
   symbol: string;
 }
+
+// Used by claims/inspection + policy/survey for the surveyor picker.
+// Mirrors com.nubeero.cia.setup.org.dto.SurveyorResponse.
+export type SurveyorType = 'INTERNAL' | 'EXTERNAL';
+
+export interface SurveyorDto {
+  id:             string;
+  name:           string;
+  type:           SurveyorType;
+  licenseNumber?: string | null;
+  email?:         string | null;
+  phone?:         string | null;
+  createdAt:      string;
+  updatedAt?:     string | null;
+}

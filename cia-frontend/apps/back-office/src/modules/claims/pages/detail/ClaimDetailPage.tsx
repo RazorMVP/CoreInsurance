@@ -28,7 +28,9 @@ import SubmitClaimDialog    from './SubmitClaimDialog';
 import CancelClaimDialog    from './CancelClaimDialog';
 import AddReserveDialog     from './AddReserveDialog';
 import AddExpenseDialog     from './AddExpenseDialog';
-import UploadDocumentDialog from './UploadDocumentDialog';
+import UploadDocumentDialog          from './UploadDocumentDialog';
+import AssignInspectorDialog         from './AssignInspectorDialog';
+import SubmitInspectionReportDialog  from './SubmitInspectionReportDialog';
 
 // allow-mock: fallback while useQuery is in flight or for unknown ids
 const fallbackClaim: ClaimDto = {
@@ -216,6 +218,8 @@ export default function ClaimDetailPage() {
   const [addReserveOpen,      setAddReserveOpen]      = useState(false);
   const [addExpenseOpen,      setAddExpenseOpen]      = useState(false);
   const [uploadOpen,          setUploadOpen]          = useState(false);
+  const [assignInspectOpen,   setAssignInspectOpen]   = useState(false);
+  const [submitReportOpen,    setSubmitReportOpen]    = useState(false);
   const [declineInspectOpen,  setDeclineInspectOpen]  = useState(false);
   const [approveInspectOpen,  setApproveInspectOpen]  = useState(false);
   const [overrideInspectOpen, setOverrideInspectOpen] = useState(false);
@@ -496,8 +500,8 @@ export default function ClaimDetailPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Loss Inspection</CardTitle>
-                <Badge variant={c.surveyorId ? 'active' : 'draft'} className="text-[10px]">
-                  {c.surveyorId ? 'Assigned' : 'Not assigned'}
+                <Badge variant={inspection || c.surveyorId ? 'active' : 'draft'} className="text-[10px]">
+                  {inspection || c.surveyorId ? 'Assigned' : 'Not assigned'}
                 </Badge>
               </div>
             </CardHeader>
@@ -510,7 +514,7 @@ export default function ClaimDetailPage() {
                   </p>
                 </div>
               )}
-              {c.surveyorId ? (
+              {inspection || c.surveyorId ? (
                 <>
                   <Row label="Surveyor"      value={inspection?.surveyorName ?? c.surveyorName ?? '—'} />
                   <Row label="Type"          value={inspection?.surveyorType ?? 'External Surveyor'} />
@@ -532,6 +536,11 @@ export default function ClaimDetailPage() {
                     }
                   />
                   <div className="flex gap-2 mt-4 flex-wrap">
+                    {(inspection?.status === 'ASSIGNED' || inspection?.status === 'DECLINED') && (
+                      <Button size="sm" onClick={() => setSubmitReportOpen(true)}>
+                        Submit Report
+                      </Button>
+                    )}
                     {inspection?.status === 'REPORT_SUBMITTED' && (
                       <Button size="sm" onClick={() => setApproveInspectOpen(true)}>
                         Approve Inspection Report
@@ -552,6 +561,11 @@ export default function ClaimDetailPage() {
                         Override Requirement
                       </Button>
                     )}
+                    {(inspection?.status === 'DECLINED') && (
+                      <Button size="sm" variant="outline" onClick={() => setAssignInspectOpen(true)}>
+                        Re-assign Inspector
+                      </Button>
+                    )}
                     {(surveyDocsQuery.data?.length ?? 0) > 0 && (
                       <Button size="sm" variant="outline" onClick={() => setDownloadReportOpen(true)}>
                         Download Report
@@ -561,11 +575,10 @@ export default function ClaimDetailPage() {
                 </>
               ) : (
                 <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">No surveyor assigned yet.</p>
-                  <div className="flex gap-2">
-                    <Button size="sm">Assign Internal Surveyor</Button>
-                    <Button size="sm" variant="outline">Assign External Surveyor</Button>
-                  </div>
+                  <p className="text-sm text-muted-foreground">No inspector assigned yet.</p>
+                  <Button size="sm" onClick={() => setAssignInspectOpen(true)}>
+                    Assign Inspector
+                  </Button>
                 </div>
               )}
             </CardContent>
@@ -709,6 +722,22 @@ export default function ClaimDetailPage() {
         claimId={c.id}
         documentName="Claim Document"
         onSuccess={() => setUploadOpen(false)}
+      />
+
+      <AssignInspectorDialog
+        open={assignInspectOpen}
+        onOpenChange={setAssignInspectOpen}
+        claimId={c.id}
+        claimNumber={c.claimNumber}
+        onSuccess={() => setAssignInspectOpen(false)}
+      />
+
+      <SubmitInspectionReportDialog
+        open={submitReportOpen}
+        onOpenChange={setSubmitReportOpen}
+        claimId={c.id}
+        claimNumber={c.claimNumber}
+        onSuccess={() => setSubmitReportOpen(false)}
       />
 
       {/* ── Approve inspection report ─────────────────────────────────── */}
