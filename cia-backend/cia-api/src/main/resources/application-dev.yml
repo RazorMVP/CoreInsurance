@@ -1,5 +1,16 @@
 spring:
   jpa:
+    # Override the default `validate` from application.yml. The PII-encrypted
+    # bytea columns introduced in V24 (customer.address, customer.id_document_url,
+    # customer_directors.id_number, customer_directors.id_document_url) are
+    # mapped on the entity as `String` with `@ColumnTransformer` + a
+    # `columnDefinition = "bytea"` — but Hibernate's schema validator's type
+    # inference doesn't honour columnDefinition and reports a varchar/bytea
+    # mismatch. Schema validation isn't useful in dev anyway since Flyway
+    # owns the DDL, so disable it here. See cia-log open follow-ups for the
+    # proper entity-mapping fix.
+    hibernate:
+      ddl-auto: none
     show-sql: true
     properties:
       hibernate:
