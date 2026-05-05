@@ -4,7 +4,7 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
-## 2026-05-04 — Session 53: Sequence B closed + B5 cia-policy wiring + audit cleanup (b/c/d)
+## 2026-05-04 / 2026-05-05 — Session 53: Sequence B closed end-to-end (G3–G8 + B1–B9, including richer ClaimDetailResponse, inspection workflow + UI, and cia-policy survey/coinsurance/risks editors)
 
 ### Context
 

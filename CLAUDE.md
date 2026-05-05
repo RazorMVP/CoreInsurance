@@ -1093,14 +1093,14 @@ bash cia-frontend/scripts/check-api-wiring.sh
 |---|---|---|
 | `[x]` | Convert Quote to Policy | CreatePolicySheet "From Approved Quote" tab — quote select, business type, payment terms |
 | `[x]` | Create Policy Without Quote | CreatePolicySheet "Direct Entry" tab — customer, product, dates, SI, rate, live premium |
-| `[x]` | Risk Details | Risk description field in CreatePolicySheet; mock risk on detail page |
+| `[x]` | Risk Details | Risk description field in CreatePolicySheet; PolicyDetailPage Risk Schedule card with RisksEditorDialog (Sheet) — PUT/POST/DELETE reconciliation, sum-insured aggregation, motor reg-no column gates on motor classes (B5.3d + B9) |
 | `[x]` | Policy Specifications | PolicyDetailPage Document tab — clause bank (add/edit/remove), template editor button, document status |
 | `[x]` | Payment + Commission | PolicyDetailPage Financial tab — debit note, commission, payment status, Post Receipt button |
-| `[x]` | Coinsurance | Business type select includes Direct with Coinsurance + Inward Coinsurance options |
+| `[x]` | Coinsurance | Business type select includes Direct with Coinsurance + Inward Coinsurance options; PolicyDetailPage Coinsurance Participants card with CoinsuranceEditorDialog (Sheet) — insurer picker + per-row share %, must sum to 100% (B5.3c) |
 | `[x]` | Policy Approval Flow | Submit / Approve / Reject buttons conditional on status; status badge throughout |
 | `[x]` | Policy Document | Document tab: Send to Insured + Acknowledge Receipt buttons; PDF download |
 | `[x]` | Debit Note | Financial tab shows debit note number, amount, commission, payment status |
-| `[x]` | Survey Process | Survey tab: threshold-conditional display, assign surveyor, upload report, override, approve |
+| `[x]` | Survey Process | Survey tab: threshold-conditional display, AssignSurveyorDialog + SubmitSurveyReportDialog (B5.3a/b) wired to /survey/{assign,report,approve,override}; full lifecycle CTA gating (ASSIGNED → REPORT_SUBMITTED → APPROVED / OVERRIDDEN) |
 | `[x]` | Policy Details Page | PolicyDetailPage 5-tab layout with full policy info, breadcrumb, action buttons |
 | `[x]` | NAICOM / NIID Upload | NAICOM tab: UID display (or PENDING badge), upload log, manual trigger button; NIID for motor/marine |
 
@@ -1138,12 +1138,12 @@ bash cia-frontend/scripts/check-api-wiring.sh
 | `[x]` | Claim Registration | Full form with validation; status flow: REGISTERED → PROCESSING → PENDING_APPROVAL → APPROVED → SETTLED |
 | `[x]` | Bulk Claim Registration | BulkClaimPage — CSV drag-and-drop, validation results with error row detail, template download |
 | `[x]` | Claim Dashboard | ClaimsListPage — StatCard row: Open Claims, Total Reserve (₦), Total Paid YTD |
-| `[x]` | Claim Detail | ClaimDetailPage 5-tab layout (Summary, Processing, Documents, Inspection, DV); missing docs badge on header + Processing tab |
-| `[x]` | Claim Processing | Processing tab: Reserves table (add/total), Expenses table (approve/reject), Comments feed (add) |
-| `[x]` | Loss Inspection | Inspection tab: assign internal/external surveyor, approve report, override requirement |
-| `[x]` | Claim Approval | Submit/Approve/Reject buttons conditional on status; status badge + missing docs count in header |
-| `[x]` | DV Generation | DV tab: Own Damage / Third Party / Ex-gratia type selection cards; DV amount input; Generate DV button |
-| `[x]` | DV Execution | Execute DV button (Online Portal), Download DV, process after execution flow |
+| `[x]` | Claim Detail | ClaimDetailPage 5-tab layout (Summary, Processing, Documents, Inspection, DV); detail rendered from real backend ClaimDto (B7) — natureOfLoss / causeOfLoss / contactName / contactPhone / DV state all from entity columns, not MockClaim |
+| `[x]` | Claim Processing | Processing tab: Reserves table (add/total), Expenses table (approve/reject). Comments feed deferred — needs ClaimComment 1:many aggregate (separate slice) |
+| `[x]` | Loss Inspection | Inspection tab driven by live ClaimInspection record (B6); AssignInspectorDialog + SubmitInspectionReportDialog (B8) + Approve/Decline/Override + zip bundle download; full lifecycle CTA gating |
+| `[x]` | Claim Approval | Submit/Approve/Reject buttons conditional on status; status badge in header (required-docs checklist deferred — see follow-ups in cia-log) |
+| `[x]` | DV Generation | DV tab: Own Damage / Third Party / Ex-gratia type selection cards; DV amount input (defaults to approvedAmount); wired to POST /api/v1/claims/{id}/dv/generate (B7) |
+| `[x]` | DV Execution | Execute DV button wired to POST /api/v1/claims/{id}/dv/execute (B7); status row shows executed-on date; Download DV gated on dvDocumentPath |
 
 ---
 

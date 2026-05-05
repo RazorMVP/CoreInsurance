@@ -314,14 +314,20 @@ Quotes support multiple per-item loadings and discounts, plus quote-level adjust
 ## Data Model Highlights
 
 ### Core entities (per tenant schema)
-`customers`, `customer_directors`, `customer_documents`, `customer_number_format`, `policies`, `quotes`, `endorsements`, `claims`, `claim_reserves`, `claim_expenses`, `reinsurance_treaties`, `ri_allocations`, `debit_notes`, `credit_notes`, `receipts`, `payments`, `products`, `classes_of_business`, `brokers`, `users`, `access_groups`, `approval_groups`, `document_templates`, `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`, `audit_log`, `login_audit_log`, `audit_alert`, `audit_alert_config`, `report_definition`, `report_pin`, `report_access_policy`, `policy_number_formats`, `quote_discount_types`, `quote_loading_types`, `quote_config`.
+`customers`, `customer_directors`, `customer_documents`, `customer_number_format`, `policies`, `policy_risks`, `policy_coinsurance_participants`, `policy_surveys`, `quotes`, `endorsements`, `claims`, `claim_reserves`, `claim_expenses`, `claim_documents`, `claim_inspections`, `reinsurance_treaties`, `ri_allocations`, `ri_fac_covers`, `debit_notes`, `credit_notes`, `receipts`, `payments`, `products`, `classes_of_business`, `brokers`, `users`, `access_groups`, `approval_groups`, `document_templates`, `partner_apps`, `webhook_registrations`, `webhook_delivery_logs`, `audit_log`, `login_audit_log`, `audit_alert`, `audit_alert_config`, `report_definition`, `report_pin`, `report_access_policy`, `policy_number_formats`, `quote_discount_types`, `quote_loading_types`, `quote_config`.
 
 ### Key relationships
 - `policies` → `customers` (many-to-one)
 - `policies` → `products` → `classes_of_business`
+- `policy_risks` → `policies` (one-to-many; soft-delete; DRAFT-only mutability)
+- `policy_coinsurance_participants` → `policies` (one-to-many; shares must sum to 100%)
+- `policy_surveys` → `policies` (one-to-one via UNIQUE policy_id; ASSIGNED → REPORT_SUBMITTED → APPROVED | OVERRIDDEN)
 - `claims` → `policies`
+- `claim_inspections` → `claims` (one-to-one via UNIQUE claim_id; ASSIGNED → REPORT_SUBMITTED → APPROVED | DECLINED | OVERRIDDEN — note DECLINED state vs PolicySurvey)
+- `claim_documents` → `claims` (one-to-many; SURVEY_REPORT subset zip-bundled at /inspection/documents/bundle)
 - `endorsements` → `policies`
 - `ri_allocations` → `policies` → `reinsurance_treaties`
+- `ri_fac_covers` → `policies` (separate aggregate for facultative inward + outward)
 - `debit_notes` → `policies` (generated on approval)
 - `credit_notes` → `endorsements` | `claims` | `commissions`
 - `receipts` → `debit_notes`
