@@ -6,91 +6,82 @@ import {
 } from '@cia/ui';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type ApiError, type ApiResponse } from '@cia/api-client';
+import {
+  apiClient,
+  AuditAlertDtoSchema, pageSchema,
+  type ApiError, type ApiResponse,
+  type AlertType, type AuditAlertDto,
+} from '@cia/api-client';
 import AlertConfigDialog from './AlertConfigDialog';
 
 interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
 
-type AlertType     = 'FAILED_LOGINS' | 'BULK_DELETE' | 'OFF_HOURS_ACTIVITY' | 'LARGE_FINANCIAL_APPROVAL';
-type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-type AlertStatus   = 'OPEN' | 'ACKNOWLEDGED';
-
-interface AuditAlert {
-  id:              string;
-  alertType:       AlertType;
-  severity:        AlertSeverity;
-  description:     string;
-  detectedAt:      string;
-  status:          AlertStatus;
-  acknowledgedAt?: string;
-  acknowledgedBy?: string;
-  entityRef?:      string;
-}
-
 // allow-mock: fallback while /audit/alerts is in flight
-const mockAlerts: AuditAlert[] = [
+const mockAlerts: AuditAlertDto[] = [
   {
-    id: 'alt1', alertType: 'FAILED_LOGINS', severity: 'HIGH',
+    id: 'alt1', alertType: 'FAILED_LOGIN', severity: 'HIGH',
     description: '3 consecutive failed login attempts from IP 154.113.22.9 for user emeka.eze@nubeero.com.',
-    detectedAt: '2026-04-24T08:23:09Z', status: 'OPEN', entityRef: 'Emeka Eze',
+    triggeredAt: '2026-04-24T08:23:09Z', acknowledged: false,
+    userName: 'Emeka Eze',
   },
   {
     id: 'alt2', alertType: 'LARGE_FINANCIAL_APPROVAL', severity: 'HIGH',
     description: 'Claim DV PAY-2026-00002 approved for ₦225,000,000 — exceeds the ₦50M threshold.',
-    detectedAt: '2026-03-18T16:50:00Z', status: 'OPEN', entityRef: 'PAY-2026-00002',
+    triggeredAt: '2026-03-18T16:50:00Z', acknowledged: false,
+    userName: 'PAY-2026-00002',
   },
   {
     id: 'alt3', alertType: 'OFF_HOURS_ACTIVITY', severity: 'MEDIUM',
     description: 'User chukwudi.obi@nubeero.com logged in at 21:44 (outside business hours 09:00–17:00).',
-    detectedAt: '2026-04-22T21:44:10Z', status: 'OPEN', entityRef: 'Chukwudi Obi',
+    triggeredAt: '2026-04-22T21:44:10Z', acknowledged: false,
+    userName: 'Chukwudi Obi',
   },
   {
-    id: 'alt4', alertType: 'FAILED_LOGINS', severity: 'MEDIUM',
+    id: 'alt4', alertType: 'FAILED_LOGIN', severity: 'MEDIUM',
     description: '2 failed login attempts from a new IP (105.112.88.1) for user ngozi.adeyemi@nubeero.com.',
-    detectedAt: '2026-04-21T14:11:00Z', status: 'ACKNOWLEDGED',
+    triggeredAt: '2026-04-21T14:11:00Z', acknowledged: true,
     acknowledgedAt: '2026-04-21T14:30:00Z', acknowledgedBy: 'Akinwale Nubeero',
-    entityRef: 'Ngozi Adeyemi',
+    userName: 'Ngozi Adeyemi',
   },
   {
     id: 'alt5', alertType: 'BULK_DELETE', severity: 'CRITICAL',
     description: '7 customer records deleted within 5 minutes by user adaeze@nubeero.com.',
-    detectedAt: '2026-04-20T11:05:00Z', status: 'ACKNOWLEDGED',
+    triggeredAt: '2026-04-20T11:05:00Z', acknowledged: true,
     acknowledgedAt: '2026-04-20T11:15:00Z', acknowledgedBy: 'Akinwale Nubeero',
-    entityRef: 'Adaeze Nwosu',
+    userName: 'Adaeze Nwosu',
   },
 ];
 
 const ALERT_TYPE_LABEL: Record<AlertType, string> = {
-  FAILED_LOGINS:            'Failed Logins',
+  FAILED_LOGIN:             'Failed Logins',
   BULK_DELETE:              'Bulk Delete',
   OFF_HOURS_ACTIVITY:       'Off-Hours Activity',
   LARGE_FINANCIAL_APPROVAL: 'Large Approval',
 };
 
-const SEVERITY_VARIANT: Record<AlertSeverity, 'active'|'pending'|'rejected'|'draft'> = {
+// Backend severity is a free-form string; the lookup falls back to 'draft'
+// for anything unrecognised so a new severity value doesn't crash rendering.
+const SEVERITY_VARIANT: Record<string, 'active' | 'pending' | 'rejected' | 'draft'> = {
   LOW:      'draft',
   MEDIUM:   'pending',
   HIGH:     'rejected',
   CRITICAL: 'rejected',
 };
 
-const STATUS_VARIANT: Record<AlertStatus, 'active'|'draft'> = {
-  OPEN:         'draft',
-  ACKNOWLEDGED: 'active',
-};
-
 export default function AlertsTab() {
   const queryClient = useQueryClient();
-  const alertsQuery = useQuery<AuditAlert[]>({
+  const alertsQuery = useQuery<AuditAlertDto[]>({
     queryKey: ['audit', 'alerts'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: AuditAlert[] }>('/api/v1/audit/alerts');
-      return res.data.data;
+      // Backend serves Page<AuditAlertResponse>; unwrap content[].
+      const res = await apiClient.get('/api/v1/audit/alerts');
+      const page = pageSchema(AuditAlertDtoSchema).parse(res.data.data);
+      return page.content;
     },
   });
   const alerts = alertsQuery.data ?? mockAlerts;
   const [configOpen,         setConfigOpen]         = useState(false);
-  const [acknowledgeTarget,  setAcknowledgeTarget]  = useState<AuditAlert | null>(null);
+  const [acknowledgeTarget,  setAcknowledgeTarget]  = useState<AuditAlertDto | null>(null);
 
   const acknowledge = useMutation({
     mutationFn: async (id: string) => {
@@ -114,11 +105,11 @@ export default function AlertsTab() {
     },
   });
 
-  const openAlerts = alerts.filter(a => a.status === 'OPEN').length;
+  const openAlerts = alerts.filter(a => !a.acknowledged).length;
 
-  const columns: ColumnDef<AuditAlert>[] = [
+  const columns: ColumnDef<AuditAlertDto>[] = [
     {
-      accessorKey: 'detectedAt',
+      accessorKey: 'triggeredAt',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Detected" />,
       cell: ({ getValue }) => (
         <span className="font-mono text-xs text-muted-foreground whitespace-nowrap">
@@ -129,16 +120,17 @@ export default function AlertsTab() {
     {
       accessorKey: 'alertType',
       header: 'Alert Type',
-      cell: ({ getValue }) => (
-        <span className="text-sm font-medium text-foreground">{ALERT_TYPE_LABEL[getValue() as AlertType]}</span>
-      ),
+      cell: ({ getValue }) => {
+        const t = getValue() as AlertType;
+        return <span className="text-sm font-medium text-foreground">{ALERT_TYPE_LABEL[t] ?? t}</span>;
+      },
     },
     {
       accessorKey: 'severity',
       header: 'Severity',
       cell: ({ getValue }) => {
-        const s = getValue() as AlertSeverity;
-        return <Badge variant={SEVERITY_VARIANT[s]} className="text-[10px]">{s}</Badge>;
+        const s = getValue() as string;
+        return <Badge variant={SEVERITY_VARIANT[s] ?? 'draft'} className="text-[10px]">{s}</Badge>;
       },
     },
     {
@@ -149,14 +141,17 @@ export default function AlertsTab() {
       ),
     },
     {
-      accessorKey: 'status',
+      id: 'status',
       header: 'Status',
+      accessorFn: (row) => row.acknowledged ? 'ACKNOWLEDGED' : 'OPEN',
       cell: ({ row }) => {
-        const s = row.original.status;
+        const ack = row.original.acknowledged;
         return (
           <div>
-            <Badge variant={STATUS_VARIANT[s]} className="text-[10px]">{s.toLowerCase()}</Badge>
-            {s === 'ACKNOWLEDGED' && row.original.acknowledgedBy && (
+            <Badge variant={ack ? 'active' : 'draft'} className="text-[10px]">
+              {ack ? 'acknowledged' : 'open'}
+            </Badge>
+            {ack && row.original.acknowledgedBy && (
               <p className="text-xs text-muted-foreground mt-0.5">by {row.original.acknowledgedBy}</p>
             )}
           </div>
@@ -167,11 +162,11 @@ export default function AlertsTab() {
       id: 'actions',
       cell: ({ row }) => (
         <DataTableRowActions
-          row={row as Row<AuditAlert>}
+          row={row as Row<AuditAlertDto>}
           actions={[
-            ...(row.original.status === 'OPEN' ? [{
+            ...(!row.original.acknowledged ? [{
               label: 'Acknowledge',
-              onClick: (r: Row<AuditAlert>) => setAcknowledgeTarget(r.original),
+              onClick: (r: Row<AuditAlertDto>) => setAcknowledgeTarget(r.original),
             }] : []),
             { label: 'View details', onClick: () => {} },
           ]}
@@ -217,15 +212,15 @@ export default function AlertsTab() {
         {/* Alert type summary */}
         <PageSection title="Alert Thresholds" description="Currently configured detection rules.">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[
-              { label: 'Failed Login Trigger', value: '≥ 3 attempts',      type: 'FAILED_LOGINS' },
-              { label: 'Bulk Delete Trigger',  value: '≥ 5 in 5 minutes',  type: 'BULK_DELETE' },
-              { label: 'Off-Hours Window',     value: 'Outside 09:00–17:00', type: 'OFF_HOURS_ACTIVITY' },
-              { label: 'Large Approval',       value: '≥ ₦50,000,000',     type: 'LARGE_FINANCIAL_APPROVAL' },
-            ].map(t => (
+            {([
+              { label: 'Failed Login Trigger', value: '≥ 3 attempts',         type: 'FAILED_LOGIN' as AlertType },
+              { label: 'Bulk Delete Trigger',  value: '≥ 5 in 5 minutes',     type: 'BULK_DELETE' as AlertType },
+              { label: 'Off-Hours Window',     value: 'Outside 09:00–17:00',   type: 'OFF_HOURS_ACTIVITY' as AlertType },
+              { label: 'Large Approval',       value: '≥ ₦50,000,000',         type: 'LARGE_FINANCIAL_APPROVAL' as AlertType },
+            ]).map(t => (
               <div key={t.type} className="rounded-lg border p-3 space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {ALERT_TYPE_LABEL[t.type as AlertType]}
+                  {ALERT_TYPE_LABEL[t.type]}
                 </p>
                 <p className="text-sm font-medium text-foreground">{t.value}</p>
                 <p className="text-xs text-muted-foreground">{t.label}</p>
@@ -248,8 +243,8 @@ export default function AlertsTab() {
             <DialogDescription>
               {acknowledgeTarget && (
                 <>
-                  Acknowledge the <span className="font-medium text-foreground">{ALERT_TYPE_LABEL[acknowledgeTarget.alertType]}</span> alert
-                  {acknowledgeTarget.entityRef && <> for <span className="font-medium text-foreground">{acknowledgeTarget.entityRef}</span></>}?
+                  Acknowledge the <span className="font-medium text-foreground">{ALERT_TYPE_LABEL[acknowledgeTarget.alertType] ?? acknowledgeTarget.alertType}</span> alert
+                  {acknowledgeTarget.userName && <> for <span className="font-medium text-foreground">{acknowledgeTarget.userName}</span></>}?
                   This marks the alert as reviewed.
                 </>
               )}
@@ -261,7 +256,9 @@ export default function AlertsTab() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAcknowledgeTarget(null)} disabled={acknowledge.isPending}>Cancel</Button>
+            <Button variant="outline" onClick={() => setAcknowledgeTarget(null)} disabled={acknowledge.isPending}>
+              Cancel
+            </Button>
             <Button
               onClick={() => acknowledgeTarget && acknowledge.mutate(acknowledgeTarget.id)}
               disabled={acknowledge.isPending}
