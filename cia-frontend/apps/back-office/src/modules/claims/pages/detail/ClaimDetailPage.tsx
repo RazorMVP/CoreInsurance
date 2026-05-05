@@ -11,7 +11,7 @@ import {
   apiClient,
   type ApiError, type ApiResponse,
   type ClaimDto, type ClaimReserveDto, type ClaimExpenseDto, type ClaimInspectionDto,
-  type ClaimDocumentDto,
+  type ClaimDocumentDto, type DvType,
 } from '@cia/api-client';
 
 interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
@@ -28,55 +28,25 @@ import SubmitClaimDialog    from './SubmitClaimDialog';
 import CancelClaimDialog    from './CancelClaimDialog';
 import AddReserveDialog     from './AddReserveDialog';
 import AddExpenseDialog     from './AddExpenseDialog';
-import AddCommentDialog     from './AddCommentDialog';
 import UploadDocumentDialog from './UploadDocumentDialog';
 
-// ── Mock data ─────────────────────────────────────────────────────────────
-type MockClaim = ClaimDto & {
-  policyProduct: string;
-  natureOfLoss: string;
-  causeOfLoss: string;
-  location: string;
-  contactName: string;
-  contactPhone: string;
-  comments: { id: string; user: string; date: string; text: string }[];
-  requiredDocs: { id: string; name: string; received: boolean; receivedDate?: string }[];
-  dvType?: 'OWN_DAMAGE' | 'THIRD_PARTY' | 'EX_GRATIA';
-  dvAmount?: number;
-  dvExecuted?: boolean;
-};
-
 // allow-mock: fallback while useQuery is in flight or for unknown ids
-const mockClaim: MockClaim = {
+const fallbackClaim: ClaimDto = {
   id: 'cl1', claimNumber: 'CLM-2026-00001',
   policyId: 'pol1', policyNumber: 'POL-2026-00001',
   customerId: 'c1', customerName: 'Chioma Okafor',
-  policyProduct: 'Private Motor Comprehensive',
+  productName: 'Private Motor Comprehensive',
   status: 'UNDER_INVESTIGATION', incidentDate: '2026-03-10', reportedDate: '2026-03-12',
   description: 'Rear-end collision at Ozumba Mbadiwe Ave. by a bus. Vehicle sustained damage to rear bumper, boot lid and tail lights.',
-  location: 'Ozumba Mbadiwe Ave, Victoria Island, Lagos',
   lossLocation: 'Ozumba Mbadiwe Ave, Victoria Island, Lagos',
-  estimatedLoss: 850_000, reserveAmount: 650_000, approvedAmount: 0,
-  currencyCode: 'NGN',
   natureOfLoss: 'Own Damage',
   causeOfLoss: 'Accident',
   contactName: 'Chioma Okafor',
   contactPhone: '+234 803 111 0001',
+  estimatedLoss: 850_000, reserveAmount: 650_000, approvedAmount: 0,
+  currencyCode: 'NGN',
   surveyorId: 'sv1', surveyorName: 'Maxwell & Partners',
   createdAt: '2026-03-12',
-  comments: [
-    { id: 'cmt1', user: 'Adaeze Nwosu',       date: '2026-03-12', text: 'Claim registered. Assessor assigned to conduct pre-loss inspection report.' },
-    { id: 'cmt2', user: 'Maxwell & Partners', date: '2026-03-14', text: 'Inspection completed. Repair estimate from Mercedes dealer: ₦720,000. Advising reserve of ₦650,000 pending final report.' },
-  ],
-  requiredDocs: [
-    { id: 'd1', name: 'Police Report',        received: true,  receivedDate: '2026-03-13' },
-    { id: 'd2', name: 'Driver Licence',        received: true,  receivedDate: '2026-03-12' },
-    { id: 'd3', name: 'Vehicle Registration',  received: true,  receivedDate: '2026-03-12' },
-    { id: 'd4', name: 'Repair Estimate',       received: true,  receivedDate: '2026-03-14' },
-    { id: 'd5', name: 'Survey Report',         received: false },
-    { id: 'd6', name: 'Completed Claim Form',  received: false },
-  ],
-  dvType: undefined, dvAmount: undefined, dvExecuted: false,
 };
 
 // allow-mock: fallback while /claims/{id}/reserves is in flight
@@ -119,7 +89,6 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-type DvType = 'OWN_DAMAGE' | 'THIRD_PARTY' | 'EX_GRATIA';
 const DV_LABELS: Record<DvType, string> = {
   OWN_DAMAGE:  'Own Damage DV',
   THIRD_PARTY: 'Third Party DV',
@@ -131,10 +100,10 @@ export default function ClaimDetailPage() {
   const { id }      = useParams<{ id: string }>();
   const queryClient = useQueryClient();
 
-  const claimQuery = useQuery<MockClaim>({
+  const claimQuery = useQuery<ClaimDto>({
     queryKey: ['claims', id],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: MockClaim }>(`/api/v1/claims/${id}`);
+      const res = await apiClient.get<{ data: ClaimDto }>(`/api/v1/claims/${id}`);
       return res.data.data;
     },
     enabled: !!id,
@@ -236,18 +205,17 @@ export default function ClaimDetailPage() {
   // "Rendered more hooks than during the previous render" the first time
   // claimQuery.data transitions from undefined to a value.
 
-  // DV state
-  const [dvType,      setDvType]      = useState<DvType | ''>('');
-  const [dvAmount,    setDvAmount]    = useState('');
-  const [dvGenerated, setDvGenerated] = useState(false);
+  // DV draft state — only used to capture the user's choice before the
+  // generate mutation fires; the persisted state lives on the claim.
+  const [draftDvType,   setDraftDvType]   = useState<DvType | ''>('');
+  const [draftDvAmount, setDraftDvAmount] = useState('');
 
   // Dialog / sheet state
   const [submitOpen,          setSubmitOpen]          = useState(false);
   const [cancelOpen,          setCancelOpen]          = useState(false);
   const [addReserveOpen,      setAddReserveOpen]      = useState(false);
   const [addExpenseOpen,      setAddExpenseOpen]      = useState(false);
-  const [addCommentOpen,      setAddCommentOpen]      = useState(false);
-  const [uploadDoc,           setUploadDoc]           = useState<{ id: string; name: string } | null>(null);
+  const [uploadOpen,          setUploadOpen]          = useState(false);
   const [declineInspectOpen,  setDeclineInspectOpen]  = useState(false);
   const [approveInspectOpen,  setApproveInspectOpen]  = useState(false);
   const [overrideInspectOpen, setOverrideInspectOpen] = useState(false);
@@ -255,7 +223,51 @@ export default function ClaimDetailPage() {
   const [declineReason,       setDeclineReason]       = useState('');
   const [downloadReportOpen,  setDownloadReportOpen]  = useState(false);
 
-  const c = claimQuery.data ?? mockClaim;
+  // ─── DV mutations (B7) ────────────────────────────────────────────────
+  const generateDv = useMutation({
+    mutationFn: async (vars: { dvType: DvType; amount?: number }) => {
+      const res = await apiClient.post<{ data: ClaimDto }>(
+        `/api/v1/claims/${id}/dv/generate`,
+        vars,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['claims', id] });
+      toast({ title: 'DV generated' });
+    },
+    onError: (err) => showServerError(err, 'Failed to generate DV'),
+  });
+
+  const executeDv = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.post<{ data: ClaimDto }>(
+        `/api/v1/claims/${id}/dv/execute`,
+        {},
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['claims', id] });
+      toast({ title: 'DV marked executed' });
+    },
+    onError: (err) => showServerError(err, 'Failed to execute DV'),
+  });
+
+  // ─── Claim documents query (B7 — replaces required-docs mock) ─────────
+  const documentsQuery = useQuery<ClaimDocumentDto[]>({
+    queryKey: ['claims', id, 'documents'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: { content: ClaimDocumentDto[] } }>(
+        `/api/v1/claims/${id}/documents`,
+        { params: { size: 100 } },
+      );
+      return res.data.data.content ?? [];
+    },
+    enabled: !!id,
+  });
+
+  const c = claimQuery.data ?? fallbackClaim;
 
   if (claimQuery.isLoading && !claimQuery.data) {
     return (
@@ -267,21 +279,23 @@ export default function ClaimDetailPage() {
     );
   }
 
-  const missingDocs   = c.requiredDocs.filter(d => !d.received);
   const isInvestigating = c.status === 'UNDER_INVESTIGATION' || c.status === 'RESERVED';
-  const canEdit       = isInvestigating;   // reserve/expense/comment editable only during investigation
+  const canEdit       = isInvestigating;   // reserves + expenses editable only during investigation
   const canSubmit     = isInvestigating;
   const canApprove    = c.status === 'PENDING_APPROVAL';
   const reserves = reservesQuery.data ?? fallbackReserves;
   const expenses = expensesQuery.data ?? fallbackExpenses;
+  const documents = documentsQuery.data ?? [];
   const totalReserve  = reserves.reduce((s, r) => s + r.amount, 0);
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
+  const dvGenerated = !!c.dvGeneratedAt;
+  const dvExecuted  = !!c.dvExecutedAt;
 
   return (
     <div className="p-6 space-y-5 max-w-5xl">
       <PageHeader
         title={c.claimNumber}
-        description={`${c.policyProduct} · ${c.customerName} · Incident ${c.incidentDate}`}
+        description={`${c.productName ?? '—'} · ${c.customerName} · Incident ${c.incidentDate}`}
         breadcrumb={
           <button onClick={() => navigate('/claims')} className="text-sm text-muted-foreground hover:text-foreground">
             ← Claims
@@ -290,9 +304,6 @@ export default function ClaimDetailPage() {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant={statusVariant[c.status]}>{c.status.toLowerCase().replace('_', ' ')}</Badge>
-            {missingDocs.length > 0 && (
-              <Badge variant="pending" className="text-[10px]">{missingDocs.length} doc(s) missing</Badge>
-            )}
             {canSubmit  && <Button size="sm" onClick={() => setSubmitOpen(true)}>Submit for Approval</Button>}
             {canApprove && <Button size="sm" variant="outline">Reject</Button>}
             {canApprove && <Button size="sm">Approve Claim</Button>}
@@ -306,14 +317,7 @@ export default function ClaimDetailPage() {
       <Tabs defaultValue="summary">
         <TabsList>
           <TabsTrigger value="summary">Summary</TabsTrigger>
-          <TabsTrigger value="processing">
-            Processing
-            {missingDocs.length > 0 && (
-              <span className="ml-1.5 rounded-full bg-[var(--status-pending-bg)] text-[var(--status-pending-fg)] px-1.5 py-0.5 text-[10px] font-semibold">
-                {missingDocs.length}
-              </span>
-            )}
-          </TabsTrigger>
+          <TabsTrigger value="processing">Processing</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="inspection">Inspection</TabsTrigger>
           <TabsTrigger value="dv">DV</TabsTrigger>
@@ -325,14 +329,16 @@ export default function ClaimDetailPage() {
             <Card>
               <CardHeader><CardTitle>Incident Details</CardTitle></CardHeader>
               <CardContent>
-                <Row label="Policy"         value={`${c.policyNumber} · ${c.policyProduct}`} />
+                <Row label="Policy"         value={`${c.policyNumber} · ${c.productName ?? '—'}`} />
                 <Row label="Customer"       value={c.customerName} />
                 <Row label="Incident Date"  value={c.incidentDate} />
                 <Row label="Reported"       value={c.reportedDate} />
-                <Row label="Nature of Loss" value={c.natureOfLoss} />
-                <Row label="Cause of Loss"  value={c.causeOfLoss} />
-                <Row label="Location"       value={c.location} />
-                <Row label="Contact"        value={`${c.contactName} · ${c.contactPhone}`} />
+                <Row label="Nature of Loss" value={c.natureOfLoss ?? '—'} />
+                <Row label="Cause of Loss"  value={c.causeOfLoss  ?? '—'} />
+                <Row label="Location"       value={c.lossLocation ?? '—'} />
+                <Row label="Contact"        value={c.contactName || c.contactPhone
+                  ? `${c.contactName ?? '—'}${c.contactPhone ? ` · ${c.contactPhone}` : ''}`
+                  : '—'} />
               </CardContent>
             </Card>
             <Card>
@@ -446,26 +452,6 @@ export default function ClaimDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Comments */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Comments</CardTitle>
-                <Button size="sm" variant="outline" onClick={() => setAddCommentOpen(true)}>Add Comment</Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {c.comments.map((cmt) => (
-                <div key={cmt.id} className="rounded-lg bg-muted/40 p-4 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold text-foreground">{cmt.user}</p>
-                    <p className="text-xs text-muted-foreground">{cmt.date}</p>
-                  </div>
-                  <p className="text-sm text-foreground leading-relaxed">{cmt.text}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
         </TabsContent>
 
         {/* ── Documents ────────────────────────────────────────────────── */}
@@ -473,42 +459,33 @@ export default function ClaimDetailPage() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Required Documents</CardTitle>
-                {missingDocs.length > 0 && (
-                  <Badge variant="pending" className="text-xs">{missingDocs.length} outstanding</Badge>
-                )}
+                <CardTitle>Uploaded Documents</CardTitle>
+                <Button size="sm" variant="outline" onClick={() => setUploadOpen(true)}>
+                  Upload Document
+                </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
-              {c.requiredDocs.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="flex items-center justify-between rounded-lg border p-3"
-                  style={!doc.received ? { background: 'var(--status-pending-bg)' } : undefined}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`h-5 w-5 rounded-full flex items-center justify-center text-xs ${doc.received ? 'bg-primary text-primary-foreground' : 'border-2 border-[var(--status-pending-fg)]'}`}>
-                      {doc.received && '✓'}
+              {documentsQuery.isLoading ? (
+                <Skeleton className="h-24 w-full" />
+              ) : documents.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">
+                  No documents uploaded yet. Use the Upload Document button to attach claim
+                  forms, police reports, photos, repair estimates and other supporting files.
+                </p>
+              ) : (
+                documents.map((doc) => (
+                  <div key={doc.id} className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-5 w-5 rounded-full flex items-center justify-center text-xs bg-primary text-primary-foreground">✓</div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{doc.fileName}</p>
+                        <p className="text-xs text-muted-foreground">{doc.documentType.replace(/_/g, ' ')} · {doc.createdAt.slice(0, 10)}</p>
+                      </div>
                     </div>
-                    <p className="text-sm font-medium text-foreground">{doc.name}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {doc.received
-                      ? <p className="text-xs text-muted-foreground">{doc.receivedDate}</p>
-                      : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs"
-                          onClick={() => setUploadDoc({ id: doc.id, name: doc.name })}
-                        >
-                          Upload
-                        </Button>
-                      )
-                    }
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -601,11 +578,15 @@ export default function ClaimDetailPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Discharge Voucher (DV)</CardTitle>
-                {dvGenerated && <Badge variant="active" className="text-[10px]">Generated</Badge>}
+                {dvExecuted
+                  ? <Badge variant="active" className="text-[10px]">Executed</Badge>
+                  : dvGenerated
+                    ? <Badge variant="pending" className="text-[10px]">Generated</Badge>
+                    : null}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {!c.status.includes('APPROVED') && !dvGenerated ? (
+              {c.status !== 'APPROVED' && c.status !== 'SETTLED' && !dvGenerated ? (
                 <div className="rounded-lg bg-muted/40 p-4">
                   <p className="text-sm text-muted-foreground">
                     DV can only be generated once the claim is approved. Current status: <strong>{c.status}</strong>
@@ -613,12 +594,25 @@ export default function ClaimDetailPage() {
                 </div>
               ) : dvGenerated ? (
                 <div className="space-y-3">
-                  <Row label="DV Type"   value={dvType ? DV_LABELS[dvType as DvType] : '—'} />
-                  <Row label="DV Amount" value={dvAmount ? `₦${Number(dvAmount).toLocaleString()}` : '—'} />
-                  <Row label="Status"    value="Generated — awaiting execution" />
+                  <Row label="DV Type"      value={c.dvType ? DV_LABELS[c.dvType] : '—'} />
+                  <Row label="DV Amount"    value={c.dvAmount != null ? `₦${c.dvAmount.toLocaleString()}` : '—'} />
+                  <Row label="Generated"    value={c.dvGeneratedAt ? c.dvGeneratedAt.slice(0, 10) : '—'} />
+                  <Row label="Status"       value={dvExecuted
+                    ? `Executed${c.dvExecutedAt ? ' on ' + c.dvExecutedAt.slice(0, 10) : ''}`
+                    : 'Generated — awaiting execution'} />
                   <div className="flex gap-2 mt-2">
-                    <Button size="sm">Execute DV (Online Portal)</Button>
-                    <Button size="sm" variant="outline">Download DV</Button>
+                    {!dvExecuted && (
+                      <Button
+                        size="sm"
+                        disabled={executeDv.isPending}
+                        onClick={() => executeDv.mutate()}
+                      >
+                        {executeDv.isPending ? 'Executing…' : 'Execute DV (Online Portal)'}
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" disabled={!c.dvDocumentPath}>
+                      Download DV
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -628,8 +622,8 @@ export default function ClaimDetailPage() {
                     {(['OWN_DAMAGE', 'THIRD_PARTY', 'EX_GRATIA'] as DvType[]).map((type) => (
                       <button
                         key={type}
-                        onClick={() => setDvType(type)}
-                        className={`rounded-lg border p-4 text-left transition-colors ${dvType === type ? 'bg-teal-50 border-primary' : 'bg-card hover:bg-secondary'}`}
+                        onClick={() => setDraftDvType(type)}
+                        className={`rounded-lg border p-4 text-left transition-colors ${draftDvType === type ? 'bg-teal-50 border-primary' : 'bg-card hover:bg-secondary'}`}
                       >
                         <p className="text-sm font-semibold text-foreground">{DV_LABELS[type]}</p>
                         <p className="text-xs text-muted-foreground mt-1">
@@ -640,24 +634,33 @@ export default function ClaimDetailPage() {
                       </button>
                     ))}
                   </div>
-                  {dvType && (
+                  {draftDvType && (
                     <div className="flex gap-3 items-end">
                       <div className="flex-1 space-y-1.5">
-                        <label className="text-sm font-medium text-foreground">DV Amount (₦)</label>
+                        <label className="text-sm font-medium text-foreground">
+                          DV Amount (₦) {c.approvedAmount != null && (
+                            <span className="text-xs text-muted-foreground font-normal">
+                              — defaults to approved amount ₦{c.approvedAmount.toLocaleString()} when blank
+                            </span>
+                          )}
+                        </label>
                         <input
                           type="number"
-                          value={dvAmount}
-                          onChange={(e) => setDvAmount(e.target.value)}
-                          placeholder="Enter DV amount"
+                          value={draftDvAmount}
+                          onChange={(e) => setDraftDvAmount(e.target.value)}
+                          placeholder={c.approvedAmount != null ? c.approvedAmount.toString() : 'Enter DV amount'}
                           className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                         />
                       </div>
                       <Button
                         size="sm"
-                        disabled={!dvAmount || Number(dvAmount) <= 0}
-                        onClick={() => setDvGenerated(true)}
+                        disabled={generateDv.isPending}
+                        onClick={() => generateDv.mutate({
+                          dvType: draftDvType,
+                          amount: draftDvAmount ? Number(draftDvAmount) : undefined,
+                        })}
                       >
-                        Generate DV
+                        {generateDv.isPending ? 'Generating…' : 'Generate DV'}
                       </Button>
                     </div>
                   )}
@@ -700,20 +703,12 @@ export default function ClaimDetailPage() {
         onSuccess={() => setAddExpenseOpen(false)}
       />
 
-      <AddCommentDialog
-        open={addCommentOpen}
-        onOpenChange={setAddCommentOpen}
-        claimId={c.id}
-        claimNumber={c.claimNumber}
-        onSuccess={() => setAddCommentOpen(false)}
-      />
-
       <UploadDocumentDialog
-        open={uploadDoc !== null}
-        onOpenChange={(v) => { if (!v) setUploadDoc(null); }}
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
         claimId={c.id}
-        documentName={uploadDoc?.name ?? ''}
-        onSuccess={() => setUploadDoc(null)}
+        documentName="Claim Document"
+        onSuccess={() => setUploadOpen(false)}
       />
 
       {/* ── Approve inspection report ─────────────────────────────────── */}

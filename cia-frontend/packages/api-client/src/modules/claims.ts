@@ -9,13 +9,17 @@
 //   const claims = await validatedGet('/api/v1/claims', z.array(ClaimDtoSchema));
 //
 // Backend gaps NOT modelled here (require future backend work):
-//   - Inspection sub-workflow (frontend has approve/override/decline
-//     for inspection reports as a separate step; backend has a single
-//     /approve workflow for the whole claim)
-//   - Inspection document bundle download
+//   - Comments aggregate — would need a ClaimComment entity (1:many)
+//     and /api/v1/claims/{id}/comments CRUD endpoints
+//   - Required-document checklist — needs ClaimRequiredDocument entity
+//     tied to the per-product checklist defined in setup module
 //   - "Paid amount" — backend exposes `approvedAmount` (the amount
 //     approved for payment). Actual paid status is tracked via the
 //     credit-note + payment chain in cia-finance.
+//
+// Inspection sub-workflow IS modelled (B6: ClaimInspectionDtoSchema +
+// /api/v1/claims/{id}/inspection/* endpoints). Document bundle download
+// IS available at /api/v1/claims/{id}/inspection/documents/bundle (B6).
 
 import { z } from 'zod';
 
@@ -35,6 +39,9 @@ export type ClaimStatus = z.infer<typeof ClaimStatusSchema>;
 
 export const ClaimExpenseStatusSchema = z.enum(['PENDING', 'APPROVED', 'CANCELLED']);
 export type ClaimExpenseStatus = z.infer<typeof ClaimExpenseStatusSchema>;
+
+export const DvTypeSchema = z.enum(['OWN_DAMAGE', 'THIRD_PARTY', 'EX_GRATIA']);
+export type DvType = z.infer<typeof DvTypeSchema>;
 
 export const ClaimExpenseTypeSchema = z.enum([
   'SURVEYOR_FEE', 'ASSESSOR_FEE', 'LEGAL_FEE',
@@ -72,6 +79,10 @@ export const ClaimDtoSchema = z.object({
   incidentDate:        z.string(),
   reportedDate:        z.string(),
   lossLocation:        z.string().nullable().optional(),
+  natureOfLoss:        z.string().nullable().optional(),
+  causeOfLoss:         z.string().nullable().optional(),
+  contactName:         z.string().nullable().optional(),
+  contactPhone:        z.string().nullable().optional(),
   description:         z.string(),
   estimatedLoss:       z.number(),
   reserveAmount:       z.number(),
@@ -89,6 +100,11 @@ export const ClaimDtoSchema = z.object({
   withdrawnAt:         z.string().nullable().optional(),
   withdrawalReason:    z.string().nullable().optional(),
   settledAt:           z.string().nullable().optional(),
+  dvType:              DvTypeSchema.nullable().optional(),
+  dvAmount:            z.number().nullable().optional(),
+  dvGeneratedAt:       z.string().nullable().optional(),
+  dvExecutedAt:        z.string().nullable().optional(),
+  dvDocumentPath:      z.string().nullable().optional(),
   notes:               z.string().nullable().optional(),
   createdAt:           z.string(),
 });
