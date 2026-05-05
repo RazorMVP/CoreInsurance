@@ -4,7 +4,7 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
-## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5, G8) + Step C validation + B1 reinsurance + B2 claims + B3 audit reports
+## 2026-05-04 — Session 53: Build audit + Sequence B (G7, G6, G5, G8) + Step C + B1 reinsurance + B2 claims + B3 audit reports + B4.1 cia-policy
 
 ### Context
 
@@ -33,6 +33,8 @@ b5de9ba  docs(log): session 53 — extend with Step C
 9386c11  fix(claims): sync DTOs to backend + wire withdraw mutation (B2)
 9b4d0f5  docs(log): session 53 — extend with B2 claims sweep
 f124a90  fix(audit): wire 3 of 6 audit reports to backend (B3)
+6213960  docs(log): session 53 — extend with B3 audit reports sweep
+38a7ba4  feat(policy): add NIID manual trigger + risk update + bulk-add (B4.1)
 ```
 
 ### Deep audit findings
@@ -235,6 +237,23 @@ Date-range filter (default last 30 days) lives at the tab strip level — `from`
 
 **Net: 3 of 6 reports wired; CSV export now exports real data** (it always exported "whatever the table is showing" — now that's backend-fed data for half the tabs).
 
+### Workstream — B4.1 cia-policy (`38a7ba4`)
+
+First slice of the cia-policy backend gap (G1) — the audit identified ~11 missing endpoints; this slice ships 3 with no new entities or migrations.
+
+**`POST /api/v1/policies/{id}/niid-upload`.** Manual NIID retrigger mirroring the existing NAICOM endpoint. The Temporal infrastructure was already wired (`PolicyNiidUploadActivityImpl`, `NiidUploadWorkflow`, the private `startNiidWorkflow` helper in `PolicyService`) — only the public manual trigger was missing. Status guard: ACTIVE or REINSTATED.
+
+**`PUT /api/v1/policies/{id}/risks/{riskId}`.** Update a single risk in a DRAFT policy. Recomputes premium from `product.rate × request.sumInsured`, recomputes policy totals, audits as a `PolicyRisk UPDATE`. Status guard: DRAFT only — once submitted the risk schedule is immutable.
+
+**`POST /api/v1/policies/{id}/risks/bulk`.** Append multiple risks to a DRAFT policy in one call. Same DRAFT guard. `orderNo` computed as `max(existing) + offset` so it appends rather than replaces (the existing private `applyRisks` helper used at policy-create time wipes and rebuilds; that's a different operation).
+
+**Helpers extracted:**
+
+- `resolveSectionName(product, sectionId)` — looks up the named `ProductSection` or returns null
+- `recomputePolicyTotals(policy)` — re-derives `totalSumInsured`, `totalPremium`, `netPremium` from current risks. Called after both the per-risk update and the bulk-append paths so the cached totals on `Policy` stay consistent.
+
+**Net:** cia-policy controller now 14 endpoints (was 12). Backend gap target list narrows from ~11 to ~8 remaining — document send/ack/download (3), survey workflow (4), coinsurance shares update (1), possibly renewal-notice trigger and risk-delete. Subsequent B4 slices will ship those incrementally.
+
 ### Housekeeping
 
 **`.gitignore` cleanup (`fc6895c`).** Repo had accumulated 7 personal skills under `.claude/skills/` (content-reviewer, gcloud-refresh, plan-week, post, post2, uat, uat-script-generator) plus `.playwright-mcp/` and `.superpowers/` working dirs as side effects of running tools cd'd here. Pattern `.claude/skills/*` + `!.claude/skills/cia/` ignores future bleed-through while keeping the project-canonical CIA skill tracked.
@@ -289,6 +308,8 @@ Date-range filter (default last 30 days) lives at the tab strip level — `from`
 | CancelClaimDialog.tsx (B2) | wired POST /api/v1/claims/{id}/withdraw with reason |
 | [audit.ts (api-client)](cia-frontend/packages/api-client/src/modules/audit.ts) | B3 — schemas for AuditLog, LoginAuditLog, UserActivitySummary, AuditAlert; pageSchema<T> helper |
 | ReportsTab.tsx (B3) | wired Approval Trail + Login Security + User Activity; date-range filter; 3 tabs deferred with allow-mock |
+| [PolicyController.java](cia-backend/cia-policy/src/main/java/com/nubeero/cia/policy/PolicyController.java) | B4.1 — added 3 endpoints (NIID trigger, PUT risk, POST risks bulk) |
+| [PolicyService.java](cia-backend/cia-policy/src/main/java/com/nubeero/cia/policy/PolicyService.java) | B4.1 — triggerNiidUpload, updateRisk, addRisksBulk + resolveSectionName + recomputePolicyTotals helpers |
 
 ### Sequence B status
 
@@ -302,7 +323,10 @@ Date-range filter (default last 30 days) lives at the tab strip level — `from`
 | Step B1 — Reinsurance sweep | ✓ done (4 commits: `63f8a14`, `047f2ce`, `9adec51`, `0b2b0bc`) — schemas + URL fixes + 4 of 7 G3 TODOs closed; FAC PDFs + inward FAC + treaty PUT + batch-reallocation deferred as backend gaps |
 | Step B2 — Claims sweep | ✓ done (`9386c11`) — claims DTOs synced + status remap + cancel→withdraw wired (closes G4 TODO 6); 4 inspection-workflow + 1 document-bundle TODOs deferred as backend gaps |
 | Step B3 — Audit reports sweep | ✓ done (`f124a90`) — schemas + 3 of 6 reports wired (Approval Trail, Login Security, User Activity); 3 deferred (Actions by User, Actions by Module, Data Changes) — need additional UI filter pickers or backend aggregation endpoints |
-| Step B4 — cia-policy backend (G1) | next |
+| Step B4.1 — cia-policy NIID trigger + risk CRUD | ✓ done (`38a7ba4`) — 3 endpoints added; cia-policy now 14 endpoints (was 12) |
+| Step B4.2 — document send/ack/download endpoints | next |
+| Step B4.3 — survey workflow (4 endpoints, new entity) | pending |
+| Step B4.4 — coinsurance shares update | pending |
 | G4 — Claims (6 endpoints) | pending |
 | G1 — cia-policy (11 endpoints) | pending |
 | G9 — Phase 3 Partner Portal (5 builds) | pending |
