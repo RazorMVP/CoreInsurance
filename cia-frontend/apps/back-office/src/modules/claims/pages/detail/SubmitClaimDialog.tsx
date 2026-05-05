@@ -44,7 +44,7 @@ export default function SubmitClaimDialog({ open, onOpenChange, claim, onConfirm
             <DetailRow label="Policy"        value={claim.policyNumber} />
             <DetailRow label="Customer"      value={claim.customerName} />
             <DetailRow label="Incident Date" value={claim.incidentDate} />
-            <DetailRow label="Registered"    value={claim.registeredDate} />
+            <DetailRow label="Reported"      value={claim.reportedDate} />
           </div>
           <Separator />
           <div className="px-4 pb-2">

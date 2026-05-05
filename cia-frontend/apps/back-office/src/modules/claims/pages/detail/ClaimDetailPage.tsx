@@ -35,16 +35,18 @@ const mockClaim: MockClaim = {
   policyId: 'pol1', policyNumber: 'POL-2026-00001',
   customerId: 'c1', customerName: 'Chioma Okafor',
   policyProduct: 'Private Motor Comprehensive',
-  status: 'PROCESSING', incidentDate: '2026-03-10', registeredDate: '2026-03-12',
+  status: 'UNDER_INVESTIGATION', incidentDate: '2026-03-10', reportedDate: '2026-03-12',
   description: 'Rear-end collision at Ozumba Mbadiwe Ave. by a bus. Vehicle sustained damage to rear bumper, boot lid and tail lights.',
   location: 'Ozumba Mbadiwe Ave, Victoria Island, Lagos',
-  estimatedLoss: 850_000, reserveAmount: 650_000, paidAmount: 0,
+  lossLocation: 'Ozumba Mbadiwe Ave, Victoria Island, Lagos',
+  estimatedLoss: 850_000, reserveAmount: 650_000, approvedAmount: 0,
+  currencyCode: 'NGN',
   natureOfLoss: 'Own Damage',
   causeOfLoss: 'Accident',
   contactName: 'Chioma Okafor',
   contactPhone: '+234 803 111 0001',
   surveyorId: 'sv1', surveyorName: 'Maxwell & Partners',
-  createdAt: '2026-03-12', updatedAt: '2026-03-15',
+  createdAt: '2026-03-12',
   comments: [
     { id: 'cmt1', user: 'Adaeze Nwosu',       date: '2026-03-12', text: 'Claim registered. Assessor assigned to conduct pre-loss inspection report.' },
     { id: 'cmt2', user: 'Maxwell & Partners', date: '2026-03-14', text: 'Inspection completed. Repair estimate from Mercedes dealer: ₦720,000. Advising reserve of ₦650,000 pending final report.' },
@@ -62,18 +64,33 @@ const mockClaim: MockClaim = {
 
 // allow-mock: fallback while /claims/{id}/reserves is in flight
 const fallbackReserves: ClaimReserveDto[] = [
-  { id: 'r1', claimId: 'cl1', category: 'Own Damage — Vehicle Repairs', amount: 600_000, createdAt: '2026-03-12' },
-  { id: 'r2', claimId: 'cl1', category: 'Survey Fees',                   amount: 50_000,  createdAt: '2026-03-12' },
+  { id: 'r1', amount: 600_000, reason: 'Own Damage — Vehicle Repairs', createdAt: '2026-03-12' },
+  { id: 'r2', amount: 50_000,  reason: 'Survey Fees',                  createdAt: '2026-03-12' },
 ];
 
 // allow-mock: fallback while /claims/{id}/expenses is in flight
 const fallbackExpenses: ClaimExpenseDto[] = [
-  { id: 'e1', claimId: 'cl1', type: 'Survey / Assessment Fee', amount: 35_000, status: 'APPROVED', createdAt: '2026-03-14' },
+  { id: 'e1', claimId: 'cl1', expenseType: 'SURVEYOR_FEE', amount: 35_000, status: 'APPROVED', vendorName: 'Maxwell & Partners', createdAt: '2026-03-14' },
 ];
 
+const EXPENSE_TYPE_LABELS: Record<ClaimExpenseDto['expenseType'], string> = {
+  SURVEYOR_FEE:    'Surveyor Fee',
+  ASSESSOR_FEE:    'Assessor Fee',
+  LEGAL_FEE:       'Legal Fee',
+  MEDICAL_REPORT:  'Medical Report',
+  INVESTIGATION:   'Investigation',
+  OTHER:           'Other',
+};
+
 const statusVariant: Record<string, 'active'|'pending'|'draft'|'rejected'|'cancelled'> = {
-  REGISTERED: 'draft', PROCESSING: 'pending', PENDING_APPROVAL: 'pending',
-  APPROVED: 'active', REJECTED: 'rejected', SETTLED: 'active', CLOSED: 'cancelled', WITHDRAWN: 'cancelled',
+  REGISTERED:          'draft',
+  UNDER_INVESTIGATION: 'pending',
+  RESERVED:            'pending',
+  PENDING_APPROVAL:    'pending',
+  APPROVED:            'active',
+  REJECTED:            'rejected',
+  SETTLED:             'active',
+  WITHDRAWN:           'cancelled',
 };
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -157,8 +174,9 @@ export default function ClaimDetailPage() {
   }
 
   const missingDocs   = c.requiredDocs.filter(d => !d.received);
-  const canEdit       = c.status === 'PROCESSING';   // reserve/expense/comment editable only while PROCESSING
-  const canSubmit     = c.status === 'PROCESSING';
+  const isInvestigating = c.status === 'UNDER_INVESTIGATION' || c.status === 'RESERVED';
+  const canEdit       = isInvestigating;   // reserve/expense/comment editable only during investigation
+  const canSubmit     = isInvestigating;
   const canApprove    = c.status === 'PENDING_APPROVAL';
   const reserves = reservesQuery.data ?? fallbackReserves;
   const expenses = expensesQuery.data ?? fallbackExpenses;
@@ -216,7 +234,7 @@ export default function ClaimDetailPage() {
                 <Row label="Policy"         value={`${c.policyNumber} · ${c.policyProduct}`} />
                 <Row label="Customer"       value={c.customerName} />
                 <Row label="Incident Date"  value={c.incidentDate} />
-                <Row label="Registered"     value={c.registeredDate} />
+                <Row label="Reported"       value={c.reportedDate} />
                 <Row label="Nature of Loss" value={c.natureOfLoss} />
                 <Row label="Cause of Loss"  value={c.causeOfLoss} />
                 <Row label="Location"       value={c.location} />
@@ -229,11 +247,11 @@ export default function ClaimDetailPage() {
                 <Row label="Estimated Loss" value={`₦${c.estimatedLoss.toLocaleString()}`} />
                 <Row label="Total Reserve"  value={`₦${totalReserve.toLocaleString()}`} />
                 <Row label="Total Expenses" value={`₦${totalExpenses.toLocaleString()}`} />
-                <Row label="Paid Amount"    value={c.paidAmount > 0 ? `₦${c.paidAmount.toLocaleString()}` : '—'} />
+                <Row label="Approved Amount" value={(c.approvedAmount ?? 0) > 0 ? `₦${(c.approvedAmount ?? 0).toLocaleString()}` : '—'} />
                 <Separator className="my-3" />
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">Outstanding Reserve</p>
-                  <p className="text-lg font-semibold text-foreground">₦{(totalReserve - c.paidAmount).toLocaleString()}</p>
+                  <p className="text-lg font-semibold text-foreground">₦{(totalReserve - (c.approvedAmount ?? 0)).toLocaleString()}</p>
                 </div>
               </CardContent>
             </Card>
@@ -283,7 +301,7 @@ export default function ClaimDetailPage() {
                 <tbody>
                   {reserves.map((r, i) => (
                     <tr key={r.id} className={i < reserves.length - 1 ? 'border-b' : ''}>
-                      <td className="px-4 py-3">{r.category}</td>
+                      <td className="px-4 py-3">{r.reason ?? '—'}</td>
                       <td className="px-4 py-3 font-medium tabular-nums">₦{r.amount.toLocaleString()}</td>
                       <td className="px-4 py-3 text-muted-foreground">{r.createdAt}</td>
                     </tr>
@@ -316,10 +334,13 @@ export default function ClaimDetailPage() {
                 <tbody>
                   {expenses.map((e, i) => (
                     <tr key={e.id} className={i < expenses.length - 1 ? 'border-b' : ''}>
-                      <td className="px-4 py-3">{e.type}</td>
+                      <td className="px-4 py-3">
+                        {EXPENSE_TYPE_LABELS[e.expenseType]}
+                        {e.vendorName && <span className="ml-2 text-xs text-muted-foreground">({e.vendorName})</span>}
+                      </td>
                       <td className="px-4 py-3 font-medium tabular-nums">₦{e.amount.toLocaleString()}</td>
                       <td className="px-4 py-3">
-                        <Badge variant={e.status === 'APPROVED' ? 'active' : 'pending'} className="text-[10px]">
+                        <Badge variant={e.status === 'APPROVED' ? 'active' : e.status === 'CANCELLED' ? 'rejected' : 'pending'} className="text-[10px]">
                           {e.status.toLowerCase()}
                         </Badge>
                       </td>

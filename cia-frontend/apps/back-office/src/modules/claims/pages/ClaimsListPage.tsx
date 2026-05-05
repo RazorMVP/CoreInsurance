@@ -6,20 +6,21 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type ClaimDto } from '@cia/api-client';
+import { z } from 'zod';
+import { validatedGet, ClaimDtoSchema, type ClaimDto } from '@cia/api-client';
 import RegisterClaimSheet from './register/RegisterClaimSheet';
 import SubmitClaimDialog  from './detail/SubmitClaimDialog';
 import CancelClaimDialog  from './detail/CancelClaimDialog';
 
 const statusVariant: Record<ClaimDto['status'], 'active' | 'pending' | 'draft' | 'rejected' | 'cancelled'> = {
-  REGISTERED:       'draft',
-  PROCESSING:       'pending',
-  PENDING_APPROVAL: 'pending',
-  APPROVED:         'active',
-  REJECTED:         'rejected',
-  SETTLED:          'active',
-  CLOSED:           'cancelled',
-  WITHDRAWN:        'cancelled',
+  REGISTERED:          'draft',
+  UNDER_INVESTIGATION: 'pending',
+  RESERVED:            'pending',
+  PENDING_APPROVAL:    'pending',
+  APPROVED:            'active',
+  REJECTED:            'rejected',
+  SETTLED:             'active',
+  WITHDRAWN:           'cancelled',
 };
 
 export default function ClaimsListPage() {
@@ -30,17 +31,16 @@ export default function ClaimsListPage() {
 
   const claimsQuery = useQuery<ClaimDto[]>({
     queryKey: ['claims'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: ClaimDto[] }>('/api/v1/claims');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/claims', z.array(ClaimDtoSchema)),
   });
   const claims = claimsQuery.data ?? [];
 
-  // Dashboard stats
-  const open      = claims.filter(c => !['SETTLED','CLOSED','WITHDRAWN'].includes(c.status)).length;
+  // Dashboard stats. "Paid" is approximated by approvedAmount — the actual
+  // paid status is tracked via credit-note + payment chain in cia-finance,
+  // but approvedAmount is what's been authorised for payment.
+  const open      = claims.filter(c => !['SETTLED', 'WITHDRAWN'].includes(c.status)).length;
   const reserved  = claims.reduce((s, c) => s + c.reserveAmount, 0);
-  const paid      = claims.reduce((s, c) => s + c.paidAmount, 0);
+  const approved  = claims.reduce((s, c) => s + (c.approvedAmount ?? 0), 0);
 
   const columns: ColumnDef<ClaimDto>[] = [
     {
@@ -81,10 +81,10 @@ export default function ClaimsListPage() {
       ),
     },
     {
-      accessorKey: 'paidAmount',
-      header: 'Paid',
+      accessorKey: 'approvedAmount',
+      header: 'Approved',
       cell: ({ getValue }) => {
-        const v = getValue() as number;
+        const v = (getValue() as number | null | undefined) ?? 0;
         return <span className={`text-sm tabular-nums ${v > 0 ? 'font-medium text-primary' : 'text-muted-foreground'}`}>
           {v > 0 ? `₦${v.toLocaleString()}` : '—'}
         </span>;
@@ -112,11 +112,13 @@ export default function ClaimsListPage() {
             row={row}
             actions={[
               { label: 'View claim',          onClick: () => navigate(`/claims/${id}`) },
-              ...(status === 'REGISTERED'     ? [{ label: 'Start processing',    onClick: () => {} }] : []),
-              ...(status === 'PROCESSING'     ? [{ label: 'Submit for approval', onClick: () => setSubmitTarget(row.original) }] : []),
-              ...(status === 'PENDING_APPROVAL' ? [{ label: 'Approve', onClick: () => {} }, { label: 'Reject', onClick: () => {}, className: 'text-destructive' }] : []),
-              ...(status === 'APPROVED'       ? [{ label: 'Generate DV',         onClick: () => {} }] : []),
-              ...(status !== 'SETTLED' && status !== 'CLOSED' ? [{ label: 'Cancel claim', onClick: () => setCancelTarget(row.original), separator: true, className: 'text-destructive' }] : []),
+              ...(status === 'REGISTERED'                            ? [{ label: 'Start investigation', onClick: () => {} }] : []),
+              ...(status === 'UNDER_INVESTIGATION' || status === 'RESERVED' ? [{ label: 'Submit for approval', onClick: () => setSubmitTarget(row.original) }] : []),
+              ...(status === 'PENDING_APPROVAL'                      ? [{ label: 'Approve', onClick: () => {} }, { label: 'Reject', onClick: () => {}, className: 'text-destructive' }] : []),
+              ...(status === 'APPROVED'                              ? [{ label: 'Generate DV', onClick: () => {} }] : []),
+              ...(status !== 'SETTLED' && status !== 'WITHDRAWN' && status !== 'REJECTED'
+                ? [{ label: 'Cancel claim', onClick: () => setCancelTarget(row.original), separator: true, className: 'text-destructive' }]
+                : []),
             ]}
           />
         );
@@ -141,7 +143,7 @@ export default function ClaimsListPage() {
       <div className="grid grid-cols-3 gap-4">
         <StatCard label="Open Claims"      value={String(open)} sub={`${claims.length} total`} />
         <StatCard label="Total Reserve"    value={`₦${reserved.toLocaleString()}`} sub="Outstanding reserve" />
-        <StatCard label="Total Paid (YTD)" value={`₦${paid.toLocaleString()}`} sub="Year to date" />
+        <StatCard label="Total Approved (YTD)" value={`₦${approved.toLocaleString()}`} sub="Year to date" />
       </div>
 
       {claimsQuery.isLoading ? (
