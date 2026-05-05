@@ -4,7 +4,7 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
-## 2026-05-04 / 2026-05-05 — Session 53: Sequence B closed end-to-end (G3–G8 + B1–B9, including richer ClaimDetailResponse, inspection workflow + UI, and cia-policy survey/coinsurance/risks editors)
+## 2026-05-04 → 2026-05-06 — Session 53: Sequence B closed end-to-end (G3–G8 + B1–B13, including richer ClaimDetailResponse, inspection workflow + UI, cia-policy survey/coinsurance/risks editors, Vercel demo-mode fix, and the full pre-Phase-3 backlog (Comments + RequiredDocs aggregates + multipart upload contract))
 
 ### Context
 
