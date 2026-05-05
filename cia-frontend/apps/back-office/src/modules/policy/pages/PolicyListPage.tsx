@@ -12,10 +12,12 @@ import CreatePolicySheet from './create/CreatePolicySheet';
 
 const statusVariant: Record<PolicyDto['status'], 'active' | 'pending' | 'draft' | 'cancelled' | 'rejected'> = {
   ACTIVE:           'active',
+  REINSTATED:       'active',
   PENDING_APPROVAL: 'pending',
   DRAFT:            'draft',
   EXPIRED:          'cancelled',
   CANCELLED:        'rejected',
+  REJECTED:         'rejected',
   LAPSED:           'draft',
 };
 

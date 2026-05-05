@@ -1,7 +1,9 @@
 // ── Quotation — DTOs ──────────────────────────────────────────────────────
 
+import type { BusinessType } from './policy';
+
 export type QuoteStatus   = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'CONVERTED' | 'EXPIRED';
-export type BusinessType  = 'DIRECT' | 'DIRECT_WITH_COINSURANCE' | 'INWARD_COINSURANCE' | 'INWARD_FAC';
+export type { BusinessType };
 
 export interface QuoteDto {
   id:               string;

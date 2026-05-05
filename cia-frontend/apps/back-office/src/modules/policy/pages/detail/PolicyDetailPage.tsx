@@ -6,29 +6,29 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, type PolicyDto } from '@cia/api-client';
 
-type MockPolicy = Omit<PolicyDto, 'updatedAt'> & {
-  updatedAt: string;
+type MockPolicy = PolicyDto & {
   riskDescription: string;
   paymentTerms: string;
   commission: number;
   debitNoteNumber?: string;
   surveyRequired: boolean;
-  surveyStatus?: 'PENDING' | 'IN_PROGRESS' | 'APPROVED' | 'OVERRIDDEN';
   clauses: { id: string; title: string; text: string }[];
 };
 
 // allow-mock: fallback while useQuery is in flight or for unknown ids
 const mockPolicy: MockPolicy = {
-  id: 'pol1', policyNumber: 'POL-2026-00001', quoteId: 'q4',
+  id: 'pol1', policyNumber: 'POL-2026-00001', status: 'ACTIVE',
+  quoteId: 'q4', quoteNumber: 'Q-2026-00004',
   customerId: 'c1', customerName: 'Chioma Okafor',
-  productId: 'p1', productName: 'Private Motor Comprehensive',
-  classOfBusinessId: '1', classOfBusinessName: 'Motor (Private)',
-  businessType: 'DIRECT', status: 'ACTIVE',
-  sumInsured: 3_500_000, premium: 78_750, netPremium: 78_750,
-  startDate: '2026-02-01', endDate: '2027-02-01',
-  naicomUid: 'NMC-2026-00001', niidUid: 'NIID-2026-00001',
-  documentPath: '/docs/pol1.pdf', debitNoteId: 'dn1',
-  createdAt: '2026-01-30', updatedAt: '2026-02-01',
+  productId: 'p1', productName: 'Private Motor Comprehensive', productCode: 'PMC', productRate: 2.25,
+  classOfBusinessId: '1', classOfBusinessName: 'Motor (Private)', classOfBusinessCode: 'MOTOR',
+  businessType: 'DIRECT', niidRequired: true,
+  policyStartDate: '2026-02-01', policyEndDate: '2027-02-01',
+  totalSumInsured: 3_500_000, totalPremium: 78_750, discount: 0, netPremium: 78_750,
+  naicomUid: 'NMC-2026-00001', niidRef: 'NIID-2026-00001',
+  policyDocumentPath: '/docs/pol1.pdf',
+  risks: [], coinsuranceParticipants: [], survey: null,
+  createdAt: '2026-01-30',
   riskDescription: '2022 Toyota Camry 2.5L, Reg: LND-001-AA, Chassis: ABC123',
   paymentTerms: 'Immediate', commission: 9_844,
   debitNoteNumber: 'DN-2026-00001',
@@ -40,8 +40,15 @@ const mockPolicy: MockPolicy = {
   ],
 };
 
-const statusVariant: Record<string, 'active'|'pending'|'draft'|'cancelled'|'rejected'> = {
-  ACTIVE: 'active', PENDING_APPROVAL: 'pending', DRAFT: 'draft', EXPIRED: 'cancelled', CANCELLED: 'rejected', LAPSED: 'draft',
+const statusVariant: Record<PolicyDto['status'], 'active' | 'pending' | 'draft' | 'cancelled' | 'rejected'> = {
+  ACTIVE:           'active',
+  REINSTATED:       'active',
+  PENDING_APPROVAL: 'pending',
+  DRAFT:            'draft',
+  EXPIRED:          'cancelled',
+  CANCELLED:        'rejected',
+  REJECTED:         'rejected',
+  LAPSED:           'draft',
 };
 
 function Row({ label, value }: { label: string; value?: string }) {
@@ -104,8 +111,8 @@ export default function PolicyDetailPage() {
   return (
     <div className="p-6 space-y-5 max-w-5xl">
       <PageHeader
-        title={p.policyNumber}
-        description={`${p.productName} · ${p.customerName} · ${p.startDate} → ${p.endDate}`}
+        title={p.policyNumber ?? p.id}
+        description={`${p.productName} · ${p.customerName} · ${p.policyStartDate} → ${p.policyEndDate}`}
         breadcrumb={
           <button onClick={() => navigate('/policies')} className="text-sm text-muted-foreground hover:text-foreground">
             ← Policies
@@ -119,7 +126,7 @@ export default function PolicyDetailPage() {
             {canApprove && <Button size="sm">Approve Policy</Button>}
             {isActive   && <Button size="sm" variant="outline">Add Endorsement</Button>}
             {isActive   && <Button size="sm">Register Claim</Button>}
-            {p.documentPath && <Button size="sm" variant="outline">Download PDF</Button>}
+            {p.policyDocumentPath && <Button size="sm" variant="outline">Download PDF</Button>}
           </div>
         }
       />
@@ -143,16 +150,16 @@ export default function PolicyDetailPage() {
                 <Row label="Product"       value={p.productName} />
                 <Row label="Class"         value={p.classOfBusinessName} />
                 <Row label="Business Type" value={p.businessType.replace(/_/g, ' ')} />
-                <Row label="Period"        value={`${p.startDate} → ${p.endDate}`} />
+                <Row label="Period"        value={`${p.policyStartDate} → ${p.policyEndDate}`} />
                 <Row label="Risk"          value={p.riskDescription} />
-                <Row label="Quote Ref."    value={p.quoteId ?? 'Direct'} />
+                <Row label="Quote Ref."    value={p.quoteNumber ?? p.quoteId ?? 'Direct'} />
               </CardContent>
             </Card>
             <Card>
               <CardHeader><CardTitle>Premium & Payment</CardTitle></CardHeader>
               <CardContent>
-                <Row label="Sum Insured"    value={`₦${p.sumInsured.toLocaleString()}`} />
-                <Row label="Gross Premium"  value={`₦${p.premium.toLocaleString()}`} />
+                <Row label="Sum Insured"    value={`₦${p.totalSumInsured.toLocaleString()}`} />
+                <Row label="Gross Premium"  value={`₦${p.totalPremium.toLocaleString()}`} />
                 <Row label="Net Premium"    value={`₦${p.netPremium.toLocaleString()}`} />
                 <Row label="Commission"     value={`₦${p.commission.toLocaleString()}`} />
                 <Row label="Payment Terms"  value={p.paymentTerms} />
@@ -170,7 +177,7 @@ export default function PolicyDetailPage() {
                 <CardTitle>Policy Document</CardTitle>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm">Edit Template</Button>
-                  {p.documentPath && <Button size="sm">Download PDF</Button>}
+                  {p.policyDocumentPath && <Button size="sm">Download PDF</Button>}
                 </div>
               </div>
             </CardHeader>
@@ -194,14 +201,14 @@ export default function PolicyDetailPage() {
                 <div>
                   <p className="text-sm font-medium text-foreground">Document Status</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {p.documentPath ? 'PDF generated and ready to send' : 'Not yet generated — approve policy to generate'}
+                    {p.policyDocumentPath ? 'PDF generated and ready to send' : 'Not yet generated — approve policy to generate'}
                   </p>
                 </div>
-                <Badge variant={p.documentPath ? 'active' : 'draft'} className="text-[10px]">
-                  {p.documentPath ? 'Generated' : 'Pending'}
+                <Badge variant={p.policyDocumentPath ? 'active' : 'draft'} className="text-[10px]">
+                  {p.policyDocumentPath ? 'Generated' : 'Pending'}
                 </Badge>
               </div>
-              {p.documentPath && (
+              {p.policyDocumentPath && (
                 <div className="flex gap-2">
                   <Button size="sm">Send to Insured</Button>
                   <Button size="sm" variant="outline">Acknowledge Receipt</Button>
@@ -216,13 +223,13 @@ export default function PolicyDetailPage() {
           <Card>
             <CardHeader><CardTitle>Debit Note & Finance</CardTitle></CardHeader>
             <CardContent>
-              {p.debitNoteId ? (
+              {p.debitNoteNumber ? (
                 <>
                   <Row label="Debit Note No."  value={p.debitNoteNumber} />
                   <Row label="Amount"           value={`₦${p.netPremium.toLocaleString()}`} />
                   <Row label="Commission"       value={`₦${p.commission.toLocaleString()}`} />
                   <Row label="Payment Status"   value="Outstanding" />
-                  <Row label="Due Date"         value={p.startDate} />
+                  <Row label="Due Date"         value={p.policyStartDate} />
                   <div className="mt-4">
                     <Button size="sm">Post Receipt</Button>
                   </div>
@@ -240,7 +247,7 @@ export default function PolicyDetailPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Pre-Loss Survey</CardTitle>
-                {p.surveyRequired && <Badge variant="pending" className="text-[10px]">{p.surveyStatus ?? 'PENDING'}</Badge>}
+                {p.surveyRequired && <Badge variant="pending" className="text-[10px]">{p.survey?.status ?? 'PENDING'}</Badge>}
               </div>
             </CardHeader>
             <CardContent>
@@ -279,9 +286,9 @@ export default function PolicyDetailPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              <NaicomStatus uid={p.naicomUid} label="NAICOM UID" />
+              <NaicomStatus uid={p.naicomUid ?? undefined} label="NAICOM UID" />
               {(p.classOfBusinessName === 'Motor (Private)' || p.classOfBusinessName === 'Marine Cargo') && (
-                <NaicomStatus uid={p.niidUid} label="NIID UID" />
+                <NaicomStatus uid={p.niidRef ?? undefined} label="NIID UID" />
               )}
               <div className="rounded-lg bg-muted/40 p-3">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Upload Log</p>

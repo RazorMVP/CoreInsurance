@@ -81,7 +81,7 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
             {isPolicyBacked && policyQuery.data && (
               <>
                 <DetailRow label="Class"  value={policyQuery.data.classOfBusinessName} />
-                <DetailRow label="Period" value={`${policyQuery.data.startDate} → ${policyQuery.data.endDate}`} />
+                <DetailRow label="Period" value={`${policyQuery.data.policyStartDate} → ${policyQuery.data.policyEndDate}`} />
               </>
             )}
           </div>
