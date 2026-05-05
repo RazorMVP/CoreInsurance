@@ -138,6 +138,14 @@ public class PolicyController {
         return ApiResponse.success(service.addRisksBulk(id, requests));
     }
 
+    @PutMapping("/{id}/coinsurance")
+    @PreAuthorize("hasRole('UNDERWRITING_UPDATE')")
+    public ApiResponse<PolicyResponse> updateCoinsurance(
+            @PathVariable UUID id,
+            @Valid @RequestBody java.util.List<PolicyCoinsuranceParticipantRequest> requests) {
+        return ApiResponse.success(service.updateCoinsurance(id, requests));
+    }
+
     // ─── Policy document delivery / acknowledgement / download ────────────
 
     @PostMapping("/{id}/document/send")

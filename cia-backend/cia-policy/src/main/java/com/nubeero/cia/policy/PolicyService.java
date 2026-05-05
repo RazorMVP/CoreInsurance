@@ -512,6 +512,23 @@ public class PolicyService {
         return toResponse(policy);
     }
 
+    // ─── Coinsurance — update participants ────────────────────────────────
+
+    @Transactional
+    public PolicyResponse updateCoinsurance(UUID id, List<PolicyCoinsuranceParticipantRequest> requests) {
+        Policy policy = findOrThrow(id);
+        requireDraftStatus(policy, "update coinsurance");
+        if (policy.getBusinessType() != BusinessType.DIRECT_WITH_COINSURANCE) {
+            throw new BusinessRuleException("INVALID_BUSINESS_TYPE",
+                    "Coinsurance participants only apply to DIRECT_WITH_COINSURANCE policies; " +
+                    "current type: " + policy.getBusinessType());
+        }
+        applyCoinsuranceParticipants(policy, requests);
+        validateCoinsuranceShares(policy);
+        auditService.log("Policy", id.toString(), AuditAction.UPDATE, null, policy);
+        return toResponse(policy);
+    }
+
     // ─── Policy document — send / acknowledge / download ──────────────────
 
     @Transactional
