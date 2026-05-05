@@ -423,6 +423,116 @@ public class PolicyService {
         return toResponse(policy);
     }
 
+    // ─── NIID manual retrigger ────────────────────────────────────────────
+
+    @Transactional
+    public PolicyResponse triggerNiidUpload(UUID id) {
+        Policy policy = findOrThrow(id);
+        if (policy.getStatus() != PolicyStatus.ACTIVE && policy.getStatus() != PolicyStatus.REINSTATED) {
+            throw new BusinessRuleException("INVALID_POLICY_STATUS",
+                    "NIID upload requires an active policy: " + id);
+        }
+        startNiidWorkflow(policy);
+        auditService.log("Policy", id.toString(), AuditAction.UPDATE, null, policy);
+        return toResponse(policy);
+    }
+
+    // ─── Risk CRUD (DRAFT-only — risks are immutable once submitted) ───────
+
+    @Transactional
+    public PolicyResponse updateRisk(UUID policyId, UUID riskId, PolicyRiskRequest request) {
+        Policy policy = findOrThrow(policyId);
+        if (policy.getStatus() != PolicyStatus.DRAFT) {
+            throw new BusinessRuleException("INVALID_POLICY_STATUS",
+                    "Risks can only be modified while the policy is in DRAFT");
+        }
+        PolicyRisk risk = policy.getRisks().stream()
+                .filter(r -> r.getId() != null && r.getId().equals(riskId) && r.getDeletedAt() == null)
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("PolicyRisk", riskId.toString()));
+
+        Product product = productRepository.findById(policy.getProductId())
+                .orElseThrow(() -> new ResourceNotFoundException("Product", policy.getProductId().toString()));
+
+        Policy beforeSnapshot = policy;  // audit captures the policy state, not the individual risk
+
+        risk.setDescription(request.getDescription());
+        risk.setSumInsured(request.getSumInsured());
+        risk.setPremium(request.getSumInsured().multiply(product.getRate()));
+        risk.setSectionId(request.getSectionId());
+        risk.setSectionName(resolveSectionName(product, request.getSectionId()));
+        risk.setRiskDetails(request.getRiskDetails());
+        risk.setVehicleRegNumber(request.getVehicleRegNumber());
+
+        recomputePolicyTotals(policy);
+
+        auditService.log("PolicyRisk", riskId.toString(), AuditAction.UPDATE, beforeSnapshot, policy);
+        return toResponse(policy);
+    }
+
+    @Transactional
+    public PolicyResponse addRisksBulk(UUID policyId, List<PolicyRiskRequest> requests) {
+        Policy policy = findOrThrow(policyId);
+        if (policy.getStatus() != PolicyStatus.DRAFT) {
+            throw new BusinessRuleException("INVALID_POLICY_STATUS",
+                    "Risks can only be added while the policy is in DRAFT");
+        }
+        if (requests == null || requests.isEmpty()) {
+            throw new BusinessRuleException("EMPTY_BULK_REQUEST",
+                    "At least one risk is required for bulk add");
+        }
+        Product product = productRepository.findById(policy.getProductId())
+                .orElseThrow(() -> new ResourceNotFoundException("Product", policy.getProductId().toString()));
+
+        int startOrder = policy.getRisks().stream()
+                .filter(r -> r.getDeletedAt() == null)
+                .mapToInt(PolicyRisk::getOrderNo)
+                .max()
+                .orElse(0) + 1;
+
+        AtomicInteger order = new AtomicInteger(startOrder);
+        requests.forEach(r -> policy.getRisks().add(PolicyRisk.builder()
+                .policy(policy)
+                .description(r.getDescription())
+                .sumInsured(r.getSumInsured())
+                .premium(r.getSumInsured().multiply(product.getRate()))
+                .sectionId(r.getSectionId())
+                .sectionName(resolveSectionName(product, r.getSectionId()))
+                .riskDetails(r.getRiskDetails())
+                .vehicleRegNumber(r.getVehicleRegNumber())
+                .orderNo(order.getAndIncrement())
+                .build()));
+
+        recomputePolicyTotals(policy);
+
+        auditService.log("Policy", policyId.toString(), AuditAction.UPDATE, null, policy);
+        return toResponse(policy);
+    }
+
+    private String resolveSectionName(Product product, UUID sectionId) {
+        if (sectionId == null) return null;
+        return product.getSections().stream()
+                .filter(s -> s.getId().equals(sectionId) && s.getDeletedAt() == null)
+                .findFirst()
+                .map(ProductSection::getName)
+                .orElse(null);
+    }
+
+    private void recomputePolicyTotals(Policy policy) {
+        BigDecimal totalSumInsured = policy.getRisks().stream()
+                .filter(r -> r.getDeletedAt() == null)
+                .map(PolicyRisk::getSumInsured)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalPremium = policy.getRisks().stream()
+                .filter(r -> r.getDeletedAt() == null)
+                .map(PolicyRisk::getPremium)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        policy.setTotalSumInsured(totalSumInsured);
+        policy.setTotalPremium(totalPremium);
+        BigDecimal discount = policy.getDiscount() == null ? BigDecimal.ZERO : policy.getDiscount();
+        policy.setNetPremium(totalPremium.subtract(discount));
+    }
+
     // ─── Temporal helpers ─────────────────────────────────────────────────
 
     private void startNaicomWorkflow(Policy policy) {

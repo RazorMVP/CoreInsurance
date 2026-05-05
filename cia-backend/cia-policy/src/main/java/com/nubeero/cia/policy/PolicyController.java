@@ -106,4 +106,29 @@ public class PolicyController {
     public ApiResponse<PolicyResponse> triggerNaicomUpload(@PathVariable UUID id) {
         return ApiResponse.success(service.triggerNaicomUpload(id));
     }
+
+    @PostMapping("/{id}/niid-upload")
+    @PreAuthorize("hasRole('UNDERWRITING_UPDATE')")
+    public ApiResponse<PolicyResponse> triggerNiidUpload(@PathVariable UUID id) {
+        return ApiResponse.success(service.triggerNiidUpload(id));
+    }
+
+    // ─── Risks (DRAFT-only — submission locks the risk schedule) ──────────
+
+    @PutMapping("/{id}/risks/{riskId}")
+    @PreAuthorize("hasRole('UNDERWRITING_UPDATE')")
+    public ApiResponse<PolicyResponse> updateRisk(
+            @PathVariable UUID id,
+            @PathVariable UUID riskId,
+            @Valid @RequestBody PolicyRiskRequest request) {
+        return ApiResponse.success(service.updateRisk(id, riskId, request));
+    }
+
+    @PostMapping("/{id}/risks/bulk")
+    @PreAuthorize("hasRole('UNDERWRITING_UPDATE')")
+    public ApiResponse<PolicyResponse> addRisksBulk(
+            @PathVariable UUID id,
+            @Valid @RequestBody java.util.List<PolicyRiskRequest> requests) {
+        return ApiResponse.success(service.addRisksBulk(id, requests));
+    }
 }
