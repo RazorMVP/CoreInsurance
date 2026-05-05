@@ -2,47 +2,42 @@ import {
   Badge, Button, Separator,
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from '@cia/ui';
+import type { AuditAction, AuditLogDto } from '@cia/api-client';
 
-type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'APPROVE' | 'REJECT' | 'SEND' | 'EXPORT' | 'LOGIN' | 'LOGOUT';
-type EntityType  = 'POLICY' | 'CLAIM' | 'CUSTOMER' | 'ENDORSEMENT' | 'QUOTE' | 'RECEIPT' | 'PAYMENT' | 'USER' | 'REINSURANCE' | 'PARTNER_APP';
+// Re-export the canonical type as AuditLogEntry so existing callers
+// (AuditLogTab) keep working without an import-name change.
+export type AuditLogEntry = AuditLogDto;
 
-export interface AuditLogEntry {
-  id:         string;
-  entityType: EntityType;
-  entityId:   string;
-  entityRef:  string;
-  action:     AuditAction;
-  userId:     string;
-  userName:   string;
-  timestamp:  string;
-  ipAddress:  string;
-  sessionId:  string;
-  oldValue:   Record<string, unknown> | null;
-  newValue:   Record<string, unknown> | null;
-}
-
-const ACTION_VARIANT: Record<AuditAction, 'active'|'pending'|'rejected'|'draft'|'cancelled'> = {
+const ACTION_VARIANT: Record<AuditAction, 'active' | 'pending' | 'rejected' | 'draft' | 'cancelled'> = {
   CREATE:  'active',
   UPDATE:  'pending',
   DELETE:  'rejected',
   APPROVE: 'active',
   REJECT:  'rejected',
+  SUBMIT:  'draft',
   SEND:    'draft',
-  EXPORT:  'draft',
-  LOGIN:   'active',
-  LOGOUT:  'draft',
+  CANCEL:  'cancelled',
+  REVERSE: 'rejected',
+  EXECUTE: 'active',
 };
 
 const ACTION_LABEL: Record<AuditAction, string> = {
-  CREATE: 'Created', UPDATE: 'Updated', DELETE: 'Deleted',
-  APPROVE: 'Approved', REJECT: 'Rejected', SEND: 'Sent',
-  EXPORT: 'Exported', LOGIN: 'Login', LOGOUT: 'Logout',
+  CREATE:  'Created',
+  UPDATE:  'Updated',
+  DELETE:  'Deleted',
+  APPROVE: 'Approved',
+  REJECT:  'Rejected',
+  SUBMIT:  'Submitted',
+  SEND:    'Sent',
+  CANCEL:  'Cancelled',
+  REVERSE: 'Reversed',
+  EXECUTE: 'Executed',
 };
 
 interface Props {
   open:         boolean;
   onOpenChange: (v: boolean) => void;
-  entry:        AuditLogEntry | null;
+  entry:        AuditLogDto | null;
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
@@ -54,7 +49,12 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function JsonPanel({ label, value }: { label: string; value: Record<string, unknown> | null }) {
+/**
+ * Backend stores oldValue / newValue as JSON-serialised strings.
+ * Pretty-print on display; if the string is malformed, show the raw
+ * value so we never silently swallow auditable data.
+ */
+function JsonPanel({ label, value }: { label: string; value: string | null | undefined }) {
   if (!value) {
     return (
       <div className="flex-1 min-w-0">
@@ -66,12 +66,19 @@ function JsonPanel({ label, value }: { label: string; value: Record<string, unkn
     );
   }
 
-  const json = JSON.stringify(value, null, 2);
+  let pretty = value;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    pretty = JSON.stringify(parsed, null, 2);
+  } catch {
+    // Leave value as-is if it isn't valid JSON.
+  }
+
   return (
     <div className="flex-1 min-w-0">
       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{label}</p>
       <pre className="rounded-lg bg-muted/40 p-3 text-[11px] font-mono text-foreground overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all">
-        {json}
+        {pretty}
       </pre>
     </div>
   );
@@ -80,12 +87,17 @@ function JsonPanel({ label, value }: { label: string; value: Record<string, unkn
 export default function AuditEventDetailSheet({ open, onOpenChange, entry }: Props) {
   if (!entry) return null;
 
+  // Backend has no entityRef field — compose a display label from
+  // entityType + entityId (truncated). Callers may also pre-resolve a
+  // friendlier reference, but this never renders empty.
+  const entityRef = entry.entityId ? entry.entityId.slice(0, 8) : '—';
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader>
           <div className="flex items-center gap-2">
-            <SheetTitle>{entry.entityType} — {entry.entityRef}</SheetTitle>
+            <SheetTitle>{entry.entityType} — {entityRef}</SheetTitle>
             <Badge variant={ACTION_VARIANT[entry.action]} className="text-[10px]">
               {ACTION_LABEL[entry.action]}
             </Badge>
@@ -104,13 +116,15 @@ export default function AuditEventDetailSheet({ open, onOpenChange, entry }: Pro
             <div className="px-4 pb-2">
               <DetailRow label="Event ID"    value={entry.id} />
               <DetailRow label="Entity Type" value={entry.entityType} />
-              <DetailRow label="Entity ID"   value={entry.entityId} />
-              <DetailRow label="Reference"   value={entry.entityRef} />
+              <DetailRow label="Entity ID"   value={entry.entityId ?? '—'} />
               <DetailRow label="Action"      value={ACTION_LABEL[entry.action]} />
-              <DetailRow label="Performed By" value={entry.userName} />
+              <DetailRow label="Performed By" value={entry.userName ?? entry.userId ?? '—'} />
               <DetailRow label="Timestamp"   value={entry.timestamp} />
-              <DetailRow label="IP Address"  value={entry.ipAddress} />
-              <DetailRow label="Session ID"  value={entry.sessionId} />
+              <DetailRow label="IP Address"  value={entry.ipAddress ?? '—'} />
+              <DetailRow label="Session ID"  value={entry.sessionId ?? '—'} />
+              {entry.approvalAmount != null && (
+                <DetailRow label="Approval Amount" value={`₦${entry.approvalAmount.toLocaleString()}`} />
+              )}
             </div>
           </div>
 
