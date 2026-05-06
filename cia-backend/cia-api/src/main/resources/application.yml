@@ -19,7 +19,15 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      # Flyway is the source of truth for schema (see db/migration/V*.sql).
+      # `validate` was the previous setting but it cannot honour
+      # `@ColumnTransformer` + `columnDefinition = "bytea"` together — the
+      # validator's expected-type derivation ignores columnDefinition and
+      # reports a varchar/bytea mismatch on the four NDPR PII fields
+      # (V24 migration). Drift between entities and migrations is caught
+      # by integration tests (Testcontainers) instead. `none` is the
+      # canonical Flyway-driven Spring Boot setting.
+      ddl-auto: none
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect

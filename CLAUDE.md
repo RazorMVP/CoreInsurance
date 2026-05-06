@@ -437,16 +437,33 @@ All external integrations share the same pattern: **interface → stub implement
 
 ```
 docker-compose up
-  ├── postgres:16        :5432   — PostgreSQL
-  ├── keycloak:24        :8180   — Keycloak (dev realm pre-seeded)
-  ├── temporalite        :7233   — Temporal single-binary dev server
-  ├── temporal-ui        :8088   — Temporal workflow browser
-  └── minio              :9000   — Object storage
-                         :9001   — MinIO console
+  ├── postgres:16        :5434   — PostgreSQL (5432 in container)
+  ├── keycloak:24        :8280   — Keycloak (8080 in container; dev realm pre-seeded)
+  ├── temporal-auto-setup :7233   — Temporal server
+  ├── temporal-ui         :8088   — Temporal workflow browser (8080 in container)
+  ├── minio              :9000   — Object storage
+  │                       :9001   — MinIO console
+  └── redis:7-alpine     :6380   — Redis (6379 in container; partner-API rate-limit cache)
 
-Spring Boot (cia-api)  :8080    — mvn spring-boot:run -pl cia-api -Pdev
-Vite dev server        :5173    — npm run dev (inside cia-frontend/)
+Spring Boot (cia-api)  :8090    — see "Run the backend" below
+Vite dev server        :5173    — pnpm --filter @cia/back-office dev
 ```
+
+**Run the backend.** From `cia-backend/`:
+
+```bash
+# First time + after non-trivial changes — install all module SNAPSHOTs to ~/.m2
+mvn install -DskipTests -pl cia-api -am
+
+# Start the API with the dev Spring profile active
+SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run -pl cia-api -Dspring-boot.run.profiles=dev
+```
+
+**Why `install` and not just `compile`:** `mvn spring-boot:run` resolves dependencies from `~/.m2/repository`, NOT from the in-reactor `target/classes` directories. After editing a non-cia-api module (e.g. `cia-claims`), running `spring-boot:run` without an `install` first will silently load the previous SNAPSHOT jar from m2 — endpoints added since the last `install` won't appear at runtime. Symptom: Springdoc reports a path count below the static `internal-api.json`. Fix: `mvn install -DskipTests -pl cia-api -am` and restart.
+
+**Why two profile flags:** `SPRING_PROFILES_ACTIVE=dev` activates the dev profile for the JVM Spring loads; `-Dspring-boot.run.profiles=dev` does the same for the spring-boot-maven-plugin's forked process. Setting both is the safe combination.
+
+The Maven `-Pdev` flag is a *Maven* profile, not a Spring profile — there is no `dev` Maven profile defined, so passing it produces a "profile could not be activated" warning and otherwise does nothing.
 
 #### Production (Kubernetes)
 
@@ -974,6 +991,7 @@ bash cia-frontend/scripts/check-api-wiring.sh
 - All foreign keys enforced at DB level.
 - Soft deletes (`deleted_at`) for all master data entities (brokers, products, etc.).
 - Indexes on all foreign keys and common filter columns.
+- **Schema management:** `spring.jpa.hibernate.ddl-auto: none` (see `application.yml`). Flyway is the source of truth for DDL; Hibernate never creates or validates schema at startup. The `validate` mode is incompatible with the V24 NDPR PII pattern (`@ColumnTransformer` + `columnDefinition = "bytea"`) — Hibernate's schema validator doesn't honour `columnDefinition` and reports a spurious varchar/bytea mismatch. Drift between entities and migrations is caught by integration tests (Testcontainers).
 
 ### Security
 - All traffic TLS in production.
