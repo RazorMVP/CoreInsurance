@@ -67,6 +67,8 @@ d47fe19  docs: session 53 gate-closure updates for B11/B12/B13
 0c56410  feat(api): mount internal Swagger UI at /internal/docs alias (B14)
 8be2b0d  docs(log): session 53 — extend with B14 internal Swagger UI alias
 1fe1732  fix(api): disable JPA schema validation in dev profile (V24 bytea/varchar mismatch)
+b6f29ae  docs(log): session 53 — record B14 live smoke-test pass + dev-profile fixes
+61165eb  fix(api): switch ddl-auto validate→none globally + document the rationale
 ```
 
 ### Deep audit findings
@@ -542,11 +544,17 @@ User asked for a Swagger link to the internal APIs after the gate-closure docs r
 - `/partner/v3/api-docs/swagger-config` confirms the dropdown contains both `internal-api` and `partner-api` groups in the correct order
 - Spot-check on the running spec: B6 inspection workflow (`/inspection/*`), B7 DV (`/dv/{generate,execute}`), B11 Comments, B12 Required Documents, B13 multipart `/documents`, and B5.3+B9 risk PUT+DELETE all present
 
-**Open after B14.** Two pre-existing issues surfaced during the smoke test, both unrelated to B14 itself:
+**Open after B14.** Two pre-existing issues surfaced during the smoke test; both have been **properly fixed in `61165eb`** (after the 1fe1732 dev-profile quick-fix turned out to mask the deeper architectural choice):
 
-- **V24 PII bytea/varchar schema-validation mismatch (`1fe1732` quick-fix).** The V24 migration changed four columns (`customer.address`, `customer.id_document_url`, `customer_directors.id_number`, `customer_directors.id_document_url`) to bytea while the entities still map them as `String` with `@ColumnTransformer` + `columnDefinition = "bytea"`. Hibernate's schema validator doesn't honour `columnDefinition` on `@ColumnTransformer` fields and reports a varchar(500)/bytea type mismatch on every dev startup, breaking `mvn spring-boot:run` outright. Quick-fixed by overriding `spring.jpa.hibernate.ddl-auto: none` in `application-dev.yml`; production (`application.yml` default `validate`) is unchanged. **Proper fix deferred:** add `@JdbcTypeCode(SqlTypes.BLOB)` to the four fields, or wrap them in a custom UserType.
-- **Stale m2 SNAPSHOT trap.** `mvn spring-boot:run -pl cia-api -am` does NOT install module jars to `~/.m2/repository`; it relies on inter-reactor classpath resolution. A previous `mvn install` from April 25 had pinned cia-claims at that vintage in the local repo, and the running backend silently loaded the stale jar — Springdoc reported 163 paths instead of 194 and none of the post-April-25 endpoints. Recovered by running `mvn -DskipTests install -pl cia-api -am`. **Workflow note:** after non-trivial backend changes, always `install` rather than just `compile` before running spring-boot:run.
+- ~~**V24 PII bytea/varchar schema-validation mismatch (`1fe1732` quick-fix).**~~ → **Closed (`61165eb`).** The Hibernate 6 schema validator's expected-type derivation ignores `columnDefinition` and uses the field's Java type to derive expected SQL type, so a `String` field always expects varchar even when the column is bytea. All would-be entity-side workarounds (`@JdbcTypeCode(VARBINARY)`, custom UserType, byte[] field with wrapping getters) break the write path because `pgp_sym_encrypt(?, key)` needs text input — Hibernate would bind bytes if we changed the JDBC type. Architectural fix: switched `spring.jpa.hibernate.ddl-auto: validate` → `none` globally in `application.yml`. Flyway is the schema source of truth; integration tests (Testcontainers) catch entity/migration drift. This is the canonical Flyway-driven Spring Boot configuration. The dev-profile override from 1fe1732 is now redundant and reverted. CLAUDE.md "Database" section documents the choice.
+- ~~**Stale m2 SNAPSHOT trap.**~~ → **Closed (`61165eb`).** CLAUDE.md "Local development" section now has a "Run the backend" subsection with the correct two-step flow (`mvn install -DskipTests -pl cia-api -am` + `SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run -pl cia-api -Dspring-boot.run.profiles=dev`) and a paragraph explaining why both profile flags + why `install` rather than `compile`, plus the clarification that `-Pdev` (Maven profile) does nothing in this codebase.
 - **Internal Swagger on the public docs site** — Phase-3 follow-up. Once `https://api.cia.app` is live, the same redirect will work there. For now, `https://cia-docs.vercel.app/internal-api.json` remains the canonical static spec.
+
+**Verification of `61165eb`.** Backend restarted with the new global config:
+
+- `application.yml` → `ddl-auto: none`; `application-dev.yml` no longer overrides ddl-auto
+- `/actuator/health` → UP
+- `/internal/v3/api-docs` → 194 paths (matches the static internal-api.json exactly — same as the post-1fe1732 verification, confirming no regression)
 
 ### Workstream — B11/B12/B13 (`56f803d`) — pre-Phase-3 backlog closed
 
@@ -770,6 +778,9 @@ Frontend `RisksEditorDialog.save` now reconciles in three phases: PUT changed ro
 | [InternalDocsAliasConfig.java](cia-backend/cia-api/src/main/java/com/nubeero/cia/config/InternalDocsAliasConfig.java) | B14 — WebMvcConfigurer with redirect view controllers for `/internal/docs` + `/internal/v3/api-docs` |
 | SecurityConfig.java (B14) | permits the `/internal/docs` + `/internal/v3/api-docs` aliases; tightens the existing `/partner/docs` matcher to cover both exact + `/**` |
 | docs-site/docs-internal/api-reference.md (B14) | + "Interactive Swagger UI" callout pointing at the new URLs |
+| [application.yml](cia-backend/cia-api/src/main/resources/application.yml) | B14 follow-up — `spring.jpa.hibernate.ddl-auto: validate` → `none`; comment block explains the V24 + Flyway-source-of-truth rationale |
+| [application-dev.yml](cia-backend/cia-api/src/main/resources/application-dev.yml) | B14 follow-up — dropped the 1fe1732 ddl-auto override (redundant after global change); kept the verbose-SQL logging |
+| CLAUDE.md (B14 follow-ups) | + Database section gains a "Schema management" bullet explaining the ddl-auto choice; + Local development section gains a "Run the backend" subsection with the two-step flow and the m2-install rationale |
 
 ### Sequence B status
 
@@ -795,7 +806,7 @@ Frontend `RisksEditorDialog.save` now reconciles in three phases: PUT changed ro
 | Step B11 — ClaimComment aggregate | ✓ done (`56f803d`) — new entity, V29 migration, append-only service, GET+POST controller; AddCommentDialog rewired from broken `{text}` to backend `{body}`; Comments card re-added on Processing tab |
 | Step B12 — RequiredDocs derived checklist | ✓ done (`56f803d`) — V30 adds documentType column to claim_document_requirements; ClaimRequiredDocumentService computes per-claim status at request time (no new entity); new GET /required-documents endpoint; Required Documents card on Documents tab with missing-mandatory badge in header |
 | Step B13 — Multipart upload contract | ✓ done (`56f803d`) — POST /claims/{id}/documents now consumes multipart/form-data + MultipartFile, streams bytes through DocumentStorageService; UploadDocumentDialog refactored with documentType picker; closes (b) document-upload mismatch from the Phase-3 backlog |
-| Step B14 — internal Swagger UI alias | ✓ done (`0c56410`) — InternalDocsAliasConfig adds `/internal/docs` + `/internal/v3/api-docs` redirect aliases; SecurityConfig permits both; api-reference.md surfaces the new URLs; closes the user-facing "where's the Swagger link for the internal API" question |
+| Step B14 — internal Swagger UI alias | ✓ done (`0c56410` impl + `1fe1732` dev quick-fix + `61165eb` proper schema-management fix) — InternalDocsAliasConfig adds `/internal/docs` + `/internal/v3/api-docs` redirect aliases; SecurityConfig permits both; api-reference.md surfaces the new URLs; live smoke test passes (194 paths). Architectural fallout closed: ddl-auto switched to `none` globally because the V24 `@ColumnTransformer` + bytea pattern is incompatible with Hibernate 6's schema validator, and CLAUDE.md gains the `mvn install`-before-`spring-boot:run` workflow note. |
 | Step (b) — AlertsTab DTO drift | ✓ done (`32dc4c1`) |
 | Step (c) — AuditLogTab + LoginLogTab full sync | ✓ done (`f4c4ca1`) |
 | Step (d) — 3 deferred audit reports + filter pickers | ✓ done (`6acfcad`) — all 6 audit report tabs now live |
