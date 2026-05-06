@@ -153,7 +153,7 @@ npx playwright test --ui             # interactive Playwright UI
 npx playwright test e2e/policy/      # single module
 ```
 
-> Before running E2E tests ensure the local stack is fully up: `docker-compose up -d` and `mvn spring-boot:run -pl cia-api`.
+> Before running E2E tests ensure the local stack is fully up: `docker-compose up -d` and `SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run -pl cia-api -Dspring-boot.run.profiles=dev`.
 
 ---
 

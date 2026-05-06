@@ -56,10 +56,13 @@ docker-compose ps
 ```bash
 cd cia-backend
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21
-./mvnw spring-boot:run -pl cia-api -Pdev
+SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run -pl cia-api -Dspring-boot.run.profiles=dev
 ```
 
 The API starts at `http://localhost:8090`. Flyway runs migrations on boot.
+The backend requires an explicit Spring profile. Use `dev` for local
+development; the Maven `-Pdev` flag is not a Spring profile and does not
+activate the local security/configuration profile.
 
 ## 4. Start the Frontend
 

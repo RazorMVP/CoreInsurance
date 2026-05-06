@@ -507,7 +507,7 @@ interface DocumentStorageService {
     InputStream download(String tenantId, String path);
     void delete(String tenantId, String path);
 }
-// Active impl: STORAGE_TYPE=minio|s3|gcs|azure|local
+// Active impl: STORAGE_TYPE=minio|s3
 ```
 
 #### KYC Verification
@@ -521,7 +521,7 @@ interface KycVerificationService {
     KycResult verifyDirector(DirectorKycRequest request);
 }
 // Failure: customer created with kyc_status = FAILED; reason stored; resubmit via KYC Update
-// Active impl: KYC_PROVIDER=dojah|prembly|nibss|mock
+// Active impl: KYC_PROVIDER=dojah|prembly; mock is dev/test only
 ```
 
 #### Notifications
@@ -1010,7 +1010,7 @@ bash cia-frontend/scripts/check-api-wiring.sh
 | `DB_URL` | PostgreSQL connection | env / K8s secret |
 | `KEYCLOAK_URL` | Keycloak server URL | env |
 | `TEMPORAL_HOST` | Temporal server address | env |
-| `STORAGE_TYPE` | `minio` / `s3` / `gcs` / `azure` | env |
+| `STORAGE_TYPE` | `minio` / `s3` | env |
 | `STORAGE_ENDPOINT` | Storage endpoint URL | env |
 | `NAICOM_API_URL` | NAICOM integration endpoint | env / vault |
 | `NIID_API_URL` | NIID integration endpoint | env / vault |

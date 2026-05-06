@@ -118,8 +118,8 @@ After provisioning, the tenant admin configures the following in the Setup & Adm
 
 | Setting | Options |
 | --- | --- |
-| KYC provider | `dojah`, `prembly`, `nibss`, `mock` |
-| Storage type | `s3`, `gcs`, `azure`, `minio`, `local` |
+| KYC provider | `dojah`, `prembly`; `mock` is dev/test only |
+| Storage type | `s3`, `minio` |
 | Email provider | `sendgrid`, `ses`, `smtp`, `log` |
 | SMS provider | `termii`, `twilio`, `log` |
 | AI features | enabled / disabled per feature flag |

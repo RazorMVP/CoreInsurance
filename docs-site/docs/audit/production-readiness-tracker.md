@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-06 16:38 Africa/Lagos
+Last updated: 2026-05-06 16:56 Africa/Lagos
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -28,8 +28,8 @@ These gates must pass before live deployment approval.
 
 | Gate | Required outcome | Status | Notes |
 | --- | --- | --- | --- |
-| Build gate | Backend, frontend, docs, and Docker config build successfully from a clean checkout. | In progress | Phase 0 working-tree baseline passed on branch `production-readiness-phase-0`; repeat from clean checkout after committing the baseline. |
-| Security gate | Production cannot run with dev profile, default secrets, mock providers, or unauthenticated endpoints. | Not started | Blocks deployment. |
+| Build gate | Backend, frontend, docs, and Docker config build successfully from a clean checkout. | In progress | Phase 0 and Phase 1 working-tree baselines passed on branch `production-readiness-phase-0`; repeat from clean checkout after committing the phase. |
+| Security gate | Production cannot run with dev profile, default secrets, mock providers, or unauthenticated endpoints. | In progress | Phase 1 startup guardrails are verified; endpoint authorization remains in Phase 2. |
 | Authorization gate | Role and scope checks are enforced and tested for critical endpoints. | Not started | Blocks deployment. |
 | Tenant isolation gate | Tenant data isolation is proven with automated tests. | Not started | Blocks deployment. |
 | Data correctness gate | Reports, premium calculations, finance postings, and migrations are validated. | Not started | Blocks deployment. |
@@ -77,12 +77,29 @@ Goal: prevent unsafe production startup.
 
 | ID | Fix item | Status | Owner | Verification |
 | --- | --- | --- | --- | --- |
-| P1-001 | Remove `dev` as the default backend profile. | Not started | TBD | Backend requires an explicit profile. |
-| P1-002 | Fail startup if a production-like environment uses the dev security profile. | Not started | TBD | Production config test fails when `SPRING_PROFILES_ACTIVE=dev`. |
-| P1-003 | Reject known development PII keys outside dev/test. | Not started | TBD | Startup validation test rejects default PII key. |
-| P1-004 | Fail startup if production uses mock KYC or stub NAICOM/NIID providers. | Not started | TBD | Production config validation tests cover all provider defaults. |
-| P1-005 | Fail startup when required production JWT, database, storage, or integration config is missing. | Not started | TBD | Missing config tests fail clearly. |
-| P1-006 | Update local setup docs so developer startup remains simple after profile changes. | Not started | TBD | Local setup instructions are tested from a clean checkout. |
+| P1-001 | Remove `dev` as the default backend profile. | Verified | TBD | `application.yml` no longer activates `dev` implicitly; backend startup requires an explicit Spring profile. |
+| P1-002 | Fail startup if a production-like environment uses the dev security profile. | Verified | TBD | `ProductionSafetyValidatorTest` rejects `dev` with production-like `CIA_ENV`. |
+| P1-003 | Reject known development PII keys outside dev/test. | Verified | TBD | `ProductionSafetyValidatorTest` rejects the checked-in dev PII key outside dev/test profiles. |
+| P1-004 | Fail startup if production uses mock KYC or stub NAICOM/NIID providers. | Verified | TBD | `ProductionSafetyValidatorTest` rejects mock KYC and stub NAICOM/NIID outside dev/test profiles. |
+| P1-005 | Fail startup when required production JWT, database, storage, or integration config is missing. | Verified | TBD | `ProductionSafetyValidatorTest` covers production JWT, database, storage, webhook, and integration config guardrails. |
+| P1-006 | Update local setup docs so developer startup remains simple after profile changes. | Verified | TBD | Local setup, environment variable, testing, and Compose docs now use explicit `SPRING_PROFILES_ACTIVE=dev`. |
+
+### Phase 1 Run Log
+
+| Field | Value |
+| --- | --- |
+| Phase date | 2026-05-06 |
+| Branch | `production-readiness-phase-0` |
+| Scope | Production startup safety guardrails; no auth/authorization endpoint policy changes yet. |
+
+| Command | Directory | Result | Notes |
+| --- | --- | --- | --- |
+| `./mvnw test -pl cia-common` | `cia-backend` | Passed | 32 common-module tests passed, including PII and production safety validator coverage. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Maven reactor completed all 20 modules successfully. Existing OpenAPI/Postman generation warnings remain. |
+| `pnpm --filter @cia/back-office typecheck` | `cia-frontend` | Passed | TypeScript completed with `tsc --noEmit`. |
+| `pnpm --filter @cia/partner typecheck` | `cia-frontend` | Passed | TypeScript completed with `tsc --noEmit`. |
+| `npm run build` | `docs-site` | Passed | Docusaurus generated static files successfully. Existing Docusaurus deprecation/update-check warnings remain. |
+| `docker-compose config` | repository root | Passed | Compose configuration rendered successfully for local infrastructure services. |
 
 ## Phase 2: Authentication And Authorization
 

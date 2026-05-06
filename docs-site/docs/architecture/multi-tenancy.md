@@ -59,8 +59,8 @@ Stored in the tenant schema's `tenant_config` table:
 
 | Config Key | Examples |
 |-----------|---------|
-| `kyc_provider` | `dojah`, `prembly`, `nibss`, `mock` |
-| `storage_type` | `minio`, `s3`, `gcs`, `azure` |
+| `kyc_provider` | `dojah`, `prembly`; `mock` is dev/test only |
+| `storage_type` | `minio`, `s3` |
 | `notification_email_provider` | `sendgrid`, `ses`, `smtp`, `log` |
 | `notification_sms_provider` | `termii`, `twilio`, `log` |
 | `ai_enabled` | `true` / `false` |

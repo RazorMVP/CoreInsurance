@@ -6,12 +6,16 @@ sidebar_label: Environment Variables
 
 ## Backend (`cia-api`)
 
-All variables have defaults for local development. Production values must be supplied via Kubernetes Secrets or a vault.
+Most variables have defaults for local development. `SPRING_PROFILES_ACTIVE`
+must always be supplied explicitly. Production values must be supplied via
+Kubernetes Secrets or a vault.
 
 ### Core
 
 | Variable | Default (dev) | Description |
 | --- | --- | --- |
+| `SPRING_PROFILES_ACTIVE` | — | Required. Use `dev` locally, `test` for automated tests, and deployment profiles such as `staging` or `prod` outside local development. |
+| `CIA_ENV` | `local` | Runtime environment label used by startup safety checks. Production-like values include `staging`, `uat`, `preprod`, `prod`, and `production`. |
 | `SERVER_PORT` | `8090` | HTTP port the Spring Boot API listens on |
 | `DB_URL` | `jdbc:postgresql://localhost:5434/cia` | PostgreSQL JDBC URL |
 | `DB_USERNAME` | `cia` | PostgreSQL user |
@@ -29,7 +33,7 @@ All variables have defaults for local development. Production values must be sup
 
 | Variable | Default (dev) | Description |
 | --- | --- | --- |
-| `STORAGE_TYPE` | `minio` | `minio` / `s3` / `gcs` / `azure` / `local` |
+| `STORAGE_TYPE` | `minio` | `minio` / `s3` |
 | `STORAGE_ENDPOINT` | `http://localhost:9000` | MinIO / S3-compatible endpoint |
 | `STORAGE_ACCESS_KEY` | `minioadmin` | Storage access key |
 | `STORAGE_SECRET_KEY` | `minioadmin` | Storage secret key |
@@ -39,9 +43,11 @@ All variables have defaults for local development. Production values must be sup
 
 | Variable | Default (dev) | Description |
 | --- | --- | --- |
-| `KYC_PROVIDER` | `mock` | `dojah` / `prembly` / `nibss` / `mock` |
+| `KYC_PROVIDER` | `mock` | `dojah` / `prembly`; `mock` is dev/test only |
 | `KYC_PROVIDER_URL` | — | KYC provider API endpoint (prod) |
+| `NAICOM_MODE` | `stub` | `stub` locally; must be `live` outside dev/test |
 | `NAICOM_API_URL` | — | NAICOM REST API endpoint (prod) |
+| `NIID_MODE` | `stub` | `stub` locally; must be `live` outside dev/test |
 | `NIID_API_URL` | — | NIID REST API endpoint (prod) |
 
 ### Notifications
@@ -103,3 +109,9 @@ Never commit secrets to the repository. Use:
 - **Local prod-like:** HashiCorp Vault with Spring Cloud Vault Config.
 
 All secret rotation must not require a restart — use dynamic secret providers where possible.
+
+Production-like profiles fail startup if they use local defaults such as the
+dev PII key, dev webhook secret, mock KYC, stub NAICOM/NIID modes, localhost
+JWT/database/storage endpoints, or missing provider URLs. This is intentional:
+deployment configuration must be supplied explicitly through the target
+environment or secret manager.

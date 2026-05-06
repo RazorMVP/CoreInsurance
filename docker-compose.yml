@@ -98,7 +98,7 @@ services:
       retries: 5
 
   # cia-api runs outside Docker during development:
-  #   mvn spring-boot:run -pl cia-api
+  #   SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run -pl cia-api -Dspring-boot.run.profiles=dev
   # Uncomment below only for full containerised deployments.
   #
   # cia-api:
