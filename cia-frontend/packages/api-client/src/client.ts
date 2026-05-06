@@ -30,7 +30,7 @@ export function createApiClient(baseURL: string): AxiosInstance {
   return client;
 }
 
-export let apiClient: AxiosInstance = createApiClient('http://localhost:8080');
+export let apiClient: AxiosInstance = createApiClient('http://localhost:8090');
 
 export function initApiClient(baseURL: string) {
   apiClient = createApiClient(baseURL);

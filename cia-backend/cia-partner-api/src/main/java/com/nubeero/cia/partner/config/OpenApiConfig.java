@@ -16,7 +16,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class OpenApiConfig {
 
-    @Value("${cia.partner.oauth2.token-url:http://localhost:8080/realms/cia/protocol/openid-connect/token}")
+    @Value("${cia.partner.oauth2.token-url:http://localhost:8280/realms/cia/protocol/openid-connect/token}")
     private String tokenUrl;
 
     @Bean

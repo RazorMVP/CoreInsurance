@@ -21,10 +21,12 @@ sidebar_label: Local Setup
 ```bash
 git clone https://github.com/RazorMVP/CoreInsurance.git
 cd CoreInsurance
-cp .env.example .env
 ```
 
-Edit `.env` with your local overrides (PostgreSQL password, Keycloak admin credentials, etc.).
+The checked-in defaults are enough to run the local stack. If you need to
+override a value, export the relevant environment variable before starting the
+backend or add an app-local Vite env file such as
+`cia-frontend/apps/back-office/.env.local`.
 
 ## 2. Start Infrastructure
 
@@ -36,12 +38,12 @@ This starts:
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| PostgreSQL 16 | 5432 | Primary database |
-| Keycloak 24 | 8080 | Auth server |
+| PostgreSQL 16 | 5434 | Primary database |
+| Keycloak 24 | 8280 | Auth server |
 | Temporal | 7233 | Workflow engine |
 | Temporal UI | 8088 | Workflow browser |
 | MinIO | 9000 / 9001 | Object storage |
-| Redis | 6379 | Rate limit counters |
+| Redis | 6380 | Rate limit counters |
 
 Wait for all services to be healthy:
 
@@ -63,8 +65,8 @@ The API starts at `http://localhost:8090`. Flyway runs migrations on boot.
 
 ```bash
 cd cia-frontend
-npm install
-npm run dev
+pnpm install
+pnpm dev:back-office
 ```
 
 The Vite dev server starts at `http://localhost:5173`.
@@ -72,9 +74,9 @@ The Vite dev server starts at `http://localhost:5173`.
 ## 5. Verify
 
 - **API Health**: `curl http://localhost:8090/actuator/health`
-- **Swagger UI**: `http://localhost:8090/api/docs`
+- **Internal API Docs**: `http://localhost:8090/internal/docs`
 - **Partner API Docs**: `http://localhost:8090/partner/docs`
-- **Keycloak Admin**: `http://localhost:8080` (admin / admin)
+- **Keycloak Admin**: `http://localhost:8280` (admin / admin)
 - **Temporal UI**: `http://localhost:8088`
 - **MinIO Console**: `http://localhost:9001` (minioadmin / minioadmin)
 

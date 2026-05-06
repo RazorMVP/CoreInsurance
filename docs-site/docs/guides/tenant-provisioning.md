@@ -56,7 +56,7 @@ For local development you can provision a tenant directly:
 
 ### 1. Create the Keycloak realm
 
-Open Keycloak Admin Console at [http://localhost:8180](http://localhost:8180) (admin / admin).
+Open Keycloak Admin Console at [http://localhost:8280](http://localhost:8280) (admin / admin).
 
 - Create a new realm named `tenant_acme`.
 - Under **Realm Settings → Keys**, verify RS256 key is present.
@@ -81,7 +81,7 @@ Point Flyway at the new schema and run:
 cd cia-backend
 ./mvnw flyway:migrate -pl cia-api \
   -Dflyway.schemas=tenant_acme \
-  -Dflyway.url=jdbc:postgresql://localhost:5432/cia \
+  -Dflyway.url=jdbc:postgresql://localhost:5434/cia \
   -Dflyway.user=cia \
   -Dflyway.password=cia_dev
 ```

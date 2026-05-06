@@ -30,6 +30,7 @@ const sidebars: SidebarsConfig = {
       label: "Audit & Compliance",
       items: [
         "audit/overview",
+        "audit/production-readiness-tracker",
         "audit/api-reference",
       ],
     },

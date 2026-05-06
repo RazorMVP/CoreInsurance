@@ -17,7 +17,7 @@ const ReactQueryDevtools = import.meta.env.DEV
     )
   : () => null;
 
-initApiClient(import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080');
+initApiClient(import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8090');
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },

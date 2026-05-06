@@ -7,7 +7,7 @@ interface KeycloakConfig {
 }
 
 const defaults: KeycloakConfig = {
-  url:      'http://localhost:8180',
+  url:      'http://localhost:8280',
   realm:    'cia-dev',
   clientId: 'cia-back-office',
 };

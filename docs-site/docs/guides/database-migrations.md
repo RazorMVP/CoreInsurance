@@ -152,7 +152,7 @@ In development, migrations run automatically on `spring-boot:run`. To run manual
 cd cia-backend
 ./mvnw flyway:migrate -pl cia-api \
   -Dflyway.schemas=tenant_dev \
-  -Dflyway.url=jdbc:postgresql://localhost:5432/cia \
+  -Dflyway.url=jdbc:postgresql://localhost:5434/cia \
   -Dflyway.user=cia \
   -Dflyway.password=cia_dev
 ```
@@ -162,7 +162,7 @@ To check migration status:
 ```bash
 ./mvnw flyway:info -pl cia-api \
   -Dflyway.schemas=tenant_dev \
-  -Dflyway.url=jdbc:postgresql://localhost:5432/cia \
+  -Dflyway.url=jdbc:postgresql://localhost:5434/cia \
   -Dflyway.user=cia \
   -Dflyway.password=cia_dev
 ```

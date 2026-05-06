@@ -13,24 +13,23 @@ All variables have defaults for local development. Production values must be sup
 | Variable | Default (dev) | Description |
 | --- | --- | --- |
 | `SERVER_PORT` | `8090` | HTTP port the Spring Boot API listens on |
-| `DB_URL` | `jdbc:postgresql://localhost:5432/cia` | PostgreSQL JDBC URL |
+| `DB_URL` | `jdbc:postgresql://localhost:5434/cia` | PostgreSQL JDBC URL |
 | `DB_USERNAME` | `cia` | PostgreSQL user |
 | `DB_PASSWORD` | `cia_dev` | PostgreSQL password |
-| `KEYCLOAK_URL` | `http://localhost:8180` | Keycloak server base URL |
+| `KEYCLOAK_URL` | `http://localhost:8280` | Keycloak server base URL |
 
 ### Temporal
 
 | Variable | Default (dev) | Description |
 | --- | --- | --- |
-| `TEMPORAL_HOST` | `localhost` | Temporal frontend host |
-| `TEMPORAL_PORT` | `7233` | Temporal frontend port |
+| `TEMPORAL_HOST` | `localhost:7233` | Temporal frontend host and port |
 | `TEMPORAL_NAMESPACE` | `default` | Temporal namespace |
 
 ### Storage
 
 | Variable | Default (dev) | Description |
 | --- | --- | --- |
-| `STORAGE_TYPE` | `local` | `minio` / `s3` / `gcs` / `azure` / `local` |
+| `STORAGE_TYPE` | `minio` | `minio` / `s3` / `gcs` / `azure` / `local` |
 | `STORAGE_ENDPOINT` | `http://localhost:9000` | MinIO / S3-compatible endpoint |
 | `STORAGE_ACCESS_KEY` | `minioadmin` | Storage access key |
 | `STORAGE_SECRET_KEY` | `minioadmin` | Storage secret key |
@@ -58,9 +57,10 @@ All variables have defaults for local development. Production values must be sup
 
 | Variable | Default (dev) | Description |
 | --- | --- | --- |
-| `PARTNER_API_RATE_LIMIT_STORE` | `in-memory` | `redis` / `in-memory` for bucket4j |
-| `REDIS_URL` | `redis://localhost:6379` | Redis connection (partner rate limiting) |
-| `WEBHOOK_SIGNING_SECRET` | — | Default HMAC-SHA256 key for webhook payloads |
+| `REDIS_HOST` | `localhost` | Redis host for partner rate limiting |
+| `REDIS_PORT` | `6380` | Redis port for partner rate limiting |
+| `PARTNER_TOKEN_URL` | `http://localhost:8280/realms/cia/protocol/openid-connect/token` | Partner OAuth2 client-credentials token endpoint |
+| `WEBHOOK_SIGNING_SECRET` | `dev-secret-replace-in-prod` | HMAC-SHA256 key for webhook payloads |
 | `PII_ENCRYPTION_KEY` | `dev-pii-key-do-not-use-in-prod-CHANGE-ME` | pgcrypto symmetric key for NDPR PII encryption on `customers` + `customer_directors`. Loss = unrecoverable customer PII. Recommended: 32+ random bytes, base64-encoded. Set via env / vault in production. |
 
 ### AI
@@ -78,21 +78,19 @@ Vite exposes only variables prefixed with `VITE_` to the browser bundle.
 | Variable | Default (dev) | Description |
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | `http://localhost:8090` | Spring Boot API base URL |
-| `VITE_KEYCLOAK_URL` | `http://localhost:8180` | Keycloak server URL |
-| `VITE_KEYCLOAK_REALM` | `tenant_dev` | Default Keycloak realm (overridden per tenant at runtime) |
-| `VITE_KEYCLOAK_CLIENT_ID` | `cia-frontend` | Keycloak public client ID |
+| `VITE_KEYCLOAK_URL` | `http://localhost:8280` | Keycloak server URL |
+| `VITE_KEYCLOAK_REALM` | `cia-dev` | Default Keycloak realm |
+| `VITE_KEYCLOAK_CLIENT_ID` | `cia-back-office` | Keycloak public client ID |
 
 ---
 
 ## Local Development
 
-Copy the template and fill in any missing values:
-
-```bash
-cp .env.example .env
-```
-
-The `docker-compose.yml` services use their own hardcoded dev defaults. The `.env` file is only read by Spring Boot (via `application.yml` `${VAR:default}` syntax) and Vite.
+No env file is required for the default local stack. `docker-compose.yml`,
+`application.yml`, and the Vite apps all provide development defaults. To
+override them, export backend variables in your shell before `spring-boot:run`,
+or create an app-local Vite file such as
+`cia-frontend/apps/back-office/.env.local`.
 
 ---
 

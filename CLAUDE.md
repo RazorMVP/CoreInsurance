@@ -1017,8 +1017,8 @@ bash cia-frontend/scripts/check-api-wiring.sh
 | `KYC_PROVIDER_URL` | KYC provider API endpoint | env / vault |
 | `SMTP_HOST` | Email server | env |
 | `SMS_PROVIDER_URL` | SMS gateway | env / vault |
-| `PARTNER_API_RATE_LIMIT_STORE` | `redis` / `in-memory` for bucket4j | env |
-| `REDIS_URL` | Redis connection (partner rate limiting) | env / vault |
+| `REDIS_HOST` | Redis host for partner rate limiting | env / vault |
+| `REDIS_PORT` | Redis port for partner rate limiting | env / vault |
 | `WEBHOOK_SIGNING_SECRET` | Default HMAC-SHA256 key for webhook payloads | env / vault |
 | `PII_ENCRYPTION_KEY` | pgcrypto symmetric key for NDPR PII encryption (`id_number`, `id_document_url`, `address` on customers + directors). Loss = unrecoverable customer PII. Recommended: 32+ random bytes, base64-encoded. | env / vault |
 
@@ -1026,8 +1026,8 @@ bash cia-frontend/scripts/check-api-wiring.sh
 
 | Variable | Purpose | Default (dev) |
 |---|---|---|
-| `VITE_API_BASE_URL` | Spring Boot API base URL | `http://localhost:8080` |
-| `VITE_KEYCLOAK_URL` | Keycloak server URL | `http://localhost:8180` |
+| `VITE_API_BASE_URL` | Spring Boot API base URL | `http://localhost:8090` |
+| `VITE_KEYCLOAK_URL` | Keycloak server URL | `http://localhost:8280` |
 | `VITE_KEYCLOAK_REALM` | Keycloak realm name | `cia-dev` |
 | `VITE_KEYCLOAK_CLIENT_ID` | Keycloak client for back office | `cia-back-office` |
 | `VITE_DEMO_MODE` | When `'true'`, allow production builds to use `DevAuthProvider` (mocked auth) instead of throwing on absent Keycloak config. Set on the public stakeholder-preview Vercel URL only. Renders an amber "Demo" banner above the AppShell. NEVER enable for tenant environments. | unset |
