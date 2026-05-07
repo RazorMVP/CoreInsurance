@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-07 01:50 Africa/Lagos
+Last updated: 2026-05-07 02:25 Africa/Lagos
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -31,7 +31,7 @@ These gates must pass before live deployment approval.
 | Build gate | Backend, frontend, docs, and Docker config build successfully from a clean checkout. | In progress | Phase 0 and Phase 1 working-tree baselines passed on branch `production-readiness-phase-0`; repeat from clean checkout after committing the phase. |
 | Security gate | Production cannot run with dev profile, default secrets, mock providers, or unauthenticated endpoints. | In progress | Phase 1 startup guardrails are verified; endpoint authorization remains in Phase 2. |
 | Authorization gate | Role and scope checks are enforced and tested for critical endpoints. | Verified | Phase 2 backend/frontend authorization fixes are implemented and full verification passed. |
-| Tenant isolation gate | Tenant data isolation is proven with automated tests. | In progress | Phase 3 tenant resolution guardrails are implemented; provisioning, migrations, and two-tenant isolation tests still block deployment. |
+| Tenant isolation gate | Tenant data isolation is proven with automated tests. | Verified | Phase 3 tenant resolution, provisioning, migration, and two-tenant isolation checks passed against local Docker Compose PostgreSQL. |
 | Data correctness gate | Reports, premium calculations, finance postings, and migrations are validated. | Not started | Blocks deployment. |
 | Integration gate | KYC, NAICOM, NIID, and Temporal workflows are implemented or explicitly blocked outside dev/test. | Not started | Blocks deployment. |
 | PII protection gate | PII is encrypted, redacted, or excluded from logs, audit records, files, and webhook payload history. | Not started | Blocks deployment. |
@@ -144,9 +144,9 @@ Goal: make tenant isolation real and testable.
 | P3-002 | Correct tenant filter ordering so JWT claims are available before tenant resolution. | Verified | TBD | Tenant filter now runs after bearer token authentication; focused auth/common tests passed. |
 | P3-003 | Validate tenant IDs against the tenant registry. | Verified | TBD | Tenant claims must resolve to an active `public.tenants` row; unknown or inactive claims return `403`. |
 | P3-004 | Remove fallback to `public` tenant outside dev/test. | Verified | TBD | `TenantIdentifierResolverTest` proves missing tenant context throws outside `dev` and `test`. |
-| P3-005 | Implement tenant provisioning. | Not started | TBD | New tenant can be provisioned automatically. |
-| P3-006 | Implement per-tenant migrations for schema-per-tenant. | Not started | TBD | Every tenant schema receives required business tables. |
-| P3-007 | Add two-tenant isolation tests. | Not started | TBD | Tenant A cannot read or mutate Tenant B data. |
+| P3-005 | Implement tenant provisioning. | Verified | TBD | `POST /admin/v1/tenants` creates inactive registry rows, creates schemas, migrates them, and activates only after success; Docker-backed integration tests passed. |
+| P3-006 | Implement per-tenant migrations for schema-per-tenant. | Verified | TBD | `TenantSchemaMigrator` baselines tenant schemas at V2 and runs V3+ migrations on provisioning and startup; Docker-backed integration tests passed. |
+| P3-007 | Add two-tenant isolation tests. | Verified | TBD | `TenantProvisioningServiceIntegrationTest` proves two tenant schemas keep customer rows isolated through schema routing and migration reruns. |
 
 ### Phase 3 Run Log
 
@@ -154,7 +154,7 @@ Goal: make tenant isolation real and testable.
 | --- | --- |
 | Phase date | 2026-05-07 |
 | Branch | `production-readiness-phase-0` |
-| Scope | Tenant resolution ordering, tenant registry validation, fail-closed missing context outside dev/test, and schema-name safety. |
+| Scope | Tenant resolution ordering, tenant registry validation, fail-closed missing context outside dev/test, schema-name safety, platform tenant provisioning, per-tenant migrations, and Docker-backed tenant isolation tests. |
 
 | Command | Directory | Result | Notes |
 | --- | --- | --- | --- |
@@ -167,6 +167,17 @@ Goal: make tenant isolation real and testable.
 | `npm run build` | `docs-site` | Passed | Docusaurus generated static files successfully after the multi-tenancy docs update. Existing Docusaurus deprecation/update-check warnings remain. |
 | `docker-compose config` | repository root | Passed | Compose configuration rendered successfully. |
 | `git diff --check` | repository root | Passed | No whitespace errors found. |
+| `./mvnw test -pl cia-auth,cia-api -am -Dtest=TenantContextFilterTest,TenantProvisioningServiceIntegrationTest,ControllerAuthorizationCoverageTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed with skips | Auth/platform provisioning filter tests and controller coverage passed. The Testcontainers tenant isolation tests were skipped because the Java Docker client failed discovery even though Docker CLI access works. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed with skips | Maven reactor completed all 20 modules successfully. `TenantProvisioningServiceIntegrationTest` was skipped because Testcontainers could not establish a valid Java Docker environment. |
+| `docker version` / `docker info` / `docker --context desktop-linux ps` | repository root | Passed with escalation | Docker Desktop 4.69.0 is running, the daemon is reachable through the CLI, and existing CoreInsurance containers are healthy. |
+| `docker run --rm postgres:16-alpine postgres --version` | repository root | Passed with escalation | Proves the local Docker daemon can create and run a short-lived PostgreSQL container. |
+| `./mvnw test -pl cia-api -am -Dtest=TenantSchemaNameTest,TenantProvisioningServiceIntegrationTest,ControllerAuthorizationCoverageTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Runs tenant schema/subdomain validation plus provisioning and isolation tests against the local Docker Compose PostgreSQL on `localhost:5434`; six API tests passed with zero skips. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Maven reactor completed all 20 modules successfully with the Docker-backed tenant integration tests running, not skipped. |
+| `npm run build` | `docs-site` | Passed | Docusaurus generated static files successfully after provisioning docs updates. Existing Docusaurus deprecation/update-check warnings remain. |
+| `docker-compose config` | repository root | Passed | Compose configuration rendered successfully. |
+| `git diff --check` | repository root | Passed | No whitespace errors found. |
+
+Docker position: Docker is available locally and can create containers. The earlier skipped test path was caused by Testcontainers' Java Docker discovery/client compatibility in this local environment, so Phase 3 verification now uses the existing Docker Compose PostgreSQL service directly for JDBC-backed tenant isolation tests.
 
 ## Phase 4: Database, Migrations, And Reporting
 

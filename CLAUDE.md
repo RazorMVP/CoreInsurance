@@ -334,13 +334,13 @@ Manual trigger:
 #### 5.4 New Tenant Provisioning
 
 ```
-Super-admin creates tenant (admin API or super-admin console):
-  1. Keycloak   — create realm, create admin user, configure roles and groups
-  2. PostgreSQL — CREATE SCHEMA {tenant_id}
-  3. Flyway     — run all migrations against {tenant_id} schema
-  4. Seed       — insert defaults: currencies, policy number format, approval groups
-  5. Config     — set KYC provider, storage type, notification provider, AI flag
-  Tenant is live. Subdomain routes to their isolated schema.
+Platform admin creates tenant (POST /admin/v1/tenants):
+  1. Auth       — require PLATFORM_ADMIN; this path may run without tenant_id
+  2. Registry   — insert inactive public.tenants row
+  3. PostgreSQL — CREATE SCHEMA {schema_name}
+  4. Flyway     — baseline schema at V2, then run V3+ business migrations
+  5. Activation — mark public.tenants.active = true after migrations pass
+  Tenant is live. JWT tenant_id can now resolve to the isolated schema.
 ```
 
 ---
@@ -349,10 +349,11 @@ Super-admin creates tenant (admin API or super-admin console):
 
 - **Schema-per-tenant** in PostgreSQL. Each insurance company gets its own isolated schema (e.g., `tenant_acme`, `tenant_leadway`).
 - Tenant resolved from the authenticated JWT `tenant_id` claim. The claim must resolve to an active row in `public.tenants` by `schema_name`, `subdomain`, or `id`; request headers and bodies are not trusted for tenant selection.
+- `POST /admin/v1/tenants` is the only authenticated path allowed to run without `tenant_id`, and it requires `PLATFORM_ADMIN`.
 - Keycloak realm per tenant for complete auth isolation — a token from Tenant A cannot authenticate against Tenant B.
 - All ORM queries are tenant-scoped via Hibernate's `MultiTenantConnectionProvider` and `CurrentTenantIdentifierResolver`. Missing tenant context fails closed outside `dev` and `test`; the `public` fallback is only for local/test execution.
 - Per-tenant configuration (stored in tenant schema): products, classes of business, approval groups, policy number formats, AI feature flag, KYC provider, notification providers.
-- Tenant schemas provisioned by Flyway at tenant creation time; all subsequent migrations run against every schema on API startup.
+- Tenant schemas are provisioned by `TenantProvisioningService`; `TenantSchemaMigrator` baselines tenant schemas at V2 and runs V3+ business migrations at creation time and on API startup for active tenants.
 
 ---
 
@@ -364,9 +365,9 @@ Super-admin creates tenant (admin API or super-admin console):
 
 **Flyway migrations** (`cia-api/src/main/resources/db/migration/`):
 
-- `V1__init_public_schema.sql` — tenant registry in `public`.
-- `V2__init_tenant_schema.sql` — all business tables; applied per schema on tenant provisioning.
-- Subsequent migrations (`V3__...`) applied to all tenant schemas automatically on startup.
+- `V1__create_public_schema.sql` — tenant registry in `public`.
+- `V2__create_tenant_schema_template.sql` — legacy template schema baseline; tenant Flyway runs baseline at V2.
+- Subsequent business migrations (`V3__...`) apply to tenant schemas automatically on provisioning and startup.
 - Never edit an existing migration file — always create a new versioned file.
 
 **Table conventions:**

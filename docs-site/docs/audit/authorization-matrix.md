@@ -6,7 +6,7 @@ sidebar_label: Authorization Matrix
 
 # Authorization Matrix
 
-Last updated: 2026-05-06 18:01 Africa/Lagos
+Last updated: 2026-05-07 02:04 Africa/Lagos
 
 This matrix records the backend authorities and partner scopes enforced for the
 Core Insurance Application. It is the Phase 2 decision record for endpoint
@@ -74,6 +74,7 @@ OAuth2 client-credentials token plus `PartnerScopeFilter`.
 | Audit alert config update | `PUT /api/v1/setup/audit-config` | `SETUP_UPDATE` |
 | Session start/end | `POST /api/v1/auth/session/start`, `/session/end` | Authenticated user |
 | Failed-login audit | `POST /api/v1/auth/login/failed` | Public by design, explicitly annotated `permitAll()` |
+| Tenant provisioning | `POST /admin/v1/tenants` | `PLATFORM_ADMIN`; may run without `tenant_id` because it creates tenant context |
 | Partner app administration | `GET /api/v1/setup/partner-apps/**` | `setup:view` |
 | Partner app create | `POST /api/v1/setup/partner-apps` | `setup:create` |
 | Partner app update/rotate/revoke | `PUT, POST /api/v1/setup/partner-apps/**` | `setup:update` |
@@ -99,6 +100,7 @@ OAuth2 client-credentials token plus `PartnerScopeFilter`.
 | --- | --- |
 | `MethodSecurityConfigTest` | Proves method security allows correct roles/authorities and denies wrong ones outside `dev`. |
 | `JwtAuthConverterTest` | Proves Keycloak role, permission, and scope normalization. |
+| `TenantContextFilterTest` | Proves authenticated requests require a resolvable tenant claim, except platform tenant provisioning which is authorized separately. |
 | `ReportControllerAuthorizationTest` | Proves HTTP access to a real reports endpoint returns `200` with `reports:view` and `403` with the wrong role. |
 | `PartnerScopeFilterTest` | Proves partner routes resolve the correct scope and reject missing auth or missing scope. |
 | `ControllerAuthorizationCoverageTest` | Fails the build if a new back-office REST handler lacks explicit `@PreAuthorize`. |

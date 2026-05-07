@@ -34,6 +34,10 @@ public class TenantContextFilter extends OncePerRequestFilter {
             if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
                 String tenantClaim = jwt.getClaimAsString("tenant_id");
                 if (tenantClaim == null || tenantClaim.isBlank()) {
+                    if (isTenantlessPlatformRequest(request)) {
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
                     forbidden(response, "Missing tenant_id claim");
                     return;
                 }
@@ -49,6 +53,14 @@ public class TenantContextFilter extends OncePerRequestFilter {
         } finally {
             TenantContext.clear();
         }
+    }
+
+    private boolean isTenantlessPlatformRequest(HttpServletRequest request) {
+        String path = request.getServletPath();
+        if (path == null || path.isBlank()) {
+            path = request.getRequestURI();
+        }
+        return path.equals("/admin/v1/tenants") || path.startsWith("/admin/v1/tenants/");
     }
 
     private void forbidden(HttpServletResponse response, String message) throws IOException {

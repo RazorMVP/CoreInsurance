@@ -27,6 +27,8 @@ The `tenant_id` claim is embedded in the Keycloak JWT at login time and is immut
 
 Outside `dev` and `test` profiles, missing tenant context fails closed. The `public` schema fallback is available only for local and test execution where a real tenant context is not present.
 
+The platform provisioning endpoint `POST /admin/v1/tenants` is the only authenticated path allowed to run without `tenant_id`. It requires `PLATFORM_ADMIN` and uses only explicit `public.tenants` and schema-management SQL.
+
 ## Keycloak Isolation
 
 Each tenant gets its own **Keycloak realm**. A token from Tenant A cannot authenticate against Tenant B because:
@@ -39,10 +41,10 @@ Each tenant gets its own **Keycloak realm**. A token from Tenant A cannot authen
 New tenant setup (see [Tenant Provisioning](../guides/tenant-provisioning)):
 
 1. Create Keycloak realm with admin user, roles, and groups
-2. `CREATE SCHEMA {tenant_id}` in PostgreSQL
-3. Flyway runs all migrations against the new schema
-4. Seed default data (currencies, policy number format, approval groups)
-5. Configure KYC provider, storage type, notification providers, AI flag
+2. Insert an inactive row in `public.tenants`
+3. `CREATE SCHEMA {schema_name}` in PostgreSQL
+4. Baseline the tenant schema at Flyway V2 and run V3+ business migrations
+5. Mark the tenant active only after migrations pass
 
 ## `public` Schema
 
@@ -61,7 +63,7 @@ updated_at   TIMESTAMPTZ
 
 ## Per-Tenant Configuration
 
-Stored in the tenant schema's `tenant_config` table:
+Stored in tenant-schema setup and configuration tables:
 
 | Config Key | Examples |
 |-----------|---------|

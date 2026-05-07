@@ -56,6 +56,21 @@ class TenantContextFilterTest {
     }
 
     @Test
+    void allowsTenantlessPlatformProvisioningRequestForAuthorizationLayer() throws Exception {
+        TenantContextFilter filter = new TenantContextFilter(claim -> Optional.empty());
+        SecurityContextHolder.getContext().setAuthentication(authentication(null));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+        filter.doFilter(new MockHttpServletRequest("POST", "/admin/v1/tenants"),
+                response, chainThatRuns(() -> chainCalled.set(true)));
+
+        assertThat(chainCalled).isTrue();
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(TenantContext.getTenantId()).isNull();
+    }
+
+    @Test
     void rejectsUnknownTenantClaim() throws Exception {
         TenantContextFilter filter = new TenantContextFilter(claim -> Optional.empty());
         SecurityContextHolder.getContext().setAuthentication(authentication("unknown"));
