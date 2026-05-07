@@ -14,7 +14,7 @@ public class StubNaicomService implements NaicomService {
     @Override
     public NaicomUploadResult uploadPolicy(NaicomUploadRequest request) {
         String uid = "NAICOM-STUB-" + UUID.randomUUID();
-        log.info("[NAICOM STUB] Uploaded policy={} uid={}", request.getPolicyNumber(), uid);
+        log.info("[NAICOM STUB] Uploaded policy using stub adapter uid={}", uid);
         return NaicomUploadResult.builder().success(true).naicomUid(uid).build();
     }
 }

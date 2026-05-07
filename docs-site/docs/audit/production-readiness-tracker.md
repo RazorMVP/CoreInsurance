@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-07 13:17 Africa/Lagos
+Last updated: 2026-05-07 13:49 Africa/Lagos
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -33,7 +33,7 @@ These gates must pass before live deployment approval.
 | Authorization gate | Role and scope checks are enforced and tested for critical endpoints. | Verified | Phase 2 backend/frontend authorization fixes are implemented and full verification passed. |
 | Tenant isolation gate | Tenant data isolation is proven with automated tests. | Verified | Phase 3 is closed. Tenant resolution, provisioning, migration, HTTP authorization, and two-tenant isolation checks passed against local Docker Compose PostgreSQL. |
 | Data correctness gate | Reports, premium calculations, finance postings, and migrations are validated. | Verified | Phase 4 database migration/report SQL is closed and all Phase 5 insurance and finance correctness items are verified. |
-| Integration gate | KYC, NAICOM, NIID, and Temporal workflows are implemented or explicitly blocked outside dev/test. | Not started | Blocks deployment. |
+| Integration gate | KYC, NAICOM, NIID, and Temporal workflows are implemented or explicitly blocked outside dev/test. | In progress | Phase 6 now hard-blocks pending live KYC, NAICOM, and NIID adapters until go-live provider work is complete; Temporal workflow execution remains Phase 7. |
 | PII protection gate | PII is encrypted, redacted, or excluded from logs, audit records, files, and webhook payload history. | Not started | Blocks deployment. |
 | Frontend contract gate | Production UI screens are wired to real backend contracts or intentionally disabled. | Not started | Blocks deployment. |
 | Deployment gate | Backend deployment, migrations, health checks, readiness checks, secrets, rollback, and monitoring are documented and tested. | Not started | Blocks deployment. |
@@ -285,12 +285,28 @@ Goal: replace production stubs with real integration paths or hard startup block
 
 | ID | Fix item | Status | Owner | Verification |
 | --- | --- | --- | --- | --- |
-| P6-001 | Implement live KYC integration or block production customer onboarding until available. | Not started | TBD | Provider contract tests pass or production startup fails clearly. |
-| P6-002 | Implement live NAICOM integration. | Not started | TBD | NAICOM contract tests pass. |
-| P6-003 | Implement live NIID integration. | Not started | TBD | NIID contract tests pass. |
-| P6-004 | Add provider timeout, retry, and failure-state handling. | Not started | TBD | Timeout and retry tests pass. |
-| P6-005 | Redact sensitive integration payloads from logs and audit records. | Not started | TBD | Log redaction tests pass. |
-| P6-006 | Restrict mock and stub providers to dev/test only. | Not started | TBD | Production config validation rejects mock/stub providers. |
+| P6-001 | Implement live KYC integration or block production customer onboarding until available. | Blocked | TBD | Go-live KYC implementation is deferred by decision; Dojah/Prembly live beans now fail startup clearly until provider contract work is complete. |
+| P6-002 | Implement live NAICOM integration. | Blocked | TBD | Go-live NAICOM implementation is deferred by decision; `NAICOM_MODE=live` now fails startup clearly until provider contract work is complete. |
+| P6-003 | Implement live NIID integration. | Blocked | TBD | Go-live NIID implementation is deferred by decision; `NIID_MODE=live` now fails startup clearly until provider contract work is complete. |
+| P6-004 | Add provider timeout, retry, and failure-state handling. | Blocked | TBD | Requires live HTTP client implementations during go-live provider work. |
+| P6-005 | Redact sensitive integration payloads from logs and audit records. | Verified | TBD | Mock/stub adapter tests prove KYC ID numbers, RC numbers, policy numbers, vehicle numbers, and payload fragments are not logged. |
+| P6-006 | Restrict mock and stub providers to dev/test only. | Verified | TBD | `ProductionSafetyValidatorTest` rejects mock/stub providers outside dev/test; integration startup-block tests reject pending live adapters until implementation. |
+
+### Phase 6 Run Log
+
+| Field | Value |
+| --- | --- |
+| Phase date | 2026-05-07 |
+| Branch | `production-readiness-phase-0` |
+| Scope | Treat live KYC, NAICOM, and NIID integrations as go-live work and hard-block unsafe production activation until those providers are implemented and contract-tested. |
+
+| Command | Directory | Result | Notes |
+| --- | --- | --- | --- |
+| `./mvnw test -pl cia-integrations -am --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Proves pending live adapters fail startup and dev/test mock/stub adapters do not log sensitive identifiers or payload fragments. |
+| `./mvnw test -pl cia-common,cia-integrations,cia-customer,cia-policy,cia-workflow,cia-api -am --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Affected backend modules passed after integration startup blockers and log redaction changes. Existing optional database integration tests reported skips in the non-escalated local path. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Maven reactor completed all 20 modules successfully after Phase 6 changes. Existing optional database integration tests reported skips in the non-escalated local path. |
+
+Phase 6 progress note: KYC, NAICOM, and NIID live implementations are intentionally deferred until go-live provider onboarding. The current build must not be deployed live with these integrations enabled; it now fails clearly instead of accepting pending adapters.
 
 ## Phase 7: Temporal Workflows
 

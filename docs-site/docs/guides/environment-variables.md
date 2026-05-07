@@ -50,6 +50,10 @@ Kubernetes Secrets or a vault.
 | `NIID_MODE` | `stub` | `stub` locally; must be `live` outside dev/test |
 | `NIID_API_URL` | — | NIID REST API endpoint (prod) |
 
+Live KYC, NAICOM, and NIID provider implementations are go-live work. Until
+those provider contracts are implemented and tested, selecting `dojah`,
+`prembly`, `NAICOM_MODE=live`, or `NIID_MODE=live` fails startup clearly.
+
 ### Notifications
 
 | Variable | Default (dev) | Description |
@@ -114,4 +118,6 @@ Production-like profiles fail startup if they use local defaults such as the
 dev PII key, dev webhook secret, mock KYC, stub NAICOM/NIID modes, localhost
 JWT/database/storage endpoints, or missing provider URLs. This is intentional:
 deployment configuration must be supplied explicitly through the target
-environment or secret manager.
+environment or secret manager. Production-like profiles also fail startup if a
+pending live integration adapter is selected before go-live implementation is
+complete.

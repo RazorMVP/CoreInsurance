@@ -14,19 +14,19 @@ public class MockKycService implements KycVerificationService {
 
     @Override
     public KycResult verifyIndividual(IndividualKycRequest request) {
-        log.info("[MOCK KYC] verifyIndividual idType={} idNumber={}", request.getIdType(), request.getIdNumber());
+        log.info("[MOCK KYC] verifyIndividual idType={}", request.getIdType());
         return successResult();
     }
 
     @Override
     public KycResult verifyCorporate(CorporateKycRequest request) {
-        log.info("[MOCK KYC] verifyCorporate rcNumber={}", request.getRcNumber());
+        log.info("[MOCK KYC] verifyCorporate companyName={}", request.getCompanyName());
         return successResult();
     }
 
     @Override
     public KycResult verifyDirector(DirectorKycRequest request) {
-        log.info("[MOCK KYC] verifyDirector idType={} idNumber={}", request.getIdType(), request.getIdNumber());
+        log.info("[MOCK KYC] verifyDirector idType={}", request.getIdType());
         return successResult();
     }
 

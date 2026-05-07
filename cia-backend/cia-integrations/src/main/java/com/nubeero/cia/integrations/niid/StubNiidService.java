@@ -14,7 +14,7 @@ public class StubNiidService implements NiidService {
     @Override
     public NiidUploadResult uploadPolicy(NiidUploadRequest request) {
         String ref = "NIID-STUB-" + UUID.randomUUID();
-        log.info("[NIID STUB] Uploaded policy={} ref={}", request.getPolicyNumber(), ref);
+        log.info("[NIID STUB] Uploaded policy using stub adapter ref={}", ref);
         return NiidUploadResult.builder().success(true).niidRef(ref).build();
     }
 }
