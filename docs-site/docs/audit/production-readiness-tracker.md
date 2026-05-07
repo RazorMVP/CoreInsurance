@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-07 02:25 Africa/Lagos
+Last updated: 2026-05-07 02:31 Africa/Lagos
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -147,6 +147,7 @@ Goal: make tenant isolation real and testable.
 | P3-005 | Implement tenant provisioning. | Verified | TBD | `POST /admin/v1/tenants` creates inactive registry rows, creates schemas, migrates them, and activates only after success; Docker-backed integration tests passed. |
 | P3-006 | Implement per-tenant migrations for schema-per-tenant. | Verified | TBD | `TenantSchemaMigrator` baselines tenant schemas at V2 and runs V3+ migrations on provisioning and startup; Docker-backed integration tests passed. |
 | P3-007 | Add two-tenant isolation tests. | Verified | TBD | `TenantProvisioningServiceIntegrationTest` proves two tenant schemas keep customer rows isolated through schema routing and migration reruns. |
+| P3-008 | Add HTTP authorization proof for platform tenant provisioning. | Verified | TBD | `TenantProvisioningControllerAuthorizationTest` proves only `PLATFORM_ADMIN` can call `POST /admin/v1/tenants` and rejected users do not invoke provisioning. |
 
 ### Phase 3 Run Log
 
@@ -171,8 +172,8 @@ Goal: make tenant isolation real and testable.
 | `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed with skips | Maven reactor completed all 20 modules successfully. `TenantProvisioningServiceIntegrationTest` was skipped because Testcontainers could not establish a valid Java Docker environment. |
 | `docker version` / `docker info` / `docker --context desktop-linux ps` | repository root | Passed with escalation | Docker Desktop 4.69.0 is running, the daemon is reachable through the CLI, and existing CoreInsurance containers are healthy. |
 | `docker run --rm postgres:16-alpine postgres --version` | repository root | Passed with escalation | Proves the local Docker daemon can create and run a short-lived PostgreSQL container. |
-| `./mvnw test -pl cia-api -am -Dtest=TenantSchemaNameTest,TenantProvisioningServiceIntegrationTest,ControllerAuthorizationCoverageTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Runs tenant schema/subdomain validation plus provisioning and isolation tests against the local Docker Compose PostgreSQL on `localhost:5434`; six API tests passed with zero skips. |
-| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Maven reactor completed all 20 modules successfully with the Docker-backed tenant integration tests running, not skipped. |
+| `./mvnw test -pl cia-api -am -Dtest=TenantSchemaNameTest,TenantProvisioningControllerAuthorizationTest,TenantProvisioningServiceIntegrationTest,ControllerAuthorizationCoverageTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Runs tenant schema/subdomain validation, HTTP authorization, provisioning, and isolation tests against the local Docker Compose PostgreSQL on `localhost:5434`; eight API tests passed with zero skips. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Maven reactor completed all 20 modules successfully with the Docker-backed tenant integration tests and platform provisioning authorization test running. |
 | `npm run build` | `docs-site` | Passed | Docusaurus generated static files successfully after provisioning docs updates. Existing Docusaurus deprecation/update-check warnings remain. |
 | `docker-compose config` | repository root | Passed | Compose configuration rendered successfully. |
 | `git diff --check` | repository root | Passed | No whitespace errors found. |

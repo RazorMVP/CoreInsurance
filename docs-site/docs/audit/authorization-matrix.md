@@ -6,7 +6,7 @@ sidebar_label: Authorization Matrix
 
 # Authorization Matrix
 
-Last updated: 2026-05-07 02:04 Africa/Lagos
+Last updated: 2026-05-07 02:31 Africa/Lagos
 
 This matrix records the backend authorities and partner scopes enforced for the
 Core Insurance Application. It is the Phase 2 decision record for endpoint
@@ -101,6 +101,7 @@ OAuth2 client-credentials token plus `PartnerScopeFilter`.
 | `MethodSecurityConfigTest` | Proves method security allows correct roles/authorities and denies wrong ones outside `dev`. |
 | `JwtAuthConverterTest` | Proves Keycloak role, permission, and scope normalization. |
 | `TenantContextFilterTest` | Proves authenticated requests require a resolvable tenant claim, except platform tenant provisioning which is authorized separately. |
+| `TenantProvisioningControllerAuthorizationTest` | Proves HTTP access to platform tenant provisioning is limited to `PLATFORM_ADMIN` and rejected roles cannot invoke provisioning. |
 | `ReportControllerAuthorizationTest` | Proves HTTP access to a real reports endpoint returns `200` with `reports:view` and `403` with the wrong role. |
 | `PartnerScopeFilterTest` | Proves partner routes resolve the correct scope and reject missing auth or missing scope. |
 | `ControllerAuthorizationCoverageTest` | Fails the build if a new back-office REST handler lacks explicit `@PreAuthorize`. |
