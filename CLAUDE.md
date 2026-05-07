@@ -251,7 +251,7 @@ AppShell
 - React Query for all server state — no Redux for remote data.
 - Keycloak JS adapter; `onLoad: 'login-required'` in production, `'check-sso'` in dev.
 - Token auto-refreshed every 30 seconds; 401 responses dispatch `cia:unauthorized` custom event.
-- `X-Tenant-ID` resolved from Keycloak JWT at the `@cia/api-client` Axios interceptor.
+- Tenant context is resolved server-side from the JWT `tenant_id` claim; the frontend must not supply or trust tenant identity headers.
 - Lazy-loaded module routes — each module chunk loaded on first visit; skeleton fallback via `Suspense`.
 - shadcn/ui extended via CVA variants (never patched at source) to maintain upgrade path.
 - Sidebar collapses to 64px icon-only mode; toggle button lives in the sidebar logo row.
@@ -268,11 +268,11 @@ Browser
   │  HTTPS + Bearer JWT
   ▼
 NGINX / Load Balancer
-  │  Subdomain resolved → X-Tenant-ID header injected
+  │  TLS, routing, and platform controls
   ▼
 Spring Boot Filter Chain
   ├── JwtAuthenticationFilter    → validates JWT against Keycloak JWKS endpoint (cached)
-  ├── TenantContextFilter        → reads tenant_id claim → sets Hibernate schema ThreadLocal
+  ├── TenantContextFilter        → resolves tenant_id claim through public.tenants
   └── @PreAuthorize              → role check e.g. hasAuthority("underwriting:create")
   ▼
 Service Layer  (business logic, approval rules, premium calculation)
@@ -348,9 +348,9 @@ Super-admin creates tenant (admin API or super-admin console):
 ### 6. Multi-Tenancy Model
 
 - **Schema-per-tenant** in PostgreSQL. Each insurance company gets its own isolated schema (e.g., `tenant_acme`, `tenant_leadway`).
-- Tenant resolved via subdomain (`acme.cia.app`) or `X-Tenant-ID` header; the value is embedded as a custom claim in the Keycloak JWT.
+- Tenant resolved from the authenticated JWT `tenant_id` claim. The claim must resolve to an active row in `public.tenants` by `schema_name`, `subdomain`, or `id`; request headers and bodies are not trusted for tenant selection.
 - Keycloak realm per tenant for complete auth isolation — a token from Tenant A cannot authenticate against Tenant B.
-- All ORM queries are tenant-scoped via Hibernate's `MultiTenantConnectionProvider` and `CurrentTenantIdentifierResolver` — no cross-schema query is possible through the application layer.
+- All ORM queries are tenant-scoped via Hibernate's `MultiTenantConnectionProvider` and `CurrentTenantIdentifierResolver`. Missing tenant context fails closed outside `dev` and `test`; the `public` fallback is only for local/test execution.
 - Per-tenant configuration (stored in tenant schema): products, classes of business, approval groups, policy number formats, AI feature flag, KYC provider, notification providers.
 - Tenant schemas provisioned by Flyway at tenant creation time; all subsequent migrations run against every schema on API startup.
 
@@ -388,8 +388,8 @@ Super-admin creates tenant (admin API or super-admin console):
    Claims: sub (user_id), realm_access.roles, tenant_id (custom claim)
 4. React attaches JWT as Authorization: Bearer on every API request
 5. Spring Security validates JWT signature using Keycloak JWKS (cached, auto-refreshed)
-6. JwtAuthConverter maps realm_access.roles → Spring GrantedAuthority list
-7. TenantContextFilter reads tenant_id claim → sets CurrentTenantIdentifierResolver ThreadLocal
+6. JwtAuthConverter maps roles, permission-style authorities, and scopes → Spring GrantedAuthority list
+7. TenantContextFilter resolves tenant_id through public.tenants and sets CurrentTenantIdentifierResolver ThreadLocal
 8. @PreAuthorize on controllers enforces authority requirements per endpoint
 9. Hibernate routes all queries to the correct tenant schema for that thread
 ```
@@ -398,10 +398,10 @@ Super-admin creates tenant (admin API or super-admin console):
 
 | Keycloak Role | Spring Authority | Usage |
 |---|---|---|
-| `{module}_create` | `{module}:create` | POST endpoints |
-| `{module}_view` | `{module}:view` | GET endpoints |
-| `{module}_update` | `{module}:update` | PUT / PATCH endpoints |
-| `{module}_approve` | `{module}:approve` | Approval actions |
+| `{module}_create` or `{module}:create` | `{module}:create`, `ROLE_{MODULE}_CREATE` | POST endpoints |
+| `{module}_view` or `{module}:view` | `{module}:view`, `ROLE_{MODULE}_VIEW` | GET endpoints |
+| `{module}_update` or `{module}:update` | `{module}:update`, `ROLE_{MODULE}_UPDATE` | PUT / PATCH endpoints |
+| `{module}_approve` or `{module}:approve` | `{module}:approve`, `ROLE_{MODULE}_APPROVE` | Approval actions |
 
 Access groups aggregate roles; users inherit permissions through their access group. Approval groups are separate — they define who can approve transactions within configured amount ranges.
 
@@ -874,16 +874,21 @@ audit_log (
 
 ## Access Control Model
 
-Keycloak roles map to Spring Security authorities:
+Keycloak roles map to Spring Security authorities. The JWT converter preserves
+raw role/permission strings and bridges role-style and permission-style grants
+so both `hasRole(...)` and `hasAuthority(...)` checks work consistently:
 
 | Permission Type | Example |
 |---|---|
-| `{module}:create` | `underwriting:create` |
-| `{module}:view` | `claims:view` |
-| `{module}:update` | `finance:update` |
-| `{module}:approve` | `underwriting:approve` |
+| Role-style | `finance_view` → `finance:view`, `ROLE_FINANCE_VIEW` |
+| Permission-style | `reports:view` → `reports:view`, `ROLE_REPORTS_VIEW` |
+| Scope-style | `quotes:create` and `SCOPE_quotes:create` |
 
-Access groups aggregate permissions. Users inherit access group permissions. Approval groups are a separate concept — they define who can approve transactions within amount ranges.
+Method-level `@PreAuthorize` enforcement is enabled outside the local `dev`
+profile. Back-office route guards use the same normalized authority model as
+the backend. Access groups aggregate permissions. Users inherit access group
+permissions. Approval groups are a separate concept — they define who can
+approve transactions within amount ranges.
 
 ---
 

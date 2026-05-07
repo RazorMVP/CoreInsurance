@@ -18,6 +18,7 @@ import {
 import { cn } from '@cia/ui';
 import { useAuth } from '@cia/auth';
 import type React from 'react';
+import { MODULE_ACCESS } from '../security/access-control';
 
 type HugeIcon = React.ComponentProps<typeof HugeiconsIcon>['icon'];
 
@@ -25,6 +26,7 @@ interface NavItem {
   label: string;
   path: string;
   icon: HugeIcon;
+  anyAuthority?: readonly string[];
 }
 
 interface NavGroup {
@@ -42,38 +44,46 @@ const navGroups: NavGroup[] = [
     label: 'Operations',
     items: [
       { label: 'Dashboard',    path: '/dashboard',    icon: DashboardSquare01Icon },
-      { label: 'Customers',    path: '/customers',    icon: UserGroupIcon },
-      { label: 'Quotation',    path: '/quotation',    icon: NoteEditIcon },
-      { label: 'Policies',     path: '/policies',     icon: Shield01Icon },
-      { label: 'Endorsements', path: '/endorsements', icon: FileEditIcon },
-      { label: 'Claims',       path: '/claims',       icon: AlertCircleIcon },
+      { label: 'Customers',    path: '/customers',    icon: UserGroupIcon, anyAuthority: MODULE_ACCESS.customers },
+      { label: 'Quotation',    path: '/quotation',    icon: NoteEditIcon, anyAuthority: MODULE_ACCESS.quotation },
+      { label: 'Policies',     path: '/policies',     icon: Shield01Icon, anyAuthority: MODULE_ACCESS.policies },
+      { label: 'Endorsements', path: '/endorsements', icon: FileEditIcon, anyAuthority: MODULE_ACCESS.endorsements },
+      { label: 'Claims',       path: '/claims',       icon: AlertCircleIcon, anyAuthority: MODULE_ACCESS.claims },
     ],
   },
   {
     label: 'Finance & RI',
     items: [
-      { label: 'Finance',     path: '/finance',     icon: Money01Icon },
-      { label: 'Reinsurance', path: '/reinsurance', icon: RepeatIcon },
+      { label: 'Finance',     path: '/finance',     icon: Money01Icon, anyAuthority: MODULE_ACCESS.finance },
+      { label: 'Reinsurance', path: '/reinsurance', icon: RepeatIcon, anyAuthority: MODULE_ACCESS.reinsurance },
     ],
   },
   {
     label: 'Reports',
     items: [
-      { label: 'Reports', path: '/reports', icon: BarChartIcon },
+      { label: 'Reports', path: '/reports', icon: BarChartIcon, anyAuthority: MODULE_ACCESS.reports },
     ],
   },
   {
     label: 'Administration',
     items: [
-      { label: 'Setup', path: '/setup', icon: Setting06Icon },
-      { label: 'Audit', path: '/audit', icon: Audit01Icon },
+      { label: 'Setup', path: '/setup', icon: Setting06Icon, anyAuthority: MODULE_ACCESS.setup },
+      { label: 'Audit', path: '/audit', icon: Audit01Icon, anyAuthority: MODULE_ACCESS.audit },
     ],
   },
 ];
 
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
-  const { user, logout } = useAuth();
+  const { user, logout, hasAnyAuthority } = useAuth();
   const location = useLocation();
+  const visibleGroups = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) =>
+        !item.anyAuthority || item.anyAuthority.length === 0 || hasAnyAuthority(item.anyAuthority)
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <aside
@@ -123,7 +133,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <nav className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin py-4"
         style={{ paddingLeft: collapsed ? 8 : 12, paddingRight: collapsed ? 8 : 12 }}
       >
-        {navGroups.map((group) => {
+        {visibleGroups.map((group) => {
           const hasActive = group.items.some(item =>
             location.pathname.startsWith(item.path)
           );

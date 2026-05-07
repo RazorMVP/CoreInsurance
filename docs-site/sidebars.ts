@@ -31,6 +31,7 @@ const sidebars: SidebarsConfig = {
       items: [
         "audit/overview",
         "audit/production-readiness-tracker",
+        "audit/authorization-matrix",
         "audit/api-reference",
       ],
     },

@@ -1,8 +1,18 @@
 package com.nubeero.cia.partner.config;
 
+import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+
+import java.time.Instant;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -69,5 +79,85 @@ class PartnerScopeFilterTest {
         // confirm the segment-aware matcher rejects unrelated extensions.
         assertThat(filter.resolveRequiredScope("POST", "/partner/v1/policies/p-1/extra/segments"))
                 .isNull();
+    }
+
+    @Test
+    void rejectsRequestWhenJwtLacksRequiredScope() throws Exception {
+        SecurityContextHolder.getContext().setAuthentication(authentication("products:read"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+        try {
+            filter.doFilter(
+                    request("POST", "/partner/v1/quotes"),
+                    response,
+                    chainThatMarks(chainCalled)
+            );
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+
+        assertThat(chainCalled).isFalse();
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(response.getContentAsString()).contains("quotes:create");
+    }
+
+    @Test
+    void allowsRequestWhenJwtHasRequiredScope() throws Exception {
+        SecurityContextHolder.getContext().setAuthentication(authentication("products:read quotes:create"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+        try {
+            filter.doFilter(
+                    request("POST", "/partner/v1/quotes"),
+                    response,
+                    chainThatMarks(chainCalled)
+            );
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+
+        assertThat(chainCalled).isTrue();
+        assertThat(response.getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void rejectsRequestWhenAuthenticationIsMissing() throws Exception {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+        try {
+            filter.doFilter(
+                    request("GET", "/partner/v1/products"),
+                    response,
+                    chainThatMarks(chainCalled)
+            );
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+
+        assertThat(chainCalled).isFalse();
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(response.getContentAsString()).contains("No valid authentication");
+    }
+
+    private MockHttpServletRequest request(String method, String uri) {
+        return new MockHttpServletRequest(method, uri);
+    }
+
+    private JwtAuthenticationToken authentication(String scope) {
+        Jwt jwt = new Jwt(
+                "token",
+                Instant.now(),
+                Instant.now().plusSeconds(300),
+                Map.of("alg", "RS256"),
+                Map.of("scope", scope)
+        );
+        return new JwtAuthenticationToken(jwt);
+    }
+
+    private FilterChain chainThatMarks(AtomicBoolean chainCalled) {
+        return (request, response) -> chainCalled.set(true);
     }
 }

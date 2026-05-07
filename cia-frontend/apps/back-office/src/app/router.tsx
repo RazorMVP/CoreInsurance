@@ -1,6 +1,8 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import AppShell from './layout/AppShell';
+import { MODULE_ACCESS } from './security/access-control';
+import RequireAccess from './security/RequireAccess';
 
 const DashboardPage     = lazy(() => import('../modules/dashboard/DashboardPage'));
 const SetupModule       = lazy(() => import('../modules/setup'));
@@ -28,23 +30,31 @@ function PageSkeleton() {
   );
 }
 
+function Protected({ access, children }: { access: readonly string[]; children: ReactNode }) {
+  return (
+    <RequireAccess anyAuthority={access}>
+      <Deferred>{children}</Deferred>
+    </RequireAccess>
+  );
+}
+
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <AppShell />,
     children: [
       { index: true,              element: <Navigate to="/dashboard" replace /> },
-      { path: 'dashboard',        element: <Deferred><DashboardPage /></Deferred> },
-      { path: 'setup/*',          element: <Deferred><SetupModule /></Deferred> },
-      { path: 'customers/*',      element: <Deferred><CustomersModule /></Deferred> },
-      { path: 'quotation/*',      element: <Deferred><QuotationModule /></Deferred> },
-      { path: 'policies/*',       element: <Deferred><PolicyModule /></Deferred> },
-      { path: 'endorsements/*',   element: <Deferred><EndorsementsModule /></Deferred> },
-      { path: 'claims/*',         element: <Deferred><ClaimsModule /></Deferred> },
-      { path: 'reinsurance/*',    element: <Deferred><ReinsuranceModule /></Deferred> },
-      { path: 'finance/*',        element: <Deferred><FinanceModule /></Deferred> },
-      { path: 'audit/*',          element: <Deferred><AuditModule /></Deferred> },
-      { path: 'reports/*',        element: <Deferred><ReportsModule /></Deferred> },
+      { path: 'dashboard',        element: <Protected access={MODULE_ACCESS.dashboard}><DashboardPage /></Protected> },
+      { path: 'setup/*',          element: <Protected access={MODULE_ACCESS.setup}><SetupModule /></Protected> },
+      { path: 'customers/*',      element: <Protected access={MODULE_ACCESS.customers}><CustomersModule /></Protected> },
+      { path: 'quotation/*',      element: <Protected access={MODULE_ACCESS.quotation}><QuotationModule /></Protected> },
+      { path: 'policies/*',       element: <Protected access={MODULE_ACCESS.policies}><PolicyModule /></Protected> },
+      { path: 'endorsements/*',   element: <Protected access={MODULE_ACCESS.endorsements}><EndorsementsModule /></Protected> },
+      { path: 'claims/*',         element: <Protected access={MODULE_ACCESS.claims}><ClaimsModule /></Protected> },
+      { path: 'reinsurance/*',    element: <Protected access={MODULE_ACCESS.reinsurance}><ReinsuranceModule /></Protected> },
+      { path: 'finance/*',        element: <Protected access={MODULE_ACCESS.finance}><FinanceModule /></Protected> },
+      { path: 'audit/*',          element: <Protected access={MODULE_ACCESS.audit}><AuditModule /></Protected> },
+      { path: 'reports/*',        element: <Protected access={MODULE_ACCESS.reports}><ReportsModule /></Protected> },
     ],
   },
 ]);

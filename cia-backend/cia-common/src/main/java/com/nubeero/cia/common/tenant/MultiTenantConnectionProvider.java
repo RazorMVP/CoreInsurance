@@ -5,12 +5,14 @@ import org.springframework.stereotype.Component;
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.regex.Pattern;
 
 @Component
 public class MultiTenantConnectionProvider
         implements org.hibernate.engine.jdbc.connections.spi.MultiTenantConnectionProvider<String> {
 
     private final DataSource dataSource;
+    private static final Pattern SAFE_SCHEMA_NAME = Pattern.compile("[a-z][a-z0-9_]{0,62}");
 
     public MultiTenantConnectionProvider(DataSource dataSource) {
         this.dataSource = dataSource;
@@ -28,6 +30,9 @@ public class MultiTenantConnectionProvider
 
     @Override
     public Connection getConnection(String tenantIdentifier) throws SQLException {
+        if (!isSafeSchemaName(tenantIdentifier)) {
+            throw new SQLException("Unsafe tenant schema name");
+        }
         Connection connection = getAnyConnection();
         connection.setSchema(tenantIdentifier);
         return connection;
@@ -52,5 +57,9 @@ public class MultiTenantConnectionProvider
     @Override
     public <T> T unwrap(Class<T> unwrapType) {
         throw new UnsupportedOperationException("Cannot unwrap as " + unwrapType.getName());
+    }
+
+    private boolean isSafeSchemaName(String tenantIdentifier) {
+        return tenantIdentifier != null && SAFE_SCHEMA_NAME.matcher(tenantIdentifier).matches();
     }
 }

@@ -32,6 +32,7 @@ public class LoginAuditController {
     private final AlertDetectionService alertDetectionService;
 
     @PostMapping("/api/v1/auth/session/start")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Record login event", description = "Called by the frontend after successful Keycloak authentication. Requires a valid JWT.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Login event recorded"),
@@ -50,6 +51,7 @@ public class LoginAuditController {
     }
 
     @PostMapping("/api/v1/auth/session/end")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Record logout event", description = "Called by the frontend on logout. Requires a valid JWT.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Logout event recorded"),
@@ -66,6 +68,7 @@ public class LoginAuditController {
     }
 
     @PostMapping("/api/v1/auth/login/failed")
+    @PreAuthorize("permitAll()")
     @Operation(
         summary = "Record failed login attempt",
         description = "Public endpoint — no JWT required. Called when JWT validation fails for a known user. Triggers failed-login alert detection."

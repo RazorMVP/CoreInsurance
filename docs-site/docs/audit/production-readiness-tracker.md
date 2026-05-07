@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-06 16:56 Africa/Lagos
+Last updated: 2026-05-07 01:50 Africa/Lagos
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -30,8 +30,8 @@ These gates must pass before live deployment approval.
 | --- | --- | --- | --- |
 | Build gate | Backend, frontend, docs, and Docker config build successfully from a clean checkout. | In progress | Phase 0 and Phase 1 working-tree baselines passed on branch `production-readiness-phase-0`; repeat from clean checkout after committing the phase. |
 | Security gate | Production cannot run with dev profile, default secrets, mock providers, or unauthenticated endpoints. | In progress | Phase 1 startup guardrails are verified; endpoint authorization remains in Phase 2. |
-| Authorization gate | Role and scope checks are enforced and tested for critical endpoints. | Not started | Blocks deployment. |
-| Tenant isolation gate | Tenant data isolation is proven with automated tests. | Not started | Blocks deployment. |
+| Authorization gate | Role and scope checks are enforced and tested for critical endpoints. | Verified | Phase 2 backend/frontend authorization fixes are implemented and full verification passed. |
+| Tenant isolation gate | Tenant data isolation is proven with automated tests. | In progress | Phase 3 tenant resolution guardrails are implemented; provisioning, migrations, and two-tenant isolation tests still block deployment. |
 | Data correctness gate | Reports, premium calculations, finance postings, and migrations are validated. | Not started | Blocks deployment. |
 | Integration gate | KYC, NAICOM, NIID, and Temporal workflows are implemented or explicitly blocked outside dev/test. | Not started | Blocks deployment. |
 | PII protection gate | PII is encrypted, redacted, or excluded from logs, audit records, files, and webhook payload history. | Not started | Blocks deployment. |
@@ -107,11 +107,32 @@ Goal: enforce backend access control consistently.
 
 | ID | Fix item | Status | Owner | Verification |
 | --- | --- | --- | --- | --- |
-| P2-001 | Enable Spring method security for `@PreAuthorize` checks. | Not started | TBD | Method-level authorization tests fail before roles and pass with roles. |
-| P2-002 | Review all admin, setup, finance, policy, claim, customer, report, document, audit, and approval endpoints. | Not started | TBD | Endpoint authorization matrix is documented. |
-| P2-003 | Standardize Keycloak roles, backend authorities, and frontend route guards. | Not started | TBD | Role naming is consistent across docs, backend, and frontend. |
-| P2-004 | Add negative authorization tests for critical endpoints. | Not started | TBD | Authenticated users without required roles are denied. |
-| P2-005 | Add partner scope tests for partner API endpoints. | Not started | TBD | Tokens without scope are denied; scoped tokens are allowed. |
+| P2-001 | Enable Spring method security for `@PreAuthorize` checks. | Verified | TBD | `MethodSecurityConfig` enables method security outside `dev`; tests prove role and authority checks allow/deny correctly. |
+| P2-002 | Review all admin, setup, finance, policy, claim, customer, report, document, audit, and approval endpoints. | Verified | TBD | `authorization-matrix.md` records the endpoint authority model; `ControllerAuthorizationCoverageTest` fails the build if a new back-office handler lacks explicit `@PreAuthorize`. |
+| P2-003 | Standardize Keycloak roles, backend authorities, and frontend route guards. | Verified | TBD | JWT and frontend auth normalization now bridge role-style and permission-style grants; back-office routes and navigation use the same authority model. |
+| P2-004 | Add negative authorization tests for critical endpoints. | Verified | TBD | `ReportControllerAuthorizationTest` proves a real reports endpoint returns `403` for the wrong role; method-security tests cover direct role/authority denial. |
+| P2-005 | Add partner scope tests for partner API endpoints. | Verified | TBD | Partner scope tests now cover missing auth, missing scope, and correctly scoped JWT behavior. |
+
+### Phase 2 Run Log
+
+| Field | Value |
+| --- | --- |
+| Phase date | 2026-05-06 |
+| Branch | `production-readiness-phase-0` |
+| Scope | Non-dev method security, JWT/frontend authority normalization, route guards, endpoint authorization matrix, controller coverage tests, and partner scope enforcement tests. |
+
+| Command | Directory | Result | Notes |
+| --- | --- | --- | --- |
+| `./mvnw test -pl cia-auth` | `cia-backend` | Passed | Covers method security allow/deny behavior and JWT role/permission/scope conversion. |
+| `./mvnw test -pl cia-auth,cia-partner-api` | `cia-backend` | Passed | Adds partner scope allow/deny behavior coverage. |
+| `./mvnw test -pl cia-auth,cia-reports,cia-partner-api,cia-api -am --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Covers auth conversion, method security, partner scope enforcement, reports HTTP authorization, and all-controller `@PreAuthorize` coverage. |
+| `pnpm --filter @cia/back-office typecheck` | `cia-frontend` | Passed | Verifies back-office route guard and authority normalization TypeScript. |
+| `pnpm --filter @cia/partner typecheck` | `cia-frontend` | Passed | Partner app typecheck remains green. |
+| `pnpm --filter @cia/back-office build` | `cia-frontend` | Passed | Vite production build succeeded. Existing large chunk warning remains for the main bundle. |
+| `pnpm --filter @cia/partner build` | `cia-frontend` | Passed | Vite production build succeeded. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Maven reactor completed all 20 modules successfully. Existing OpenAPI/Postman warnings remain. |
+| `npm run build` | `docs-site` | Passed | Docusaurus generated static files successfully. Existing Docusaurus deprecation/update-check warnings remain. |
+| `docker-compose config` | repository root | Passed | Compose configuration rendered successfully. |
 
 ## Phase 3: Tenant Architecture And Isolation
 
@@ -119,13 +140,33 @@ Goal: make tenant isolation real and testable.
 
 | ID | Fix item | Status | Owner | Verification |
 | --- | --- | --- | --- | --- |
-| P3-001 | Confirm final tenancy model: schema-per-tenant or single-schema `tenant_id`. | Blocked | TBD | Architecture decision record is approved. |
-| P3-002 | Correct tenant filter ordering so JWT claims are available before tenant resolution. | Not started | TBD | Tenant context test proves JWT tenant claim is read. |
-| P3-003 | Validate tenant IDs against the tenant registry. | Not started | TBD | Unknown tenant claim is rejected. |
-| P3-004 | Remove fallback to `public` tenant outside dev/test. | Not started | TBD | Missing tenant fails safely in production profile. |
+| P3-001 | Confirm final tenancy model: schema-per-tenant or single-schema `tenant_id`. | Verified | TBD | Schema-per-tenant is documented as the active production-readiness model in the architecture docs. |
+| P3-002 | Correct tenant filter ordering so JWT claims are available before tenant resolution. | Verified | TBD | Tenant filter now runs after bearer token authentication; focused auth/common tests passed. |
+| P3-003 | Validate tenant IDs against the tenant registry. | Verified | TBD | Tenant claims must resolve to an active `public.tenants` row; unknown or inactive claims return `403`. |
+| P3-004 | Remove fallback to `public` tenant outside dev/test. | Verified | TBD | `TenantIdentifierResolverTest` proves missing tenant context throws outside `dev` and `test`. |
 | P3-005 | Implement tenant provisioning. | Not started | TBD | New tenant can be provisioned automatically. |
-| P3-006 | Implement per-tenant migrations if schema-per-tenant is retained. | Blocked | TBD | Every tenant schema receives required business tables. |
+| P3-006 | Implement per-tenant migrations for schema-per-tenant. | Not started | TBD | Every tenant schema receives required business tables. |
 | P3-007 | Add two-tenant isolation tests. | Not started | TBD | Tenant A cannot read or mutate Tenant B data. |
+
+### Phase 3 Run Log
+
+| Field | Value |
+| --- | --- |
+| Phase date | 2026-05-07 |
+| Branch | `production-readiness-phase-0` |
+| Scope | Tenant resolution ordering, tenant registry validation, fail-closed missing context outside dev/test, and schema-name safety. |
+
+| Command | Directory | Result | Notes |
+| --- | --- | --- | --- |
+| `./mvnw test -pl cia-common,cia-auth -am --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Covers missing tenant fail-closed behavior, dev/test public fallback, tenant registry validation, tenant claim resolution, unknown tenant rejection, unsafe schema rejection, and tenant context cleanup. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Maven reactor completed all 20 modules successfully after tenant guardrail changes. Existing OpenAPI/Postman, Commons Logging, and deprecation warnings remain non-blocking. |
+| `pnpm --filter @cia/back-office typecheck` | `cia-frontend` | Passed | Back-office TypeScript remains green with Phase 2 frontend authorization work still in the working tree. |
+| `pnpm --filter @cia/partner typecheck` | `cia-frontend` | Passed | Partner TypeScript remains green. |
+| `pnpm --filter @cia/back-office build` | `cia-frontend` | Passed | Vite production build succeeded. Existing large chunk warning remains for the main bundle. |
+| `pnpm --filter @cia/partner build` | `cia-frontend` | Passed | Vite production build succeeded. |
+| `npm run build` | `docs-site` | Passed | Docusaurus generated static files successfully after the multi-tenancy docs update. Existing Docusaurus deprecation/update-check warnings remain. |
+| `docker-compose config` | repository root | Passed | Compose configuration rendered successfully. |
+| `git diff --check` | repository root | Passed | No whitespace errors found. |
 
 ## Phase 4: Database, Migrations, And Reporting
 

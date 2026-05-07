@@ -17,7 +17,7 @@ CIA uses **Keycloak** as the OAuth2 authorization server with JWT (RS256) tokens
    Claims: sub (user_id), realm_access.roles, tenant_id (custom claim)
 4. React attaches JWT as Authorization: Bearer on every API request
 5. Spring Security validates JWT signature using Keycloak JWKS (cached, auto-refreshed)
-6. JwtAuthConverter maps realm_access.roles → Spring GrantedAuthority list
+6. JwtAuthConverter maps roles, permissions, and scopes → Spring GrantedAuthority list
 7. TenantContextFilter reads tenant_id claim → sets schema ThreadLocal
 8. @PreAuthorize on controllers enforces authority requirements per endpoint
 9. Hibernate routes all queries to the correct tenant schema
@@ -25,18 +25,35 @@ CIA uses **Keycloak** as the OAuth2 authorization server with JWT (RS256) tokens
 
 ## Role-Based Access Control
 
-Keycloak roles map directly to Spring Security authorities:
+Method-level authorization is enabled outside the local `dev` profile. The
+`dev` profile remains intentionally permissive for local setup only; production
+startup guardrails prevent production-like environments from running with
+`dev`.
+
+Keycloak realm roles and permission-style authorities are normalized both ways
+so the system can safely support the legacy role-style controllers and the
+newer permission-style report/setup checks:
 
 | Keycloak Role | Spring Authority | Usage |
 | --- | --- | --- |
-| `{module}_create` | `ROLE_{MODULE}_CREATE` | POST endpoints |
-| `{module}_view` | `ROLE_{MODULE}_VIEW` | GET endpoints |
-| `{module}_update` | `ROLE_{MODULE}_UPDATE` | PUT / PATCH endpoints |
-| `{module}_approve` | `ROLE_{MODULE}_APPROVE` | Approval actions |
-| `audit_view` | `ROLE_AUDIT_VIEW` | System Auditor — read-only access to all audit data |
-| `setup_update` | `ROLE_SETUP_UPDATE` | System Admin — full setup + audit config |
+| `{module}_create` | `{module}:create`, `ROLE_{MODULE}_CREATE` | POST endpoints |
+| `{module}_view` | `{module}:view`, `ROLE_{MODULE}_VIEW` | GET endpoints |
+| `{module}_update` | `{module}:update`, `ROLE_{MODULE}_UPDATE` | PUT / PATCH endpoints |
+| `{module}_approve` | `{module}:approve`, `ROLE_{MODULE}_APPROVE` | Approval actions |
+| `audit_view` or `audit:view` | `audit:view`, `ROLE_AUDIT_VIEW` | System Auditor — read-only access to all audit data |
+| `setup_update` or `setup:update` | `setup:update`, `ROLE_SETUP_UPDATE` | System Admin — full setup + audit config |
+| `reports:view` | `reports:view`, `ROLE_REPORTS_VIEW` | Permission-style report access |
 
-Access groups in Keycloak aggregate roles. Users inherit permissions through their assigned access group.
+OAuth2 scopes from `scope` or `scp` claims map to both raw scope authorities
+and `SCOPE_*` authorities, for example `quotes:create` and
+`SCOPE_quotes:create`.
+
+Access groups in Keycloak aggregate roles and permission-style authorities.
+Users inherit permissions through their assigned access group.
+
+The [Authorization Matrix](../audit/authorization-matrix) lists the current
+endpoint requirements and the regression tests that keep this coverage from
+silently drifting.
 
 ## Audit Trail
 
@@ -83,7 +100,7 @@ Alerts fire in-app and email notifications via `NotificationService`. Auditors c
 | `PASSWORD_RESET` | Recorded on Keycloak password reset events |
 | `ACCOUNT_LOCKED` | Recorded when Keycloak locks an account after repeated failures |
 
-`/api/v1/auth/login/failed` is intentionally public — it records failed authentication before a valid JWT exists.
+`/api/v1/auth/session/start` and `/api/v1/auth/session/end` require an authenticated JWT. `/api/v1/auth/login/failed` is intentionally public and explicitly annotated `permitAll()` because it records failed authentication before a valid JWT exists.
 
 ## Data Protection (NDPR)
 

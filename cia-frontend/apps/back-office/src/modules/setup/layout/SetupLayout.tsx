@@ -1,5 +1,7 @@
 import { cn } from '@cia/ui';
+import { useAuth } from '@cia/auth';
 import { NavLink } from 'react-router-dom';
+import { SETUP_ROUTE_ACCESS } from '../../../app/security/access-control';
 
 interface NavItem { label: string; path: string }
 
@@ -54,6 +56,16 @@ const navGroups: { label: string; items: NavItem[] }[] = [
 ];
 
 export default function SetupLayout({ children }: { children: React.ReactNode }) {
+  const { hasAnyAuthority } = useAuth();
+  const visibleGroups = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) =>
+        hasAnyAuthority(SETUP_ROUTE_ACCESS[item.path as keyof typeof SETUP_ROUTE_ACCESS] ?? [])
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
+
   return (
     <div className="flex h-full">
       {/* Secondary nav */}
@@ -61,7 +73,7 @@ export default function SetupLayout({ children }: { children: React.ReactNode })
         className="hidden w-52 shrink-0 overflow-y-auto bg-card py-4 md:block"
         style={{ boxShadow: '1px 0 0 var(--border)' }}
       >
-        {navGroups.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.label} className="mb-5 px-3">
             <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               {group.label}
