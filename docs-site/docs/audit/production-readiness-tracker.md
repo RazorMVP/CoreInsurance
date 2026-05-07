@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-07 08:55 Africa/Lagos
+Last updated: 2026-05-07 09:19 Africa/Lagos
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -192,9 +192,9 @@ Goal: make database-backed operations reliable.
 | P4-001 | Align report SQL with actual migration table and column names. | Verified | TBD | `ReportQueryBuilderIntegrationTest` passed against local Docker Compose PostgreSQL with zero skips. |
 | P4-002 | Review native SQL across all modules for schema drift. | Verified | TBD | Native SQL inventory is recorded below; the report SQL drift was corrected, and migration/tenant SQL paths were covered by focused tests. |
 | P4-003 | Add fresh-database migration test. | Verified | TBD | `FreshDatabaseMigrationIntegrationTest` migrated an empty disposable PostgreSQL database to Flyway version `31`. |
-| P4-004 | Add seeded report generation tests. | Verified | TBD | Representative seeded report field shapes for policies, claims, finance, reinsurance, customers, and endorsements return expected rows and totals. |
+| P4-004 | Add seeded report generation tests. | Verified | TBD | Fresh-database test executes all 55 active seeded system reports through `ReportQueryBuilder`; representative seeded row/totals tests also pass. |
 | P4-005 | Review indexes for policies, claims, customers, finance, audit, and reports. | Verified | TBD | `V31__reporting_query_indexes.sql` adds missing date/grouping indexes used by report and dashboard read paths. |
-| P4-006 | Define production migration and rollback procedure. | In review | TBD | `database-migration-runbook.md` documents pre-checks, deployment sequence, rollback position, and post-deployment checks. |
+| P4-006 | Define production migration and rollback procedure. | Verified | TBD | `database-migration-runbook.md` documents pre-checks, deployment sequence, rollback position, and post-deployment checks; docs build passed. |
 
 ### Phase 4 Native SQL Inventory
 
@@ -224,6 +224,13 @@ Goal: make database-backed operations reliable.
 | `npm run build` | `docs-site` | Passed | Docusaurus generated static files successfully after the runbook and tracker updates. Existing Docusaurus deprecation/update-check warnings remain. |
 | `docker-compose config` | repository root | Passed | Compose configuration rendered successfully. |
 | `git diff --check` | repository root | Passed | No whitespace errors found. |
+| `./mvnw test -pl cia-api -am -Dtest=FreshDatabaseMigrationIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Expanded fresh-migration coverage executes all 55 active seeded system reports against the migrated schema. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Maven reactor completed all 20 modules successfully after expanded seeded-report coverage. |
+| `npm run build` | `docs-site` | Passed | Docusaurus generated static files successfully after the Phase 4 closure update. Existing Docusaurus warnings remain. |
+| `docker-compose config` | repository root | Passed | Compose configuration rendered successfully after the Phase 4 closure update. |
+| `git diff --check` | repository root | Passed | No whitespace errors found after the Phase 4 closure update. |
+
+Phase 4 closure note: the Phase 4 database, migration, and reporting scope is implementation-complete as of 2026-05-07. It proves fresh PostgreSQL migration to Flyway version `31`, tenant schema migration to version `31`, execution of all active seeded system reports, report SQL alignment with migrated table and column names, reporting indexes, and the production migration rollback runbook. Premium calculation and finance posting correctness remain in Phase 5.
 
 ## Phase 5: Insurance And Finance Correctness
 

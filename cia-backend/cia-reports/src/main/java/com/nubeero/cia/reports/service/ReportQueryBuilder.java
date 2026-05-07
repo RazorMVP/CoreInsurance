@@ -211,11 +211,21 @@ public class ReportQueryBuilder {
         }
 
         // Apply sort
-        appendSort(sql, config, dataSource, selectedAliases, grouped);
+        boolean computedSort = isComputedSort(config);
+        if (!computedSort) {
+            appendSort(sql, config, dataSource, selectedAliases, grouped);
+        }
         sql.append(" LIMIT ?");
         params.add(maxRows);
 
-        return applyComputedFields(jdbcTemplate.queryForList(sql.toString(), params.toArray()), config);
+        List<Map<String, Object>> rows = applyComputedFields(
+                jdbcTemplate.queryForList(sql.toString(), params.toArray()),
+                config
+        );
+        if (computedSort) {
+            return sortComputedRows(rows, config);
+        }
+        return rows;
     }
 
     private List<Map<String, Object>> applyComputedFields(List<Map<String, Object>> rawRows,
@@ -366,6 +376,26 @@ public class ReportQueryBuilder {
         } else {
             sql.append(" ORDER BY ").append(expression).append(" ").append(dir);
         }
+    }
+
+    private boolean isComputedSort(ReportConfig config) {
+        if (config.getSortBy() == null || config.getSortBy().isBlank() || config.getFields() == null) {
+            return false;
+        }
+        return config.getFields().stream()
+                .anyMatch(field -> field.isComputed() && config.getSortBy().equals(field.getKey()));
+    }
+
+    private List<Map<String, Object>> sortComputedRows(List<Map<String, Object>> rows, ReportConfig config) {
+        String sortKey = config.getSortBy();
+        Comparator<Map<String, Object>> comparator = Comparator.comparing(
+                row -> toBigDecimal(row.get(sortKey)),
+                Comparator.nullsLast(Comparator.naturalOrder())
+        );
+        if (!"ASC".equalsIgnoreCase(config.getSortDir())) {
+            comparator = comparator.reversed();
+        }
+        return rows.stream().sorted(comparator).toList();
     }
 
     private static String customerDisplayNameExpression() {

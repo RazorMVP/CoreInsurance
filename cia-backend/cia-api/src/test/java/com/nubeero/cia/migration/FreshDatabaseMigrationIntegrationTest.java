@@ -1,5 +1,10 @@
 package com.nubeero.cia.migration;
 
+import com.nubeero.cia.reports.domain.DataSource;
+import com.nubeero.cia.reports.domain.ReportConfig;
+import com.nubeero.cia.reports.domain.ReportConfigConverter;
+import com.nubeero.cia.reports.domain.ReportDefinition;
+import com.nubeero.cia.reports.service.ReportQueryBuilder;
 import com.zaxxer.hikari.HikariDataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterEach;
@@ -8,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -67,6 +74,44 @@ class FreshDatabaseMigrationIntegrationTest {
         assertThat(regclass("public.idx_policies_created_at")).isNotNull();
     }
 
+    @Test
+    void seededSystemReportsExecuteAgainstFreshMigratedSchema() {
+        Flyway.configure()
+                .dataSource(migrationDataSource)
+                .locations("classpath:db/migration")
+                .cleanDisabled(true)
+                .load()
+                .migrate();
+
+        ReportConfigConverter converter = new ReportConfigConverter();
+        ReportQueryBuilder queryBuilder = new ReportQueryBuilder(migrationJdbcTemplate);
+        List<SeededReport> reports = migrationJdbcTemplate.query(
+                """
+                SELECT name, data_source, config::text
+                FROM report_definition
+                WHERE type = 'SYSTEM'
+                  AND is_active = true
+                  AND deleted_at IS NULL
+                ORDER BY name
+                """,
+                (rs, rowNum) -> new SeededReport(
+                        rs.getString("name"),
+                        DataSource.valueOf(rs.getString("data_source")),
+                        converter.convertToEntityAttribute(rs.getString("config"))
+                )
+        );
+
+        assertThat(reports).hasSize(55);
+        for (SeededReport report : reports) {
+            ReportDefinition definition = ReportDefinition.builder()
+                    .name(report.name())
+                    .dataSource(report.dataSource())
+                    .config(report.config())
+                    .build();
+            queryBuilder.execute(definition, Map.of(), 1);
+        }
+    }
+
     private boolean canConnect(JdbcTemplate jdbcTemplate) {
         try {
             jdbcTemplate.execute("SELECT 1");
@@ -113,5 +158,8 @@ class FreshDatabaseMigrationIntegrationTest {
         if (dataSource != null && !dataSource.isClosed()) {
             dataSource.close();
         }
+    }
+
+    private record SeededReport(String name, DataSource dataSource, ReportConfig config) {
     }
 }
