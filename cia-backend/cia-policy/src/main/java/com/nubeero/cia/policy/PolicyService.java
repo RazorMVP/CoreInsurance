@@ -8,6 +8,7 @@ import com.nubeero.cia.storage.DocumentStorageService;
 import com.nubeero.cia.common.event.PolicyApprovedEvent;
 import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
+import com.nubeero.cia.common.finance.PremiumCalculator;
 import com.nubeero.cia.common.tenant.TenantContext;
 import com.nubeero.cia.customer.Customer;
 import com.nubeero.cia.customer.CustomerService;
@@ -461,7 +462,7 @@ public class PolicyService {
 
         risk.setDescription(request.getDescription());
         risk.setSumInsured(request.getSumInsured());
-        risk.setPremium(request.getSumInsured().multiply(product.getRate()));
+        risk.setPremium(PremiumCalculator.grossPremium(request.getSumInsured(), product.getRate()));
         risk.setSectionId(request.getSectionId());
         risk.setSectionName(resolveSectionName(product, request.getSectionId()));
         risk.setRiskDetails(request.getRiskDetails());
@@ -527,7 +528,7 @@ public class PolicyService {
                 .policy(policy)
                 .description(r.getDescription())
                 .sumInsured(r.getSumInsured())
-                .premium(r.getSumInsured().multiply(product.getRate()))
+                .premium(PremiumCalculator.grossPremium(r.getSumInsured(), product.getRate()))
                 .sectionId(r.getSectionId())
                 .sectionName(resolveSectionName(product, r.getSectionId()))
                 .riskDetails(r.getRiskDetails())
@@ -636,7 +637,8 @@ public class PolicyService {
         policy.setTotalSumInsured(totalSumInsured);
         policy.setTotalPremium(totalPremium);
         BigDecimal discount = policy.getDiscount() == null ? BigDecimal.ZERO : policy.getDiscount();
-        policy.setNetPremium(totalPremium.subtract(discount));
+        policy.setDiscount(PremiumCalculator.effectiveDiscount(totalPremium, discount));
+        policy.setNetPremium(PremiumCalculator.netPremium(totalPremium, discount));
     }
 
     // ─── Temporal helpers ─────────────────────────────────────────────────
@@ -702,7 +704,7 @@ public class PolicyService {
                         .map(ProductSection::getName)
                         .orElse(null);
             }
-            BigDecimal premium = r.getSumInsured().multiply(product.getRate());
+            BigDecimal premium = PremiumCalculator.grossPremium(r.getSumInsured(), product.getRate());
             policy.getRisks().add(PolicyRisk.builder()
                     .policy(policy)
                     .description(r.getDescription())
@@ -742,12 +744,10 @@ public class PolicyService {
         BigDecimal totalPremium = policy.getRisks().stream()
                 .map(PolicyRisk::getPremium)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal effectiveDiscount = discount.min(totalPremium);
-
         policy.setTotalSumInsured(totalSumInsured);
         policy.setTotalPremium(totalPremium);
-        policy.setDiscount(effectiveDiscount);
-        policy.setNetPremium(totalPremium.subtract(effectiveDiscount));
+        policy.setDiscount(PremiumCalculator.effectiveDiscount(totalPremium, discount));
+        policy.setNetPremium(PremiumCalculator.netPremium(totalPremium, discount));
     }
 
     private void validateCoinsuranceShares(Policy policy) {

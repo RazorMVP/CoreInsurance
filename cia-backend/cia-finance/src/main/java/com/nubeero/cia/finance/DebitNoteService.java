@@ -46,6 +46,11 @@ public class DebitNoteService {
                 .orElseThrow(() -> new ResourceNotFoundException("DebitNote", id));
     }
 
+    DebitNote findForPosting(UUID id) {
+        return debitNoteRepository.findByIdAndDeletedAtIsNullForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("DebitNote", id));
+    }
+
     @Transactional
     public DebitNote createForPolicy(PolicyApprovedEvent event) {
         DebitNote dn = new DebitNote();

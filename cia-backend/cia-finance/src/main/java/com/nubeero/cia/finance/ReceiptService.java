@@ -1,5 +1,6 @@
 package com.nubeero.cia.finance;
 
+import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -42,12 +43,18 @@ public class ReceiptService {
     public Receipt post(UUID debitNoteId, BigDecimal amount, LocalDate paymentDate,
                         PaymentMethod paymentMethod, UUID bankId, String bankName,
                         String chequeNumber, String narration) {
-        DebitNote dn = debitNoteService.findOrThrow(debitNoteId);
+        DebitNote dn = debitNoteService.findForPosting(debitNoteId);
         if (dn.getStatus() == DebitNoteStatus.SETTLED
                 || dn.getStatus() == DebitNoteStatus.CANCELLED
                 || dn.getStatus() == DebitNoteStatus.VOID) {
             throw new IllegalStateException(
                     "Cannot post receipt against a " + dn.getStatus() + " debit note");
+        }
+        BigDecimal postedAmount = sumPostedReceipts(debitNoteId);
+        BigDecimal outstandingAmount = dn.getTotalAmount().subtract(postedAmount);
+        if (amount.compareTo(outstandingAmount) > 0) {
+            throw new BusinessRuleException("RECEIPT_OVERPOSTING",
+                    "Receipt amount cannot exceed outstanding debit note balance");
         }
 
         Receipt receipt = new Receipt();
@@ -65,7 +72,7 @@ public class ReceiptService {
         receipt.setCreatedBy(currentUser());
         Receipt saved = receiptRepository.save(receipt);
 
-        BigDecimal newPaid = sumPostedReceipts(debitNoteId);
+        BigDecimal newPaid = postedAmount.add(amount);
         debitNoteService.recalculateStatus(debitNoteId, newPaid);
 
         return saved;

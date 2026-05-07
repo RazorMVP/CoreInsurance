@@ -4,6 +4,7 @@ import com.nubeero.cia.common.audit.AuditAction;
 import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
+import com.nubeero.cia.common.finance.PremiumCalculator;
 import com.nubeero.cia.common.tenant.TenantContext;
 import com.nubeero.cia.customer.Customer;
 import com.nubeero.cia.customer.CustomerService;
@@ -348,8 +349,7 @@ public class QuoteService {
             List<AdjustmentEntry> loadings  = resolveAdjustments(r.getLoadings(),  "LOADING");
             List<AdjustmentEntry> discounts = resolveAdjustments(r.getDiscounts(), "DISCOUNT");
 
-            BigDecimal gross   = r.getSumInsured().multiply(r.getRate())
-                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            BigDecimal gross = PremiumCalculator.grossPremium(r.getSumInsured(), r.getRate());
             BigDecimal premium = computeItemNet(gross, loadings, discounts, config.getCalcSequence());
 
             quote.getRisks().add(QuoteRisk.builder()

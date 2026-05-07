@@ -40,6 +40,11 @@ public class CreditNoteService {
                 .orElseThrow(() -> new ResourceNotFoundException("CreditNote", id));
     }
 
+    CreditNote findForPosting(UUID id) {
+        return creditNoteRepository.findByIdAndDeletedAtIsNullForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("CreditNote", id));
+    }
+
     @Transactional
     public CreditNote create(FinanceEntityType entityType, UUID entityId, String entityReference,
                               UUID beneficiaryId, String beneficiaryName,

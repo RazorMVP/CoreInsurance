@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-07 09:19 Africa/Lagos
+Last updated: 2026-05-07 10:25 Africa/Lagos
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -32,7 +32,7 @@ These gates must pass before live deployment approval.
 | Security gate | Production cannot run with dev profile, default secrets, mock providers, or unauthenticated endpoints. | In progress | Phase 1 startup guardrails are verified; endpoint authorization remains in Phase 2. |
 | Authorization gate | Role and scope checks are enforced and tested for critical endpoints. | Verified | Phase 2 backend/frontend authorization fixes are implemented and full verification passed. |
 | Tenant isolation gate | Tenant data isolation is proven with automated tests. | Verified | Phase 3 is closed. Tenant resolution, provisioning, migration, HTTP authorization, and two-tenant isolation checks passed against local Docker Compose PostgreSQL. |
-| Data correctness gate | Reports, premium calculations, finance postings, and migrations are validated. | In progress | Phase 4 database migration and report SQL hardening has started; Phase 5 still owns premium and finance posting correctness. |
+| Data correctness gate | Reports, premium calculations, finance postings, and migrations are validated. | In progress | Phase 4 database migration/report SQL is closed and P5-001/P5-002 are verified; remaining Phase 5 policy issuance, endorsement, claim lifecycle, and settlement correctness items still block completion. |
 | Integration gate | KYC, NAICOM, NIID, and Temporal workflows are implemented or explicitly blocked outside dev/test. | Not started | Blocks deployment. |
 | PII protection gate | PII is encrypted, redacted, or excluded from logs, audit records, files, and webhook payload history. | Not started | Blocks deployment. |
 | Frontend contract gate | Production UI screens are wired to real backend contracts or intentionally disabled. | Not started | Blocks deployment. |
@@ -238,12 +238,34 @@ Goal: prevent incorrect policy, claim, endorsement, and finance outcomes.
 
 | ID | Fix item | Status | Owner | Verification |
 | --- | --- | --- | --- | --- |
-| P5-001 | Align quote and direct policy premium calculations. | Not started | TBD | Premium calculation tests pass for quote and direct policy paths. |
-| P5-002 | Prevent receipt and payment overposting unless an approved overpayment workflow exists. | Not started | TBD | Posting above outstanding balance is rejected. |
+| P5-001 | Align quote and direct policy premium calculations. | Verified | TBD | `PremiumCalculatorTest`, `QuoteServiceTest`, and `PolicyServiceTest` prove percentage-rate premium calculation for quote and direct policy paths. |
+| P5-002 | Prevent receipt and payment overposting unless an approved overpayment workflow exists. | Verified | TBD | Receipt and payment services reject posting above outstanding balances, and note rows are locked during posting. |
 | P5-003 | Add policy issuance tests from quote and direct policy creation. | Not started | TBD | Financial records are consistent across both paths. |
 | P5-004 | Add endorsement premium adjustment tests. | Not started | TBD | Endorsements produce expected financial impact. |
 | P5-005 | Add claim lifecycle transition tests. | Not started | TBD | Invalid transitions are rejected. |
 | P5-006 | Add finance settlement and outstanding balance tests. | Not started | TBD | Paid, partial, and unpaid statuses are correct. |
+
+### Phase 5 Run Log
+
+| Field | Value |
+| --- | --- |
+| Phase date | 2026-05-07 |
+| Branch | `production-readiness-phase-0` |
+| Scope | Insurance and finance correctness, starting with quote/direct-policy premium parity. |
+
+| Command | Directory | Result | Notes |
+| --- | --- | --- | --- |
+| `./mvnw test -pl cia-common,cia-quotation,cia-policy -am -Dtest=PremiumCalculatorTest,QuoteServiceTest,PolicyServiceTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Proves shared gross premium calculation at percentage rate, quote creation premium totals, direct policy creation premium totals, and discount capping behavior. |
+| `./mvnw test -pl cia-common,cia-quotation,cia-policy -am --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Affected module test suite passed after P5-001 changes. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Maven reactor completed all 20 modules successfully after P5-001 changes. Existing optional database integration tests reported skips in the non-escalated local path. |
+| `./mvnw test -pl cia-finance -am -Dtest=ReceiptServiceTest,PaymentServiceTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Proves debit-note receipt and credit-note payment overposting attempts are rejected before saving or recalculating status. |
+| `./mvnw test -pl cia-common,cia-quotation,cia-policy,cia-finance -am --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Affected module suite passed after P5-001 and P5-002 changes. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Maven reactor completed all 20 modules successfully after P5-002 changes. Existing optional database integration tests reported skips in the non-escalated local path. |
+| `npm run build` | `docs-site` | Passed | Docusaurus generated static files successfully after Phase 5 tracker updates. Existing Docusaurus deprecation/update-check warnings remain. |
+| `docker-compose config` | repository root | Passed | Compose configuration rendered successfully after Phase 5 changes. |
+| `git diff --check` | repository root | Passed | No whitespace errors found after Phase 5 changes. |
+
+Phase 5 progress note: P5-001 and P5-002 are verified. Phase 5 remains open until policy issuance financial records, endorsement premium impact, claim lifecycle transitions, and finance settlement/outstanding-balance behavior are implemented and tested.
 
 ## Phase 6: Production Integrations
 

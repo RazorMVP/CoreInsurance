@@ -1,5 +1,6 @@
 package com.nubeero.cia.finance;
 
+import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -42,11 +43,17 @@ public class PaymentService {
     public Payment post(UUID creditNoteId, BigDecimal amount, LocalDate paymentDate,
                         PaymentMethod paymentMethod, UUID bankId, String bankName,
                         String bankAccountName, String bankAccountNumber, String narration) {
-        CreditNote cn = creditNoteService.findOrThrow(creditNoteId);
+        CreditNote cn = creditNoteService.findForPosting(creditNoteId);
         if (cn.getStatus() == CreditNoteStatus.SETTLED
                 || cn.getStatus() == CreditNoteStatus.CANCELLED) {
             throw new IllegalStateException(
                     "Cannot post payment against a " + cn.getStatus() + " credit note");
+        }
+        BigDecimal postedAmount = sumPostedPayments(creditNoteId);
+        BigDecimal outstandingAmount = cn.getTotalAmount().subtract(postedAmount);
+        if (amount.compareTo(outstandingAmount) > 0) {
+            throw new BusinessRuleException("PAYMENT_OVERPOSTING",
+                    "Payment amount cannot exceed outstanding credit note balance");
         }
 
         Payment payment = new Payment();
@@ -65,7 +72,7 @@ public class PaymentService {
         payment.setCreatedBy(currentUser());
         Payment saved = paymentRepository.save(payment);
 
-        BigDecimal newPaid = sumPostedPayments(creditNoteId);
+        BigDecimal newPaid = postedAmount.add(amount);
         creditNoteService.recalculateStatus(creditNoteId, newPaid);
 
         return saved;
