@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-07 14:14 Africa/Lagos
+Last updated: 2026-05-07 14:55 Africa/Lagos
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -33,7 +33,7 @@ These gates must pass before live deployment approval.
 | Authorization gate | Role and scope checks are enforced and tested for critical endpoints. | Verified | Phase 2 backend/frontend authorization fixes are implemented and full verification passed. |
 | Tenant isolation gate | Tenant data isolation is proven with automated tests. | Verified | Phase 3 is closed. Tenant resolution, provisioning, migration, HTTP authorization, and two-tenant isolation checks passed against local Docker Compose PostgreSQL. |
 | Data correctness gate | Reports, premium calculations, finance postings, and migrations are validated. | Verified | Phase 4 database migration/report SQL is closed and all Phase 5 insurance and finance correctness items are verified. |
-| Integration gate | KYC, NAICOM, NIID, and Temporal workflows are implemented or explicitly blocked outside dev/test. | In progress | Phase 6 now hard-blocks pending live KYC, NAICOM, and NIID adapters until go-live provider work is complete; Temporal workflow execution remains Phase 7. |
+| Integration gate | KYC, NAICOM, NIID, and Temporal workflows are implemented or explicitly blocked outside dev/test. | Verified | Phase 6 hard-blocks pending live KYC, NAICOM, and NIID adapters until go-live provider work is complete; Phase 7 implements and verifies Temporal approval, NAICOM, NIID, and webhook worker execution/registration. |
 | PII protection gate | PII is encrypted, redacted, or excluded from logs, audit records, files, and webhook payload history. | Not started | Blocks deployment. |
 | Frontend contract gate | Production UI screens are wired to real backend contracts or intentionally disabled. | Not started | Blocks deployment. |
 | Deployment gate | Backend deployment, migrations, health checks, readiness checks, secrets, rollback, and monitoring are documented and tested. | Not started | Blocks deployment. |
@@ -314,12 +314,25 @@ Goal: make long-running operational workflows executable and observable.
 
 | ID | Fix item | Status | Owner | Verification |
 | --- | --- | --- | --- | --- |
-| P7-001 | Implement approval workflow worker. | Not started | TBD | Quote, policy, claim, and endorsement approval workflow tests pass. |
-| P7-002 | Implement NAICOM upload workflow worker. | Not started | TBD | Workflow test confirms status updates and retries. |
-| P7-003 | Implement NIID upload workflow worker. | Not started | TBD | Workflow test confirms status updates and retries. |
-| P7-004 | Register all workflow implementations. | Not started | TBD | Worker startup test confirms registrations. |
-| P7-005 | Make Temporal worker health part of readiness checks. | Not started | TBD | Readiness fails when required workers are unavailable. |
-| P7-006 | Stop swallowing critical Temporal startup failures in production. | Not started | TBD | Production startup/readiness test fails clearly. |
+| P7-001 | Implement approval workflow worker. | Verified | TBD | `ApprovalWorkflowImplTest` proves notify, approve signal, status query, and finalise activity execution. |
+| P7-002 | Implement NAICOM upload workflow worker. | Verified | TBD | `NaicomUploadWorkflowImplTest` proves policy payload fetch, upload, certificate update, and retry-backed activity execution. |
+| P7-003 | Implement NIID upload workflow worker. | Verified | TBD | `NiidUploadWorkflowImplTest` proves policy payload fetch, upload, NIID reference update, and retry-backed activity execution. |
+| P7-004 | Register all workflow implementations. | Verified | TBD | Core approval/NAICOM/NIID worker registration and webhook dispatch worker registration tests pass. |
+| P7-005 | Make Temporal worker health part of readiness checks. | Verified | TBD | `TemporalWorkerHealthIndicatorTest` reports DOWN until the worker manager is started and UP only while active. |
+| P7-006 | Stop swallowing critical Temporal startup failures in production. | Verified | TBD | `TemporalWorkerStarterTest` fails startup outside dev/test and only tolerates Temporal unavailability in dev/test profiles. |
+
+### Phase 7 Run Log
+
+| Command | Directory | Result | Notes |
+| --- | --- | --- | --- |
+| `./mvnw test -pl cia-workflow,cia-api,cia-partner-api -am -Dtest=ApprovalWorkflowImplTest,NaicomUploadWorkflowImplTest,NiidUploadWorkflowImplTest,CoreWorkflowWorkerConfigTest,TemporalWorkerHealthIndicatorTest,TemporalWorkerStarterTest,WebhookWorkerConfigTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Focused Phase 7 workflow, worker registration, health, and startup guardrail checks passed. |
+| `./mvnw test -pl cia-workflow,cia-policy,cia-claims,cia-endorsement,cia-partner-api,cia-api -am --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Affected backend modules passed after Temporal worker implementation and wrapper changes. Existing optional database integration tests reported skips in the local path. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Full Maven reactor completed all 20 backend modules successfully. Existing optional database integration tests reported skips in the local path. |
+| `npm run build` | `docs-site` | Passed | Docusaurus production build generated static files. Deprecation/update-check warnings were removed by moving markdown link handling under `markdown.hooks` and disabling update notifier during scripted builds. |
+| `docker-compose config` | repository root | Passed | Local infrastructure compose configuration rendered successfully. |
+| `git diff --check` | repository root | Passed | No whitespace errors were detected in the Phase 7 diff. |
+
+Phase 7 closure note: Phase 7 is closed. Temporal now has executable approval, NAICOM upload, NIID upload, and webhook dispatch workers registered through a testable worker manager; worker health is exposed for readiness, and non-dev/test startup no longer hides critical worker startup failures.
 
 ## Phase 8: PII, Files, Webhooks, And API Hardening
 
