@@ -287,6 +287,7 @@ public class ClaimService {
         Claim claim = findOrThrow(id);
         if (claim.getStatus() == ClaimStatus.APPROVED
                 || claim.getStatus() == ClaimStatus.SETTLED
+                || claim.getStatus() == ClaimStatus.REJECTED
                 || claim.getStatus() == ClaimStatus.WITHDRAWN) {
             throw new BusinessRuleException("INVALID_STATUS",
                     "Cannot withdraw a " + claim.getStatus() + " claim");

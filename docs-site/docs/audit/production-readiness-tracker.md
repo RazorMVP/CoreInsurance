@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-07 10:25 Africa/Lagos
+Last updated: 2026-05-07 13:17 Africa/Lagos
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -32,7 +32,7 @@ These gates must pass before live deployment approval.
 | Security gate | Production cannot run with dev profile, default secrets, mock providers, or unauthenticated endpoints. | In progress | Phase 1 startup guardrails are verified; endpoint authorization remains in Phase 2. |
 | Authorization gate | Role and scope checks are enforced and tested for critical endpoints. | Verified | Phase 2 backend/frontend authorization fixes are implemented and full verification passed. |
 | Tenant isolation gate | Tenant data isolation is proven with automated tests. | Verified | Phase 3 is closed. Tenant resolution, provisioning, migration, HTTP authorization, and two-tenant isolation checks passed against local Docker Compose PostgreSQL. |
-| Data correctness gate | Reports, premium calculations, finance postings, and migrations are validated. | In progress | Phase 4 database migration/report SQL is closed and P5-001/P5-002 are verified; remaining Phase 5 policy issuance, endorsement, claim lifecycle, and settlement correctness items still block completion. |
+| Data correctness gate | Reports, premium calculations, finance postings, and migrations are validated. | Verified | Phase 4 database migration/report SQL is closed and all Phase 5 insurance and finance correctness items are verified. |
 | Integration gate | KYC, NAICOM, NIID, and Temporal workflows are implemented or explicitly blocked outside dev/test. | Not started | Blocks deployment. |
 | PII protection gate | PII is encrypted, redacted, or excluded from logs, audit records, files, and webhook payload history. | Not started | Blocks deployment. |
 | Frontend contract gate | Production UI screens are wired to real backend contracts or intentionally disabled. | Not started | Blocks deployment. |
@@ -240,10 +240,10 @@ Goal: prevent incorrect policy, claim, endorsement, and finance outcomes.
 | --- | --- | --- | --- | --- |
 | P5-001 | Align quote and direct policy premium calculations. | Verified | TBD | `PremiumCalculatorTest`, `QuoteServiceTest`, and `PolicyServiceTest` prove percentage-rate premium calculation for quote and direct policy paths. |
 | P5-002 | Prevent receipt and payment overposting unless an approved overpayment workflow exists. | Verified | TBD | Receipt and payment services reject posting above outstanding balances, and note rows are locked during posting. |
-| P5-003 | Add policy issuance tests from quote and direct policy creation. | Not started | TBD | Financial records are consistent across both paths. |
-| P5-004 | Add endorsement premium adjustment tests. | Not started | TBD | Endorsements produce expected financial impact. |
-| P5-005 | Add claim lifecycle transition tests. | Not started | TBD | Invalid transitions are rejected. |
-| P5-006 | Add finance settlement and outstanding balance tests. | Not started | TBD | Paid, partial, and unpaid statuses are correct. |
+| P5-003 | Add policy issuance tests from quote and direct policy creation. | Verified | TBD | Direct-created and quote-bound policy approvals publish finance events with approved net premium, and debit-note creation uses the event as the receivable source. |
+| P5-004 | Add endorsement premium adjustment tests. | Verified | TBD | Endorsement tests prove pro-rata additional/return premium adjustments, approval event payloads, and debit/credit-note routing for financial impact. |
+| P5-005 | Add claim lifecycle transition tests. | Verified | TBD | Claim tests prove registered-to-settled happy path and invalid submit, approve, settle, and rejected-withdrawal transitions. |
+| P5-006 | Add finance settlement and outstanding balance tests. | Verified | TBD | Debit-note and credit-note recalculation tests prove unpaid, partial, and settled statuses; receipt/payment tests prove posting and reversal recalculate the correct paid amount. |
 
 ### Phase 5 Run Log
 
@@ -261,11 +261,23 @@ Goal: prevent incorrect policy, claim, endorsement, and finance outcomes.
 | `./mvnw test -pl cia-finance -am -Dtest=ReceiptServiceTest,PaymentServiceTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Proves debit-note receipt and credit-note payment overposting attempts are rejected before saving or recalculating status. |
 | `./mvnw test -pl cia-common,cia-quotation,cia-policy,cia-finance -am --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Affected module suite passed after P5-001 and P5-002 changes. |
 | `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Maven reactor completed all 20 modules successfully after P5-002 changes. Existing optional database integration tests reported skips in the non-escalated local path. |
+| `./mvnw test -pl cia-policy,cia-finance -am -Dtest=PolicyServiceTest,DebitNoteServiceTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Proves direct-created and quote-bound policy approvals publish finance events with the approved net premium, and debit-note creation records that receivable. |
+| `./mvnw test -pl cia-common,cia-quotation,cia-policy,cia-finance -am --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Affected module suite passed after P5-003 tests were added. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Maven reactor completed all 20 modules successfully after P5-003 changes. Existing optional database integration tests reported skips in the non-escalated local path. |
+| `./mvnw test -pl cia-endorsement,cia-finance -am -Dtest=EndorsementServiceTest,EndorsementApprovedEventListenerTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Proves additional premium, return premium, zero premium, approval event, and finance debit/credit routing behavior for endorsements. |
+| `./mvnw test -pl cia-common,cia-quotation,cia-policy,cia-endorsement,cia-finance -am --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Affected module suite passed after P5-004 tests were added. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Maven reactor completed all 20 modules successfully after P5-004 changes. Existing optional database integration tests reported skips in the non-escalated local path. |
+| `./mvnw test -pl cia-claims -am -Dtest=ClaimServiceTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Proves claim registered-to-settled lifecycle and rejects invalid submit, approve, settle, and rejected-withdrawal transitions. |
+| `./mvnw test -pl cia-common,cia-quotation,cia-policy,cia-claims,cia-endorsement,cia-finance -am --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Affected module suite passed after P5-005 lifecycle transition changes. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Maven reactor completed all 20 modules successfully after P5-005 changes. Existing optional database integration tests reported skips in the non-escalated local path. |
+| `./mvnw test -pl cia-finance -am -Dtest=DebitNoteServiceTest,CreditNoteServiceTest,ReceiptServiceTest,PaymentServiceTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Proves debit-note and credit-note unpaid, partial, and settled status recalculation, plus receipt/payment posting and reversal paid-amount recalculation. |
+| `./mvnw test -pl cia-common,cia-quotation,cia-policy,cia-claims,cia-endorsement,cia-finance -am --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Affected Phase 5 module suite passed after P5-006 settlement and outstanding-balance tests were added. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Maven reactor completed all 20 modules successfully after P5-006 changes. Existing optional database integration tests reported skips in the non-escalated local path. |
 | `npm run build` | `docs-site` | Passed | Docusaurus generated static files successfully after Phase 5 tracker updates. Existing Docusaurus deprecation/update-check warnings remain. |
 | `docker-compose config` | repository root | Passed | Compose configuration rendered successfully after Phase 5 changes. |
 | `git diff --check` | repository root | Passed | No whitespace errors found after Phase 5 changes. |
 
-Phase 5 progress note: P5-001 and P5-002 are verified. Phase 5 remains open until policy issuance financial records, endorsement premium impact, claim lifecycle transitions, and finance settlement/outstanding-balance behavior are implemented and tested.
+Phase 5 closure note: Phase 5 is implementation-complete as of 2026-05-07. Quote and direct policy premiums, policy issuance finance events, receipt/payment overposting prevention, endorsement premium adjustment routing, claim lifecycle transitions, and finance settlement/outstanding balance behavior are verified.
 
 ## Phase 6: Production Integrations
 
