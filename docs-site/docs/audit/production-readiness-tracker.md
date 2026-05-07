@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-07 13:49 Africa/Lagos
+Last updated: 2026-05-07 14:14 Africa/Lagos
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -306,7 +306,7 @@ Goal: replace production stubs with real integration paths or hard startup block
 | `./mvnw test -pl cia-common,cia-integrations,cia-customer,cia-policy,cia-workflow,cia-api -am --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Affected backend modules passed after integration startup blockers and log redaction changes. Existing optional database integration tests reported skips in the non-escalated local path. |
 | `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Maven reactor completed all 20 modules successfully after Phase 6 changes. Existing optional database integration tests reported skips in the non-escalated local path. |
 
-Phase 6 progress note: KYC, NAICOM, and NIID live implementations are intentionally deferred until go-live provider onboarding. The current build must not be deployed live with these integrations enabled; it now fails clearly instead of accepting pending adapters.
+Phase 6 closure note: Phase 6 is closed for the current pre-go-live readiness scope. KYC, NAICOM, and NIID live implementations are intentionally deferred until go-live provider onboarding; the current build must not be deployed live with these integrations enabled, and it now fails clearly instead of accepting pending adapters. P6-001 through P6-004 remain blocked go-live implementation items by decision, not unresolved current-phase defects.
 
 ## Phase 7: Temporal Workflows
 
