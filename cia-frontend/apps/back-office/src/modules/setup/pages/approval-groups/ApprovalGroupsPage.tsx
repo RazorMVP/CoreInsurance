@@ -4,11 +4,11 @@ import {
   PageHeader, Separator, Skeleton,
 } from '@cia/ui';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type ApprovalGroupDto } from '@cia/api-client';
+import { apiClient, unwrapPageData, type ApprovalGroupDto, type SpringPageResponse } from '@cia/api-client';
 import { type Row } from '@tanstack/react-table';
 import ApprovalGroupSheet from './ApprovalGroupSheet';
 
-const MODULE_LABELS: Record<string, string> = {
+const ENTITY_LABELS: Record<string, string> = {
   UNDERWRITING: 'Underwriting', CLAIMS: 'Claims', FINANCE: 'Finance',
   ENDORSEMENT: 'Endorsements', QUOTATION: 'Quotation',
 };
@@ -20,8 +20,10 @@ export default function ApprovalGroupsPage() {
   const groupsQuery = useQuery<ApprovalGroupDto[]>({
     queryKey: ['setup', 'approval-groups'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: ApprovalGroupDto[] }>('/api/v1/setup/approval-groups');
-      return res.data.data;
+      const res = await apiClient.get<{ data: SpringPageResponse<ApprovalGroupDto> | ApprovalGroupDto[] }>(
+        '/api/v1/setup/approval-groups',
+      );
+      return unwrapPageData(res.data.data);
     },
   });
   const groups = groupsQuery.data ?? [];
@@ -53,7 +55,7 @@ export default function ApprovalGroupsPage() {
                 <div className="flex items-start justify-between">
                   <div className="space-y-0.5">
                     <p className="font-display text-sm font-semibold text-foreground">{group.name}</p>
-                    <Badge variant="default" className="text-[10px]">{MODULE_LABELS[group.module] ?? group.module}</Badge>
+                    <Badge variant="default" className="text-[10px]">{ENTITY_LABELS[group.entityType] ?? group.entityType}</Badge>
                   </div>
                   <DataTableRowActions
                     row={{ original: group } as Row<ApprovalGroupDto>}
@@ -69,13 +71,13 @@ export default function ApprovalGroupsPage() {
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Approval Levels</p>
                   {group.levels.map((lvl) => (
-                    <div key={lvl.level} className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">
+                    <div key={lvl.id ?? lvl.levelOrder} className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">
                       <div>
-                        <p className="text-xs font-medium text-foreground">Level {lvl.level}</p>
-                        <p className="text-xs text-muted-foreground">{lvl.approverNames.join(', ')}</p>
+                        <p className="text-xs font-medium text-foreground">Level {lvl.levelOrder}</p>
+                        <p className="text-xs text-muted-foreground">{lvl.approverName || lvl.approverUserId}</p>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        ₦{lvl.minAmount.toLocaleString()} – {lvl.maxAmount >= 1e12 ? '∞' : `₦${lvl.maxAmount.toLocaleString()}`}
+                        Up to ₦{lvl.maxAmount.toLocaleString()}
                       </p>
                     </div>
                   ))}

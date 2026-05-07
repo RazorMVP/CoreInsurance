@@ -7,14 +7,22 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type CustomerDto } from '@cia/api-client';
+import { apiClient, unwrapPageData, type CustomerDto, type SpringPageResponse } from '@cia/api-client';
 import IndividualOnboardingSheet from './individual/IndividualOnboardingSheet';
 import CorporateOnboardingSheet from './corporate/CorporateOnboardingSheet';
 
-type CustomerRow = CustomerDto & { customerNumber?: string };
+type CustomerRow = Omit<CustomerDto, 'status'> & {
+  customerNumber?: string;
+  status?: CustomerDto['status'];
+  customerStatus?: CustomerDto['status'];
+};
 
 const kycVariant: Record<CustomerDto['kycStatus'], 'active' | 'pending' | 'rejected'> = { VERIFIED: 'active', PENDING: 'pending', FAILED: 'rejected', RESUBMIT: 'pending' };
 const statusVariant: Record<CustomerDto['status'], 'active' | 'draft' | 'rejected'> = { ACTIVE: 'active', INACTIVE: 'draft', BLACKLISTED: 'rejected' };
+
+function customerStatus(row: CustomerRow): CustomerDto['status'] {
+  return row.status ?? row.customerStatus ?? 'ACTIVE';
+}
 
 export default function CustomersListPage() {
   const navigate = useNavigate();
@@ -24,13 +32,13 @@ export default function CustomersListPage() {
   const customersQuery = useQuery<CustomerRow[]>({
     queryKey: ['customers'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: CustomerRow[] }>('/api/v1/customers');
-      return res.data.data;
+      const res = await apiClient.get<{ data: SpringPageResponse<CustomerRow> | CustomerRow[] }>('/api/v1/customers');
+      return unwrapPageData(res.data.data);
     },
   });
   const customers = customersQuery.data ?? [];
 
-  const columns: ColumnDef<CustomerDto & { customerNumber?: string }>[] = [
+  const columns: ColumnDef<CustomerRow>[] = [
     {
       accessorKey: 'displayName',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Customer" />,
@@ -57,7 +65,7 @@ export default function CustomersListPage() {
     {
       accessorKey: 'status',
       header: 'Status',
-      cell: ({ getValue }) => { const s = getValue() as CustomerDto['status']; return <Badge variant={statusVariant[s]}>{s.toLowerCase()}</Badge>; },
+      cell: ({ row }) => { const s = customerStatus(row.original); return <Badge variant={statusVariant[s]}>{s.toLowerCase()}</Badge>; },
     },
     {
       accessorKey: 'brokerName',

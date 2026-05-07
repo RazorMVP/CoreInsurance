@@ -26,10 +26,11 @@
 // schema is overkill — but the validated path is the default.
 
 export { apiClient, createApiClient, initApiClient, setTokenGetter } from './client';
-export type { ApiResponse, ApiMeta, ApiError, PageResponse } from './types';
+export type { ApiResponse, ApiMeta, ApiError, PageResponse, SpringPageResponse } from './types';
+export { normalizePageResponse, unwrapPageData } from './types';
 export { useGet, useList, useCreate, useUpdate, useRemove } from './hooks';
 export {
   apiEnvelope,
-  validatedGet, validatedPost, validatedPut, validatedPatch,
+  validatedGet, validatedPageGet, validatedPost, validatedPut, validatedPatch,
 } from './validation';
 export * from './modules';

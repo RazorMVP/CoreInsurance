@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-  PageSection, Separator, Skeleton, toast,
+  EmptyState, PageSection, Separator, Skeleton, toast,
 } from '@cia/ui';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -15,42 +15,6 @@ import {
 import AlertConfigDialog from './AlertConfigDialog';
 
 interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
-
-// allow-mock: fallback while /audit/alerts is in flight
-const mockAlerts: AuditAlertDto[] = [
-  {
-    id: 'alt1', alertType: 'FAILED_LOGIN', severity: 'HIGH',
-    description: '3 consecutive failed login attempts from IP 154.113.22.9 for user emeka.eze@nubeero.com.',
-    triggeredAt: '2026-04-24T08:23:09Z', acknowledged: false,
-    userName: 'Emeka Eze',
-  },
-  {
-    id: 'alt2', alertType: 'LARGE_FINANCIAL_APPROVAL', severity: 'HIGH',
-    description: 'Claim DV PAY-2026-00002 approved for ₦225,000,000 — exceeds the ₦50M threshold.',
-    triggeredAt: '2026-03-18T16:50:00Z', acknowledged: false,
-    userName: 'PAY-2026-00002',
-  },
-  {
-    id: 'alt3', alertType: 'OFF_HOURS_ACTIVITY', severity: 'MEDIUM',
-    description: 'User chukwudi.obi@nubeero.com logged in at 21:44 (outside business hours 09:00–17:00).',
-    triggeredAt: '2026-04-22T21:44:10Z', acknowledged: false,
-    userName: 'Chukwudi Obi',
-  },
-  {
-    id: 'alt4', alertType: 'FAILED_LOGIN', severity: 'MEDIUM',
-    description: '2 failed login attempts from a new IP (105.112.88.1) for user ngozi.adeyemi@nubeero.com.',
-    triggeredAt: '2026-04-21T14:11:00Z', acknowledged: true,
-    acknowledgedAt: '2026-04-21T14:30:00Z', acknowledgedBy: 'Akinwale Nubeero',
-    userName: 'Ngozi Adeyemi',
-  },
-  {
-    id: 'alt5', alertType: 'BULK_DELETE', severity: 'CRITICAL',
-    description: '7 customer records deleted within 5 minutes by user adaeze@nubeero.com.',
-    triggeredAt: '2026-04-20T11:05:00Z', acknowledged: true,
-    acknowledgedAt: '2026-04-20T11:15:00Z', acknowledgedBy: 'Akinwale Nubeero',
-    userName: 'Adaeze Nwosu',
-  },
-];
 
 const ALERT_TYPE_LABEL: Record<AlertType, string> = {
   FAILED_LOGIN:             'Failed Logins',
@@ -79,7 +43,7 @@ export default function AlertsTab() {
       return page.content;
     },
   });
-  const alerts = alertsQuery.data ?? mockAlerts;
+  const alerts = alertsQuery.data ?? [];
   const [configOpen,         setConfigOpen]         = useState(false);
   const [acknowledgeTarget,  setAcknowledgeTarget]  = useState<AuditAlertDto | null>(null);
 
@@ -198,6 +162,14 @@ export default function AlertsTab() {
         >
           {alertsQuery.isLoading ? (
             <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+          ) : alertsQuery.isError ? (
+            <EmptyState
+              title="Alerts unavailable"
+              description="The audit alert service did not return a usable response."
+              action={<Button size="sm" variant="outline" onClick={() => alertsQuery.refetch()}>Retry</Button>}
+            />
+          ) : alerts.length === 0 ? (
+            <EmptyState title="No audit alerts" description="New alerts will appear here when detection rules are triggered." />
           ) : (
             <DataTable
               columns={columns}

@@ -30,7 +30,6 @@ export const MODULE_ACCESS = {
 
 export const SETUP_ROUTE_ACCESS = {
   '/setup/company': ACCESS.setupView,
-  '/setup/users': ACCESS.setupView,
   '/setup/access-groups': ACCESS.setupView,
   '/setup/approval-groups': ACCESS.setupView,
   '/setup/classes': ACCESS.setupView,

@@ -7,7 +7,7 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type QuoteDto } from '@cia/api-client';
+import { apiClient, unwrapPageData, type BusinessType, type SpringPageResponse } from '@cia/api-client';
 import SingleRiskQuoteSheet from './create/SingleRiskQuoteSheet';
 import MultiRiskQuoteSheet  from './create/MultiRiskQuoteSheet';
 import QuotePdfPreview, { type QuotePdfData } from './QuotePdfPreview';
@@ -43,7 +43,24 @@ const mockQuotePdfData: Record<string, QuotePdfData> = {
   },
 };
 
-const statusVariant: Record<QuoteDto['status'], 'active' | 'pending' | 'rejected' | 'draft' | 'cancelled'> = {
+type QuoteSummaryRow = {
+  id: string;
+  quoteNumber: string;
+  status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'CONVERTED' | 'EXPIRED';
+  customerId: string;
+  customerName: string;
+  productName: string;
+  classOfBusinessName: string;
+  brokerName?: string | null;
+  businessType: BusinessType;
+  policyStartDate: string;
+  policyEndDate: string;
+  netPremium: number;
+  expiresAt?: string | null;
+  createdAt: string;
+};
+
+const statusVariant: Record<QuoteSummaryRow['status'], 'active' | 'pending' | 'rejected' | 'draft' | 'cancelled'> = {
   APPROVED:  'active',
   SUBMITTED: 'pending',
   DRAFT:     'draft',
@@ -58,16 +75,16 @@ export default function QuotationListPage() {
   const [multiOpen,  setMultiOpen]  = useState(false);
   const [pdfData,    setPdfData]    = useState<QuotePdfData | null>(null);
 
-  const quotesQuery = useQuery<QuoteDto[]>({
+  const quotesQuery = useQuery<QuoteSummaryRow[]>({
     queryKey: ['quotes'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: QuoteDto[] }>('/api/v1/quotes');
-      return res.data.data;
+      const res = await apiClient.get<{ data: SpringPageResponse<QuoteSummaryRow> | QuoteSummaryRow[] }>('/api/v1/quotes');
+      return unwrapPageData(res.data.data);
     },
   });
   const quotes = quotesQuery.data ?? [];
 
-  const columns: ColumnDef<QuoteDto>[] = [
+  const columns: ColumnDef<QuoteSummaryRow>[] = [
     {
       accessorKey: 'quoteNumber',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Quote No." />,
@@ -96,11 +113,9 @@ export default function QuotationListPage() {
       ),
     },
     {
-      accessorKey: 'sumInsured',
-      header: 'Sum Insured',
-      cell: ({ getValue }) => (
-        <span className="text-sm tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
-      ),
+      accessorKey: 'policyStartDate',
+      header: 'Start Date',
+      cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{getValue() as string}</span>,
     },
     {
       accessorKey: 'netPremium',
@@ -113,16 +128,14 @@ export default function QuotationListPage() {
       accessorKey: 'status',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
       cell: ({ getValue }) => {
-        const s = getValue() as QuoteDto['status'];
+        const s = getValue() as QuoteSummaryRow['status'];
         return <Badge variant={statusVariant[s]}>{s.toLowerCase()}</Badge>;
       },
     },
     {
-      accessorKey: 'version',
-      header: 'Ver.',
-      cell: ({ getValue }) => (
-        <span className="text-xs text-muted-foreground">v{getValue() as number}</span>
-      ),
+      accessorKey: 'expiresAt',
+      header: 'Expires',
+      cell: ({ getValue }) => <span className="text-xs text-muted-foreground">{(getValue() as string | undefined) ?? '—'}</span>,
     },
     {
       accessorKey: 'createdAt',

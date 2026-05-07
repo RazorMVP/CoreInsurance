@@ -6,104 +6,150 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   EmptyState,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Skeleton,
   cn,
+  toast,
 } from '@cia/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient, unwrapPageData, type SpringPageResponse } from '@cia/api-client';
 import type { TemplateRow, TemplateType } from './template-types';
 import { TEMPLATE_TYPES } from './template-types';
 import TemplateUploadSheet from './TemplateUploadSheet';
 
-// ── Products (same list as clause-types.ts — kept local for tab independence) ─
-const PRODUCTS = [
-  { id: '1', name: 'Private Motor Comprehensive' },
-  { id: '2', name: 'Commercial Vehicle' },
-  { id: '3', name: 'Fire & Burglary Standard' },
-  { id: '4', name: 'Marine Cargo Open Cover' },
-];
+interface ProductRow {
+  id: string;
+  name: string;
+  classOfBusinessId?: string | null;
+}
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-const INITIAL_TEMPLATES: TemplateRow[] = [
-  { id: 't1', productId: '1', productName: 'Private Motor Comprehensive', name: 'Motor Comprehensive Policy v3', filename: 'policy_template_pmc_v3.docx',  type: 'POLICY_DOCUMENT', status: 'ACTIVE',   uploadedAt: '2026-03-15' },
-  { id: 't2', productId: '1', productName: 'Private Motor Comprehensive', name: 'NAICOM Motor Certificate',      filename: 'naicom_cert_motor_v2.docx',      type: 'CERTIFICATE',     status: 'ACTIVE',   uploadedAt: '2026-01-10' },
-  { id: 't3', productId: '1', productName: 'Private Motor Comprehensive', name: 'Policy Schedule',               filename: 'policy_schedule_pmc.docx',       type: 'SCHEDULE',        status: 'ARCHIVED', uploadedAt: '2025-11-02' },
-];
+interface DocumentTemplateResponse {
+  id: string;
+  templateType: TemplateType;
+  productId?: string | null;
+  classOfBusinessId?: string | null;
+  storagePath: string;
+  description?: string | null;
+  active: boolean;
+  createdAt: string;
+}
 
-// ── Badge styles per template type ───────────────────────────────────────────
 const TYPE_BADGE: Record<TemplateType, string> = {
-  POLICY_DOCUMENT: 'bg-blue-50 text-blue-700 border-blue-200',
-  CERTIFICATE:     'bg-amber-50 text-amber-700 border-amber-200',
-  SCHEDULE:        'bg-neutral-100 text-neutral-600 border-neutral-200',
-  DEBIT_NOTE:      'bg-purple-50 text-purple-700 border-purple-200',
-  ENDORSEMENT:     'bg-teal-50 text-teal-700 border-teal-200',
-  OTHER:           'bg-neutral-100 text-neutral-600 border-neutral-200',
+  POLICY:             'bg-blue-50 text-blue-700 border-blue-200',
+  ENDORSEMENT:        'bg-teal-50 text-teal-700 border-teal-200',
+  CLAIM_DV:           'bg-purple-50 text-purple-700 border-purple-200',
+  NAICOM_CERTIFICATE: 'bg-amber-50 text-amber-700 border-amber-200',
 };
 
 function typeLabelOf(type: TemplateType): string {
   return TEMPLATE_TYPES.find(t => t.value === type)?.label ?? type;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+function fileNameOf(storagePath: string): string {
+  return storagePath.split('/').pop() ?? storagePath;
+}
+
+function toTemplateRow(t: DocumentTemplateResponse, products: ProductRow[]): TemplateRow {
+  const product = products.find((p) => p.id === t.productId);
+  return {
+    id:                t.id,
+    productId:         t.productId,
+    classOfBusinessId: t.classOfBusinessId,
+    productName:       product?.name,
+    storagePath:       t.storagePath,
+    description:       t.description,
+    type:              t.templateType,
+    status:            t.active ? 'ACTIVE' : 'ARCHIVED',
+    uploadedAt:        t.createdAt.slice(0, 10),
+  };
+}
+
 export default function TemplatesTab() {
-  const [templates,     setTemplates]     = useState<TemplateRow[]>(INITIAL_TEMPLATES);
-  const [selectedProd,  setSelectedProd]  = useState('');
-  const [uploadOpen,    setUploadOpen]    = useState(false);
+  const queryClient = useQueryClient();
+  const [selectedProd, setSelectedProd] = useState('');
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [replaceTarget, setReplaceTarget] = useState<Pick<TemplateRow, 'id' | 'type'> | null>(null);
-  const [archiveId,     setArchiveId]     = useState<string | null>(null);
-  const [deleteId,      setDeleteId]      = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const product     = PRODUCTS.find(p => p.id === selectedProd);
-  const visible     = templates.filter(t => t.productId === selectedProd);
-  const activeCount = visible.filter(t => t.status === 'ACTIVE').length;
+  const productsQuery = useQuery<ProductRow[]>({
+    queryKey: ['setup', 'products', 'template-picker'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: SpringPageResponse<ProductRow> | ProductRow[] }>(
+        '/api/v1/setup/products',
+        { params: { size: 100 } },
+      );
+      return unwrapPageData(res.data.data);
+    },
+  });
 
-  function handleUpload(values: { name: string; type: TemplateType; file: File; replaceId?: string }) {
-    if (!product) return;
-    setTemplates(prev => {
-      const updated = values.replaceId
-        ? prev.map(t => t.id === values.replaceId ? { ...t, status: 'ARCHIVED' as const } : t)
-        : prev;
-      return [
-        ...updated,
-        {
-          id: crypto.randomUUID(),
-          productId:   product.id,
-          productName: product.name,
-          name:        values.name,
-          filename:    values.file.name,
-          type:        values.type,
-          status:      'ACTIVE' as const,
-          uploadedAt:  new Date().toISOString().slice(0, 10),
-        },
-      ];
-    });
-    setReplaceTarget(null);
-  }
+  const templatesQuery = useQuery<TemplateRow[]>({
+    queryKey: ['setup', 'document-templates'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: SpringPageResponse<DocumentTemplateResponse> | DocumentTemplateResponse[] }>(
+        '/api/v1/document-templates',
+        { params: { size: 200 } },
+      );
+      const products = productsQuery.data ?? [];
+      return unwrapPageData(res.data.data).map((template) => toTemplateRow(template, products));
+    },
+  });
 
-  function handleArchive() {
-    if (archiveId) {
-      setTemplates(prev => prev.map(t => t.id === archiveId ? { ...t, status: 'ARCHIVED' } : t));
-      setArchiveId(null);
-    }
-  }
+  const uploadTemplate = useMutation({
+    mutationFn: async (values: { description?: string; type: TemplateType; file: File }) => {
+      const product = productsQuery.data?.find((p) => p.id === selectedProd);
+      const formData = new FormData();
+      formData.append('templateType', values.type);
+      formData.append('productId', selectedProd);
+      if (product?.classOfBusinessId) formData.append('classOfBusinessId', product.classOfBusinessId);
+      if (values.description?.trim()) formData.append('description', values.description.trim());
+      formData.append('file', values.file);
 
-  function handleDelete() {
-    if (deleteId) {
-      setTemplates(prev => prev.filter(t => t.id !== deleteId));
+      const res = await apiClient.post<{ data: DocumentTemplateResponse }>(
+        '/api/v1/document-templates',
+        formData,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['setup', 'document-templates'] });
+      setReplaceTarget(null);
+      toast({ title: 'Template uploaded' });
+    },
+    onError: () => {
+      toast({ variant: 'destructive', title: 'Template upload failed' });
+    },
+  });
+
+  const deleteTemplate = useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.delete(`/api/v1/document-templates/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['setup', 'document-templates'] });
       setDeleteId(null);
-    }
-  }
+      toast({ title: 'Template deleted' });
+    },
+    onError: () => {
+      toast({ variant: 'destructive', title: 'Template delete failed' });
+    },
+  });
 
+  const products = productsQuery.data ?? [];
+  const templates = templatesQuery.data ?? [];
+  const product = products.find(p => p.id === selectedProd);
+  const visible = templates.filter(t => t.productId === selectedProd);
+  const activeCount = visible.filter(t => t.status === 'ACTIVE').length;
   const deleteTarget = templates.find(t => t.id === deleteId);
 
   return (
     <>
-      {/* Product selector row */}
       <div className="flex items-center gap-3 flex-wrap mb-5">
         <span className="text-sm text-muted-foreground shrink-0">Product</span>
-        <Select value={selectedProd} onValueChange={setSelectedProd}>
+        <Select value={selectedProd} onValueChange={setSelectedProd} disabled={productsQuery.isLoading}>
           <SelectTrigger className="w-[260px]">
-            <SelectValue placeholder="Select a product…" />
+            <SelectValue placeholder={productsQuery.isLoading ? 'Loading products...' : 'Select a product...'} />
           </SelectTrigger>
           <SelectContent>
-            {PRODUCTS.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+            {products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
           </SelectContent>
         </Select>
         {selectedProd && (
@@ -114,14 +160,27 @@ export default function TemplatesTab() {
         <div className="flex-1" />
         {selectedProd && (
           <Button size="sm" onClick={() => { setReplaceTarget(null); setUploadOpen(true); }}>
-            ↑ Upload Template
+            Upload Template
           </Button>
         )}
       </div>
 
-      {/* Content */}
-      {!selectedProd ? (
+      {productsQuery.isError ? (
+        <EmptyState
+          title="Products unavailable"
+          description="Products are required before templates can be scoped and uploaded."
+          action={<Button size="sm" variant="outline" onClick={() => productsQuery.refetch()}>Retry</Button>}
+        />
+      ) : productsQuery.isLoading || templatesQuery.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-14 w-full" /></div>
+      ) : !selectedProd ? (
         <EmptyState title="Select a product to view its templates" />
+      ) : templatesQuery.isError ? (
+        <EmptyState
+          title="Templates unavailable"
+          description="The document template service did not return a usable response."
+          action={<Button size="sm" variant="outline" onClick={() => templatesQuery.refetch()}>Retry</Button>}
+        />
       ) : visible.length === 0 ? (
         <EmptyState
           title="No templates yet"
@@ -129,12 +188,10 @@ export default function TemplatesTab() {
         />
       ) : (
         <div className="space-y-2">
-          {/* List header */}
           <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_auto] gap-3 px-3 py-1.5 rounded-md bg-muted text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
             <span>Template</span><span>Type</span><span>Uploaded</span><span>Status</span><span></span>
           </div>
 
-          {/* Template rows */}
           {visible.map(t => (
             <div
               key={t.id}
@@ -144,8 +201,8 @@ export default function TemplatesTab() {
               )}
             >
               <div>
-                <p className="text-sm font-medium text-foreground">{t.name}</p>
-                <p className="font-mono text-[10px] text-muted-foreground mt-0.5">{t.filename}</p>
+                <p className="text-sm font-medium text-foreground">{t.description || typeLabelOf(t.type)}</p>
+                <p className="font-mono text-[10px] text-muted-foreground mt-0.5">{fileNameOf(t.storagePath)}</p>
               </div>
               <Badge className={cn('text-[10px] border w-fit hover:opacity-100', TYPE_BADGE[t.type])}>
                 {typeLabelOf(t.type)}
@@ -161,73 +218,55 @@ export default function TemplatesTab() {
               >
                 {t.status === 'ACTIVE' ? 'Active' : 'Archived'}
               </Badge>
-              <div className="flex items-center gap-1">
-                {/* Download (mock) */}
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-primary" title="Download">↓</Button>
-                {/* Actions */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground">⋯</Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => { setReplaceTarget({ id: t.id, type: t.type }); setUploadOpen(true); }}>
-                      Replace
-                    </DropdownMenuItem>
-                    {t.status === 'ACTIVE' && (
-                      <DropdownMenuItem onClick={() => setArchiveId(t.id)}>Archive</DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem
-                      className="text-destructive focus:text-destructive"
-                      onClick={() => setDeleteId(t.id)}
-                    >
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground">...</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => { setReplaceTarget({ id: t.id, type: t.type }); setUploadOpen(true); }}>
+                    Replace
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setDeleteId(t.id)}
+                  >
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           ))}
         </div>
       )}
 
-      {/* Upload / Replace sheet */}
       <TemplateUploadSheet
         open={uploadOpen}
         onOpenChange={(v) => { setUploadOpen(v); if (!v) setReplaceTarget(null); }}
         productId={selectedProd}
         productName={product?.name ?? ''}
         replaceTemplate={replaceTarget}
-        onSave={handleUpload}
+        onSave={(values) => uploadTemplate.mutateAsync(values).then(() => undefined)}
       />
 
-      {/* Archive confirm */}
-      <Dialog open={!!archiveId} onOpenChange={() => setArchiveId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Archive template?</DialogTitle>
-            <DialogDescription>The template will be marked as archived and will no longer be used for new documents.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setArchiveId(null)}>Cancel</Button>
-            <Button onClick={handleArchive}>Archive</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete confirm */}
       <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete template?</DialogTitle>
             <DialogDescription>
               {deleteTarget?.status === 'ACTIVE'
-                ? 'Warning: this template is currently active and may be in use. This cannot be undone.'
+                ? 'This template is active and may be used for new document generation. This cannot be undone.'
                 : 'This cannot be undone.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+            <Button variant="outline" onClick={() => setDeleteId(null)} disabled={deleteTemplate.isPending}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteId && deleteTemplate.mutate(deleteId)}
+              disabled={deleteTemplate.isPending}
+            >
+              {deleteTemplate.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

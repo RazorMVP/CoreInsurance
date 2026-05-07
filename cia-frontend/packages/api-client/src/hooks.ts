@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import { apiClient } from './client';
-import type { ApiResponse, PageResponse } from './types';
+import { normalizePageResponse, type ApiResponse, type PageResponse, type SpringPageResponse } from './types';
 
 // ── Generic typed query hooks ──────────────────────────────────────────────
 
@@ -28,8 +28,8 @@ export function useList<T>(
   return useQuery<PageResponse<T>>({
     queryKey: [...queryKey, params],
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<PageResponse<T>>>(url, { params });
-      return res.data.data as PageResponse<T>;
+      const res = await apiClient.get<ApiResponse<SpringPageResponse<T> | PageResponse<T> | T[]>>(url, { params });
+      return normalizePageResponse(res.data.data);
     },
     ...options,
   });

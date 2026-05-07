@@ -15,7 +15,6 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   {
     label: 'People & Access',
     items: [
-      { label: 'Users',             path: '/setup/users' },
       { label: 'Access Groups',     path: '/setup/access-groups' },
       { label: 'Approval Groups',   path: '/setup/approval-groups' },
     ],

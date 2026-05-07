@@ -45,7 +45,7 @@ export default function AlertConfigDialog({ open, onOpenChange }: Props) {
   const configQuery = useQuery<FormValues>({
     queryKey: ['audit', 'alert-config'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: FormValues }>('/api/v1/audit/alert-config');
+      const res = await apiClient.get<{ data: FormValues }>('/api/v1/setup/audit-config');
       return res.data.data;
     },
     enabled: open,
@@ -67,7 +67,7 @@ export default function AlertConfigDialog({ open, onOpenChange }: Props) {
 
   const save = useMutation({
     mutationFn: async (values: FormValues) => {
-      const res = await apiClient.put<{ data: FormValues }>('/api/v1/audit/alert-config', values);
+      const res = await apiClient.put<{ data: FormValues }>('/api/v1/setup/audit-config', values);
       return res.data.data;
     },
     onSuccess: () => {

@@ -7,10 +7,27 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type PolicyDto } from '@cia/api-client';
+import { apiClient, unwrapPageData, type BusinessType, type PolicyStatus, type SpringPageResponse } from '@cia/api-client';
 import CreatePolicySheet from './create/CreatePolicySheet';
 
-const statusVariant: Record<PolicyDto['status'], 'active' | 'pending' | 'draft' | 'cancelled' | 'rejected'> = {
+type PolicySummaryRow = {
+  id: string;
+  policyNumber?: string | null;
+  status: PolicyStatus;
+  customerId: string;
+  customerName: string;
+  productName: string;
+  classOfBusinessName: string;
+  brokerName?: string | null;
+  businessType: BusinessType;
+  policyStartDate: string;
+  policyEndDate: string;
+  netPremium: number;
+  naicomUid?: string | null;
+  createdAt: string;
+};
+
+const statusVariant: Record<PolicyStatus, 'active' | 'pending' | 'draft' | 'cancelled' | 'rejected'> = {
   ACTIVE:           'active',
   REINSTATED:       'active',
   PENDING_APPROVAL: 'pending',
@@ -30,16 +47,16 @@ export default function PolicyListPage() {
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
 
-  const policiesQuery = useQuery<PolicyDto[]>({
+  const policiesQuery = useQuery<PolicySummaryRow[]>({
     queryKey: ['policies'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: PolicyDto[] }>('/api/v1/policies');
-      return res.data.data;
+      const res = await apiClient.get<{ data: SpringPageResponse<PolicySummaryRow> | PolicySummaryRow[] }>('/api/v1/policies');
+      return unwrapPageData(res.data.data);
     },
   });
   const policies = policiesQuery.data ?? [];
 
-  const columns: ColumnDef<PolicyDto>[] = [
+  const columns: ColumnDef<PolicySummaryRow>[] = [
     {
       accessorKey: 'policyNumber',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Policy No." />,
@@ -68,10 +85,10 @@ export default function PolicyListPage() {
       ),
     },
     {
-      accessorKey: 'sumInsured',
-      header: 'Sum Insured',
+      accessorKey: 'policyStartDate',
+      header: 'Start Date',
       cell: ({ getValue }) => (
-        <span className="text-sm tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
+        <span className="text-sm text-muted-foreground">{getValue() as string}</span>
       ),
     },
     {
@@ -85,7 +102,7 @@ export default function PolicyListPage() {
       accessorKey: 'status',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
       cell: ({ getValue }) => {
-        const s = getValue() as PolicyDto['status'];
+        const s = getValue() as PolicyStatus;
         return <Badge variant={statusVariant[s]}>{s.toLowerCase().replace('_', ' ')}</Badge>;
       },
     },
@@ -95,7 +112,7 @@ export default function PolicyListPage() {
       cell: ({ getValue }) => <NaicomBadge uid={getValue() as string | undefined} />,
     },
     {
-      accessorKey: 'endDate',
+      accessorKey: 'policyEndDate',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Expiry" />,
       cell: ({ getValue }) => (
         <span className="text-sm text-muted-foreground">{getValue() as string}</span>

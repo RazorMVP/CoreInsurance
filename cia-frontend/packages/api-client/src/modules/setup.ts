@@ -35,16 +35,18 @@ export interface AccessGroupDto {
 export interface ApprovalGroupDto {
   id:          string;
   name:        string;
-  module:      string;
+  entityType:  string;
   levels:      ApprovalLevelDto[];
+  createdAt?:  string;
+  updatedAt?:  string;
 }
 
 export interface ApprovalLevelDto {
-  level:         number;
-  minAmount:     number;
-  maxAmount:     number;
-  approverIds:   string[];
-  approverNames: string[];
+  id?:            string;
+  levelOrder:     number;
+  approverUserId: string;
+  approverName?:  string;
+  maxAmount:      number;
 }
 
 export interface ProductDto {

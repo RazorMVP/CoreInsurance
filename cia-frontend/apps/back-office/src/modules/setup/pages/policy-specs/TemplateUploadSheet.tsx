@@ -12,53 +12,53 @@ import {
 import type { TemplateRow } from './template-types';
 import { TEMPLATE_TYPES } from './template-types';
 
-// ── Schema ───────────────────────────────────────────────────────────────────
 const templateSchema = z.object({
-  name: z.string().min(2, 'Required'),
-  type: z.enum(['POLICY_DOCUMENT','CERTIFICATE','SCHEDULE','DEBIT_NOTE','ENDORSEMENT','OTHER']),
+  description: z.string().optional(),
+  type:        z.enum(['POLICY', 'ENDORSEMENT', 'CLAIM_DV', 'NAICOM_CERTIFICATE']),
 });
 type TemplateFormValues = z.infer<typeof templateSchema>;
 
-// ── Props ────────────────────────────────────────────────────────────────────
 interface Props {
-  open:          boolean;
-  onOpenChange:  (v: boolean) => void;
-  productId:     string;
-  productName:   string;
-  /** When replacing an existing template, pre-fills type and shows the warning banner */
+  open:             boolean;
+  onOpenChange:     (v: boolean) => void;
+  productId:        string;
+  productName:      string;
   replaceTemplate?: Pick<TemplateRow, 'id' | 'type'> | null;
-  onSave:        (values: TemplateFormValues & { file: File; replaceId?: string }) => void;
+  onSave:           (values: TemplateFormValues & { file: File }) => Promise<void>;
 }
 
 export default function TemplateUploadSheet({
-  open, onOpenChange, productId: _productId, productName, replaceTemplate, onSave,
+  open, onOpenChange, productName, replaceTemplate, onSave,
 }: Props) {
-  const [file,     setFile]     = useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [fileError,setFileError]= useState('');
-  const fileInputRef             = useRef<HTMLInputElement>(null);
+  const [fileError, setFileError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<TemplateFormValues>({
     resolver:      zodResolver(templateSchema),
-    defaultValues: { name: '', type: 'POLICY_DOCUMENT' },
+    defaultValues: { description: '', type: 'POLICY' },
   });
 
   useEffect(() => {
     if (!open) {
       setFile(null);
       setFileError('');
+      setSaving(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
     form.reset({
-      name: '',
-      type: replaceTemplate?.type ?? 'POLICY_DOCUMENT',
+      description: '',
+      type:        replaceTemplate?.type ?? 'POLICY',
     });
   }, [open, replaceTemplate, form]);
 
   function acceptFile(f: File) {
-    const valid = f.name.endsWith('.docx') || f.name.endsWith('.pdf');
-    if (!valid) { setFileError('Only .docx and .pdf files are accepted.'); return; }
-    if (f.size > 10 * 1024 * 1024) { setFileError('File must be under 10 MB.'); return; }
+    const lowerName = f.name.toLowerCase();
+    const valid = lowerName.endsWith('.html') || lowerName.endsWith('.htm') || f.type === 'text/html';
+    if (!valid) { setFileError('Only HTML template files are accepted.'); return; }
+    if (f.size > 2 * 1024 * 1024) { setFileError('File must be under 2 MB.'); return; }
     setFileError('');
     setFile(f);
   }
@@ -75,10 +75,15 @@ export default function TemplateUploadSheet({
     if (f) acceptFile(f);
   }
 
-  function onSubmit(values: TemplateFormValues) {
+  async function onSubmit(values: TemplateFormValues) {
     if (!file) { setFileError('Please select a file.'); return; }
-    onSave({ ...values, file, replaceId: replaceTemplate?.id });
-    onOpenChange(false);
+    setSaving(true);
+    try {
+      await onSave({ ...values, file });
+      onOpenChange(false);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -88,39 +93,30 @@ export default function TemplateUploadSheet({
           <SheetTitle>{replaceTemplate ? 'Replace Template' : 'Upload Template'}</SheetTitle>
           <SheetDescription>
             {replaceTemplate
-              ? 'Uploading a new file will archive the current version.'
-              : 'Upload a .docx or .pdf master template for this product.'}
+              ? 'Uploading a new file will deactivate the current active template for this product and type.'
+              : 'Upload an HTML master template for this product.'}
           </SheetDescription>
         </SheetHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="mt-6 space-y-5">
-
-            {/* Product — read-only */}
             <FormItem>
               <FormLabel>Product</FormLabel>
               <Input value={productName} readOnly className="bg-muted text-muted-foreground cursor-default" />
-              <p className="text-xs text-muted-foreground mt-1">Pre-filled from the product selector.</p>
             </FormItem>
 
-            {/* Name */}
-            <FormField control={form.control} name="name" render={({ field }) => (
+            <FormField control={form.control} name="description" render={({ field }) => (
               <FormItem>
-                <FormLabel>Template Name</FormLabel>
-                <FormControl><Input placeholder="e.g. Motor Comprehensive Policy v3" {...field} /></FormControl>
+                <FormLabel>Description</FormLabel>
+                <FormControl><Input placeholder="e.g. Motor policy template" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
 
-            {/* Type */}
             <FormField control={form.control} name="type" render={({ field }) => (
               <FormItem>
                 <FormLabel>Template Type</FormLabel>
-                <Select
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  disabled={!!replaceTemplate}
-                >
+                <Select value={field.value} onValueChange={field.onChange} disabled={!!replaceTemplate}>
                   <FormControl>
                     <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                   </FormControl>
@@ -137,9 +133,8 @@ export default function TemplateUploadSheet({
               </FormItem>
             )} />
 
-            {/* File drop zone */}
             <FormItem>
-              <FormLabel>File</FormLabel>
+              <FormLabel>HTML File</FormLabel>
               <div
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
@@ -150,13 +145,13 @@ export default function TemplateUploadSheet({
                 {file ? (
                   <div>
                     <p className="text-sm font-medium text-foreground">{file.name}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{(file.size / 1024).toFixed(0)} KB — click to change</p>
+                    <p className="text-xs text-muted-foreground mt-1">{(file.size / 1024).toFixed(0)} KB - click to change</p>
                   </div>
                 ) : (
                   <div>
-                    <p className="text-sm font-medium text-foreground">Drop .docx or .pdf here</p>
+                    <p className="text-sm font-medium text-foreground">Drop .html here</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      or <span className="text-primary">browse to upload</span> · Max 10 MB
+                      or <span className="text-primary">browse to upload</span> · Max 2 MB
                     </p>
                   </div>
                 )}
@@ -164,7 +159,7 @@ export default function TemplateUploadSheet({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".docx,.pdf"
+                accept=".html,.htm,text/html"
                 className="hidden"
                 onChange={handleFileInput}
               />
@@ -172,8 +167,8 @@ export default function TemplateUploadSheet({
             </FormItem>
 
             <SheetFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit">Upload Template</Button>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+              <Button type="submit" disabled={saving}>{saving ? 'Uploading...' : 'Upload Template'}</Button>
             </SheetFooter>
           </form>
         </Form>

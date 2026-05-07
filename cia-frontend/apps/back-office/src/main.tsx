@@ -25,13 +25,6 @@ const queryClient = new QueryClient({
 
 const keycloakConfigured = !!import.meta.env.VITE_KEYCLOAK_URL;
 
-// Demo mode (`VITE_DEMO_MODE=true`) allows production builds to ship with
-// the DevAuthProvider — used for stakeholder previews on the public Vercel
-// URL while real Keycloak infrastructure is not yet stood up. Auth is
-// mocked, mutations hit the (likely also-mocked) backend at the configured
-// API base URL. NEVER enable for tenant-bearing environments.
-const demoMode = import.meta.env.VITE_DEMO_MODE === 'true';
-
 if (keycloakConfigured) {
   configureKeycloak({
     url:      import.meta.env.VITE_KEYCLOAK_URL,
@@ -39,20 +32,18 @@ if (keycloakConfigured) {
     clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID ?? 'cia-back-office',
   });
   setTokenGetter(() => keycloak.token);
-} else if (!import.meta.env.DEV && !demoMode) {
+} else if (!import.meta.env.DEV) {
   // Production builds MUST have Keycloak configured. Fail loud rather than
-  // silently fall back to DevAuthProvider, which would ship unauthenticated
-  // mock access to end users. The only exception is VITE_DEMO_MODE=true,
-  // which is for the stakeholder-preview Vercel URL — never for real tenants.
+  // silently fall back to DevAuthProvider, which would ship mock access to
+  // end users.
   throw new Error(
     'VITE_KEYCLOAK_URL is required for production builds. ' +
-    'Configure Keycloak environment variables on your hosting provider, ' +
-    'or set VITE_DEMO_MODE=true for a demo build with mocked auth.'
+    'Configure Keycloak environment variables on your hosting provider.'
   );
 }
 
-// DevAuthProvider is used in dev mode and demo mode; AuthProvider only when
-// real Keycloak is configured.
+// DevAuthProvider is used in local development only; AuthProvider is required
+// for every production build.
 const AuthWrapper = keycloakConfigured ? AuthProvider : DevAuthProvider;
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

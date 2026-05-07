@@ -5,23 +5,24 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
   Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle,
 } from '@cia/ui';
-import { apiClient, type ApprovalGroupDto, type UserDto } from '@cia/api-client';
+import { apiClient, type ApprovalGroupDto } from '@cia/api-client';
 import { useEffect } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { applyApiErrors } from '@/lib/form-errors';
 
 const levelSchema = z.object({
-  minAmount:    z.coerce.number().min(0),
-  maxAmount:    z.coerce.number().min(1),
-  approverIds:  z.array(z.string()).min(1),
+  levelOrder:     z.coerce.number().int().min(1),
+  approverUserId: z.string().min(1, 'Required'),
+  approverName:   z.string().optional(),
+  maxAmount:      z.coerce.number().min(0),
 });
 
 const schema = z.object({
-  name:   z.string().min(2, 'Required'),
-  module: z.string().min(1, 'Required'),
-  levels: z.array(levelSchema).min(1, 'At least one level required'),
+  name:       z.string().min(2, 'Required'),
+  entityType: z.string().min(1, 'Required'),
+  levels:     z.array(levelSchema).min(1, 'At least one level required'),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -36,23 +37,10 @@ interface Props {
 export default function ApprovalGroupSheet({ open, onOpenChange, group, onSuccess }: Props) {
   const queryClient = useQueryClient();
 
-  const usersQuery = useQuery<UserDto[]>({
-    queryKey: ['setup', 'users'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: UserDto[] }>('/api/v1/setup/users');
-      return res.data.data;
-    },
-    enabled: open,
-  });
-  const approvers = (usersQuery.data ?? []).map((u) => ({
-    id:   u.id,
-    name: `${u.firstName} ${u.lastName}`,
-  }));
-
   const form = useForm<FormValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(schema) as any,
-    defaultValues: { name: '', module: '', levels: [{ minAmount: 0, maxAmount: 10_000_000, approverIds: [] }] },
+    defaultValues: { name: '', entityType: '', levels: [{ levelOrder: 1, approverUserId: '', approverName: '', maxAmount: 10_000_000 }] },
   });
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: 'levels' });
@@ -60,25 +48,34 @@ export default function ApprovalGroupSheet({ open, onOpenChange, group, onSucces
   useEffect(() => {
     if (group) {
       form.reset({
-        name:   group.name,
-        module: group.module,
-        levels: group.levels.map((l) => ({ minAmount: l.minAmount, maxAmount: l.maxAmount, approverIds: l.approverIds })),
+        name:       group.name,
+        entityType: group.entityType,
+        levels:     group.levels.map((l, i) => ({
+          levelOrder:     l.levelOrder ?? i + 1,
+          approverUserId: l.approverUserId,
+          approverName:   l.approverName ?? '',
+          maxAmount:      l.maxAmount,
+        })),
       });
     } else {
-      form.reset({ name: '', module: '', levels: [{ minAmount: 0, maxAmount: 10_000_000, approverIds: [] }] });
+      form.reset({ name: '', entityType: '', levels: [{ levelOrder: 1, approverUserId: '', approverName: '', maxAmount: 10_000_000 }] });
     }
   }, [group, form]);
 
   const save = useMutation({
     mutationFn: async (values: FormValues) => {
+      const payload = {
+        ...values,
+        levels: values.levels.map((level, index) => ({ ...level, levelOrder: index + 1 })),
+      };
       if (group) {
         const res = await apiClient.put<{ data: ApprovalGroupDto }>(
-          `/api/v1/setup/approval-groups/${group.id}`, values,
+          `/api/v1/setup/approval-groups/${group.id}`, payload,
         );
         return res.data.data;
       }
       const res = await apiClient.post<{ data: ApprovalGroupDto }>(
-        '/api/v1/setup/approval-groups', values,
+        '/api/v1/setup/approval-groups', payload,
       );
       return res.data.data;
     },
@@ -113,12 +110,12 @@ export default function ApprovalGroupSheet({ open, onOpenChange, group, onSucces
                   </FormItem>
                 )}
               />
-              <FormField control={form.control} name="module"
+              <FormField control={form.control} name="entityType"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Module</FormLabel>
+                    <FormLabel>Entity Type</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl><SelectTrigger><SelectValue placeholder="Select module" /></SelectTrigger></FormControl>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Select entity" /></SelectTrigger></FormControl>
                       <SelectContent>{MODULES.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                     </Select>
                     <FormMessage />
@@ -140,15 +137,6 @@ export default function ApprovalGroupSheet({ open, onOpenChange, group, onSucces
                     )}
                   </div>
                   <FormRow>
-                    <FormField control={form.control} name={`levels.${i}.minAmount`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Min Amount (₦)</FormLabel>
-                          <FormControl><Input type="number" {...field} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                     <FormField control={form.control} name={`levels.${i}.maxAmount`}
                       render={({ field }) => (
                         <FormItem>
@@ -158,20 +146,21 @@ export default function ApprovalGroupSheet({ open, onOpenChange, group, onSucces
                         </FormItem>
                       )}
                     />
+                    <FormField control={form.control} name={`levels.${i}.approverUserId`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Approver User ID</FormLabel>
+                          <FormControl><Input placeholder="Keycloak user id" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </FormRow>
-                  <FormField control={form.control} name={`levels.${i}.approverIds`}
+                  <FormField control={form.control} name={`levels.${i}.approverName`}
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Approver</FormLabel>
-                        <Select
-                          onValueChange={(v) => field.onChange([v])}
-                          value={field.value[0] ?? ''}
-                        >
-                          <FormControl><SelectTrigger><SelectValue placeholder="Select approver" /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            {approvers.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                        <FormLabel>Approver Name</FormLabel>
+                        <FormControl><Input placeholder="Display name" {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -179,7 +168,7 @@ export default function ApprovalGroupSheet({ open, onOpenChange, group, onSucces
                 </div>
               ))}
               <Button type="button" variant="outline" size="sm"
-                onClick={() => append({ minAmount: 0, maxAmount: 50_000_000, approverIds: [] })}>
+                onClick={() => append({ levelOrder: fields.length + 1, approverUserId: '', approverName: '', maxAmount: 50_000_000 })}>
                 + Add Level
               </Button>
             </div>

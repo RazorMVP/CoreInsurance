@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { AxiosRequestConfig } from 'axios';
 import { apiClient } from './client';
+import { normalizePageResponse, type PageResponse } from './types';
 
 // ─── Envelope ────────────────────────────────────────────────────────────────
 //
@@ -65,6 +66,31 @@ export async function validatedGet<T extends z.ZodTypeAny>(
   const res = await apiClient.get(url, config);
   const parsed = apiEnvelope(schema).parse(res.data) as { data: z.infer<T> };
   return parsed.data;
+}
+
+export async function validatedPageGet<T extends z.ZodTypeAny>(
+  url:     string,
+  schema:  T,
+  config?: AxiosRequestConfig,
+): Promise<PageResponse<z.infer<T>>> {
+  const springPageSchema = z.object({
+    content:       z.array(schema),
+    totalElements: z.number().optional(),
+    totalPages:    z.number().optional(),
+    number:        z.number().optional(),
+    size:          z.number().optional(),
+  });
+  const pageResponseSchema = z.object({
+    data: z.array(schema),
+    meta: z.object({
+      page:       z.number(),
+      size:       z.number(),
+      total:      z.number(),
+      totalPages: z.number(),
+    }),
+  });
+  const data = await validatedGet(url, z.union([springPageSchema, pageResponseSchema, z.array(schema)]), config);
+  return normalizePageResponse(data);
 }
 
 /** POST + validate. Returns just the `data` field of the envelope. */

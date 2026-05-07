@@ -6,8 +6,7 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { z } from 'zod';
-import { validatedGet, ClaimDtoSchema, type ClaimDto } from '@cia/api-client';
+import { validatedPageGet, ClaimDtoSchema, type ClaimDto } from '@cia/api-client';
 import RegisterClaimSheet from './register/RegisterClaimSheet';
 import SubmitClaimDialog  from './detail/SubmitClaimDialog';
 import CancelClaimDialog  from './detail/CancelClaimDialog';
@@ -31,7 +30,7 @@ export default function ClaimsListPage() {
 
   const claimsQuery = useQuery<ClaimDto[]>({
     queryKey: ['claims'],
-    queryFn: () => validatedGet('/api/v1/claims', z.array(ClaimDtoSchema)),
+    queryFn: async () => (await validatedPageGet('/api/v1/claims', ClaimDtoSchema)).data,
   });
   const claims = claimsQuery.data ?? [];
 

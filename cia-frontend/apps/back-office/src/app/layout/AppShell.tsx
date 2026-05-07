@@ -4,19 +4,11 @@ import { Toaster } from '@cia/ui';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 
-const isDemo = import.meta.env.VITE_DEMO_MODE === 'true';
-
 export default function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
-      {isDemo && (
-        <div className="flex items-center justify-center gap-2 bg-amber-100 px-4 py-1.5 text-xs font-medium text-amber-900 border-b border-amber-200">
-          <span className="rounded-sm bg-amber-200 px-1.5 py-0.5 font-semibold uppercase tracking-wide text-[10px]">Demo</span>
-          <span>Stakeholder preview — auth is mocked, data is illustrative. Not a tenant environment.</span>
-        </div>
-      )}
       <div className="flex flex-1 overflow-hidden">
         <aside
           style={{

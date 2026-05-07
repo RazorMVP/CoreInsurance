@@ -7,7 +7,6 @@ import RequireAccess from '../../app/security/RequireAccess';
 import SetupLayout from './layout/SetupLayout';
 
 const CompanySettingsPage     = lazy(() => import('./pages/company/CompanySettingsPage'));
-const UsersPage               = lazy(() => import('./pages/users/UsersPage'));
 const AccessGroupsPage        = lazy(() => import('./pages/access-groups/AccessGroupsPage'));
 const ApprovalGroupsPage      = lazy(() => import('./pages/approval-groups/ApprovalGroupsPage'));
 const ClassesPage             = lazy(() => import('./pages/classes/ClassesPage'));
@@ -57,7 +56,6 @@ export default function SetupModule() {
         <Routes>
           <Route index element={<SetupIndexRedirect />} />
           <Route path="company" element={<SetupPage path="/setup/company"><CompanySettingsPage /></SetupPage>} />
-          <Route path="users" element={<SetupPage path="/setup/users"><UsersPage /></SetupPage>} />
           <Route path="access-groups" element={<SetupPage path="/setup/access-groups"><AccessGroupsPage /></SetupPage>} />
           <Route path="approval-groups" element={<SetupPage path="/setup/approval-groups"><ApprovalGroupsPage /></SetupPage>} />
           <Route path="classes" element={<SetupPage path="/setup/classes"><ClassesPage /></SetupPage>} />
