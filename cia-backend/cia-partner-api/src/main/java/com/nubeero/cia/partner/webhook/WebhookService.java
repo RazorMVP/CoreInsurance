@@ -43,7 +43,7 @@ public class WebhookService {
 
         WebhookRegistration reg = WebhookRegistration.builder()
                 .partnerAppId(partnerAppId)
-                .targetUrl(req.targetUrl())
+                .targetUrl(WebhookTargetUrlValidator.validate(req.targetUrl()).toString())
                 .secret(req.secret())
                 .eventTypes(String.join(",", req.eventTypes()))
                 .active(true)

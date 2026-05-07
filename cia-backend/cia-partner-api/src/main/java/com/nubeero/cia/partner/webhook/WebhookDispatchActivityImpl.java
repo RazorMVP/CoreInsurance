@@ -47,9 +47,10 @@ public class WebhookDispatchActivityImpl implements WebhookDispatchActivity {
     private WebhookDeliveryResult dispatch(WebhookRegistration registration, WebhookDispatchRequest request) {
         WebhookDeliveryResult result;
         try {
+            URI targetUri = WebhookTargetUrlValidator.validate(registration.getTargetUrl());
             String signature = sign(request.getPayloadJson(), registration.getSecret());
             HttpRequest httpRequest = HttpRequest.newBuilder()
-                    .uri(URI.create(registration.getTargetUrl()))
+                    .uri(targetUri)
                     .timeout(Duration.ofSeconds(30))
                     .header("Content-Type", "application/json")
                     .header("X-CIA-Event", request.getEventType())
@@ -75,11 +76,11 @@ public class WebhookDispatchActivityImpl implements WebhookDispatchActivity {
         deliveryLogRepository.save(WebhookDeliveryLog.builder()
                 .webhookRegistrationId(registration.getId())
                 .eventType(request.getEventType())
-                .payloadJson(request.getPayloadJson())
+                .payloadJson(WebhookDeliverySanitizer.redactedPayloadMarker())
                 .success(result.isSuccess())
                 .httpStatus(result.getHttpStatus() > 0 ? result.getHttpStatus() : null)
-                .responseBody(result.getResponseBody())
-                .errorMessage(result.getErrorMessage())
+                .responseBody(WebhookDeliverySanitizer.sanitizeResponseBody(result.getResponseBody()))
+                .errorMessage(WebhookDeliverySanitizer.sanitizeErrorMessage(result.getErrorMessage()))
                 .build());
 
         return result;

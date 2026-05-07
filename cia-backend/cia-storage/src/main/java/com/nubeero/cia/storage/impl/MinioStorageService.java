@@ -1,6 +1,7 @@
 package com.nubeero.cia.storage.impl;
 
 import com.nubeero.cia.storage.DocumentStorageService;
+import com.nubeero.cia.storage.StorageTenantGuard;
 import com.nubeero.cia.storage.config.StorageProperties;
 import io.minio.*;
 import io.minio.http.Method;
@@ -20,10 +21,11 @@ public class MinioStorageService implements DocumentStorageService {
 
     private final MinioClient minioClient;
     private final StorageProperties storageProperties;
+    private final StorageTenantGuard storageTenantGuard;
 
     @Override
     public String upload(String tenantId, String path, InputStream content, String mimeType) {
-        String objectName = tenantId + "/" + path;
+        String objectName = objectName(tenantId, path);
         try {
             minioClient.putObject(PutObjectArgs.builder()
                     .bucket(storageProperties.getBucketName())
@@ -41,7 +43,7 @@ public class MinioStorageService implements DocumentStorageService {
 
     @Override
     public InputStream download(String tenantId, String path) {
-        String objectName = tenantId + "/" + path;
+        String objectName = objectName(tenantId, path);
         try {
             return minioClient.getObject(GetObjectArgs.builder()
                     .bucket(storageProperties.getBucketName())
@@ -55,7 +57,7 @@ public class MinioStorageService implements DocumentStorageService {
 
     @Override
     public void delete(String tenantId, String path) {
-        String objectName = tenantId + "/" + path;
+        String objectName = objectName(tenantId, path);
         try {
             minioClient.removeObject(RemoveObjectArgs.builder()
                     .bucket(storageProperties.getBucketName())
@@ -70,7 +72,7 @@ public class MinioStorageService implements DocumentStorageService {
 
     @Override
     public String presignedUrl(String tenantId, String path, long expirySeconds) {
-        String objectName = tenantId + "/" + path;
+        String objectName = objectName(tenantId, path);
         try {
             return minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                     .bucket(storageProperties.getBucketName())
@@ -82,5 +84,9 @@ public class MinioStorageService implements DocumentStorageService {
             log.error("Failed to generate presigned URL for object={}", objectName, e);
             throw new RuntimeException("Presigned URL generation failed: " + objectName, e);
         }
+    }
+
+    private String objectName(String tenantId, String path) {
+        return storageTenantGuard.requireAllowedTenant(tenantId) + "/" + path;
     }
 }

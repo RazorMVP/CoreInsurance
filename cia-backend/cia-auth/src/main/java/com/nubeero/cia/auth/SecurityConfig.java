@@ -20,6 +20,7 @@ public class SecurityConfig {
 
     private final JwtAuthConverter jwtAuthConverter;
     private final TenantContextFilter tenantContextFilter;
+    private final ApiDocsAccessPolicy apiDocsAccessPolicy;
 
     @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
     private String issuerUri;
@@ -29,25 +30,19 @@ public class SecurityConfig {
         return http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                new AntPathRequestMatcher("/actuator/health"),
-                                new AntPathRequestMatcher("/actuator/info"),
-                                // Swagger UI + OpenAPI specs — the actual mount is
-                                // under /partner/* (see application.yml). The
-                                // /internal/* paths are friendly redirect aliases
-                                // for the internal-api GroupedOpenApi.
-                                new AntPathRequestMatcher("/partner/docs/**"),
-                                new AntPathRequestMatcher("/partner/docs"),
-                                new AntPathRequestMatcher("/partner/swagger-ui/**"),
-                                new AntPathRequestMatcher("/partner/v3/api-docs/**"),
-                                new AntPathRequestMatcher("/internal/docs"),
-                                new AntPathRequestMatcher("/internal/v3/api-docs"),
-                                new AntPathRequestMatcher("/webjars/**"),
-                                new AntPathRequestMatcher("/api/v1/auth/login/failed")
-                        ).permitAll()
-                        .anyRequest().authenticated()
-                )
+                .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers(
+                            new AntPathRequestMatcher("/actuator/health"),
+                            new AntPathRequestMatcher("/actuator/info"),
+                            new AntPathRequestMatcher("/api/v1/auth/login/failed")
+                    ).permitAll();
+                    if (apiDocsAccessPolicy.publicDocsEnabled()) {
+                        auth.requestMatchers(apiDocsAccessPolicy.requestMatchers()).permitAll();
+                    } else {
+                        auth.requestMatchers(apiDocsAccessPolicy.requestMatchers()).authenticated();
+                    }
+                    auth.anyRequest().authenticated();
+                })
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter))
                 )

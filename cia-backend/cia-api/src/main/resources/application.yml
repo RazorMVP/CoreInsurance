@@ -73,6 +73,9 @@ management:
 cia:
   environment: ${CIA_ENV:local}
 
+  api-docs:
+    public-enabled: ${API_DOCS_PUBLIC_ENABLED:false}
+
   temporal:
     host: ${TEMPORAL_HOST:localhost:7233}
     namespace: ${TEMPORAL_NAMESPACE:default}

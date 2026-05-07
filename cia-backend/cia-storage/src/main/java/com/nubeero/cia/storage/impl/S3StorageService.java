@@ -1,6 +1,7 @@
 package com.nubeero.cia.storage.impl;
 
 import com.nubeero.cia.storage.DocumentStorageService;
+import com.nubeero.cia.storage.StorageTenantGuard;
 import com.nubeero.cia.storage.config.StorageProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,10 +25,11 @@ public class S3StorageService implements DocumentStorageService {
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
     private final StorageProperties storageProperties;
+    private final StorageTenantGuard storageTenantGuard;
 
     @Override
     public String upload(String tenantId, String path, InputStream content, String mimeType) {
-        String key = tenantId + "/" + path;
+        String key = key(tenantId, path);
         try {
             s3Client.putObject(
                     PutObjectRequest.builder()
@@ -47,7 +49,7 @@ public class S3StorageService implements DocumentStorageService {
 
     @Override
     public InputStream download(String tenantId, String path) {
-        String key = tenantId + "/" + path;
+        String key = key(tenantId, path);
         return s3Client.getObject(GetObjectRequest.builder()
                 .bucket(storageProperties.getBucketName())
                 .key(key)
@@ -56,7 +58,7 @@ public class S3StorageService implements DocumentStorageService {
 
     @Override
     public void delete(String tenantId, String path) {
-        String key = tenantId + "/" + path;
+        String key = key(tenantId, path);
         s3Client.deleteObject(DeleteObjectRequest.builder()
                 .bucket(storageProperties.getBucketName())
                 .key(key)
@@ -66,7 +68,7 @@ public class S3StorageService implements DocumentStorageService {
 
     @Override
     public String presignedUrl(String tenantId, String path, long expirySeconds) {
-        String key = tenantId + "/" + path;
+        String key = key(tenantId, path);
         return s3Presigner.presignGetObject(GetObjectPresignRequest.builder()
                 .signatureDuration(Duration.ofSeconds(expirySeconds))
                 .getObjectRequest(GetObjectRequest.builder()
@@ -76,5 +78,9 @@ public class S3StorageService implements DocumentStorageService {
                 .build())
                 .url()
                 .toString();
+    }
+
+    private String key(String tenantId, String path) {
+        return storageTenantGuard.requireAllowedTenant(tenantId) + "/" + path;
     }
 }

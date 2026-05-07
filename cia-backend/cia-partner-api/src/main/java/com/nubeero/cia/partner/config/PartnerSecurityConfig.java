@@ -1,5 +1,6 @@
 package com.nubeero.cia.partner.config;
 
+import com.nubeero.cia.auth.ApiDocsAccessPolicy;
 import com.nubeero.cia.auth.JwtAuthConverter;
 import com.nubeero.cia.auth.TenantContextFilter;
 import lombok.RequiredArgsConstructor;
@@ -10,7 +11,6 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 @Configuration
 @RequiredArgsConstructor
@@ -19,6 +19,7 @@ public class PartnerSecurityConfig {
     private final JwtAuthConverter jwtAuthConverter;
     private final TenantContextFilter tenantContextFilter;
     private final PartnerScopeFilter partnerScopeFilter;
+    private final ApiDocsAccessPolicy apiDocsAccessPolicy;
 
     @Bean
     @Order(1)
@@ -27,14 +28,14 @@ public class PartnerSecurityConfig {
                 .securityMatcher("/partner/**")
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                new AntPathRequestMatcher("/partner/docs/**"),
-                                new AntPathRequestMatcher("/partner/swagger-ui/**"),
-                                new AntPathRequestMatcher("/partner/v3/api-docs/**")
-                        ).permitAll()
-                        .anyRequest().authenticated()
-                )
+                .authorizeHttpRequests(auth -> {
+                    if (apiDocsAccessPolicy.publicDocsEnabled()) {
+                        auth.requestMatchers(apiDocsAccessPolicy.requestMatchers()).permitAll();
+                    } else {
+                        auth.requestMatchers(apiDocsAccessPolicy.requestMatchers()).authenticated();
+                    }
+                    auth.anyRequest().authenticated();
+                })
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter))
                 )
