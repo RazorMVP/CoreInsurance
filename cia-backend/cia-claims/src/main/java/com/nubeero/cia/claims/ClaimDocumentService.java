@@ -3,6 +3,8 @@ package com.nubeero.cia.claims;
 import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import com.nubeero.cia.common.tenant.TenantContext;
+import com.nubeero.cia.common.upload.UploadCategory;
+import com.nubeero.cia.common.upload.UploadSecurityPolicy;
 import com.nubeero.cia.storage.DocumentStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -13,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
@@ -28,6 +31,7 @@ public class ClaimDocumentService {
     private final ClaimDocumentRepository documentRepository;
     private final ClaimRepository         claimRepository;
     private final DocumentStorageService  storageService;
+    private final UploadSecurityPolicy    uploadSecurityPolicy;
 
     public Page<ClaimDocument> findByClaimId(UUID claimId, Pageable pageable) {
         return documentRepository.findAllByClaim_IdAndDeletedAtIsNull(claimId, pageable);
@@ -123,22 +127,21 @@ public class ClaimDocumentService {
                     "Cannot upload documents to a " + claim.getStatus() + " claim");
         }
 
-        String originalName = file.getOriginalFilename();
-        if (originalName == null || originalName.isBlank()) originalName = "upload";
-        String safeName = originalName.replaceAll("[^A-Za-z0-9._-]", "_");
-        String path = "claims/" + claimId + "/" + UUID.randomUUID() + "-" + safeName;
+        var upload = uploadSecurityPolicy.validate(UploadCategory.CLAIM_DOCUMENT, file);
+        String path = "claims/" + claimId + "/" + UUID.randomUUID() + "-" + upload.safeFilename();
 
-        String contentType = file.getContentType();
-        if (contentType == null || contentType.isBlank()) contentType = "application/octet-stream";
-
-        storageService.upload(TenantContext.getTenantId(), path, file.getInputStream(), contentType);
+        storageService.upload(
+                TenantContext.getTenantId(),
+                path,
+                new ByteArrayInputStream(upload.content()),
+                upload.contentType());
 
         ClaimDocument doc = ClaimDocument.builder()
                 .claim(claim)
                 .documentType(documentType)
-                .fileName(originalName)
+                .fileName(upload.originalFilename())
                 .filePath(path)
-                .fileSize(file.getSize())
+                .fileSize(upload.size())
                 .uploadedBy(currentUser())
                 .build();
 

@@ -1,6 +1,5 @@
 package com.nubeero.cia.common.audit;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -18,7 +17,7 @@ import java.time.Instant;
 public class AuditService {
 
     private final AuditLogRepository auditLogRepository;
-    private final ObjectMapper objectMapper;
+    private final AuditValueSanitizer auditValueSanitizer;
     private final ApplicationEventPublisher eventPublisher;
 
     public void log(String entityType, String entityId, AuditAction action,
@@ -47,8 +46,8 @@ public class AuditService {
                     .userId(resolveUserId())
                     .userName(resolveUserName())
                     .timestamp(Instant.now())
-                    .oldValue(toJson(oldValue))
-                    .newValue(toJson(newValue))
+                    .oldValue(auditValueSanitizer.sanitizeToJson(oldValue))
+                    .newValue(auditValueSanitizer.sanitizeToJson(newValue))
                     .ipAddress(ipAddress)
                     .sessionId(sessionId)
                     .approvalAmount(approvalAmount)
@@ -83,13 +82,4 @@ public class AuditService {
         return jwt;
     }
 
-    private String toJson(Object value) {
-        if (value == null) return null;
-        try {
-            return objectMapper.writeValueAsString(value);
-        } catch (Exception e) {
-            log.warn("Could not serialise audit value to JSON: {}", e.getMessage());
-            return value.toString();
-        }
-    }
 }

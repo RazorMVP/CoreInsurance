@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-07 15:37 Africa/Lagos
+Last updated: 2026-05-07 20:17 Africa/Lagos
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -34,7 +34,7 @@ These gates must pass before live deployment approval.
 | Tenant isolation gate | Tenant data isolation is proven with automated tests. | Verified | Phase 3 is closed. Tenant resolution, provisioning, migration, HTTP authorization, and two-tenant isolation checks passed against local Docker Compose PostgreSQL. |
 | Data correctness gate | Reports, premium calculations, finance postings, and migrations are validated. | Verified | Phase 4 database migration/report SQL is closed and all Phase 5 insurance and finance correctness items are verified. |
 | Integration gate | KYC, NAICOM, NIID, and Temporal workflows are implemented or explicitly blocked outside dev/test. | Verified | Phase 6 hard-blocks pending live KYC, NAICOM, and NIID adapters until go-live provider work is complete; Phase 7 implements and verifies Temporal approval, NAICOM, NIID, and webhook worker execution/registration. |
-| PII protection gate | PII is encrypted, redacted, or excluded from logs, audit records, files, and webhook payload history. | In progress | Phase 8 has started. Webhook payload history, webhook response storage, storage tenant fallback, SSRF validation, and production API docs exposure are now hardened; audit-log PII and upload validation remain open. |
+| PII protection gate | PII is encrypted, redacted, or excluded from logs, audit records, files, and webhook payload history. | Verified | Phase 8 is closed for the current pre-go-live scope. Audit snapshots are redacted, upload limits/type checks/scanner hooks are enforced, webhook payload history is not retained, webhook responses are sanitized, storage tenant fallback is blocked, SSRF validation is in place, API docs default private, and sensitive endpoint rate limits are enforced. |
 | Frontend contract gate | Production UI screens are wired to real backend contracts or intentionally disabled. | Not started | Blocks deployment. |
 | Deployment gate | Backend deployment, migrations, health checks, readiness checks, secrets, rollback, and monitoring are documented and tested. | Not started | Blocks deployment. |
 
@@ -340,15 +340,15 @@ Goal: protect insurer and customer data.
 
 | ID | Fix item | Status | Owner | Verification |
 | --- | --- | --- | --- | --- |
-| P8-001 | Redact or encrypt PII inside audit logs. | Not started | TBD | Audit tests prove ID numbers, addresses, and documents are not stored in plain text. |
-| P8-002 | Define PII classification for customer, KYC, claim, policy, and finance records. | Not started | TBD | Classification is documented and reviewed. |
-| P8-003 | Add explicit upload limits for claim, KYC, and document files. | Not started | TBD | Oversized upload tests fail safely. |
-| P8-004 | Add file type validation and malware-scanning integration point. | Not started | TBD | Invalid file type tests fail safely. |
+| P8-001 | Redact or encrypt PII inside audit logs. | Verified | TBD | `AuditValueSanitizerTest` proves ID numbers, addresses, contact details, document URLs, tokens, and free-text identifiers are redacted before audit snapshots are stored. |
+| P8-002 | Define PII classification for customer, KYC, claim, policy, and finance records. | Verified | TBD | `pii-classification.md` documents the classification levels, domain inventory, and required handling rules. |
+| P8-003 | Add explicit upload limits for claim, KYC, and document files. | Verified | TBD | `UploadSecurityPolicyTest` proves oversized KYC uploads fail safely; service code now validates KYC and claim uploads before storage. |
+| P8-004 | Add file type validation and malware-scanning integration point. | Verified | TBD | `UploadSecurityPolicyTest` proves invalid extensions/types fail safely and malware scanner detections block storage. A production scanner bean remains a go-live provider decision. |
 | P8-005 | Prevent file storage fallback to the `public` tenant outside dev/test. | Verified | TBD | `StorageTenantGuardTest` proves missing tenants fail and `public` storage is blocked outside dev/test while real tenants continue. |
 | P8-006 | Harden webhook target URL validation against SSRF. | Verified | TBD | `WebhookTargetUrlValidatorTest` rejects non-HTTPS, userinfo, localhost, private IPs, link-local, metadata, carrier-grade NAT, benchmark, loopback, and unique-local IPv6 targets. |
 | P8-007 | Cap and redact webhook delivery response bodies. | Verified | TBD | `WebhookDeliverySanitizerTest` proves webhook payloads are not stored and sensitive response/error fields are redacted and capped. |
 | P8-008 | Restrict internal and partner API docs in production. | Verified | TBD | `ApiDocsAccessPolicyTest` proves docs routes are centrally identified; config defaults public docs off and enables them only in dev unless explicitly overridden. |
-| P8-009 | Add rate limits for sensitive back-office and partner endpoints. | Not started | TBD | Rate-limit tests pass. |
+| P8-009 | Add rate limits for sensitive back-office and partner endpoints. | Verified | TBD | `SensitiveEndpointRateLimitPolicyTest` and `SensitiveEndpointRateLimitFilterTest` prove partner, tenant admin, audit export, customer write, claim upload, and failed-login paths are rate-limited server-side. |
 
 ### Phase 8 Run Log
 
@@ -361,8 +361,13 @@ Goal: protect insurer and customer data.
 | `npm run build` | `docs-site` | Passed | Docusaurus production build generated static files after Phase 8 tracker updates. |
 | `docker-compose config` | repository root | Passed | Local infrastructure compose configuration rendered successfully. |
 | `git diff --check` | repository root | Passed | No whitespace errors were detected in the Phase 8 diff. |
+| `./mvnw test -pl cia-common,cia-auth,cia-customer,cia-claims,cia-partner-api,cia-api -am --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Affected Phase 8 audit-redaction, upload-validation, rate-limit, customer/claim upload, partner, and assembled API modules passed. Existing optional database integration tests reported skips in the local path. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Full Maven reactor completed all 20 backend modules successfully after closing P8-001 through P8-004 and P8-009. Existing optional database integration tests reported skips in the local path. |
+| `npm run build` | `docs-site` | Passed | Docusaurus production build generated static files after the PII classification and tracker updates. |
+| `docker-compose config` | repository root | Passed | Local infrastructure compose configuration rendered successfully after final Phase 8 changes. |
+| `git diff --check` | repository root | Passed | No whitespace errors were detected after final Phase 8 changes. |
 
-Phase 8 progress note: Phase 8 is underway, not closed. P8-005 through P8-008 are verified in this pass. P8-001 through P8-004 and P8-009 remain open and still block closing the PII protection gate.
+Phase 8 closure note: Phase 8 is closed for the current pre-go-live scope. The remaining live decision is vendor selection and registration of a production malware scanner bean; the application-level integration point and fail-safe validation behavior are now implemented and tested.
 
 ## Phase 9: Frontend And Backend Contract Alignment
 

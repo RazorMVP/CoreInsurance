@@ -5,6 +5,8 @@ import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import com.nubeero.cia.common.tenant.TenantContext;
+import com.nubeero.cia.common.upload.UploadCategory;
+import com.nubeero.cia.common.upload.UploadSecurityPolicy;
 import com.nubeero.cia.customer.dto.*;
 import com.nubeero.cia.integrations.kyc.*;
 import com.nubeero.cia.setup.customer.CustomerNumberFormatService;
@@ -19,7 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
+import java.io.ByteArrayInputStream;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -36,6 +38,7 @@ public class CustomerService {
     private final AuditService auditService;
     private final DocumentStorageService documentStorageService;
     private final CustomerNumberFormatService customerNumberFormatService;
+    private final UploadSecurityPolicy uploadSecurityPolicy;
 
     // ─── Queries ────────────────────────────────────────────────────
 
@@ -540,15 +543,12 @@ public class CustomerService {
     /** Uploads a KYC document file to MinIO and returns the stored path. */
     private String uploadKycDocument(MultipartFile file, UUID customerId, String docKey) {
         if (file == null || file.isEmpty()) return null;
-        String tenantId = TenantContext.getTenantId() != null ? TenantContext.getTenantId() : "public";
-        String ext = getExtension(file.getOriginalFilename());
+        String tenantId = TenantContext.getTenantId();
+        var upload = uploadSecurityPolicy.validate(UploadCategory.KYC_DOCUMENT, file);
+        String ext = getExtension(upload.safeFilename());
         String path = "customers/" + customerId + "/kyc/" + docKey + ext;
-        try {
-            return documentStorageService.upload(tenantId, path, file.getInputStream(), file.getContentType());
-        } catch (IOException e) {
-            log.error("Failed to upload KYC document for customer {}: {}", customerId, e.getMessage());
-            throw new BusinessRuleException("DOCUMENT_UPLOAD_FAILED", "Failed to upload " + docKey + ": " + e.getMessage());
-        }
+        return documentStorageService.upload(
+                tenantId, path, new ByteArrayInputStream(upload.content()), upload.contentType());
     }
 
     private String getExtension(String filename) {

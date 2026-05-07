@@ -21,6 +21,7 @@ public class SecurityConfig {
     private final JwtAuthConverter jwtAuthConverter;
     private final TenantContextFilter tenantContextFilter;
     private final ApiDocsAccessPolicy apiDocsAccessPolicy;
+    private final SensitiveEndpointRateLimitFilter sensitiveEndpointRateLimitFilter;
 
     @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
     private String issuerUri;
@@ -46,6 +47,7 @@ public class SecurityConfig {
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter))
                 )
+                .addFilterAfter(sensitiveEndpointRateLimitFilter, BearerTokenAuthenticationFilter.class)
                 .addFilterAfter(tenantContextFilter, BearerTokenAuthenticationFilter.class)
                 .build();
     }

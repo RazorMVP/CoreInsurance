@@ -2,6 +2,7 @@ package com.nubeero.cia.partner.config;
 
 import com.nubeero.cia.auth.ApiDocsAccessPolicy;
 import com.nubeero.cia.auth.JwtAuthConverter;
+import com.nubeero.cia.auth.SensitiveEndpointRateLimitFilter;
 import com.nubeero.cia.auth.TenantContextFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -9,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
@@ -20,6 +22,7 @@ public class PartnerSecurityConfig {
     private final TenantContextFilter tenantContextFilter;
     private final PartnerScopeFilter partnerScopeFilter;
     private final ApiDocsAccessPolicy apiDocsAccessPolicy;
+    private final SensitiveEndpointRateLimitFilter sensitiveEndpointRateLimitFilter;
 
     @Bean
     @Order(1)
@@ -39,6 +42,7 @@ public class PartnerSecurityConfig {
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter))
                 )
+                .addFilterAfter(sensitiveEndpointRateLimitFilter, BearerTokenAuthenticationFilter.class)
                 .addFilterBefore(tenantContextFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(partnerScopeFilter, TenantContextFilter.class)
                 .build();

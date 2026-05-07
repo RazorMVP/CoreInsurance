@@ -56,6 +56,11 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6380}
 
+  servlet:
+    multipart:
+      max-file-size: ${MULTIPART_MAX_FILE_SIZE:25MB}
+      max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:30MB}
+
 server:
   port: ${SERVER_PORT:8090}
   servlet:
@@ -75,6 +80,16 @@ cia:
 
   api-docs:
     public-enabled: ${API_DOCS_PUBLIC_ENABLED:false}
+
+  upload:
+    kyc-max-bytes: ${KYC_UPLOAD_MAX_BYTES:10485760}
+    claim-max-bytes: ${CLAIM_UPLOAD_MAX_BYTES:26214400}
+
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    partner-requests-per-minute: ${PARTNER_RATE_LIMIT_RPM:300}
+    sensitive-requests-per-minute: ${SENSITIVE_RATE_LIMIT_RPM:60}
+    failed-login-requests-per-minute: ${FAILED_LOGIN_RATE_LIMIT_RPM:10}
 
   temporal:
     host: ${TEMPORAL_HOST:localhost:7233}
