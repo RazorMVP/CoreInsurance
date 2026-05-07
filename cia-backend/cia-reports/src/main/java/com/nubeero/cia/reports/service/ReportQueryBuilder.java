@@ -1,10 +1,9 @@
 package com.nubeero.cia.reports.service;
 
 import com.nubeero.cia.reports.domain.*;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.Query;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -27,55 +26,100 @@ public class ReportQueryBuilder {
     /** Cap for CSV / PDF exports. Higher than JSON because the result is streamed/written to disk. */
     public static final int EXPORT_MAX_ROWS = 100_000;
 
-    private final EntityManager entityManager;
+    private final JdbcTemplate jdbcTemplate;
 
-    // Base SQL templates per data source
-    private static final Map<DataSource, String> BASE_QUERIES = Map.of(
-        DataSource.POLICIES,
-            "SELECT p.policy_number, c.full_name AS customer_name, " +
-            "cob.name AS class_of_business, pr.name AS product_name, " +
-            "p.sum_insured, p.premium, p.status, p.start_date, p.end_date, " +
-            "p.inception_date, p.created_at FROM policy p " +
-            "LEFT JOIN customer c ON c.id = p.customer_id " +
-            "LEFT JOIN class_of_business cob ON cob.id = p.class_of_business_id " +
-            "LEFT JOIN product pr ON pr.id = p.product_id WHERE p.deleted_at IS NULL",
+    private static final Set<String> AGGREGATE_FIELDS = Set.of(
+            "amount",
+            "ceded_amount",
+            "premium",
+            "reserve_amount",
+            "retained_amount",
+            "sum_insured",
+            "total_paid"
+    );
 
-        DataSource.CLAIMS,
-            "SELECT cl.claim_number, p.policy_number, c.full_name AS customer_name, " +
-            "cob.name AS class_of_business, cl.status, cl.reserve_amount, " +
-            "cl.total_paid, cl.incident_date, cl.registered_at, cl.created_at " +
-            "FROM claim cl " +
-            "LEFT JOIN policy p ON p.id = cl.policy_id " +
-            "LEFT JOIN customer c ON c.id = p.customer_id " +
-            "LEFT JOIN class_of_business cob ON cob.id = p.class_of_business_id " +
-            "WHERE cl.deleted_at IS NULL",
+    private static final Map<DataSource, String> FROM_CLAUSES = Map.of(
+            DataSource.POLICIES, " FROM policies p WHERE p.deleted_at IS NULL",
+            DataSource.CLAIMS, " FROM claims cl WHERE cl.deleted_at IS NULL",
+            DataSource.FINANCE, " FROM debit_notes dn WHERE dn.deleted_at IS NULL",
+            DataSource.REINSURANCE, """
+                     FROM ri_allocations ria
+                     LEFT JOIN ri_treaties t ON t.id = ria.treaty_id
+                    WHERE ria.deleted_at IS NULL""",
+            DataSource.CUSTOMERS, " FROM customers c WHERE c.deleted_at IS NULL",
+            DataSource.ENDORSEMENTS, " FROM endorsements e WHERE e.deleted_at IS NULL"
+    );
 
-        DataSource.FINANCE,
-            "SELECT dn.debit_note_number, p.policy_number, c.full_name AS customer_name, " +
-            "dn.amount, dn.status, dn.due_date, dn.created_at FROM debit_note dn " +
-            "LEFT JOIN policy p ON p.id = dn.policy_id " +
-            "LEFT JOIN customer c ON c.id = p.customer_id " +
-            "WHERE dn.deleted_at IS NULL",
-
-        DataSource.REINSURANCE,
-            "SELECT ria.id AS allocation_id, p.policy_number, t.name AS treaty_name, " +
-            "t.type AS treaty_type, ria.retained_amount, ria.ceded_amount, " +
-            "ria.status, ria.created_at FROM ri_allocation ria " +
-            "LEFT JOIN policy p ON p.id = ria.policy_id " +
-            "LEFT JOIN reinsurance_treaty t ON t.id = ria.treaty_id " +
-            "WHERE ria.deleted_at IS NULL",
-
-        DataSource.CUSTOMERS,
-            "SELECT c.id, c.full_name, c.customer_type, c.kyc_status, " +
-            "c.channel, c.created_at FROM customer c WHERE c.deleted_at IS NULL",
-
-        DataSource.ENDORSEMENTS,
-            "SELECT e.endorsement_number, p.policy_number, c.full_name AS customer_name, " +
-            "e.type AS endorsement_type, e.endorsement_premium, e.effective_date, " +
-            "e.status, e.created_at FROM endorsement e " +
-            "LEFT JOIN policy p ON p.id = e.policy_id " +
-            "LEFT JOIN customer c ON c.id = p.customer_id " +
-            "WHERE e.deleted_at IS NULL"
+    private static final Map<DataSource, Map<String, String>> FIELD_EXPRESSIONS = Map.of(
+            DataSource.POLICIES, Map.ofEntries(
+                    Map.entry("amount", "p.total_premium"),
+                    Map.entry("class_of_business", "p.class_of_business_name"),
+                    Map.entry("created_at", "p.created_at"),
+                    Map.entry("customer_name", "p.customer_name"),
+                    Map.entry("end_date", "p.policy_end_date"),
+                    Map.entry("policy_number", "p.policy_number"),
+                    Map.entry("premium", "p.total_premium"),
+                    Map.entry("product_name", "p.product_name"),
+                    Map.entry("start_date", "p.policy_start_date"),
+                    Map.entry("status", "p.status"),
+                    Map.entry("sum_insured", "p.total_sum_insured")
+            ),
+            DataSource.CLAIMS, Map.ofEntries(
+                    Map.entry("amount", "COALESCE(cl.approved_amount, cl.reserve_amount, 0)"),
+                    Map.entry("claim_number", "cl.claim_number"),
+                    Map.entry("class_of_business", "cl.class_of_business_name"),
+                    Map.entry("created_at", "cl.created_at"),
+                    Map.entry("customer_name", "cl.customer_name"),
+                    Map.entry("policy_number", "cl.policy_number"),
+                    Map.entry("registered_at", "cl.created_at"),
+                    Map.entry("reserve_amount", "cl.reserve_amount"),
+                    Map.entry("status", "cl.status"),
+                    Map.entry("total_paid", "COALESCE(cl.approved_amount, 0)")
+            ),
+            DataSource.FINANCE, Map.ofEntries(
+                    Map.entry("amount", "dn.total_amount"),
+                    Map.entry("created_at", "dn.created_at"),
+                    Map.entry("customer_name", "dn.customer_name"),
+                    Map.entry("debit_note_number", "dn.debit_note_number"),
+                    Map.entry("due_date", "dn.due_date"),
+                    Map.entry("policy_number", "dn.entity_reference"),
+                    Map.entry("status", "dn.status")
+            ),
+            DataSource.REINSURANCE, Map.ofEntries(
+                    Map.entry("amount", "ria.ceded_amount"),
+                    Map.entry("ceded_amount", "ria.ceded_amount"),
+                    Map.entry("created_at", "ria.created_at"),
+                    Map.entry("policy_number", "ria.policy_number"),
+                    Map.entry("retained_amount", "ria.retained_amount"),
+                    Map.entry("status", "ria.status"),
+                    Map.entry("treaty_name", "COALESCE(NULLIF(t.description, ''), ria.treaty_type)"),
+                    Map.entry("treaty_type", "ria.treaty_type")
+            ),
+            DataSource.CUSTOMERS, Map.ofEntries(
+                    Map.entry("channel", "'DIRECT'"),
+                    Map.entry("created_at", "c.created_at"),
+                    Map.entry("customer_name", customerDisplayNameExpression()),
+                    Map.entry("customer_type", "c.customer_type"),
+                    Map.entry("full_name", customerDisplayNameExpression()),
+                    Map.entry("id", "c.id"),
+                    Map.entry("kyc_status", "c.kyc_status"),
+                    Map.entry("status", "c.customer_status")
+            ),
+            DataSource.ENDORSEMENTS, Map.ofEntries(
+                    Map.entry("amount", "e.premium_adjustment"),
+                    Map.entry("class_of_business", "e.class_of_business_name"),
+                    Map.entry("created_at", "e.created_at"),
+                    Map.entry("customer_name", "e.customer_name"),
+                    Map.entry("effective_date", "e.effective_date"),
+                    Map.entry("endorsement_number", "e.endorsement_number"),
+                    Map.entry("endorsement_type", "e.endorsement_type"),
+                    Map.entry("end_date", "e.policy_end_date"),
+                    Map.entry("policy_number", "e.policy_number"),
+                    Map.entry("premium", "e.premium_adjustment"),
+                    Map.entry("product_name", "e.product_name"),
+                    Map.entry("status", "e.status"),
+                    Map.entry("sum_insured", "e.new_sum_insured")
+            )
     );
 
     public List<Map<String, Object>> execute(ReportDefinition definition,
@@ -83,14 +127,44 @@ public class ReportQueryBuilder {
         return execute(definition, filterValues, DEFAULT_MAX_ROWS);
     }
 
-    @SuppressWarnings("unchecked")
     public List<Map<String, Object>> execute(ReportDefinition definition,
                                               Map<String, String> filterValues,
                                               int maxRows) {
+        if (maxRows <= 0) {
+            throw new IllegalArgumentException("maxRows must be greater than zero");
+        }
+
         ReportConfig config = definition.getConfig();
-        StringBuilder sql = new StringBuilder(BASE_QUERIES.get(definition.getDataSource()));
+        DataSource dataSource = definition.getDataSource();
+        List<ReportField> rawFields = rawFields(config);
+        if (rawFields.isEmpty()) {
+            throw new IllegalArgumentException("Report definition must include at least one raw field");
+        }
+        boolean grouped = config.getGroupBy() != null && !config.getGroupBy().isBlank();
+        Set<String> selectedAliases = new HashSet<>();
+        Set<String> groupByExpressions = new LinkedHashSet<>();
+
+        StringBuilder sql = new StringBuilder("SELECT ");
+        for (int i = 0; i < rawFields.size(); i++) {
+            ReportField field = rawFields.get(i);
+            String expression = fieldExpression(dataSource, field.getKey());
+            if (i > 0) {
+                sql.append(", ");
+            }
+
+            if (grouped && isAggregateField(field)) {
+                sql.append("COALESCE(SUM(").append(expression).append("), 0) AS ").append(field.getKey());
+            } else {
+                sql.append(expression).append(" AS ").append(field.getKey());
+                if (grouped) {
+                    groupByExpressions.add(expression);
+                }
+            }
+            selectedAliases.add(field.getKey());
+        }
+        sql.append(FROM_CLAUSES.get(dataSource));
+
         List<Object> params = new ArrayList<>();
-        int paramIdx = 1;
 
         // Apply filters
         if (config.getFilters() != null && filterValues != null) {
@@ -101,30 +175,30 @@ public class ReportQueryBuilder {
                 switch (filter.getKey()) {
                     case "date_from" -> {
                         sql.append(" AND ").append(createdAtCol(definition.getDataSource()))
-                           .append(" >= ?").append(paramIdx++);
+                           .append(" >= ?");
                         params.add(LocalDate.parse(value).atStartOfDay());
                     }
                     case "date_to" -> {
                         sql.append(" AND ").append(createdAtCol(definition.getDataSource()))
-                           .append(" < ?").append(paramIdx++);
+                           .append(" < ?");
                         params.add(LocalDate.parse(value).plusDays(1).atStartOfDay());
                     }
                     case "class_of_business_id" -> {
-                        // Only datasources that JOIN class_of_business support this filter
+                        // Only datasources that expose class_of_business_id support this filter.
                         if (hasCobJoin(definition.getDataSource())) {
-                            sql.append(" AND cob.id = ?").append(paramIdx++);
+                            sql.append(" AND ").append(classOfBusinessIdCol(dataSource)).append(" = ?");
                             params.add(UUID.fromString(value));
                         }
                     }
                     case "product_id" -> {
                         if (definition.getDataSource() == DataSource.POLICIES) {
-                            sql.append(" AND pr.id = ?").append(paramIdx++);
+                            sql.append(" AND p.product_id = ?");
                             params.add(UUID.fromString(value));
                         }
                     }
                     case "status" -> {
                         sql.append(" AND ").append(statusCol(definition.getDataSource()))
-                           .append(" = ?").append(paramIdx++);
+                           .append(" = ?");
                         params.add(value);
                     }
                     default -> log.debug("Unhandled filter key: {}", filter.getKey());
@@ -132,35 +206,22 @@ public class ReportQueryBuilder {
             }
         }
 
+        if (grouped && !groupByExpressions.isEmpty()) {
+            sql.append(" GROUP BY ").append(String.join(", ", groupByExpressions));
+        }
+
         // Apply sort
-        if (config.getSortBy() != null && !config.getSortBy().isBlank()) {
-            String dir = "ASC".equalsIgnoreCase(config.getSortDir()) ? "ASC" : "DESC";
-            sql.append(" ORDER BY ").append(sanitizeColumnName(config.getSortBy()))
-               .append(" ").append(dir);
-        }
+        appendSort(sql, config, dataSource, selectedAliases, grouped);
+        sql.append(" LIMIT ?");
+        params.add(maxRows);
 
-        Query query = entityManager.createNativeQuery(sql.toString());
-        for (int i = 0; i < params.size(); i++) {
-            query.setParameter(i + 1, params.get(i));
-        }
-        query.setMaxResults(maxRows);
-
-        List<Object[]> rawRows = query.getResultList();
-        return applyComputedFields(rawRows, config);
+        return applyComputedFields(jdbcTemplate.queryForList(sql.toString(), params.toArray()), config);
     }
 
-    private List<Map<String, Object>> applyComputedFields(List<Object[]> rawRows,
+    private List<Map<String, Object>> applyComputedFields(List<Map<String, Object>> rawRows,
                                                             ReportConfig config) {
-        if (config.getFields() == null) return List.of();
-
-        List<ReportField> rawFields = config.getFields().stream()
-                .filter(f -> !f.isComputed()).toList();
-
         return rawRows.stream().map(row -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            for (int i = 0; i < Math.min(rawFields.size(), row.length); i++) {
-                map.put(rawFields.get(i).getKey(), row[i]);
-            }
+            Map<String, Object> map = new LinkedHashMap<>(row);
             // Apply computed formulas
             for (ReportField f : config.getFields()) {
                 if (!f.isComputed()) continue;
@@ -246,16 +307,74 @@ public class ReportQueryBuilder {
         };
     }
 
+    private String classOfBusinessIdCol(DataSource ds) {
+        return switch (ds) {
+            case POLICIES     -> "p.class_of_business_id";
+            case CLAIMS       -> "cl.class_of_business_id";
+            case ENDORSEMENTS -> "e.class_of_business_id";
+            default -> throw new IllegalArgumentException("Data source does not support class filter: " + ds);
+        };
+    }
+
     /** Returns true only for datasources whose base query JOINs class_of_business. */
     private boolean hasCobJoin(DataSource ds) {
         return ds == DataSource.POLICIES || ds == DataSource.CLAIMS
                 || ds == DataSource.ENDORSEMENTS;
     }
 
-    /** Whitelist-based column name sanitizer — prevents SQL injection in ORDER BY. */
-    private String sanitizeColumnName(String raw) {
-        if (raw == null) return "created_at";
-        // Allow only alphanumeric + underscore + dot (for table.column)
-        return raw.replaceAll("[^a-zA-Z0-9_.]", "").toLowerCase();
+    private List<ReportField> rawFields(ReportConfig config) {
+        if (config.getFields() == null) {
+            return List.of();
+        }
+        return config.getFields().stream()
+                .filter(field -> !field.isComputed())
+                .toList();
+    }
+
+    private String fieldExpression(DataSource dataSource, String fieldKey) {
+        String expression = FIELD_EXPRESSIONS.getOrDefault(dataSource, Map.of()).get(fieldKey);
+        if (expression == null) {
+            throw new IllegalArgumentException("Unsupported report field " + fieldKey
+                    + " for data source " + dataSource);
+        }
+        return expression;
+    }
+
+    private boolean isAggregateField(ReportField field) {
+        return AGGREGATE_FIELDS.contains(field.getKey());
+    }
+
+    private void appendSort(StringBuilder sql,
+                            ReportConfig config,
+                            DataSource dataSource,
+                            Set<String> selectedAliases,
+                            boolean grouped) {
+        if (config.getSortBy() == null || config.getSortBy().isBlank()) {
+            return;
+        }
+
+        String sortKey = config.getSortBy();
+        String dir = "ASC".equalsIgnoreCase(config.getSortDir()) ? "ASC" : "DESC";
+        if (selectedAliases.contains(sortKey)) {
+            sql.append(" ORDER BY ").append(sortKey).append(" ").append(dir);
+            return;
+        }
+
+        String expression = fieldExpression(dataSource, sortKey);
+        if (grouped && AGGREGATE_FIELDS.contains(sortKey)) {
+            sql.append(" ORDER BY COALESCE(SUM(").append(expression).append("), 0) ").append(dir);
+        } else {
+            sql.append(" ORDER BY ").append(expression).append(" ").append(dir);
+        }
+    }
+
+    private static String customerDisplayNameExpression() {
+        return """
+                COALESCE(
+                    NULLIF(TRIM(CONCAT_WS(' ', c.first_name, c.last_name)), ''),
+                    NULLIF(c.company_name, ''),
+                    NULLIF(c.contact_person, ''),
+                    c.id::text
+                )""";
     }
 }

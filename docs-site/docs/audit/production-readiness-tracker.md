@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-07 02:40 Africa/Lagos
+Last updated: 2026-05-07 08:55 Africa/Lagos
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -32,7 +32,7 @@ These gates must pass before live deployment approval.
 | Security gate | Production cannot run with dev profile, default secrets, mock providers, or unauthenticated endpoints. | In progress | Phase 1 startup guardrails are verified; endpoint authorization remains in Phase 2. |
 | Authorization gate | Role and scope checks are enforced and tested for critical endpoints. | Verified | Phase 2 backend/frontend authorization fixes are implemented and full verification passed. |
 | Tenant isolation gate | Tenant data isolation is proven with automated tests. | Verified | Phase 3 is closed. Tenant resolution, provisioning, migration, HTTP authorization, and two-tenant isolation checks passed against local Docker Compose PostgreSQL. |
-| Data correctness gate | Reports, premium calculations, finance postings, and migrations are validated. | Not started | Blocks deployment. |
+| Data correctness gate | Reports, premium calculations, finance postings, and migrations are validated. | In progress | Phase 4 database migration and report SQL hardening has started; Phase 5 still owns premium and finance posting correctness. |
 | Integration gate | KYC, NAICOM, NIID, and Temporal workflows are implemented or explicitly blocked outside dev/test. | Not started | Blocks deployment. |
 | PII protection gate | PII is encrypted, redacted, or excluded from logs, audit records, files, and webhook payload history. | Not started | Blocks deployment. |
 | Frontend contract gate | Production UI screens are wired to real backend contracts or intentionally disabled. | Not started | Blocks deployment. |
@@ -189,12 +189,41 @@ Goal: make database-backed operations reliable.
 
 | ID | Fix item | Status | Owner | Verification |
 | --- | --- | --- | --- | --- |
-| P4-001 | Align report SQL with actual migration table and column names. | Not started | TBD | Database-backed report tests pass. |
-| P4-002 | Review native SQL across all modules for schema drift. | Not started | TBD | Native SQL inventory is complete. |
-| P4-003 | Add fresh-database migration test. | Not started | TBD | Empty database migrates to latest version successfully. |
-| P4-004 | Add seeded report generation tests. | Not started | TBD | Reports return expected rows and totals. |
-| P4-005 | Review indexes for policies, claims, customers, finance, audit, and reports. | Not started | TBD | Query paths are documented and indexed where needed. |
-| P4-006 | Define production migration and rollback procedure. | Not started | TBD | Procedure is documented and reviewed. |
+| P4-001 | Align report SQL with actual migration table and column names. | Verified | TBD | `ReportQueryBuilderIntegrationTest` passed against local Docker Compose PostgreSQL with zero skips. |
+| P4-002 | Review native SQL across all modules for schema drift. | Verified | TBD | Native SQL inventory is recorded below; the report SQL drift was corrected, and migration/tenant SQL paths were covered by focused tests. |
+| P4-003 | Add fresh-database migration test. | Verified | TBD | `FreshDatabaseMigrationIntegrationTest` migrated an empty disposable PostgreSQL database to Flyway version `31`. |
+| P4-004 | Add seeded report generation tests. | Verified | TBD | Representative seeded report field shapes for policies, claims, finance, reinsurance, customers, and endorsements return expected rows and totals. |
+| P4-005 | Review indexes for policies, claims, customers, finance, audit, and reports. | Verified | TBD | `V31__reporting_query_indexes.sql` adds missing date/grouping indexes used by report and dashboard read paths. |
+| P4-006 | Define production migration and rollback procedure. | In review | TBD | `database-migration-runbook.md` documents pre-checks, deployment sequence, rollback position, and post-deployment checks. |
+
+### Phase 4 Native SQL Inventory
+
+| Area | File | Position |
+| --- | --- | --- |
+| Reports | `cia-reports/src/main/java/com/nubeero/cia/reports/service/ReportQueryBuilder.java` | Uses tenant-scoped `JdbcTemplate` SQL; corrected to use migrated table and column names for policies, claims, finance, reinsurance, customers, and endorsements. |
+| Dashboard | `cia-api/src/main/java/com/nubeero/cia/dashboard/DashboardService.java` | Uses native SQL for dashboard cards, trends, renewals, search, recent activity, and RI utilisation; table/column names match the migration schema, with finance business semantics deferred to Phase 5. |
+| Tenant registry | `cia-auth/src/main/java/com/nubeero/cia/auth/JdbcTenantRegistry.java` | Uses `public.tenants`; covered by Phase 3 tenant registry tests. |
+| Tenant migration | `cia-api/src/main/java/com/nubeero/cia/tenant/TenantSchemaMigrator.java` | Uses schema-history and `to_regclass` checks; covered by Phase 3 tenant migration tests. |
+| Tenant provisioning | `cia-api/src/main/java/com/nubeero/cia/tenant/TenantProvisioningService.java` | Uses parameterized registry queries plus validated schema identifiers; covered by Phase 3 provisioning and isolation tests. |
+
+### Phase 4 Run Log
+
+| Field | Value |
+| --- | --- |
+| Phase date | 2026-05-07 |
+| Branch | `production-readiness-phase-0` |
+| Scope | Report SQL schema alignment, database-backed report tests, fresh database Flyway test, reporting index migration, native SQL inventory, and migration runbook. |
+
+| Command | Directory | Result | Notes |
+| --- | --- | --- | --- |
+| `docker-compose up -d postgres` | repository root | Passed with escalation | Started the local PostgreSQL service required for Phase 4 database-backed tests. |
+| `docker-compose ps postgres` | repository root | Passed with escalation | PostgreSQL was healthy on `localhost:5434`. |
+| `./mvnw test -pl cia-reports -am -Dtest=ReportQueryBuilderIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Three report SQL integration tests passed against Docker Compose PostgreSQL with zero skips. |
+| `./mvnw test -pl cia-api -am -Dtest=FreshDatabaseMigrationIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | A disposable database migrated from empty to Flyway version `31`; reporting index migration was verified. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Maven reactor completed all 20 modules successfully; tenant and migration tests applied tenant schemas and disposable databases to Flyway version `31`. |
+| `npm run build` | `docs-site` | Passed | Docusaurus generated static files successfully after the runbook and tracker updates. Existing Docusaurus deprecation/update-check warnings remain. |
+| `docker-compose config` | repository root | Passed | Compose configuration rendered successfully. |
+| `git diff --check` | repository root | Passed | No whitespace errors found. |
 
 ## Phase 5: Insurance And Finance Correctness
 
