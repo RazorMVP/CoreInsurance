@@ -24,6 +24,7 @@ const queryClient = new QueryClient({
 });
 
 const keycloakConfigured = !!import.meta.env.VITE_KEYCLOAK_URL;
+const e2eDevAuth = import.meta.env.MODE === 'e2e' && import.meta.env.VITE_E2E_DEV_AUTH === 'true';
 
 if (keycloakConfigured) {
   configureKeycloak({
@@ -32,7 +33,7 @@ if (keycloakConfigured) {
     clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID ?? 'cia-back-office',
   });
   setTokenGetter(() => keycloak.token);
-} else if (!import.meta.env.DEV) {
+} else if (!import.meta.env.DEV && !e2eDevAuth) {
   // Production builds MUST have Keycloak configured. Fail loud rather than
   // silently fall back to DevAuthProvider, which would ship mock access to
   // end users.
@@ -42,8 +43,8 @@ if (keycloakConfigured) {
   );
 }
 
-// DevAuthProvider is used in local development only; AuthProvider is required
-// for every production build.
+// DevAuthProvider is used in local development and the isolated Playwright
+// e2e mode only; AuthProvider is required for every production build.
 const AuthWrapper = keycloakConfigured ? AuthProvider : DevAuthProvider;
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

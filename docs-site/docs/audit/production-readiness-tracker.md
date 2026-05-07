@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-07 20:42 Africa/Lagos
+Last updated: 2026-05-07 21:42 Africa/Lagos
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -35,7 +35,7 @@ These gates must pass before live deployment approval.
 | Data correctness gate | Reports, premium calculations, finance postings, and migrations are validated. | Verified | Phase 4 database migration/report SQL is closed and all Phase 5 insurance and finance correctness items are verified. |
 | Integration gate | KYC, NAICOM, NIID, and Temporal workflows are implemented or explicitly blocked outside dev/test. | Verified | Phase 6 hard-blocks pending live KYC, NAICOM, and NIID adapters until go-live provider work is complete; Phase 7 implements and verifies Temporal approval, NAICOM, NIID, and webhook worker execution/registration. |
 | PII protection gate | PII is encrypted, redacted, or excluded from logs, audit records, files, and webhook payload history. | Verified | Phase 8 is closed for the current pre-go-live scope. Audit snapshots are redacted, upload limits/type checks/scanner hooks are enforced, webhook payload history is not retained, webhook responses are sanitized, storage tenant fallback is blocked, SSRF validation is in place, API docs default private, and sensitive endpoint rate limits are enforced. |
-| Frontend contract gate | Production UI screens are wired to real backend contracts or intentionally disabled. | In progress | Core contract fixes are implemented and verified for P9-001 through P9-007; Playwright smoke coverage remains blocked by the missing test dependency/harness. |
+| Frontend contract gate | Production UI screens are wired to real backend contracts or intentionally disabled. | Verified | Phase 9 is closed. Core contract fixes are implemented, users setup is disabled until backed by an endpoint, production demo auth is removed, and Playwright smoke coverage passes for core back-office routes. |
 | Deployment gate | Backend deployment, migrations, health checks, readiness checks, secrets, rollback, and monitoring are documented and tested. | Not started | Blocks deployment. |
 
 ## Phase 0: Baseline And Tracking
@@ -382,7 +382,7 @@ Goal: make production UI screens work against real backend responses.
 | P9-005 | Wire customer policy and claim tabs to real backend endpoints. | Verified | TBD | Customer detail tabs now call `/api/v1/policies?customerId=` and `/api/v1/claims?customerId=` and unwrap paginated responses. |
 | P9-006 | Align document template frontend types with backend template types. | Verified | TBD | Template UI now uses backend template types, HTML upload payloads, `/api/v1/document-templates`, and backend delete semantics. |
 | P9-007 | Remove production access to demo auth mode. | Verified | TBD | Production builds fail without Keycloak config; `VITE_DEMO_MODE` no longer enables DevAuthProvider or a demo banner. |
-| P9-008 | Add Playwright smoke tests for core production journeys. | Blocked | TBD | `@playwright/test` is not installed in the frontend workspace; adding/running the harness requires dependency installation and browser/runtime setup. |
+| P9-008 | Add Playwright smoke tests for core production journeys. | Verified | TBD | Back-office Playwright smoke tests cover authenticated shell startup and dashboard, customers, quotation, policies, claims, finance, reports, and setup products routes. |
 
 ### Phase 9 Run Log
 
@@ -391,12 +391,13 @@ Goal: make production UI screens work against real backend responses.
 | `pnpm --filter @cia/back-office typecheck` | `cia-frontend` | Passed | Back-office TypeScript completed with the Phase 9 page, route, auth, approval group, and document-template contract fixes. |
 | `pnpm --filter @cia/partner typecheck` | `cia-frontend` | Passed | Partner TypeScript remains green after shared API client page-normalizer changes. |
 | `pnpm --filter @cia/back-office build` | `cia-frontend` | Passed | Vite production build succeeded. Existing large chunk warning remains for the main bundle. |
+| `pnpm --filter @cia/back-office test:e2e` | `cia-frontend` | Passed with escalation | Nine Chromium smoke tests passed against the Vite e2e server with mocked backend API responses and local e2e auth mode. |
 | `npm run build` | `docs-site` | Passed | Docusaurus production build generated static files after the Phase 9 tracker update. |
 | `docker-compose config` | repository root | Passed | Local infrastructure compose configuration rendered successfully after the Phase 9 changes. |
 | `git diff --check` | repository root | Passed | No whitespace errors were detected in the Phase 9 diff. |
-| `rg -n "@playwright/test\|playwright" ...` | repository root | Blocked | No Playwright dependency or existing smoke-test harness is present in the frontend workspace. |
+| `rg -n "@playwright/test\|playwright" ...` | repository root | Passed | Playwright dependency, config, and smoke-test harness are present in the back-office workspace. |
 
-Phase 9 position: P9-001 through P9-007 are implementation-complete and verified by frontend typecheck/build. Phase 9 is not closed until the Playwright smoke-test harness decision is made and P9-008 can be implemented and run.
+Phase 9 closure note: Phase 9 is closed as of 2026-05-07. P9-001 through P9-008 are verified by frontend typecheck, production build, Playwright smoke tests, docs build, Compose config rendering, and whitespace checks.
 
 ## Phase 10: Deployment Architecture
 
