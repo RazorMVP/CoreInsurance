@@ -29,7 +29,7 @@ Core backend, frontend, documentation, Compose configuration, and local image pa
 | Dependency audit | Passed after remediation | Frontend production audit passed; docs audit initially found a high `serialize-javascript` issue, then passed after overriding to `7.0.5` and refreshing the lockfile. |
 | Secret scan | Passed for repository scope | No tracked env files were found; secret-pattern scan only matched documented placeholders and an intentionally shortened partner-doc token example. |
 | Image SBOM | Passed | `docker sbom cia-backend:phase10` generated an SBOM for the Phase 10 backend image. |
-| Image CVE scan | In review | The backend image workflow now runs Trivy against high and critical CVEs and uploads SARIF. Working scans found Spring, Thymeleaf, Tomcat, Bouncy Castle, PostgreSQL JDBC, protobuf, gRPC, MinIO, and Netty CVEs, so the backend dependency graph was upgraded to Spring Boot `3.5.14`, Spring Security Web `6.5.10`, Thymeleaf `3.1.5.RELEASE`, Tomcat `10.1.54`, Bouncy Castle `1.84`, PostgreSQL JDBC `42.7.11`, protobuf `3.25.5`, gRPC `1.75.0`, MinIO `8.6.0`, and Netty `4.1.133.Final`; the vulnerable Netty native epoll transport was removed from the API image path. Final release evidence requires a successful GitHub workflow run for the exact release image. |
+| Image CVE scan | Passed for current commit | The backend image workflow now runs Trivy against high and critical CVEs and uploads SARIF. Working scans found Spring, Thymeleaf, Tomcat, Bouncy Castle, PostgreSQL JDBC, protobuf, gRPC, MinIO, and Netty CVEs, so the backend dependency graph was upgraded to Spring Boot `3.5.14`, Spring Security Web `6.5.10`, Thymeleaf `3.1.5.RELEASE`, Tomcat `10.1.54`, Bouncy Castle `1.84`, PostgreSQL JDBC `42.7.11`, protobuf `3.25.5`, gRPC `1.75.0`, MinIO `8.6.0`, and Netty `4.1.133.Final`; the vulnerable Netty native epoll transport was removed from the API image path. GitHub Backend Image run `25549693671` passed for commit `0c38912`; rerun if the release commit changes. |
 | Production config rendering | Passed | Local Compose and production Compose template config rendering passed. |
 | Clean-environment rehearsal | Blocked | A production env preflight now validates the release environment before rehearsal; the actual rehearsal still requires real vault secrets, live provider credentials, target infrastructure access, and monitoring destination access. |
 
@@ -40,7 +40,6 @@ Core backend, frontend, documentation, Compose configuration, and local image pa
 | RSB-001 | Live KYC contract testing is not complete. | Run contract tests against the approved live or pre-production KYC provider endpoint with issued credentials. | TBD |
 | RSB-002 | Live NAICOM contract testing is not complete. | Run NAICOM upload, failure, retry, and reconciliation tests against the approved provider environment. | TBD |
 | RSB-003 | Live NIID contract testing is not complete. | Run NIID upload, failure, retry, and reconciliation tests against the approved provider environment. | TBD |
-| RSB-004 | Backend image CVE scan result is not attached. | Run the backend image workflow for the exact release commit and confirm the Trivy high/critical CVE gate passes. | TBD |
 | RSB-005 | Clean-environment deployment rehearsal is not complete. | Run `scripts/validate-production-env.sh .env.production`, render production Compose, then deploy from a clean checkout using real vault-managed secrets, target infrastructure access, migration job mode, health checks, and rollback rehearsal. | TBD |
 | RSB-006 | Formal release approval is pending. | Record business, technical, security, and operations approval after all blockers are closed. | TBD |
 
@@ -57,7 +56,7 @@ Core backend, frontend, documentation, Compose configuration, and local image pa
 Before this record can be changed to approved, attach or reference:
 
 1. Live KYC, NAICOM, and NIID contract test results.
-2. High and critical CVE scan result for the exact release backend image.
+2. High and critical CVE scan result for the exact release backend image if the release commit changes after `0c38912`.
 3. Clean-environment deployment rehearsal log.
 4. Migration job log and rollback rehearsal confirmation.
 5. Imported monitoring dashboard and alert verification.

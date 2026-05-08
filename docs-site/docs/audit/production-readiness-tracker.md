@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-08 11:02 WAT
+Last updated: 2026-05-08 11:18 WAT
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -447,7 +447,7 @@ Goal: prove the system is ready for controlled live deployment.
 | P11-003 | Run auth and authorization test suite. | Verified | TBD | Method security, JWT authority conversion, tenant context, reports authorization, controller coverage, tenant provisioning authorization, and partner scope tests passed. |
 | P11-004 | Run workflow and integration contract test suites. | Blocked | TBD | Temporal workflow and current stub/mock integration tests pass; live KYC, NAICOM, and NIID contract tests remain blocked until go-live provider credentials are issued. |
 | P11-005 | Run frontend typecheck and end-to-end tests. | Verified | TBD | Back-office and partner typechecks/builds passed; back-office Playwright smoke suite passed in Chromium; CI now repeats partner build and Playwright smoke checks. |
-| P11-006 | Run dependency and image vulnerability checks. | In review | TBD | Frontend and docs package audits now pass, secret scan only found documented placeholders, SBOM generation works, the backend dependency graph was upgraded to remediate Trivy-reported Spring, Thymeleaf, Tomcat, Bouncy Castle, PostgreSQL JDBC, protobuf, gRPC, MinIO, and Netty CVEs, the vulnerable Netty native epoll transport was removed from the API image path, and the backend image workflow enforces a high/critical CVE gate; final release evidence requires a successful GitHub run for the exact image. |
+| P11-006 | Run dependency and image vulnerability checks. | Verified | TBD | Frontend and docs package audits pass, secret scan only found documented placeholders, SBOM generation works, the backend dependency graph was upgraded to remediate Trivy-reported Spring, Thymeleaf, Tomcat, Bouncy Castle, PostgreSQL JDBC, protobuf, gRPC, MinIO, and Netty CVEs, the vulnerable Netty native epoll transport was removed from the API image path, and GitHub Backend Image run `25549693671` passed the high/critical Trivy gate for commit `0c38912`. |
 | P11-007 | Run clean-environment deployment rehearsal. | Blocked | TBD | Production Compose config renders and a production env preflight now validates the release environment before rehearsal; the actual rehearsal still requires real vault secrets, live provider credentials, and target monitoring/deployment access. |
 | P11-008 | Produce release readiness sign-off. | In review | TBD | Release certification report is prepared for decision-maker review; controlled deployment approval remains pending. |
 
@@ -499,8 +499,9 @@ Goal: prove the system is ready for controlled live deployment.
 | `gh run view 25548534179 --log-failed` | repository root | Investigated with escalation | The Backend Image scan for commit `9ada9eb` reduced the high/critical gate to one remaining finding: `netty-transport-native-epoll` `4.1.133.Final`. |
 | `./mvnw dependency:tree -pl cia-api -am -Dincludes=io.netty:netty-transport-native-epoll,io.netty:netty-codec,io.netty:netty-codec-dns,io.netty:netty-codec-http,io.netty:netty-codec-http2 --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | `netty-transport-native-epoll` is no longer present in the API dependency graph; Netty HTTP, HTTP/2, codec, and DNS libraries remain on `4.1.133.Final`. |
 | `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Full 20-module backend verification passed after removing the vulnerable native epoll transport from the WebFlux dependency path. |
+| `gh run list --branch production-readiness-phase-0 --limit 8` | repository root | Passed with escalation | GitHub CI run `25549693703` and Backend Image run `25549693671` both passed for commit `0c38912`; the Backend Image run is the current high/critical Trivy evidence. |
 
-Phase 11 certification note: regression evidence supports continued controlled release preparation, but Phase 11 is not fully closed for live deployment. Live release approval remains blocked on provider contract tests for KYC, NAICOM, and NIID, a successful GitHub image CVE scan for the exact release image, a clean-environment deployment rehearsal with real secrets and target infrastructure access, and formal decision-maker sign-off.
+Phase 11 certification note: regression evidence supports continued controlled release preparation, but Phase 11 is not fully closed for live deployment. Live release approval remains blocked on provider contract tests for KYC, NAICOM, and NIID, a clean-environment deployment rehearsal with real secrets and target infrastructure access, and formal decision-maker sign-off.
 
 ## Immediate Next Decision
 
@@ -509,6 +510,6 @@ The immediate decision is whether to prepare the external go-live dependencies n
 Recommended order:
 
 1. Secure live or pre-production KYC, NAICOM, and NIID credentials and confirm allowed test windows.
-2. Enable an approved image CVE scanner for the exact release image.
-3. Provision the clean rehearsal environment with vault-managed secrets and monitoring targets.
-4. Rerun Phase 11 end to end and record final release sign-off.
+2. Provision the clean rehearsal environment with vault-managed secrets and monitoring targets.
+3. Rerun Phase 11 end to end if the release commit changes after commit `0c38912`.
+4. Record final release sign-off after provider contracts and deployment rehearsal pass.
