@@ -27,13 +27,16 @@ container liveness healthcheck against `/actuator/health/liveness`.
 
 1. Build, scan, and publish a backend image from the intended commit.
 2. Take a database backup or storage snapshot.
-3. Run the migration service with `CIA_MIGRATION_ONLY=true`.
-4. Confirm the migration service exits successfully.
-5. Start or roll the `cia-api` service.
-6. Wait for `/actuator/health/readiness` to return `UP`.
-7. Run smoke checks for authentication, tenant resolution, customers, quotes,
+3. Validate the target environment file with
+   `scripts/validate-production-env.sh`.
+4. Render the production Compose configuration with the same environment file.
+5. Run the migration service with `CIA_MIGRATION_ONLY=true`.
+6. Confirm the migration service exits successfully.
+7. Start or roll the `cia-api` service.
+8. Wait for `/actuator/health/readiness` to return `UP`.
+9. Run smoke checks for authentication, tenant resolution, customers, quotes,
    policies, claims, finance, reports, setup, and audit.
-8. Record the commit, image digest, CVE scan result, Flyway version, backup reference, and smoke
+10. Record the commit, image digest, CVE scan result, Flyway version, backup reference, and smoke
    result in the release notes.
 
 Do not serve traffic to a new application image until the migration service has
@@ -100,6 +103,20 @@ Minimum required secret-backed values:
 `PII_ENCRYPTION_KEY` is data-critical. Losing it makes encrypted customer PII
 unrecoverable; rotating it requires a controlled re-encryption procedure.
 
+Before a clean-environment rehearsal, copy
+`docker/production/production.env.example` to the target environment and replace
+all placeholders with secret-manager values. Then run:
+
+```bash
+scripts/validate-production-env.sh .env.production
+docker compose --env-file .env.production -f docker/production/docker-compose.yml config
+```
+
+The preflight intentionally fails when it sees placeholder values, local
+endpoints, `latest` image tags, dev/test Spring profiles, mock/stub providers,
+disabled rate limiting, or short PII/webhook secrets. Use
+`--allow-placeholders` only to validate the checked-in example file shape.
+
 ## Rollback
 
 Application rollback is safe only if the database did not migrate or if the
@@ -151,6 +168,7 @@ readiness probe.
 
 ```bash
 docker build -f cia-backend/Dockerfile -t cia-backend:phase10 cia-backend
+scripts/validate-production-env.sh --allow-placeholders docker/production/production.env.example
 docker-compose --env-file docker/production/production.env.example -f docker/production/docker-compose.yml config
 ./mvnw test -pl cia-api -am -Dtest=ExternalDependenciesHealthIndicatorTest,TenantMigrationRunnerTest,TemporalWorkerHealthIndicatorTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress
 ```

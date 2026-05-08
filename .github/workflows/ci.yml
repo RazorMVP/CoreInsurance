@@ -124,11 +124,17 @@ jobs:
 
   # ── Docs: Build Docusaurus (validates no broken links / MDX errors) ─────────
   docs:
-    name: Docs (Docusaurus build)
+    name: Docs and deployment contract
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate production env example
+        run: scripts/validate-production-env.sh --allow-placeholders docker/production/production.env.example
+
+      - name: Validate production Compose template
+        run: docker compose --env-file docker/production/production.env.example -f docker/production/docker-compose.yml config
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
