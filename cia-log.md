@@ -4,6 +4,92 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-09 — Session 55 (main-branch): Period-end closures requirements gathering for EOD/EOM/EOQ/Half-Year/EOY — scope locked at 96% confidence
+
+### Context
+
+User flagged that CIAGB does not currently cater for end-of-day, end-of-month, end-of-quarter, half-year, or end-of-year business closures, and that admin should be able to run them. Requested a web search of insurance-industry practice followed by structured one-at-a-time clarifying questions until the problem and the proposed fix were understood at 96% confidence.
+
+This session is requirements gathering only — no code changes yet. Output is a locked-in scope summary plus a list of defaults to apply during implementation, plus an indicative scale estimate.
+
+### Web research summary
+
+- **Operational vs accounting close split:** insurance systems typically split daily/weekly closures (operational batch jobs, snapshots, dashboards) from monthly+ closures (accounting period close with adjusting entries, sub-ledger reconciliation, period locks). Best-in-class accounting close is 1–3 days; typical 5–10.
+- **NAICOM regulatory deadlines:** monthly recapitalisation progress within 10 working days of month-end; quarterly Management Accounts within 30 days of quarter-end; quarterly ALM within 15 days; annual audited returns by 30 June following year. ₦5,000/day fines for late quarterly returns; possible licence cancellation for repeat default.
+- **IFRS 17 measurement models:** PAA for short-duration (≤1y) general business contracts; GMM for long-duration; VFA for direct participating contracts. PAA roughly 6–10× simpler than full standard.
+- **IFRS 17 + IFRS 9 are companion standards:** IFRS 17 measures insurance contract liabilities; IFRS 9 measures the financial assets backing those liabilities. Both deliberately effective Jan 1, 2023 to align insurer adoption.
+
+### Locked-in scope (7 clarifying questions, all answered)
+
+| # | Aspect | Decision |
+| --- | --- | --- |
+| Q1 | Coverage | Both operational + financial close in coordinated flow |
+| Q2 | Architecture | Hybrid — daily/weekly = operational only; monthly+ = full GL |
+| Q3 | IFRS 17 measurement | PAA only (general business 1-year contracts); GMM/VFA reserved as future-extensibility but not implemented |
+| Q4 | Tenant ownership | Tenant primary + platform fallback (oversight dashboard + emergency force-close) |
+| Q5 | Finality | Soft close → hard close; transition on grace window or regulator acceptance |
+| Q6 | Activity menu | EOD ops only · EOM ops + financial · EOQ adds quarterly regulatory · Half adds interim reporting · EOY adds annual regulatory + nominal-to-retained-earnings zero-out + cohort closure + RI treaty year-end. Investment portfolio added to scope; future activities to be addable via registry pattern. |
+| Q7a | Approval | CFO + Finance Manager for hard close; single Finance Manager for soft close |
+| Q7b | Trigger | Manual primary; optional auto-schedule per closure type per tenant |
+| Q7c | Fiscal year | Tenant-configurable, default 31 December |
+| Q7d | Period assignment | By business date (policy effective / claim DOL / receipt posting), 5-business-day late-posting cutoff |
+| Q7e | Investments | New `cia-investments` module under IFRS 9 (FVPL / FVOCI / Amortised Cost) |
+
+### Defaults to apply during implementation (push back if any are wrong)
+
+- Reinsurance contracts held: PAA measurement, mirror approach to issued contracts (since `cia-reinsurance` is in scope)
+- Risk adjustment for non-financial risk: confidence-level method, 75th percentile (Nigerian convention)
+- IFRS 9 ECL: 12-month ECL by default; lifetime ECL on stage-2/stage-3 instruments
+- Reopening soft-closed periods: requires CFO approval + automatic audit trail entry
+- Closure progress tracking via Temporal workflow with real-time progress on the admin UI
+- `period_assignment_date` helper added to `Policy`, `Claim`, `Receipt`, `Payment` without changing existing columns
+
+### Indicative scale (single-team)
+
+| Workstream | Weeks |
+| --- | --- |
+| `cia-investments` module | 4–5 |
+| Chart of accounts + journal entries layer in `cia-finance` | 4–6 |
+| IFRS 17 PAA measurement service (LRC, LIC, risk adjustment, onerous test) | 4–6 |
+| Closure orchestration via Temporal | 3–4 |
+| NAICOM submission pack generators (monthly recap, quarterly Mgmt Account, ALM, annual returns) | 4–6 |
+| Frontend admin UI | 4–5 |
+| Approval workflow integration | 1–2 |
+| Period locking + business-date cutoff enforcement | 2–3 |
+| IFRS 17 + IFRS 9 disclosure roll-forwards | 2–3 |
+| Tenant fiscal year configurability + half-year derivation | 1 |
+| Closure activity registry pattern | 1 |
+| Tests, integration, regression | continuous |
+
+Order-of-magnitude: 30–40 weeks for one engineer; 4–6 months calendar time with 2–3 engineers parallelised.
+
+### Files modified this session on `main`
+
+| Path | Change |
+| --- | --- |
+| `cia-log.md` | This entry only. |
+
+### Outstanding decision before implementation begins
+
+User asked which deliverable to produce next: (1) detailed design document, (2) implementation plan with phasing, (3) both, or (4) something else. Pending response.
+
+### Open items I will surface during implementation (do not gate scope)
+
+- Specific NAICOM submission templates (need actual forms or a regulatory authority to confirm field mapping)
+- Onerous test threshold tunables per portfolio
+- Whether the platform-admin oversight dashboard should auto-alert on tenants approaching the 10-working-day NAICOM monthly-recap deadline
+- Audit trail granularity for close events (per-step or aggregated per closure)
+
+### Web research sources
+
+- NAICOM Prudential Guidelines for Insurers and Reinsurers in Nigeria (https://storage.naicom.website/naicom/files/Prudential%20Guidelines%20For%20tnsurers%20and%20Reinsurers%20In%20Nigeria.pdf)
+- PwC Insurance Contracts viewpoint — premium recognition / unearned premium liability
+- Casualty Actuarial Society "Basic Insurance Accounting" study notes
+- HighRadius / FloQast / Tipalti — month-end close best-practice references
+- Nigerian Insurers Association — statutory regulator overview
+
+---
+
 ## 2026-05-08 — Session 54 (main-branch marker): no work performed on `main` this session
 
 ### Context
