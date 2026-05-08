@@ -33,6 +33,7 @@ const sidebars: SidebarsConfig = {
       items: [
         "audit/overview",
         "audit/production-readiness-tracker",
+        "audit/release-readiness-signoff",
         "audit/authorization-matrix",
         "audit/pii-classification",
         "audit/api-reference",

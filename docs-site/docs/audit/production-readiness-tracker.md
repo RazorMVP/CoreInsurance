@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-07 23:46 WAT
+Last updated: 2026-05-08 08:00 WAT
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -442,21 +442,54 @@ Goal: prove the system is ready for controlled live deployment.
 
 | ID | Fix item | Status | Owner | Verification |
 | --- | --- | --- | --- | --- |
-| P11-001 | Run full backend unit and integration tests. | Not started | TBD | All backend tests pass. |
-| P11-002 | Run multi-tenant isolation test suite. | Not started | TBD | Tenant isolation tests pass. |
-| P11-003 | Run auth and authorization test suite. | Not started | TBD | Role and scope tests pass. |
-| P11-004 | Run workflow and integration contract test suites. | Not started | TBD | Temporal, KYC, NAICOM, and NIID tests pass. |
-| P11-005 | Run frontend typecheck and end-to-end tests. | Not started | TBD | Typecheck and Playwright tests pass. |
-| P11-006 | Run dependency and image vulnerability checks. | Not started | TBD | No release-blocking vulnerabilities remain. |
-| P11-007 | Run clean-environment deployment rehearsal. | Not started | TBD | System deploys from scratch using documented process. |
-| P11-008 | Produce release readiness sign-off. | Not started | TBD | Decision makers approve controlled deployment. |
+| P11-001 | Run full backend unit and integration tests. | Verified | TBD | `./mvnw verify --batch-mode --no-transfer-progress` passed across all 20 backend modules with zero failures. |
+| P11-002 | Run multi-tenant isolation test suite. | Verified | TBD | Docker Compose PostgreSQL-backed tenant schema, provisioning, authorization, and isolation tests passed with zero skips. |
+| P11-003 | Run auth and authorization test suite. | Verified | TBD | Method security, JWT authority conversion, tenant context, reports authorization, controller coverage, tenant provisioning authorization, and partner scope tests passed. |
+| P11-004 | Run workflow and integration contract test suites. | Blocked | TBD | Temporal workflow and current stub/mock integration tests pass; live KYC, NAICOM, and NIID contract tests remain blocked until go-live provider credentials are issued. |
+| P11-005 | Run frontend typecheck and end-to-end tests. | Verified | TBD | Back-office and partner typechecks/builds passed; back-office Playwright smoke suite passed in Chromium. |
+| P11-006 | Run dependency and image vulnerability checks. | Blocked | TBD | Frontend and docs package audits now pass, secret scan only found documented placeholders, and SBOM generation works; Docker image CVE scan is blocked until Docker Scout login or Trivy/Grype is available. |
+| P11-007 | Run clean-environment deployment rehearsal. | Blocked | TBD | Production Compose config renders, but a true clean-environment rehearsal requires real vault secrets, live provider credentials, and target monitoring/deployment access. |
+| P11-008 | Produce release readiness sign-off. | In review | TBD | Release certification report is prepared for decision-maker review; controlled deployment approval remains pending. |
+
+### Phase 11 Run Log
+
+| Field | Value |
+| --- | --- |
+| Phase date | 2026-05-08 |
+| Branch | `production-readiness-phase-0` |
+| Scope | Full regression, security/dependency audit, production configuration verification, and release certification decision record. |
+
+| Command | Directory | Result | Notes |
+| --- | --- | --- | --- |
+| `docker-compose up -d postgres` | repository root | Passed with escalation | Local PostgreSQL service was running for Docker-backed database tests. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Maven reactor completed all 20 modules successfully; fresh database migration and API tests ran with zero failures. |
+| `./mvnw test -pl cia-api -am -Dtest=TenantSchemaNameTest,TenantProvisioningControllerAuthorizationTest,TenantProvisioningServiceIntegrationTest,ControllerAuthorizationCoverageTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Tenant schema validation, tenant provisioning authorization, and Docker-backed tenant isolation tests passed with zero skips. |
+| `./mvnw test -pl cia-auth,cia-reports,cia-partner-api,cia-api -am -Dtest=MethodSecurityConfigTest,JwtAuthConverterTest,TenantContextFilterTest,ReportControllerAuthorizationTest,ControllerAuthorizationCoverageTest,TenantProvisioningControllerAuthorizationTest,PartnerScopeFilterTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Authorization, controller coverage, tenant context, report authorization, tenant provisioning authorization, and partner scope tests passed. |
+| `./mvnw test -pl cia-integrations,cia-workflow,cia-api -am -Dtest=IntegrationStartupBlockTest,MockKycServiceTest,StubNaicomServiceTest,StubNiidServiceTest,ApprovalWorkflowImplTest,NaicomUploadWorkflowImplTest,NiidUploadWorkflowImplTest,CoreWorkflowWorkerConfigTest,TemporalWorkerStarterTest,TemporalWorkerHealthIndicatorTest,ExternalDependenciesHealthIndicatorTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Temporal worker/workflow tests and current mock/stub integration tests passed; live provider contract tests remain a go-live dependency. |
+| `pnpm --filter @cia/back-office typecheck` | `cia-frontend` | Passed | Back-office TypeScript passed. |
+| `pnpm --filter @cia/partner typecheck` | `cia-frontend` | Passed | Partner TypeScript passed. |
+| `pnpm --filter @cia/back-office build` | `cia-frontend` | Passed | Vite production build succeeded; the existing large chunk warning remains non-blocking. |
+| `pnpm --filter @cia/partner build` | `cia-frontend` | Passed | Vite production build succeeded. |
+| `pnpm --filter @cia/back-office test:e2e` | `cia-frontend` | Passed with escalation | Nine Chromium Playwright smoke tests passed across the authenticated shell and core back-office routes. |
+| `npm run build` | `docs-site` | Passed | Docusaurus static build passed after dependency audit remediation. |
+| `pnpm audit --prod --audit-level high` | `cia-frontend` | Passed with escalation | No known production frontend vulnerabilities were reported. |
+| `npm audit --omit=dev --audit-level=high` | `docs-site` | Passed with escalation | Initial high `serialize-javascript` finding was fixed by overriding to `7.0.5` and refreshing the lockfile; re-audit reports zero vulnerabilities. |
+| `rg` secret-pattern scan | repository root | Passed | No tracked env files were found; scan results were limited to documented placeholders and a shortened bearer-token example in partner docs. |
+| `docker-compose config` | repository root | Passed | Local Compose configuration rendered successfully. |
+| `docker compose --env-file docker/production/production.env.example -f docker/production/docker-compose.yml config` | repository root | Passed | Production Compose template renders with placeholder values from the example env file. |
+| `docker image inspect cia-backend:phase10` | repository root | Passed with escalation | Phase 10 backend image exists locally as Linux arm64 image `sha256:a22a02083f37...`. |
+| `docker sbom cia-backend:phase10` | repository root | Passed with escalation | Docker generated an SBOM for the Phase 10 backend image. |
+| `docker scout cves cia-backend:phase10 --only-severity high,critical` | repository root | Blocked with escalation | Docker Scout requires Docker login in this environment; Trivy, Grype, Syft, and Gitleaks are not installed locally. |
+
+Phase 11 certification note: regression evidence supports continued controlled release preparation, but Phase 11 is not fully closed for live deployment. Live release approval remains blocked on provider contract tests for KYC, NAICOM, and NIID, a completed image CVE scan, a clean-environment deployment rehearsal with real secrets and target infrastructure access, and formal decision-maker sign-off.
 
 ## Immediate Next Decision
 
-The first implementation decision is whether to proceed with Phase 1 production safety guardrails before resolving tenant architecture, or to make the tenant architecture decision first.
+The immediate decision is whether to prepare the external go-live dependencies now or keep the system in controlled pre-live readiness until provider and infrastructure access is available.
 
 Recommended order:
 
-1. Complete Phase 0 baseline and tracking.
-2. Complete Phase 1 production safety guardrails.
-3. Make the Phase 3 tenant architecture decision before changing tenant migrations.
+1. Secure live or pre-production KYC, NAICOM, and NIID credentials and confirm allowed test windows.
+2. Enable an approved image CVE scanner for the exact release image.
+3. Provision the clean rehearsal environment with vault-managed secrets and monitoring targets.
+4. Rerun Phase 11 end to end and record final release sign-off.
