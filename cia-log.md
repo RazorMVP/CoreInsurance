@@ -4,6 +4,27 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-08 — Session 54 (main-branch marker): no work performed on `main` this session
+
+### Context
+
+Session 54's substantive work happened on branch `production-readiness-phase-0` and is not reflected on `main`. User switched to `main` at the end of the session and indicated `main` will be the working branch going forward until they say otherwise.
+
+`main` was at `b04f7b5` at switch time; nothing has been done here yet this session.
+
+### Files modified this session on `main`
+
+| Path | Change |
+| --- | --- |
+| `cia-log.md` | This marker entry only. |
+
+### Open items
+
+- For the Phase 7–11 work that has accumulated on `production-readiness-phase-0` and is not yet merged into `main`, see the corresponding session entries on that branch (or the `production-readiness-tracker.md` audit doc).
+- This branch's next session-log entry will cover the first real work performed on `main`.
+
+---
+
 ## 2026-05-04 → 2026-05-06 — Session 53: Sequence B closed end-to-end (G3–G8 + B1–B13, including richer ClaimDetailResponse, inspection workflow + UI, cia-policy survey/coinsurance/risks editors, Vercel demo-mode fix, and the full pre-Phase-3 backlog (Comments + RequiredDocs aggregates + multipart upload contract))
 
 ### Context
