@@ -13,6 +13,8 @@ const sidebars: SidebarsConfig = {
         "architecture/security",
         "architecture/workflows",
         "architecture/integrations",
+        "architecture/period-end-closures-design",
+        "architecture/period-end-closures-implementation-plan",
       ],
     },
     {
