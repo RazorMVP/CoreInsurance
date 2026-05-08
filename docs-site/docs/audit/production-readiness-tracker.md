@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-07 21:42 Africa/Lagos
+Last updated: 2026-05-07 23:46 WAT
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -36,7 +36,7 @@ These gates must pass before live deployment approval.
 | Integration gate | KYC, NAICOM, NIID, and Temporal workflows are implemented or explicitly blocked outside dev/test. | Verified | Phase 6 hard-blocks pending live KYC, NAICOM, and NIID adapters until go-live provider work is complete; Phase 7 implements and verifies Temporal approval, NAICOM, NIID, and webhook worker execution/registration. |
 | PII protection gate | PII is encrypted, redacted, or excluded from logs, audit records, files, and webhook payload history. | Verified | Phase 8 is closed for the current pre-go-live scope. Audit snapshots are redacted, upload limits/type checks/scanner hooks are enforced, webhook payload history is not retained, webhook responses are sanitized, storage tenant fallback is blocked, SSRF validation is in place, API docs default private, and sensitive endpoint rate limits are enforced. |
 | Frontend contract gate | Production UI screens are wired to real backend contracts or intentionally disabled. | Verified | Phase 9 is closed. Core contract fixes are implemented, users setup is disabled until backed by an endpoint, production demo auth is removed, and Playwright smoke coverage passes for core back-office routes. |
-| Deployment gate | Backend deployment, migrations, health checks, readiness checks, secrets, rollback, and monitoring are documented and tested. | Not started | Blocks deployment. |
+| Deployment gate | Backend deployment, migrations, health checks, readiness checks, secrets, rollback, and monitoring are documented and tested. | Verified | Phase 10 adds and verifies the backend image, migration job mode, production Compose template, health/readiness checks, CI image workflow, deployment runbook, rollback procedure, and observability pack. A clean-environment deployment rehearsal remains Phase 11. |
 
 ## Phase 0: Baseline And Tracking
 
@@ -405,14 +405,36 @@ Goal: make the full system reproducible in a live environment.
 
 | ID | Fix item | Status | Owner | Verification |
 | --- | --- | --- | --- | --- |
-| P10-001 | Add backend Dockerfile. | Not started | TBD | Backend image builds successfully. |
-| P10-002 | Add production deployment configuration. | Not started | TBD | Target deployment environment can start all required services. |
-| P10-003 | Add database migration job. | Not started | TBD | Migrations run before application traffic is served. |
-| P10-004 | Add health and readiness checks. | Not started | TBD | Readiness reflects database, auth, Temporal, and required integrations. |
-| P10-005 | Document production environment variable and secret contract. | Not started | TBD | Deployment docs list all required values. |
-| P10-006 | Add backend CI image build and deployment workflow. | Not started | TBD | CI produces deployable backend artifact. |
-| P10-007 | Add rollback procedure. | Not started | TBD | Rollback steps are documented and tested. |
-| P10-008 | Add observability for logs, metrics, traces, workflows, and integration failures. | Not started | TBD | Alerts and dashboards exist for critical failure modes. |
+| P10-001 | Add backend Dockerfile. | Verified | TBD | `docker build -f cia-backend/Dockerfile -t cia-backend:phase10 cia-backend` built and exported the backend image. |
+| P10-002 | Add production deployment configuration. | Verified | TBD | `docker/production/docker-compose.yml` renders with `production.env.example`; clean live-environment startup rehearsal remains Phase 11 with real secrets and provider credentials. |
+| P10-003 | Add database migration job. | Verified | TBD | `cia-migrate` runs the same image with `CIA_MIGRATION_ONLY=true`; `TenantMigrationRunnerTest` proves migration-only mode closes the application after tenant migrations. |
+| P10-004 | Add health and readiness checks. | Verified | TBD | Liveness/readiness probes are enabled; readiness includes database, Redis, Temporal worker, and production external dependency configuration health. |
+| P10-005 | Document production environment variable and secret contract. | Verified | TBD | `production-deployment.md`, `environment-variables.md`, and `production.env.example` document required non-local values and secret-backed inputs. |
+| P10-006 | Add backend CI image build and deployment workflow. | Verified | TBD | `.github/workflows/backend-image.yml` builds the backend image and publishes to GHCR outside pull requests. |
+| P10-007 | Add rollback procedure. | Verified | TBD | Production deployment and database migration runbooks document backup, rollback, forward repair, and post-rollback validation. |
+| P10-008 | Add observability for logs, metrics, traces, workflows, and integration failures. | Verified | TBD | Prometheus metrics are exposed, production observability requirements are documented, and `ops/observability/` provides alert rules plus a Grafana dashboard starter. |
+
+### Phase 10 Run Log
+
+| Field | Value |
+| --- | --- |
+| Phase date | 2026-05-07 |
+| Branch | `production-readiness-phase-0` |
+| Scope | Backend image packaging, production deployment template, migration-only job mode, health/readiness, CI image workflow, production runbook, rollback procedure, and observability assets. |
+
+| Command | Directory | Result | Notes |
+| --- | --- | --- | --- |
+| `./mvnw test -pl cia-api -am -Dtest=ExternalDependenciesHealthIndicatorTest,TenantMigrationRunnerTest,TemporalWorkerHealthIndicatorTest -Dsurefire.failIfNoSpecifiedTests=false --batch-mode --no-transfer-progress` | `cia-backend` | Passed | Seven focused API tests passed for production dependency health, migration-only shutdown behavior, and Temporal worker health. |
+| `docker build -f cia-backend/Dockerfile -t cia-backend:phase10 cia-backend` | repository root | Passed with escalation | Built and exported the backend image. Earlier attempts hit transient Maven Central TLS/content-length transfer errors; the Dockerfile was simplified to one real `mvn package` step with `-U`, and the final cached retry passed. |
+| `docker compose --env-file docker/production/production.env.example -f docker/production/docker-compose.yml config` | repository root | Passed | Production Compose template rendered the migration job and API service with required environment contract. |
+| `docker-compose config` | repository root | Passed | Local infrastructure Compose configuration still renders successfully. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed with skips | Maven reactor completed all 20 backend modules. Optional database integration tests reported five skips in the non-escalated local path. |
+| `npm run build` | `docs-site` | Passed | Docusaurus generated static files after production deployment docs and observability references were added. |
+| `node -e "JSON.parse(...)"` | repository root | Passed | Grafana dashboard JSON parsed successfully. |
+| `ruby -e "require 'yaml'; YAML.load_file(...)"` | repository root | Passed | Prometheus alert rules YAML parsed successfully. |
+| `git diff --check` | repository root | Passed | No whitespace errors were detected. |
+
+Phase 10 closure note: Phase 10 is implementation-complete for deployment architecture as of 2026-05-07. The deployment gate is verified for the current repository scope: image build, migration job mode, readiness gating, production configuration contract, CI image workflow, rollback docs, and monitoring assets are in place. The first clean-environment deployment rehearsal with real vault secrets, live provider credentials, and imported monitoring assets remains Phase 11.
 
 ## Phase 11: Full Regression And Release Certification
 

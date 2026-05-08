@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 import java.util.UUID;
 
 @Service
-public class TenantProvisioningService {
+public class TenantProvisioningService implements ActiveTenantMigrationService {
 
     private final JdbcTemplate jdbcTemplate;
     private final TenantSchemaMigrator tenantSchemaMigrator;
@@ -54,6 +54,7 @@ public class TenantProvisioningService {
         }
     }
 
+    @Override
     public void migrateActiveTenants() {
         jdbcTemplate.queryForList(
                 "SELECT schema_name FROM public.tenants WHERE active = true ORDER BY schema_name",

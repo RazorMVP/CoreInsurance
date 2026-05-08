@@ -16,6 +16,7 @@ Kubernetes Secrets or a vault.
 | --- | --- | --- |
 | `SPRING_PROFILES_ACTIVE` | — | Required. Use `dev` locally, `test` for automated tests, and deployment profiles such as `staging` or `prod` outside local development. |
 | `CIA_ENV` | `local` | Runtime environment label used by startup safety checks. Production-like values include `staging`, `uat`, `preprod`, `prod`, and `production`. |
+| `CIA_MIGRATION_ONLY` | `false` | Set to `true` for the deployment migration job. The app exits after public and active-tenant migrations complete. |
 | `SERVER_PORT` | `8090` | HTTP port the Spring Boot API listens on |
 | `DB_URL` | `jdbc:postgresql://localhost:5434/cia` | PostgreSQL JDBC URL |
 | `DB_USERNAME` | `cia` | PostgreSQL user |
@@ -72,6 +73,15 @@ those provider contracts are implemented and tested, selecting `dojah`,
 | `PARTNER_TOKEN_URL` | `http://localhost:8280/realms/cia/protocol/openid-connect/token` | Partner OAuth2 client-credentials token endpoint |
 | `WEBHOOK_SIGNING_SECRET` | `dev-secret-replace-in-prod` | HMAC-SHA256 key for webhook payloads |
 | `PII_ENCRYPTION_KEY` | `dev-pii-key-do-not-use-in-prod-CHANGE-ME` | pgcrypto symmetric key for NDPR PII encryption on `customers` + `customer_directors`. Loss = unrecoverable customer PII. Recommended: 32+ random bytes, base64-encoded. Set via env / vault in production. |
+
+### Health And Observability
+
+| Endpoint | Description |
+| --- | --- |
+| `/actuator/health/liveness` | Container liveness probe. |
+| `/actuator/health/readiness` | Traffic readiness probe; includes database, Redis, Temporal worker, and external dependency configuration health. |
+| `/actuator/metrics` | Micrometer metrics endpoint. |
+| `/actuator/prometheus` | Prometheus scrape endpoint. |
 
 ### AI
 

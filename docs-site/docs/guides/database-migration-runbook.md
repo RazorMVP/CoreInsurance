@@ -38,8 +38,8 @@ Production data is tenant-scoped using the schema-per-tenant model. Platform met
 
 1. Put the environment into the approved deployment window.
 2. Stop background workers that may write business data during migration.
-3. Apply the application deployment with Flyway enabled.
-4. Watch Flyway logs until the latest migration version is reported as successful.
+3. Run the deployment migration job with `CIA_MIGRATION_ONLY=true`.
+4. Watch Flyway logs until the latest migration version is reported as successful and the migration container exits with code `0`.
 5. Confirm the platform schema version:
 
 ```sql
@@ -51,7 +51,7 @@ LIMIT 1;
 
 6. Confirm each active tenant schema has its tenant migration history table and expected business tables.
 7. Run smoke checks for authentication, tenant resolution, customer lookup, policy lookup, claims lookup, finance lookup, and report generation.
-8. Restart background workers after migration checks pass.
+8. Start or roll the API service only after migration checks pass.
 
 ## Rollback Position
 

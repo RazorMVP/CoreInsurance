@@ -1,0 +1,72 @@
+groups:
+  - name: coreinsurance-api
+    rules:
+      - alert: CoreInsuranceApiTargetDown
+        expr: up{job="cia-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: cia-api
+        annotations:
+          summary: Core Insurance API scrape target is down
+          description: Prometheus has not been able to scrape the cia-api target for 2 minutes.
+
+      - alert: CoreInsuranceReadinessDown
+        expr: probe_success{job="cia-readiness"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: cia-api
+        annotations:
+          summary: Core Insurance API readiness probe is down
+          description: The production readiness endpoint has failed for 2 minutes; traffic should not be routed to this instance.
+
+      - alert: CoreInsuranceHighHttp5xxRate
+        expr: sum(rate(http_server_requests_seconds_count{job="cia-api",status=~"5.."}[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: cia-api
+        annotations:
+          summary: Core Insurance API is returning elevated 5xx responses
+          description: The API is returning more than 0.05 5xx responses per second over 10 minutes.
+
+      - alert: CoreInsuranceHighAverageLatency
+        expr: sum(rate(http_server_requests_seconds_sum{job="cia-api"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{job="cia-api"}[5m])), 1) > 1
+        for: 10m
+        labels:
+          severity: warning
+          service: cia-api
+        annotations:
+          summary: Core Insurance API average latency is high
+          description: Average HTTP request latency has exceeded 1 second for 10 minutes.
+
+      - alert: CoreInsuranceDatabasePoolSaturation
+        expr: max(hikaricp_connections_active{job="cia-api"} / clamp_min(hikaricp_connections_max{job="cia-api"}, 1)) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: cia-api
+        annotations:
+          summary: Core Insurance database connection pool is near saturation
+          description: Hikari active connections have exceeded 80 percent of the configured maximum for 5 minutes.
+
+      - alert: CoreInsuranceJvmMemoryPressure
+        expr: sum(jvm_memory_used_bytes{job="cia-api",area="heap"}) / clamp_min(sum(jvm_memory_max_bytes{job="cia-api",area="heap"}), 1) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          service: cia-api
+        annotations:
+          summary: Core Insurance API heap usage is high
+          description: JVM heap usage has exceeded 85 percent for 10 minutes.
+
+      - alert: CoreInsuranceMigrationJobFailed
+        expr: kube_job_status_failed{job_name=~".*cia-migrate.*"} > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: cia-migrate
+        annotations:
+          summary: Core Insurance migration job failed
+          description: A cia-migrate job has failed. Stop rollout and follow the production rollback runbook.

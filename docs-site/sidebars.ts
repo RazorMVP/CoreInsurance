@@ -23,6 +23,8 @@ const sidebars: SidebarsConfig = {
         "guides/tenant-provisioning",
         "guides/environment-variables",
         "guides/database-migrations",
+        "guides/database-migration-runbook",
+        "guides/production-deployment",
       ],
     },
     {

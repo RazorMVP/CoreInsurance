@@ -1,0 +1,78 @@
+name: coreinsurance-production
+
+x-cia-api-env: &cia-api-env
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+  CIA_ENV: ${CIA_ENV}
+  SERVER_PORT: ${SERVER_PORT:-8090}
+  DB_URL: ${DB_URL}
+  DB_USERNAME: ${DB_USERNAME}
+  DB_PASSWORD: ${DB_PASSWORD}
+  KEYCLOAK_URL: ${KEYCLOAK_URL}
+  KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+  REDIS_HOST: ${REDIS_HOST}
+  REDIS_PORT: ${REDIS_PORT:-6379}
+  TEMPORAL_HOST: ${TEMPORAL_HOST}
+  TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE}
+  STORAGE_TYPE: ${STORAGE_TYPE}
+  STORAGE_ENDPOINT: ${STORAGE_ENDPOINT}
+  STORAGE_BUCKET: ${STORAGE_BUCKET}
+  STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
+  STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+  STORAGE_REGION: ${STORAGE_REGION}
+  PII_ENCRYPTION_KEY: ${PII_ENCRYPTION_KEY}
+  WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET}
+  PARTNER_TOKEN_URL: ${PARTNER_TOKEN_URL}
+  KYC_PROVIDER: ${KYC_PROVIDER}
+  KYC_PROVIDER_URL: ${KYC_PROVIDER_URL}
+  NAICOM_MODE: ${NAICOM_MODE}
+  NAICOM_API_URL: ${NAICOM_API_URL}
+  NIID_MODE: ${NIID_MODE}
+  NIID_API_URL: ${NIID_API_URL}
+  EMAIL_NOTIFICATIONS_ENABLED: ${EMAIL_NOTIFICATIONS_ENABLED:-true}
+  SMS_NOTIFICATIONS_ENABLED: ${SMS_NOTIFICATIONS_ENABLED:-true}
+  SMTP_HOST: ${SMTP_HOST}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USERNAME: ${SMTP_USERNAME}
+  SMTP_PASSWORD: ${SMTP_PASSWORD}
+  RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+  PARTNER_RATE_LIMIT_RPM: ${PARTNER_RATE_LIMIT_RPM:-300}
+  SENSITIVE_RATE_LIMIT_RPM: ${SENSITIVE_RATE_LIMIT_RPM:-60}
+  FAILED_LOGIN_RATE_LIMIT_RPM: ${FAILED_LOGIN_RATE_LIMIT_RPM:-10}
+
+services:
+  cia-migrate:
+    image: ${CIA_BACKEND_IMAGE}
+    pull_policy: always
+    restart: "no"
+    environment:
+      <<: *cia-api-env
+      CIA_MIGRATION_ONLY: "true"
+      JAVA_OPTS: ${MIGRATION_JAVA_OPTS:--XX:MaxRAMPercentage=70}
+    networks:
+      - cia-private
+
+  cia-api:
+    image: ${CIA_BACKEND_IMAGE}
+    pull_policy: always
+    depends_on:
+      cia-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    environment:
+      <<: *cia-api-env
+      CIA_MIGRATION_ONLY: "false"
+      JAVA_OPTS: ${JAVA_OPTS:--XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError}
+    ports:
+      - "${CIA_API_BIND:-127.0.0.1}:${CIA_API_PORT:-8090}:8090"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8090/actuator/health/readiness"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    networks:
+      - cia-private
+
+networks:
+  cia-private:
+    driver: bridge
