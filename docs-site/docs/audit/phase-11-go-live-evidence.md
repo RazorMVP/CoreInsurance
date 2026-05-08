@@ -53,11 +53,33 @@ The rehearsal must start from a clean checkout and a real secret-managed
 environment. It must not use checked-in placeholders, local endpoints, mock
 providers, stub providers, `latest` image tags, or disabled rate limits.
 
+Use the Phase 11 preflight helper to create a redacted evidence bundle:
+
+```bash
+scripts/phase11-go-live-preflight.sh \
+  --env-file .env.production \
+  --image-ref ghcr.io/razormvp/coreinsurance/cia-backend@sha256:<digest>
+```
+
+For a dry run against the checked-in example file only:
+
+```bash
+scripts/phase11-go-live-preflight.sh \
+  --env-file docker/production/production.env.example \
+  --allow-placeholders \
+  --allow-dirty \
+  --skip-gh
+```
+
+The generated `phase11-evidence/` directory is ignored by Git. Review the
+bundle before attaching it to the release record; it redacts known secret keys,
+but evidence owners must still confirm no provider secret values are included.
+
 | Step | Command or action | Evidence to attach |
 | --- | --- | --- |
 | 1 | Confirm release commit and immutable backend image tag or digest. | Commit SHA, image reference, Backend Image workflow run URL. |
-| 2 | Validate target environment file. | `scripts/validate-production-env.sh .env.production` output. |
-| 3 | Render production Compose. | `docker compose --env-file .env.production -f docker/production/docker-compose.yml config` output. |
+| 2 | Validate target environment file. | `phase11-go-live-preflight.sh` summary and `production-env-preflight.txt`. |
+| 3 | Render production Compose. | `production-compose-config.txt` from the preflight bundle, reviewed for redaction. |
 | 4 | Confirm target secrets are from vault or platform secret manager. | Secret manager path list, not secret values. |
 | 5 | Take database backup or snapshot. | Backup id, timestamp, retention location, restore owner. |
 | 6 | Run migration job with `CIA_MIGRATION_ONLY=true`. | Migration container log, Flyway version, tenant schema migration summary. |

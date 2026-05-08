@@ -117,6 +117,18 @@ endpoints, `latest` image tags, dev/test Spring profiles, mock/stub providers,
 disabled rate limiting, or short PII/webhook secrets. Use
 `--allow-placeholders` only to validate the checked-in example file shape.
 
+For the final Phase 11 rehearsal, prefer the evidence helper so the output is
+captured in a redacted bundle:
+
+```bash
+scripts/phase11-go-live-preflight.sh \
+  --env-file .env.production \
+  --image-ref ghcr.io/razormvp/coreinsurance/cia-backend@sha256:<digest>
+```
+
+The helper writes to `phase11-evidence/`, which is intentionally ignored by Git.
+Review the bundle before attaching it to the release record.
+
 ## Rollback
 
 Application rollback is safe only if the database did not migrate or if the

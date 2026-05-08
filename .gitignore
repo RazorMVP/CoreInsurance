@@ -67,3 +67,6 @@ coverage/
 test-results/
 playwright-report/
 playwright/.cache/
+
+# ─── Phase 11 live-readiness evidence bundles ───────────────────────────────
+phase11-evidence/

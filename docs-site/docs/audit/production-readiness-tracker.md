@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-08 15:11 WAT
+Last updated: 2026-05-08 15:59 WAT
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -448,7 +448,7 @@ Goal: prove the system is ready for controlled live deployment.
 | P11-004 | Run workflow and integration contract test suites. | Blocked | TBD | Temporal workflow and current stub/mock integration tests pass; `phase-11-go-live-evidence.md` now defines the required KYC, NAICOM, and NIID contract evidence; live tests remain blocked until go-live provider credentials are issued. |
 | P11-005 | Run frontend typecheck and end-to-end tests. | Verified | TBD | Back-office and partner typechecks/builds passed; back-office Playwright smoke suite passed in Chromium; CI now repeats partner build and Playwright smoke checks. |
 | P11-006 | Run dependency and image vulnerability checks. | Verified | TBD | Frontend and docs package audits pass, secret scan only found documented placeholders, SBOM generation works, the backend dependency graph was upgraded to remediate Trivy-reported Spring, Thymeleaf, Tomcat, Bouncy Castle, PostgreSQL JDBC, protobuf, gRPC, MinIO, and Netty CVEs, the vulnerable Netty native epoll transport was removed from the API image path, and GitHub Backend Image run `25560343039` passed the high/critical Trivy gate for commit `503b091`; rerun the image gate if the final release commit changes. |
-| P11-007 | Run clean-environment deployment rehearsal. | Blocked | TBD | Production Compose config renders, production env preflight validates the release environment before rehearsal, and `phase-11-go-live-evidence.md` now defines the clean-rehearsal evidence pack; the actual rehearsal still requires real vault secrets, live provider credentials, and target monitoring/deployment access. |
+| P11-007 | Run clean-environment deployment rehearsal. | Blocked | TBD | Production Compose config renders, production env preflight validates the release environment before rehearsal, `phase-11-go-live-evidence.md` defines the clean-rehearsal evidence pack, and `phase11-go-live-preflight.sh` can generate a redacted evidence bundle; the actual rehearsal still requires real vault secrets, live provider credentials, and target monitoring/deployment access. |
 | P11-008 | Produce release readiness sign-off. | In review | TBD | Release certification report and Phase 11 go-live evidence checklist are prepared for decision-maker review; controlled deployment approval remains pending. |
 
 ### Phase 11 Run Log
@@ -505,6 +505,9 @@ Goal: prove the system is ready for controlled live deployment.
 | `phase-11-go-live-evidence.md` | `docs-site` | Added | Defines provider contract evidence, clean-environment rehearsal evidence, smoke test scope, and final sign-off register for the remaining blocked live-deployment decisions. |
 | `git push` | repository root | Passed with escalation | Pushed Phase 11 evidence checklist commit `503b091` to `production-readiness-phase-0`. |
 | `gh run list --branch production-readiness-phase-0 --limit 6` | repository root | Passed with escalation | Latest GitHub Backend Image run `25560343039` and CI run `25560342997` both passed for commit `503b091`. |
+| `scripts/phase11-go-live-preflight.sh --env-file docker/production/production.env.example --allow-placeholders --allow-dirty --evidence-dir /private/tmp/phase11-preflight-test-2 --skip-gh --image-ref ghcr.io/razormvp/coreinsurance/cia-backend:test-sha` | repository root | Passed | Dry run proved the Phase 11 evidence helper can validate the example env file, render production Compose with redacted output, record the immutable image reference, and create the evidence bundle. |
+| `npm run build` | `docs-site` | Passed | Docusaurus static build passed after adding the Phase 11 preflight helper documentation. |
+| `git diff --check` | repository root | Passed | No whitespace errors found after the Phase 11 preflight helper changes. |
 
 Phase 11 certification note: regression evidence supports continued controlled release preparation, but Phase 11 is not fully closed for live deployment. Live release approval remains blocked on provider contract tests for KYC, NAICOM, and NIID, a clean-environment deployment rehearsal with real secrets and target infrastructure access, and formal decision-maker sign-off.
 

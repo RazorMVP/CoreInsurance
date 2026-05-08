@@ -34,7 +34,7 @@ Core backend, frontend, documentation, Compose configuration, and local image pa
 | Image SBOM | Passed | `docker sbom cia-backend:phase10` generated an SBOM for the Phase 10 backend image. |
 | Image CVE scan | Passed for current commit | The backend image workflow now runs Trivy against high and critical CVEs and uploads SARIF. Working scans found Spring, Thymeleaf, Tomcat, Bouncy Castle, PostgreSQL JDBC, protobuf, gRPC, MinIO, and Netty CVEs, so the backend dependency graph was upgraded to Spring Boot `3.5.14`, Spring Security Web `6.5.10`, Thymeleaf `3.1.5.RELEASE`, Tomcat `10.1.54`, Bouncy Castle `1.84`, PostgreSQL JDBC `42.7.11`, protobuf `3.25.5`, gRPC `1.75.0`, MinIO `8.6.0`, and Netty `4.1.133.Final`; the vulnerable Netty native epoll transport was removed from the API image path. GitHub Backend Image run `25560343039` passed for commit `503b091`; rerun if the release commit changes. |
 | Production config rendering | Passed | Local Compose and production Compose template config rendering passed. |
-| Clean-environment rehearsal | Blocked | A production env preflight now validates the release environment before rehearsal; the actual rehearsal still requires real vault secrets, live provider credentials, target infrastructure access, and monitoring destination access. |
+| Clean-environment rehearsal | Ready, blocked on access | A production env preflight validates the release environment before rehearsal, and `phase11-go-live-preflight.sh` now creates a redacted evidence bundle for the final run. The actual rehearsal still requires real vault secrets, live provider credentials, target infrastructure access, and monitoring destination access. |
 
 ## Release Blockers
 
