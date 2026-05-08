@@ -69,7 +69,8 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             echo "ref=$first_tag" >> "$GITHUB_OUTPUT"
           else
-            echo "ref=ghcr.io/${GITHUB_REPOSITORY}/cia-backend@${DIGEST}" >> "$GITHUB_OUTPUT"
+            image_repo="${first_tag%:*}"
+            echo "ref=${image_repo}@${DIGEST}" >> "$GITHUB_OUTPUT"
           fi
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
