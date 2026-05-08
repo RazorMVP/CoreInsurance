@@ -29,7 +29,7 @@ Core backend, frontend, documentation, Compose configuration, and local image pa
 | Dependency audit | Passed after remediation | Frontend production audit passed; docs audit initially found a high `serialize-javascript` issue, then passed after overriding to `7.0.5` and refreshing the lockfile. |
 | Secret scan | Passed for repository scope | No tracked env files were found; secret-pattern scan only matched documented placeholders and an intentionally shortened partner-doc token example. |
 | Image SBOM | Passed | `docker sbom cia-backend:phase10` generated an SBOM for the Phase 10 backend image. |
-| Image CVE scan | In review | The backend image workflow now runs Trivy against high and critical CVEs and uploads SARIF; final release evidence requires a successful GitHub workflow run for the exact release image. |
+| Image CVE scan | In review | The backend image workflow now runs Trivy against high and critical CVEs and uploads SARIF. The first working scan found Spring/Thymeleaf CVEs, so the backend was upgraded to Spring Boot `3.5.11` with Thymeleaf `3.1.5.RELEASE`; final release evidence requires a successful GitHub workflow run for the exact release image. |
 | Production config rendering | Passed | Local Compose and production Compose template config rendering passed. |
 | Clean-environment rehearsal | Blocked | A production env preflight now validates the release environment before rehearsal; the actual rehearsal still requires real vault secrets, live provider credentials, target infrastructure access, and monitoring destination access. |
 

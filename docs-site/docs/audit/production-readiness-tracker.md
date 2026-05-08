@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-08 08:30 WAT
+Last updated: 2026-05-08 09:20 WAT
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -447,7 +447,7 @@ Goal: prove the system is ready for controlled live deployment.
 | P11-003 | Run auth and authorization test suite. | Verified | TBD | Method security, JWT authority conversion, tenant context, reports authorization, controller coverage, tenant provisioning authorization, and partner scope tests passed. |
 | P11-004 | Run workflow and integration contract test suites. | Blocked | TBD | Temporal workflow and current stub/mock integration tests pass; live KYC, NAICOM, and NIID contract tests remain blocked until go-live provider credentials are issued. |
 | P11-005 | Run frontend typecheck and end-to-end tests. | Verified | TBD | Back-office and partner typechecks/builds passed; back-office Playwright smoke suite passed in Chromium; CI now repeats partner build and Playwright smoke checks. |
-| P11-006 | Run dependency and image vulnerability checks. | In review | TBD | Frontend and docs package audits now pass, secret scan only found documented placeholders, SBOM generation works, and the backend image workflow now enforces a Trivy high/critical CVE gate; final release evidence requires a successful GitHub run for the exact image. |
+| P11-006 | Run dependency and image vulnerability checks. | In review | TBD | Frontend and docs package audits now pass, secret scan only found documented placeholders, SBOM generation works, the backend was upgraded to remediate Trivy-reported Spring/Thymeleaf CVEs, and the backend image workflow enforces a high/critical CVE gate; final release evidence requires a successful GitHub run for the exact image. |
 | P11-007 | Run clean-environment deployment rehearsal. | Blocked | TBD | Production Compose config renders and a production env preflight now validates the release environment before rehearsal; the actual rehearsal still requires real vault secrets, live provider credentials, and target monitoring/deployment access. |
 | P11-008 | Produce release readiness sign-off. | In review | TBD | Release certification report is prepared for decision-maker review; controlled deployment approval remains pending. |
 
@@ -484,6 +484,10 @@ Goal: prove the system is ready for controlled live deployment.
 | `ruby -e "require 'yaml'; YAML.load_file(...)"` | repository root | Passed | Backend image workflow YAML parses successfully after adding the Trivy CVE gate. |
 | `ruby -e "require 'yaml'; YAML.load_file(...)"` | repository root | Passed | Main CI workflow YAML parses successfully after enabling docs CI, frontend production audit, partner build, Playwright smoke checks, production env example preflight, and production Compose validation. |
 | `gh run view 25543540746 --log-failed` | repository root | Investigated with escalation | GitHub Backend Image workflow reached Trivy but failed because the scan digest reference used mixed-case repository naming; the workflow now derives scan refs from lowercase metadata tags. |
+| `gh run view 25543982497 --log-failed` | repository root | Investigated with escalation | Trivy scan wiring worked and failed on real high/critical backend dependency CVEs: Spring Core `6.1.14` and Thymeleaf `3.1.2.RELEASE`. |
+| `./mvnw dependency:tree -pl cia-api -am -Dincludes=org.springframework:spring-core,org.thymeleaf:thymeleaf,org.thymeleaf:thymeleaf-spring6,com.squareup.okhttp3:okhttp --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Dependency graph now resolves Spring Core `6.2.16`, Thymeleaf `3.1.5.RELEASE`, and explicitly pinned OkHttp `4.12.0`. |
+| `./mvnw test -pl cia-api -am --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | API reactor tests passed after the Spring Boot `3.5.11` and Thymeleaf `3.1.5.RELEASE` upgrade. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Full 20-module backend verification passed after the dependency CVE remediation. |
 | `npm run build` | `docs-site` | Passed | Docusaurus static build passed after adding the Phase 11 certification and image-scan runbook updates. |
 
 Phase 11 certification note: regression evidence supports continued controlled release preparation, but Phase 11 is not fully closed for live deployment. Live release approval remains blocked on provider contract tests for KYC, NAICOM, and NIID, a successful GitHub image CVE scan for the exact release image, a clean-environment deployment rehearsal with real secrets and target infrastructure access, and formal decision-maker sign-off.
