@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-08 11:18 WAT
+Last updated: 2026-05-08 12:07 WAT
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -445,11 +445,11 @@ Goal: prove the system is ready for controlled live deployment.
 | P11-001 | Run full backend unit and integration tests. | Verified | TBD | `./mvnw verify --batch-mode --no-transfer-progress` passed across all 20 backend modules with zero failures. |
 | P11-002 | Run multi-tenant isolation test suite. | Verified | TBD | Docker Compose PostgreSQL-backed tenant schema, provisioning, authorization, and isolation tests passed with zero skips. |
 | P11-003 | Run auth and authorization test suite. | Verified | TBD | Method security, JWT authority conversion, tenant context, reports authorization, controller coverage, tenant provisioning authorization, and partner scope tests passed. |
-| P11-004 | Run workflow and integration contract test suites. | Blocked | TBD | Temporal workflow and current stub/mock integration tests pass; live KYC, NAICOM, and NIID contract tests remain blocked until go-live provider credentials are issued. |
+| P11-004 | Run workflow and integration contract test suites. | Blocked | TBD | Temporal workflow and current stub/mock integration tests pass; `phase-11-go-live-evidence.md` now defines the required KYC, NAICOM, and NIID contract evidence; live tests remain blocked until go-live provider credentials are issued. |
 | P11-005 | Run frontend typecheck and end-to-end tests. | Verified | TBD | Back-office and partner typechecks/builds passed; back-office Playwright smoke suite passed in Chromium; CI now repeats partner build and Playwright smoke checks. |
-| P11-006 | Run dependency and image vulnerability checks. | Verified | TBD | Frontend and docs package audits pass, secret scan only found documented placeholders, SBOM generation works, the backend dependency graph was upgraded to remediate Trivy-reported Spring, Thymeleaf, Tomcat, Bouncy Castle, PostgreSQL JDBC, protobuf, gRPC, MinIO, and Netty CVEs, the vulnerable Netty native epoll transport was removed from the API image path, and GitHub Backend Image run `25549693671` passed the high/critical Trivy gate for commit `0c38912`. |
-| P11-007 | Run clean-environment deployment rehearsal. | Blocked | TBD | Production Compose config renders and a production env preflight now validates the release environment before rehearsal; the actual rehearsal still requires real vault secrets, live provider credentials, and target monitoring/deployment access. |
-| P11-008 | Produce release readiness sign-off. | In review | TBD | Release certification report is prepared for decision-maker review; controlled deployment approval remains pending. |
+| P11-006 | Run dependency and image vulnerability checks. | Verified | TBD | Frontend and docs package audits pass, secret scan only found documented placeholders, SBOM generation works, the backend dependency graph was upgraded to remediate Trivy-reported Spring, Thymeleaf, Tomcat, Bouncy Castle, PostgreSQL JDBC, protobuf, gRPC, MinIO, and Netty CVEs, the vulnerable Netty native epoll transport was removed from the API image path, and GitHub Backend Image run `25550396143` passed the high/critical Trivy gate for commit `d87899b`. |
+| P11-007 | Run clean-environment deployment rehearsal. | Blocked | TBD | Production Compose config renders, production env preflight validates the release environment before rehearsal, and `phase-11-go-live-evidence.md` now defines the clean-rehearsal evidence pack; the actual rehearsal still requires real vault secrets, live provider credentials, and target monitoring/deployment access. |
+| P11-008 | Produce release readiness sign-off. | In review | TBD | Release certification report and Phase 11 go-live evidence checklist are prepared for decision-maker review; controlled deployment approval remains pending. |
 
 ### Phase 11 Run Log
 
@@ -500,6 +500,9 @@ Goal: prove the system is ready for controlled live deployment.
 | `./mvnw dependency:tree -pl cia-api -am -Dincludes=io.netty:netty-transport-native-epoll,io.netty:netty-codec,io.netty:netty-codec-dns,io.netty:netty-codec-http,io.netty:netty-codec-http2 --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | `netty-transport-native-epoll` is no longer present in the API dependency graph; Netty HTTP, HTTP/2, codec, and DNS libraries remain on `4.1.133.Final`. |
 | `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Full 20-module backend verification passed after removing the vulnerable native epoll transport from the WebFlux dependency path. |
 | `gh run list --branch production-readiness-phase-0 --limit 8` | repository root | Passed with escalation | GitHub CI run `25549693703` and Backend Image run `25549693671` both passed for commit `0c38912`; the Backend Image run is the current high/critical Trivy evidence. |
+| `gh run watch 25550396143 --exit-status` | repository root | Passed with escalation | Latest pushed Backend Image run passed for branch tip `d87899b`, confirming the high/critical Trivy gate after the image-scan evidence documentation commit. |
+| `gh run watch 25550396166 --exit-status` | repository root | Passed with escalation | Latest pushed CI run passed for branch tip `d87899b`. |
+| `phase-11-go-live-evidence.md` | `docs-site` | Added | Defines provider contract evidence, clean-environment rehearsal evidence, smoke test scope, and final sign-off register for the remaining blocked live-deployment decisions. |
 
 Phase 11 certification note: regression evidence supports continued controlled release preparation, but Phase 11 is not fully closed for live deployment. Live release approval remains blocked on provider contract tests for KYC, NAICOM, and NIID, a clean-environment deployment rehearsal with real secrets and target infrastructure access, and formal decision-maker sign-off.
 

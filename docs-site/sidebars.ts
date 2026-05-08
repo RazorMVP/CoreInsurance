@@ -34,6 +34,7 @@ const sidebars: SidebarsConfig = {
         "audit/overview",
         "audit/production-readiness-tracker",
         "audit/release-readiness-signoff",
+        "audit/phase-11-go-live-evidence",
         "audit/authorization-matrix",
         "audit/pii-classification",
         "audit/api-reference",
