@@ -25,7 +25,7 @@ Core backend, frontend, documentation, Compose configuration, and local image pa
 | Authorization | Passed | Method security, JWT conversion, tenant context, report authorization, controller coverage, tenant provisioning authorization, and partner scope tests passed. |
 | Workflow execution | Passed for current scope | Temporal worker, approval workflow, NAICOM upload workflow, NIID upload workflow, and health indicator tests passed. |
 | External provider contracts | Blocked | Live KYC, NAICOM, and NIID contract tests require real provider credentials and go-live endpoints. |
-| Frontend contract and E2E | Passed | Back-office and partner typechecks/builds passed; nine back-office Playwright Chromium smoke tests passed. |
+| Frontend contract and E2E | Passed | Back-office and partner typechecks/builds passed; nine back-office Playwright Chromium smoke tests passed, and CI now repeats the partner build and back-office Playwright smoke suite. |
 | Dependency audit | Passed after remediation | Frontend production audit passed; docs audit initially found a high `serialize-javascript` issue, then passed after overriding to `7.0.5` and refreshing the lockfile. |
 | Secret scan | Passed for repository scope | No tracked env files were found; secret-pattern scan only matched documented placeholders and an intentionally shortened partner-doc token example. |
 | Image SBOM | Passed | `docker sbom cia-backend:phase10` generated an SBOM for the Phase 10 backend image. |

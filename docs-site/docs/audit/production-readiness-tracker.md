@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-08 08:15 WAT
+Last updated: 2026-05-08 08:20 WAT
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -446,7 +446,7 @@ Goal: prove the system is ready for controlled live deployment.
 | P11-002 | Run multi-tenant isolation test suite. | Verified | TBD | Docker Compose PostgreSQL-backed tenant schema, provisioning, authorization, and isolation tests passed with zero skips. |
 | P11-003 | Run auth and authorization test suite. | Verified | TBD | Method security, JWT authority conversion, tenant context, reports authorization, controller coverage, tenant provisioning authorization, and partner scope tests passed. |
 | P11-004 | Run workflow and integration contract test suites. | Blocked | TBD | Temporal workflow and current stub/mock integration tests pass; live KYC, NAICOM, and NIID contract tests remain blocked until go-live provider credentials are issued. |
-| P11-005 | Run frontend typecheck and end-to-end tests. | Verified | TBD | Back-office and partner typechecks/builds passed; back-office Playwright smoke suite passed in Chromium. |
+| P11-005 | Run frontend typecheck and end-to-end tests. | Verified | TBD | Back-office and partner typechecks/builds passed; back-office Playwright smoke suite passed in Chromium; CI now repeats partner build and Playwright smoke checks. |
 | P11-006 | Run dependency and image vulnerability checks. | In review | TBD | Frontend and docs package audits now pass, secret scan only found documented placeholders, SBOM generation works, and the backend image workflow now enforces a Trivy high/critical CVE gate; final release evidence requires a successful GitHub run for the exact image. |
 | P11-007 | Run clean-environment deployment rehearsal. | Blocked | TBD | Production Compose config renders, but a true clean-environment rehearsal requires real vault secrets, live provider credentials, and target monitoring/deployment access. |
 | P11-008 | Produce release readiness sign-off. | In review | TBD | Release certification report is prepared for decision-maker review; controlled deployment approval remains pending. |
@@ -481,6 +481,7 @@ Goal: prove the system is ready for controlled live deployment.
 | `docker sbom cia-backend:phase10` | repository root | Passed with escalation | Docker generated an SBOM for the Phase 10 backend image. |
 | `docker scout cves cia-backend:phase10 --only-severity high,critical` | repository root | Blocked with escalation | Docker Scout requires Docker login in this environment; Trivy, Grype, Syft, and Gitleaks are not installed locally. |
 | `ruby -e "require 'yaml'; YAML.load_file(...)"` | repository root | Passed | Backend image workflow YAML parses successfully after adding the Trivy CVE gate. |
+| `ruby -e "require 'yaml'; YAML.load_file(...)"` | repository root | Passed | Main CI workflow YAML parses successfully after enabling docs CI, frontend production audit, partner build, and Playwright smoke checks. |
 | `npm run build` | `docs-site` | Passed | Docusaurus static build passed after adding the Phase 11 certification and image-scan runbook updates. |
 
 Phase 11 certification note: regression evidence supports continued controlled release preparation, but Phase 11 is not fully closed for live deployment. Live release approval remains blocked on provider contract tests for KYC, NAICOM, and NIID, a successful GitHub image CVE scan for the exact release image, a clean-environment deployment rehearsal with real secrets and target infrastructure access, and formal decision-maker sign-off.

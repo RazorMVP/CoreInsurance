@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, production-readiness-phase-0]
   pull_request:
     branches: [main]
 
@@ -70,6 +70,10 @@ jobs:
         working-directory: cia-frontend
         run: pnpm install --frozen-lockfile
 
+      - name: Production dependency audit
+        working-directory: cia-frontend
+        run: pnpm audit --prod --audit-level high
+
       - name: API-wiring guard (no mock arrays / console.log / stale TODOs)
         run: bash cia-frontend/scripts/check-api-wiring.sh
 
@@ -90,6 +94,20 @@ jobs:
           VITE_KEYCLOAK_REALM: nubsure
           VITE_KEYCLOAK_CLIENT_ID: back-office
 
+      - name: Build — partner
+        working-directory: cia-frontend
+        run: pnpm --filter @cia/partner build
+        env:
+          VITE_API_BASE_URL: https://api.nubsure.app
+
+      - name: Install Playwright Chromium
+        working-directory: cia-frontend
+        run: pnpm --filter @cia/back-office exec playwright install --with-deps chromium
+
+      - name: Playwright smoke — back-office
+        working-directory: cia-frontend
+        run: pnpm --filter @cia/back-office test:e2e
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -97,12 +115,17 @@ jobs:
           path: cia-frontend/apps/back-office/dist/
           retention-days: 3
 
+      - name: Upload partner build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: partner-dist
+          path: cia-frontend/apps/partner/dist/
+          retention-days: 3
+
   # ── Docs: Build Docusaurus (validates no broken links / MDX errors) ─────────
-  # Stubbed until docs-site/ is scaffolded. Remove the `if: false` when ready.
   docs:
     name: Docs (Docusaurus build)
     runs-on: ubuntu-latest
-    if: false
 
     steps:
       - uses: actions/checkout@v4
@@ -115,6 +138,10 @@ jobs:
       - name: Install dependencies
         working-directory: docs-site
         run: npm ci
+
+      - name: Production dependency audit
+        working-directory: docs-site
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Build Docusaurus
         working-directory: docs-site
