@@ -6,7 +6,7 @@ sidebar_label: Production Readiness Tracker
 
 # Production Readiness Fix Tracker
 
-Last updated: 2026-05-08 09:46 WAT
+Last updated: 2026-05-08 10:06 WAT
 
 This tracker captures the fixes required before the Core Insurance Application can be considered ready for full testing and live deployment by insurance companies.
 
@@ -447,7 +447,7 @@ Goal: prove the system is ready for controlled live deployment.
 | P11-003 | Run auth and authorization test suite. | Verified | TBD | Method security, JWT authority conversion, tenant context, reports authorization, controller coverage, tenant provisioning authorization, and partner scope tests passed. |
 | P11-004 | Run workflow and integration contract test suites. | Blocked | TBD | Temporal workflow and current stub/mock integration tests pass; live KYC, NAICOM, and NIID contract tests remain blocked until go-live provider credentials are issued. |
 | P11-005 | Run frontend typecheck and end-to-end tests. | Verified | TBD | Back-office and partner typechecks/builds passed; back-office Playwright smoke suite passed in Chromium; CI now repeats partner build and Playwright smoke checks. |
-| P11-006 | Run dependency and image vulnerability checks. | In review | TBD | Frontend and docs package audits now pass, secret scan only found documented placeholders, SBOM generation works, the backend dependency graph was upgraded to remediate Trivy-reported Spring, Thymeleaf, Tomcat, Bouncy Castle, and PostgreSQL JDBC CVEs, and the backend image workflow enforces a high/critical CVE gate; final release evidence requires a successful GitHub run for the exact image. |
+| P11-006 | Run dependency and image vulnerability checks. | In review | TBD | Frontend and docs package audits now pass, secret scan only found documented placeholders, SBOM generation works, the backend dependency graph was upgraded to remediate Trivy-reported Spring, Thymeleaf, Tomcat, Bouncy Castle, PostgreSQL JDBC, protobuf, gRPC, MinIO, and Netty CVEs, and the backend image workflow enforces a high/critical CVE gate; final release evidence requires a successful GitHub run for the exact image. |
 | P11-007 | Run clean-environment deployment rehearsal. | Blocked | TBD | Production Compose config renders and a production env preflight now validates the release environment before rehearsal; the actual rehearsal still requires real vault secrets, live provider credentials, and target monitoring/deployment access. |
 | P11-008 | Produce release readiness sign-off. | In review | TBD | Release certification report is prepared for decision-maker review; controlled deployment approval remains pending. |
 
@@ -492,6 +492,10 @@ Goal: prove the system is ready for controlled live deployment.
 | `gh run view 25545333903 --log-failed` | repository root | Investigated with escalation | The follow-up Backend Image scan confirmed remaining high/critical CVEs in Spring Boot/Security, Tomcat, Bouncy Castle, and PostgreSQL JDBC. |
 | `./mvnw dependency:tree -pl cia-api -am -Dincludes=org.springframework.boot:spring-boot,org.springframework.security:spring-security-web,org.apache.tomcat.embed:tomcat-embed-core,org.bouncycastle:bcprov-jdk18on,org.postgresql:postgresql,org.thymeleaf:thymeleaf --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Dependency graph now resolves Spring Boot `3.5.14`, Spring Security Web `6.5.10`, Tomcat Embed Core `10.1.54`, Bouncy Castle `1.84`, PostgreSQL JDBC `42.7.11`, and Thymeleaf `3.1.5.RELEASE`. |
 | `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Full 20-module backend verification passed after the final dependency CVE remediation. |
+| `gh run view 25546536679 --log-failed` | repository root | Investigated with escalation | The Backend Image scan for commit `535cca1` passed build/SARIF upload but failed the high/critical gate on protobuf, gRPC, MinIO, and Netty libraries. |
+| `./mvnw dependency:tree -pl cia-api -am -Dincludes=com.google.protobuf:protobuf-java,io.grpc:grpc-netty-shaded,io.grpc:grpc-protobuf,io.grpc:grpc-services,io.minio:minio,io.netty:netty-codec,io.netty:netty-codec-dns,io.netty:netty-codec-http,io.netty:netty-codec-http2,io.netty:netty-transport-native-epoll --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Dependency graph now resolves protobuf `3.25.5`, gRPC `1.75.0`, MinIO `8.6.0`, and Netty `4.1.133.Final`. |
+| `./mvnw test -pl cia-workflow -am --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Workflow tests passed after adding explicit `grpc-inprocess` test coverage for Temporal's in-process test server. |
+| `./mvnw verify --batch-mode --no-transfer-progress` | `cia-backend` | Passed with escalation | Full 20-module backend verification passed after the protobuf, gRPC, MinIO, and Netty CVE remediation. |
 
 Phase 11 certification note: regression evidence supports continued controlled release preparation, but Phase 11 is not fully closed for live deployment. Live release approval remains blocked on provider contract tests for KYC, NAICOM, and NIID, a successful GitHub image CVE scan for the exact release image, a clean-environment deployment rehearsal with real secrets and target infrastructure access, and formal decision-maker sign-off.
 

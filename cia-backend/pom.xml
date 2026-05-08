@@ -47,12 +47,15 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <lombok.version>1.18.46</lombok.version>
     <temporal.version>1.25.0</temporal.version>
+    <grpc.version>1.75.0</grpc.version>
     <mapstruct.version>1.5.5.Final</mapstruct.version>
     <springdoc.version>2.5.0</springdoc.version>
     <thymeleaf.version>3.1.5.RELEASE</thymeleaf.version>
     <tomcat.version>10.1.54</tomcat.version>
+    <netty.version>4.1.133.Final</netty.version>
+    <protobuf-java.version>3.25.5</protobuf-java.version>
     <pdfbox.version>3.0.2</pdfbox.version>
-    <minio.version>8.5.11</minio.version>
+    <minio.version>8.6.0</minio.version>
     <okhttp.version>4.12.0</okhttp.version>
     <aws-sdk.version>2.25.60</aws-sdk.version>
     <bouncycastle.version>1.84</bouncycastle.version>
@@ -173,6 +176,18 @@
         <artifactId>temporal-testing</artifactId>
         <version>${temporal.version}</version>
         <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>io.grpc</groupId>
+        <artifactId>grpc-bom</artifactId>
+        <version>${grpc.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-java</artifactId>
+        <version>${protobuf-java.version}</version>
       </dependency>
 
       <!-- ── MapStruct ─────────────────────────────────────────────── -->
