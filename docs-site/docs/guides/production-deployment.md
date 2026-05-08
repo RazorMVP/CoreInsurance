@@ -17,7 +17,7 @@ production releases.
 | Backend image | `cia-backend/Dockerfile` | Builds the executable `cia-api` Spring Boot image. |
 | Production Compose template | `docker/production/docker-compose.yml` | Documents the required API and migration services for a container runtime. |
 | Production env example | `docker/production/production.env.example` | Lists required non-local environment variables without committing real secrets. |
-| Backend image workflow | `.github/workflows/backend-image.yml` | Builds the backend image in CI and publishes to GHCR outside pull requests. |
+| Backend image workflow | `.github/workflows/backend-image.yml` | Builds the backend image, scans it for high and critical CVEs, and publishes to GHCR outside pull requests. |
 | Observability pack | `ops/observability/` | Provides Prometheus alert rules and a Grafana dashboard starter. |
 
 The backend image runs as a non-root user, exposes `8090`, and includes a
@@ -25,7 +25,7 @@ container liveness healthcheck against `/actuator/health/liveness`.
 
 ## Required Deployment Sequence
 
-1. Build and publish a backend image from the intended commit.
+1. Build, scan, and publish a backend image from the intended commit.
 2. Take a database backup or storage snapshot.
 3. Run the migration service with `CIA_MIGRATION_ONLY=true`.
 4. Confirm the migration service exits successfully.
@@ -33,11 +33,16 @@ container liveness healthcheck against `/actuator/health/liveness`.
 6. Wait for `/actuator/health/readiness` to return `UP`.
 7. Run smoke checks for authentication, tenant resolution, customers, quotes,
    policies, claims, finance, reports, setup, and audit.
-8. Record the commit, image digest, Flyway version, backup reference, and smoke
+8. Record the commit, image digest, CVE scan result, Flyway version, backup reference, and smoke
    result in the release notes.
 
 Do not serve traffic to a new application image until the migration service has
 completed successfully.
+
+The backend image workflow enforces the vulnerability gate with Trivy. The
+release image must have no unresolved high or critical CVEs before production
+approval, and the SARIF report should remain available in GitHub code scanning
+for audit review.
 
 ## Migration Job
 

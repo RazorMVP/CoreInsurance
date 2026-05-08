@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   packages: write
+  security-events: write
 
 jobs:
   build:
@@ -42,13 +43,58 @@ jobs:
             type=ref,event=tag
 
       - name: Build image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: cia-backend
           file: cia-backend/Dockerfile
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Resolve image reference for scanning
+        id: scan-image
+        shell: bash
+        run: |
+          first_tag="$(printf '%s\n' "$TAGS" | head -n 1)"
+          if [[ -z "$first_tag" ]]; then
+            echo "No backend image tag was generated for scanning." >&2
+            exit 1
+          fi
+
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            echo "ref=$first_tag" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=ghcr.io/${GITHUB_REPOSITORY}/cia-backend@${DIGEST}" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+
+      - name: Generate vulnerability scan report
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: ${{ steps.scan-image.outputs.ref }}
+          format: sarif
+          output: trivy-results.sarif
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
+      - name: Upload vulnerability scan report
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Enforce high and critical CVE gate
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: ${{ steps.scan-image.outputs.ref }}
+          format: table
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+          exit-code: '1'

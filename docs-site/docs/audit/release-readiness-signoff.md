@@ -29,7 +29,7 @@ Core backend, frontend, documentation, Compose configuration, and local image pa
 | Dependency audit | Passed after remediation | Frontend production audit passed; docs audit initially found a high `serialize-javascript` issue, then passed after overriding to `7.0.5` and refreshing the lockfile. |
 | Secret scan | Passed for repository scope | No tracked env files were found; secret-pattern scan only matched documented placeholders and an intentionally shortened partner-doc token example. |
 | Image SBOM | Passed | `docker sbom cia-backend:phase10` generated an SBOM for the Phase 10 backend image. |
-| Image CVE scan | Blocked | `docker scout cves` requires Docker login locally, and Trivy/Grype are not installed in this environment. |
+| Image CVE scan | In review | The backend image workflow now runs Trivy against high and critical CVEs and uploads SARIF; final release evidence requires a successful GitHub workflow run for the exact release image. |
 | Production config rendering | Passed | Local Compose and production Compose template config rendering passed. |
 | Clean-environment rehearsal | Blocked | Requires real vault secrets, live provider credentials, target infrastructure access, and monitoring destination access. |
 
@@ -40,7 +40,7 @@ Core backend, frontend, documentation, Compose configuration, and local image pa
 | RSB-001 | Live KYC contract testing is not complete. | Run contract tests against the approved live or pre-production KYC provider endpoint with issued credentials. | TBD |
 | RSB-002 | Live NAICOM contract testing is not complete. | Run NAICOM upload, failure, retry, and reconciliation tests against the approved provider environment. | TBD |
 | RSB-003 | Live NIID contract testing is not complete. | Run NIID upload, failure, retry, and reconciliation tests against the approved provider environment. | TBD |
-| RSB-004 | Backend image CVE scan is not complete. | Log in to Docker Scout or install an approved scanner such as Trivy/Grype, then scan the release image for high and critical CVEs. | TBD |
+| RSB-004 | Backend image CVE scan result is not attached. | Run the backend image workflow for the exact release commit and confirm the Trivy high/critical CVE gate passes. | TBD |
 | RSB-005 | Clean-environment deployment rehearsal is not complete. | Deploy from a clean checkout using real vault-managed secrets, target infrastructure access, migration job mode, health checks, and rollback rehearsal. | TBD |
 | RSB-006 | Formal release approval is pending. | Record business, technical, security, and operations approval after all blockers are closed. | TBD |
 
