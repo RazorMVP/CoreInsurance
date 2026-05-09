@@ -317,5 +317,6 @@ For maximum parallel team utilisation:
 ## Related Documents
 
 - `period-end-closures-design.md` — full technical design that this plan implements
+- `period-end-closures-foundations-plan.md` — PR-slice expansion of Phases 1, 2, and 3
 - `production-readiness-tracker.md` — adjacent gates (Phase 7 Temporal workers, Phase 8 PII handling, Phase 10 deployment) that this plan inherits
 - `database-migration-runbook.md` — established procedure for Flyway migrations during deployment
