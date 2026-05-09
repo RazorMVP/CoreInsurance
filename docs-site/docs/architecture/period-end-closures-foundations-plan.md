@@ -70,7 +70,7 @@ Total slices: 9. Estimated calendar time: 4–6 weeks single engineer; 3–4 wee
 
 **Deliverables:**
 
-- `V25__create_gl_foundation.sql` (tenant schema):
+- `V31__create_gl_foundation.sql` (tenant schema):
   - `chart_of_account` (id, code, name, account_type [ASSET|LIABILITY|EQUITY|INCOME|EXPENSE], parent_id, ifrs17_role, ifrs9_role, is_active, audit columns)
   - `journal_entry` (id, posting_date, business_date, period_id, source_module, source_event_type, source_reference, narrative, posted_by, reversal_of, status, audit columns)
   - `journal_entry_line` (id, journal_entry_id, line_no, account_id, debit_amount, credit_amount, currency_code, dimension_tags JSONB, audit columns) with CHECK that exactly one of debit/credit > 0
@@ -97,7 +97,7 @@ Total slices: 9. Estimated calendar time: 4–6 weeks single engineer; 3–4 wee
 
 **Deliverables:**
 
-- `V26__seed_chart_of_accounts.sql`:
+- `V32__seed_chart_of_accounts.sql`:
   - Asset, liability, equity, income, expense accounts at the level required by NAICOM monthly recapitalisation reporting.
   - IFRS 17 accounts: LRC opening / movements / closing; LIC opening / movements / closing; insurance revenue; insurance service expense; risk adjustment unwinding; onerous deficit recognition; reinsurance ceded LRC / LIC mirrors.
   - IFRS 9 accounts: investment income; fair-value gains/losses on FVPL; FVOCI debt / equity OCI movements; ECL expense; amortised-cost interest accrual.
@@ -169,7 +169,7 @@ Total slices: 9. Estimated calendar time: 4–6 weeks single engineer; 3–4 wee
 
 - `SubledgerPostingService` Spring component with `@EventListener` methods for `DebitNoteApprovedEvent`, `CreditNoteIssuedEvent`, `ReceiptPostedEvent`, `PaymentPostedEvent`.
 - Each listener resolves the matching `posting_rule`, builds a `PostJournalEntryRequest`, and calls `JournalEntryService.post(...)`.
-- `posting_rule` rows seeded for each event type via `V27__seed_posting_rules.sql`.
+- `posting_rule` rows seeded for each event type via `V33__seed_posting_rules.sql`.
 - Idempotency: each listener checks `journal_entry(source_module, source_event_type, source_reference)` and skips if already posted.
 
 **Tests:**
@@ -293,7 +293,7 @@ Total slices: 8. Estimated calendar time: 4–6 weeks single engineer. May start
 
 **Deliverables:**
 
-- `V28__create_ifrs17_paa.sql` (tenant schema):
+- `V34__create_ifrs17_paa.sql` (tenant schema):
   - `insurance_portfolio` (id, code, name, product_id, line_of_business, currency_code, audit columns)
   - `contract_group` (id, portfolio_id, cohort_year, group_status [PROFITABLE|NEAR_ONEROUS|ONEROUS], audit columns)
   - `lrc_balance` (id, contract_group_id, fiscal_period_id, opening_balance, new_business, premium_received, revenue_recognised, acquisition_cost_amortisation, closing_balance, currency_code, audit columns)
@@ -317,7 +317,7 @@ Total slices: 8. Estimated calendar time: 4–6 weeks single engineer. May start
 
 **Deliverables:**
 
-- `V29__seed_insurance_portfolios.sql` reading from `products` and inserting one portfolio per `product.product_family` (or per product if no family field).
+- `V35__seed_insurance_portfolios.sql` reading from `products` and inserting one portfolio per `product.product_family` (or per product if no family field).
 - Backfill task assigning every existing in-force policy to a `contract_group` based on its product's portfolio and `start_date.year` cohort.
 
 **Tests:** every active policy has a non-null `contract_group_id` after backfill.
@@ -437,7 +437,7 @@ Total slices: 8. Estimated calendar time: 4–6 weeks single engineer. May start
 **Deliverables:**
 
 - `ReinsuranceContractsHeldService.measurePeriod(...)` mirroring 2.6 output at the cession percentage from `cia-reinsurance.treaty` allocations.
-- Ceded LRC / LIC tracked in mirror tables `reinsurance_lrc_balance`, `reinsurance_lic_balance` (added by `V30__create_ri_held_balances.sql`).
+- Ceded LRC / LIC tracked in mirror tables `reinsurance_lrc_balance`, `reinsurance_lic_balance` (added by `V36__create_ri_held_balances.sql`).
 - Ceded JEs posted to ceded-side accounts.
 
 **Tests:**
@@ -485,7 +485,7 @@ Total slices: 7. Estimated calendar time: 4–5 weeks single engineer. Slices 3.
 
 - New module `cia-investments/` with `pom.xml` depending on `cia-common`, `cia-auth`, `cia-finance` (for `JournalEntryService` injection).
 - Module added to `cia-api` assembly so the module's controllers are auto-scanned.
-- `V31__create_investments.sql` (tenant schema):
+- `V37__create_investments.sql` (tenant schema):
   - `instrument` (id, isin?, code, name, instrument_type [BOND|EQUITY|FUND|TBILL|MMD|OTHER], issuer, currency_code, coupon_rate?, maturity_date?, audit columns)
   - `holding` (id, instrument_id, custodian, ifrs9_classification [FVPL|FVOCI_DEBT|FVOCI_EQUITY|AMORTISED_COST], business_model, sppi_passed, acquisition_date, acquisition_cost, units, status, audit columns)
   - `valuation` (id, holding_id, valuation_date, market_price, fair_value, source [MANUAL|MARKET_DATA], audit columns)
@@ -579,7 +579,7 @@ Total slices: 7. Estimated calendar time: 4–5 weeks single engineer. Slices 3.
 **Deliverables:**
 
 - `EclService.computeStage1(holding)`, `computeStage2(holding)`, `computeStage3(holding)` returning ECL amount per stage.
-- Simple credit-rating-band PD/LGD lookup (seeded via `V32__seed_credit_rating_bands.sql`). Sophisticated PD/LGD modelling is explicitly future-phase.
+- Simple credit-rating-band PD/LGD lookup (seeded via `V38__seed_credit_rating_bands.sql`). Sophisticated PD/LGD modelling is explicitly future-phase.
 - Stage transition rules:
   - STAGE1 → STAGE2 on significant credit deterioration.
   - STAGE2 → STAGE3 on credit-impaired indicator.
