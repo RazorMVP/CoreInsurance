@@ -4,6 +4,101 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-11 — Session 56 (`module-12-period-end-closures`): Foundations plan published + Slice 1.1 (V31 GL schema) shipped + Slice 1.2 (COA seed) design pass in-thread
+
+### Context
+
+Branch `module-12-period-end-closures` carries Module 12 (Period-End Closures) — IFRS 17 PAA + IFRS 9 + NAICOM closes. Session 55 locked scope; Session 56 turned that scope into a published foundations plan and the first migration slice, then opened the COA seed design pass which is being resolved in the same thread (no work deferred to a future session — fix-as-it-comes principle).
+
+### Work landed (committed + pushed)
+
+**Foundations plan** (`docs-site/docs/architecture/period-end-closures-foundations-plan.md`, ~480 lines)
+
+- Critical-path diagram identifies Slice **1.4 (JournalEntryService)** and **1.9 (reconciliation gate)** as gateway slices — everything downstream binds to those contracts.
+- Phases 1–3 broken into PR-sized slices (1.1–1.9, 2.1–2.8, 3.1–3.7) with branch naming, review model, replan checkpoints at weeks 4 / 7 / 13, and a reconciliation evidence template for PR descriptions.
+- Registered in `docs-site/sidebars.ts`; cross-linked from `period-end-closures-implementation-plan.md` Related Documents.
+- Commits: `29cc585` (plan + sidebar + cross-link), `38e8ac9` (renumber V25–V32 → V31–V38 after discovering V25–V30 already in use on branch).
+
+**Slice 1.1 — GL foundation schema** (`cia-api/src/main/resources/db/migration/V31__create_gl_foundation.sql`, ~280 lines)
+
+Schema-only migration adding 7 tables to the tenant schema:
+
+| Table | Key shape |
+|---|---|
+| `chart_of_account` | Hierarchical (`parent_id`), `account_type` CHECK in (ASSET/LIABILITY/EQUITY/INCOME/EXPENSE), `ifrs17_role` + `ifrs9_role` columns (free-text for now), UNIQUE on `code` |
+| `fiscal_year` | `status` CHECK in (PLANNING/ACTIVE/CLOSED), CHECK `end_date > start_date` |
+| `fiscal_period` | DAY/MONTH/QUARTER/HALF_YEAR/YEAR child periods, `soft_closed_at` + `hard_closed_at` with `ck_fiscal_period_close_chronology` |
+| `period_lock` | SOFT/HARD records; `grace_window_until` / `released_at` / `released_by` enforced all-or-nothing by CHECK |
+| `journal_entry` | Two-date model (`posting_date` + `business_date`), `(source_module, source_event_type, source_reference)` UNIQUE for idempotency, self-FK `reversal_of`, CHECK `business_date <= posting_date` |
+| `journal_entry_line` | Two-column DR/CR (`debit_amount` + `credit_amount` DECIMAL(18,2)) with CHECK exactly one > 0; promoted dimensions (`cohort_year`, `portfolio_id`, `contract_group_id`, `holding_id`) + JSONB `dimension_tags` with GIN index |
+| `posting_rule` | Sub-ledger event → DR/CR account mapping; FKs to `chart_of_account.code`; CHECK distinct accounts |
+
+**Slice 1.1 — Test** (`cia-api/src/test/java/com/nubeero/cia/api/migration/V31GlFoundationMigrationTest.java`, ~350 lines)
+
+Testcontainers + Flyway + JDBC (no Spring context). Shared container (`@TestInstance(PER_CLASS)`); `@BeforeAll` runs Flyway `target=31`. Nested test classes per table assert every CHECK / UNIQUE / FK introduced by V31.
+
+Commit: `96de0e7` (V31 + test).
+
+### Design decisions locked
+
+| ID | Decision |
+|---|---|
+| Slice 1.1 D1 | Promoted dimension columns + `dimension_tags` JSONB (hybrid) for `journal_entry_line` |
+| Slice 1.1 D2 | Two-column DR/CR with CHECK constraint (not signed amount) |
+| Slice 1.1 D3 | DB UNIQUE on `(source_module, source_event_type, source_reference)` (closes TOCTOU race) |
+| Slice 1.1 D4 | `business_date <= posting_date` enforced (CHECK), with documented edge case for backdated postings |
+| Slice 1.1 D5 | DECIMAL(18,2) — matches existing `cia-finance` money columns |
+| Slice 1.1 D6 | Constraint naming convention `pk_/uq_/fk_/ck_` |
+| Slice 1.1 D7 | Renumber V25→V31 etc. after discovering V25–V30 already taken on branch |
+| Slice 1.2 D1 | 4-digit hierarchical numeric COA codes (semantic load on `ifrs17_role` / `ifrs9_role`) |
+| Slice 1.2 D2 | 3-level COA depth (Class → Group → Leaf) — matches NAICOM monthly recap granularity |
+| Slice 1.2 D3 | `INSERT … ON CONFLICT (code) DO NOTHING` for seed idempotency |
+| Slice 1.2 D4 | Commit `expected-tree.txt` fixture + test asserts seeded data matches fixture |
+
+### Slice 1.2 — COA tree in active review (in-thread, not deferred)
+
+- Proposed tree: **5 Classes + 26 Groups + 79 Leaves = 110 rows** (subject to R1/R2/R3 resolution below).
+- IFRS 17 role tags assigned on LRC/LIC/movement leaves: `LRC_BEL`, `LRC_RA`, `LRC_LC`, `LIC_OCR`, `LIC_IBNR`, `LIC_RA`, `LIC_CHE`, `LRC_REINSURANCE`, `LIC_REINSURANCE`, `REVENUE_LRC_RELEASE`, `REVENUE_ACQ_RECOVERY`, `REVENUE_RA_RELEASE`, `REVENUE_EXP_ADJ`, `INCURRED_CLAIMS`, `LIC_CHANGE`, `ACQ_EXPENSE`, `OTHER_DIRECT_EXPENSE`, `LC_CHANGE`, `REINSURANCE_PREMIUM`, `REINSURANCE_LRC_CHANGE`, `REINSURANCE_RECOVERY`, `INSURANCE_FINANCE_EXPENSE`, `INSURANCE_FINANCE_OCI`.
+- IFRS 9 role tags assigned on investment / ECL / OCI accounts: `FVPL`, `FVOCI_DEBT`, `FVOCI_EQUITY`, `AMORTISED_COST`, `ECL_ALLOWANCE`, `ECL_EXPENSE`, `INTEREST_AC`, `INTEREST_FVOCI`, `FVPL_GAINS`, `FVPL_LOSSES`, `OCI_DEBT_RESERVE`, `OCI_EQUITY_RESERVE`.
+- **Three review items currently active (recommendation: all A):**
+  - **R1 — Inward FAC liabilities (2210, 2220).** Recommend **A — seed now.** Module 6 supports inward FAC end-to-end; first approval would otherwise fail FK lookup at `posting_rule.debit_account`. Two rows now vs a production posting break later.
+  - **R2 — Insurance finance OCI account (3430).** Recommend **A — seed unconditionally.** OCI election is a tenant config decision, not a COA decision. Account sits at zero until election. Same asymmetry argument as R1.
+  - **R3 — DAC.** Recommend **A — exclude.** This is accounting determination, not deferral — under IFRS 17 PAA there is no separate DAC asset; the recovery flows through `4120 REVENUE_ACQ_RECOVERY` and `5130 ACQ_EXPENSE`. Including DAC would invite incorrect posting rules.
+
+### In-flight work (this session, continuing in-thread)
+
+After R1/R2/R3 confirmation:
+1. Write `V32__seed_chart_of_accounts.sql` (~110 INSERT rows, `ON CONFLICT (code) DO NOTHING`).
+2. Write `cia-finance/src/test/resources/coa/expected-tree.txt` fixture.
+3. Write seed test asserting every code + name + `ifrs17_role` + `ifrs9_role` matches fixture.
+4. Verify against the postgres:16 smoke container (Flyway target=32).
+5. Commit + push to `module-12-period-end-closures`.
+
+### Local verification notes
+
+- Local Testcontainers run blocked by Docker 29.x ↔ docker-java 3.4.0 API negotiation (bundled with testcontainers 1.20.1). `curl --unix-socket` works; docker-java's `/info` request shape gets rejected with 400 BadRequest. Reproduced after bumping testcontainers to 1.20.6 — same error. CI Ubuntu Docker 27.x is compatible, so tests run there.
+- Worked around locally by spinning up an isolated `postgres:16-alpine` on port 65432, running `flyway/flyway:10` against it (all 31 migrations green, schema version `31`), and exercising 5 representative V31 constraints by hand against the smoke container before commit.
+
+### Files touched this session
+
+| File | Change |
+|---|---|
+| `docs-site/docs/architecture/period-end-closures-foundations-plan.md` | New (~480 lines) — Phases 1-3 PR slices, gateway slices, replan checkpoints, reconciliation evidence template |
+| `docs-site/docs/architecture/period-end-closures-implementation-plan.md` | Added cross-link to foundations plan in Related Documents |
+| `docs-site/sidebars.ts` | Registered `architecture/period-end-closures-foundations-plan` |
+| `cia-backend/cia-api/src/main/resources/db/migration/V31__create_gl_foundation.sql` | New (~280 lines) — 7-table GL schema |
+| `cia-backend/cia-api/src/test/java/com/nubeero/cia/api/migration/V31GlFoundationMigrationTest.java` | New (~350 lines) — Testcontainers + Flyway constraint coverage |
+
+### Development discipline note
+
+Adopted explicit no-defer principle for this module: items surfaced during a slice are resolved in the same slice / thread / session. Stop-hook session boundaries are administrative — they do not partition design decisions. R1/R2/R3 are active in-thread review items, not "next session" items.
+
+### Open questions
+
+None blocking — Slice 1.2 review in progress (R1/R2/R3 recommendations issued; awaiting confirmation in same thread).
+
+---
+
 ## 2026-05-09 — Session 55 (main-branch): Period-end closures requirements gathering for EOD/EOM/EOQ/Half-Year/EOY — scope locked at 96% confidence
 
 ### Context
