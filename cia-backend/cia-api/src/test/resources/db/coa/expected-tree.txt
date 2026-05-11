@@ -1,0 +1,137 @@
+# Expected Chart of Accounts after V32 seed migration.
+# Format: code|name|account_type|parent_code|ifrs17_role|ifrs9_role
+# Empty fields shown as the literal "-".
+# Total rows: 129 (5 classes + 27 groups + 97 leaves).
+# Sorted ascending by code.
+#
+# This file is the locked contract for V32__seed_chart_of_accounts.sql.
+# Drift between V32 and this fixture is detected by V32ChartOfAccountSeedMigrationTest.
+1000|Assets|ASSET|-|-|-
+1100|Cash and cash equivalents|ASSET|1000|-|-
+1110|Cash on hand|ASSET|1100|-|-
+1120|Bank current accounts|ASSET|1100|-|-
+1130|Bank call deposits|ASSET|1100|-|-
+1140|Money market instruments|ASSET|1100|-|-
+1200|Investments|ASSET|1000|-|-
+1210|FVPL - Equity securities|ASSET|1200|-|FVPL
+1220|FVPL - Debt securities|ASSET|1200|-|FVPL
+1230|FVOCI - Debt securities|ASSET|1200|-|FVOCI_DEBT
+1240|FVOCI - Equity securities (elected)|ASSET|1200|-|FVOCI_EQUITY
+1250|Amortised cost - Debt securities|ASSET|1200|-|AMORTISED_COST
+1300|Insurance receivables|ASSET|1000|-|-
+1310|Premium receivable - Direct|ASSET|1300|-|-
+1320|Premium receivable - Broker|ASSET|1300|-|-
+1330|Premium receivable - Coinsurer (inward)|ASSET|1300|-|-
+1340|ECL allowance - Premium receivable|ASSET|1300|-|ECL_ALLOWANCE
+1400|Reinsurance contract held|ASSET|1000|-|-
+1410|Reinsurance - LRC asset|ASSET|1400|LRC_REINSURANCE|-
+1420|Reinsurance - LIC asset|ASSET|1400|LIC_REINSURANCE|-
+1430|Reinsurance recoveries receivable|ASSET|1400|-|-
+1440|ECL allowance - Reinsurance recoveries|ASSET|1400|-|ECL_ALLOWANCE
+1500|Other assets|ASSET|1000|-|-
+1510|Prepayments|ASSET|1500|-|-
+1520|Other receivables|ASSET|1500|-|-
+1530|Tax recoverable|ASSET|1500|-|-
+1600|Property, plant and equipment|ASSET|1000|-|-
+1610|Land and buildings|ASSET|1600|-|-
+1620|Motor vehicles|ASSET|1600|-|-
+1630|Computer equipment|ASSET|1600|-|-
+1640|Furniture and fittings|ASSET|1600|-|-
+1650|Accumulated depreciation (contra)|ASSET|1600|-|-
+1700|Intangible assets|ASSET|1000|-|-
+1710|Software|ASSET|1700|-|-
+1720|Accumulated amortisation (contra)|ASSET|1700|-|-
+2000|Liabilities|LIABILITY|-|-|-
+2100|Insurance contract liabilities (issued)|LIABILITY|2000|-|-
+2110|LRC - Best estimate of liabilities|LIABILITY|2100|LRC_BEL|-
+2120|LRC - Risk adjustment|LIABILITY|2100|LRC_RA|-
+2130|LRC - Loss component (onerous)|LIABILITY|2100|LRC_LC|-
+2140|LIC - Outstanding claims reserve|LIABILITY|2100|LIC_OCR|-
+2150|LIC - IBNR|LIABILITY|2100|LIC_IBNR|-
+2160|LIC - Risk adjustment|LIABILITY|2100|LIC_RA|-
+2170|LIC - Claims handling expense provision|LIABILITY|2100|LIC_CHE|-
+2200|Reinsurance contracts issued (inward FAC)|LIABILITY|2000|-|-
+2210|Inward reinsurance - LRC|LIABILITY|2200|LRC_BEL|-
+2220|Inward reinsurance - LIC|LIABILITY|2200|LIC_OCR|-
+2300|Trade payables|LIABILITY|2000|-|-
+2310|Reinsurance premium payable (outward)|LIABILITY|2300|-|-
+2320|Commission payable - Brokers|LIABILITY|2300|-|-
+2330|Commission payable - Agents|LIABILITY|2300|-|-
+2340|Coinsurance payable (outward share)|LIABILITY|2300|-|-
+2350|Claims payable|LIABILITY|2300|-|-
+2400|Tax liabilities|LIABILITY|2000|-|-
+2410|Income tax payable|LIABILITY|2400|-|-
+2420|VAT payable|LIABILITY|2400|-|-
+2430|WHT payable|LIABILITY|2400|-|-
+2440|NAICOM levy payable|LIABILITY|2400|-|-
+2500|Other liabilities|LIABILITY|2000|-|-
+2510|Accruals|LIABILITY|2500|-|-
+2520|Staff payables|LIABILITY|2500|-|-
+2530|Other creditors|LIABILITY|2500|-|-
+2600|Borrowings|LIABILITY|2000|-|-
+2610|Bank borrowings|LIABILITY|2600|-|-
+2620|Lease liabilities|LIABILITY|2600|-|-
+3000|Equity|EQUITY|-|-|-
+3100|Share capital|EQUITY|3000|-|-
+3110|Ordinary share capital|EQUITY|3100|-|-
+3120|Share premium|EQUITY|3100|-|-
+3200|Retained earnings|EQUITY|3000|-|-
+3210|Retained earnings - Brought forward|EQUITY|3200|-|-
+3220|Profit / loss - Current period|EQUITY|3200|-|-
+3300|Statutory reserves|EQUITY|3000|-|-
+3310|Contingency reserve (NAICOM mandatory)|EQUITY|3300|-|-
+3320|Statutory reserve|EQUITY|3300|-|-
+3400|OCI reserves|EQUITY|3000|-|-
+3410|FVOCI debt reserve|EQUITY|3400|-|OCI_DEBT_RESERVE
+3420|FVOCI equity reserve|EQUITY|3400|-|OCI_EQUITY_RESERVE
+3430|Insurance finance OCI (if elected)|EQUITY|3400|INSURANCE_FINANCE_OCI|-
+4000|Income|INCOME|-|-|-
+4100|Insurance revenue|INCOME|4000|-|-
+4110|Insurance revenue - LRC release|INCOME|4100|REVENUE_LRC_RELEASE|-
+4120|Insurance revenue - Acquisition cost recovery|INCOME|4100|REVENUE_ACQ_RECOVERY|-
+4130|Change in risk adjustment (non-financial)|INCOME|4100|REVENUE_RA_RELEASE|-
+4140|Experience adjustment|INCOME|4100|REVENUE_EXP_ADJ|-
+4200|Investment income|INCOME|4000|-|-
+4210|Interest income - Amortised cost|INCOME|4200|-|INTEREST_AC
+4220|Interest income - FVOCI debt|INCOME|4200|-|INTEREST_FVOCI
+4230|Dividend income|INCOME|4200|-|-
+4240|Realised gains - Investments|INCOME|4200|-|-
+4250|Unrealised FV gains - FVPL|INCOME|4200|-|FVPL_GAINS
+4260|FX gains|INCOME|4200|-|-
+4300|Reinsurance income (ceded)|INCOME|4000|-|-
+4310|Amounts recoverable for incurred claims|INCOME|4300|REINSURANCE_RECOVERY|-
+4320|Reinsurance commission income|INCOME|4300|-|-
+4400|Other income|INCOME|4000|-|-
+4410|Sundry income|INCOME|4400|-|-
+4420|Fee income|INCOME|4400|-|-
+5000|Expenses|EXPENSE|-|-|-
+5100|Insurance service expense|EXPENSE|5000|-|-
+5110|Incurred claims|EXPENSE|5100|INCURRED_CLAIMS|-
+5120|Change in LIC|EXPENSE|5100|LIC_CHANGE|-
+5130|Insurance acquisition expense|EXPENSE|5100|ACQ_EXPENSE|-
+5140|Other directly attributable expenses|EXPENSE|5100|OTHER_DIRECT_EXPENSE|-
+5150|Loss component change|EXPENSE|5100|LC_CHANGE|-
+5200|Reinsurance expense (outward)|EXPENSE|5000|-|-
+5210|Outward reinsurance premium|EXPENSE|5200|REINSURANCE_PREMIUM|-
+5220|Change in reinsurance LRC asset|EXPENSE|5200|REINSURANCE_LRC_CHANGE|-
+5230|Reinsurance commission expense|EXPENSE|5200|-|-
+5300|Investment expense|EXPENSE|5000|-|-
+5310|Investment management fees|EXPENSE|5300|-|-
+5320|Realised losses - Investments|EXPENSE|5300|-|-
+5330|Unrealised FV losses - FVPL|EXPENSE|5300|-|FVPL_LOSSES
+5340|ECL expense - Investment securities|EXPENSE|5300|-|ECL_EXPENSE
+5350|ECL expense - Premium receivables|EXPENSE|5300|-|ECL_EXPENSE
+5360|FX losses|EXPENSE|5300|-|-
+5400|Operating expense|EXPENSE|5000|-|-
+5410|Staff costs|EXPENSE|5400|-|-
+5420|Depreciation|EXPENSE|5400|-|-
+5430|Amortisation|EXPENSE|5400|-|-
+5440|Office and administration|EXPENSE|5400|-|-
+5450|Professional fees|EXPENSE|5400|-|-
+5460|Marketing|EXPENSE|5400|-|-
+5500|Finance costs|EXPENSE|5000|-|-
+5510|Interest expense|EXPENSE|5500|-|-
+5520|Insurance finance expense|EXPENSE|5500|INSURANCE_FINANCE_EXPENSE|-
+5600|Tax expense|EXPENSE|5000|-|-
+5610|Current tax|EXPENSE|5600|-|-
+5620|Deferred tax|EXPENSE|5600|-|-
