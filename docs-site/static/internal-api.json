@@ -289,6 +289,48 @@
           }
         }
       },
+      "ChartOfAccountNode": {
+        "type": "object",
+        "description": "Chart-of-accounts node returned by GET /finance/chart-of-accounts. Recursive — leaves carry an empty children array.",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "2110",
+            "description": "Seeded account code (4-digit hierarchical: class.group.leaf)."
+          },
+          "name": {
+            "type": "string",
+            "example": "LRC - Best estimate of liabilities"
+          },
+          "accountType": {
+            "type": "string",
+            "enum": ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"],
+            "example": "LIABILITY"
+          },
+          "ifrs17Role": {
+            "type": "string",
+            "nullable": true,
+            "example": "LRC_BEL",
+            "description": "IFRS 17 measurement role tag (null on non-measurement leaves)."
+          },
+          "ifrs9Role": {
+            "type": "string",
+            "nullable": true,
+            "example": "FVPL",
+            "description": "IFRS 9 classification role tag (null on non-investment leaves)."
+          },
+          "active": {
+            "type": "boolean",
+            "example": true
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartOfAccountNode"
+            }
+          }
+        }
+      },
       "DashboardStats": {
         "type": "object",
         "properties": {
@@ -6055,6 +6097,48 @@
           },
           "401": {
             "description": "Unauthorized \u2014 missing or expired JWT"
+          }
+        }
+      }
+    },
+    "/finance/chart-of-accounts": {
+      "get": {
+        "summary": "Get Chart of Accounts tree",
+        "description": "Returns the seeded chart of accounts as a nested tree rooted at the five top-level account-type classes (Asset / Liability / Equity / Income / Expense). Children are sorted ascending by code; soft-deleted rows are omitted. Read-only \u2014 CRUD on the COA is deferred until tenant customisation (post-Phase-7). Introduced by Module 12 Slice 1.3.",
+        "operationId": "getChartOfAccountsTree",
+        "tags": [
+          "Finance \u2014 General Ledger"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ChartOfAccountNode"
+                      }
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or expired JWT"
+          },
+          "403": {
+            "description": "Forbidden \u2014 missing FINANCE_VIEW role"
           }
         }
       }
