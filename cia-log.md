@@ -4,6 +4,92 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-13 — Session 57 (`module-12-period-end-closures`): Slice 1.2 (V32 COA seed) + Slice 1.3 (ChartOfAccountService) shipped
+
+### Context
+
+Continued Module 12 (Period-End Closures) work on the same feature branch. Two slices shipped in-thread (no deferral): V32 COA seed migration and the read-only `ChartOfAccountService` that consumes it. The slice-by-slice design pass model continued — explicit decisions locked before any code was written.
+
+### Work landed (committed + pushed)
+
+**Slice 1.2 — V32 Chart of Accounts seed** (`b0ffd39`)
+
+| Artefact | Detail |
+|---|---|
+| `cia-api/src/main/resources/db/migration/V32__seed_chart_of_accounts.sql` | 129 rows: 5 classes + 27 groups + 97 leaves. 25 IFRS 17 role tags, 15 IFRS 9 role tags. `ON CONFLICT (code) DO NOTHING` for idempotency. Three INSERT statements (classes, groups via VALUES JOIN, leaves via VALUES JOIN) preserve FK ordering. |
+| `cia-api/src/test/resources/db/coa/expected-tree.txt` | 129-row pipe-delimited fixture sorted by code asc. Locked contract for the seed test. |
+| `cia-api/src/test/java/.../V32ChartOfAccountSeedMigrationTest.java` | 7 Testcontainers tests covering row counts (129 / 5 / 27 / 97), exact field-by-field match against fixture, IFRS17 + IFRS9 tag coverage, idempotency under re-insert, `created_by='system-seed'`, `is_active=TRUE`. |
+
+R-locks: R1=A (seed inward FAC 2210/2220 now), R2=A (seed insurance finance OCI 3430 unconditionally), R3=A (no separate DAC under IFRS 17 PAA).
+
+Smoke verification: isolated `postgres:16-alpine` on port 65433 + Flyway 10 `target=32` — 32 migrations green, 129 rows, 0 orphan FKs, IFRS17=25 / IFRS9=15 match fixture, key role tags spot-checked.
+
+**Slice 1.3 — ChartOfAccountService (read-only)** (`d0e86e3`)
+
+Read-only service over the V32 seed; supplies the contract Slice 1.4 (JournalEntryService gateway) and Slice 1.5 (SubledgerPostingService listeners) bind to. CRUD deferred until post-Phase-7 (cia-reports SYSTEM-rows pattern: no mutation methods on the service surface).
+
+| Component | Package | Lines | Responsibility |
+|---|---|---|---|
+| `AccountType` | `com.nubeero.cia.finance.gl` | 11 | 5-value enum mirroring V31 CHECK |
+| `Ifrs17Role` | `com.nubeero.cia.finance.gl` | 56 | 23 LRC/LIC/movement role constants |
+| `Ifrs9Role` | `com.nubeero.cia.finance.gl` | 41 | 12 classification + ECL + OCI role constants |
+| `ChartOfAccount` | `com.nubeero.cia.finance.gl` | 56 | JPA entity (`@Enumerated(STRING)` on roles, lazy parent `@ManyToOne`) |
+| `ChartOfAccountRepository` | `com.nubeero.cia.finance.gl` | 22 | 4 Spring Data finders, all `WHERE deleted_at IS NULL` |
+| `ChartOfAccountService` | `com.nubeero.cia.finance.gl` | 133 | `findByCode`, `findByIfrs17Role`, `findByIfrs9Role`, `getTree`; 4 `@Cacheable` regions with tenant-prefixed SpEL keys |
+| `ChartOfAccountController` | `com.nubeero.cia.finance.gl` | 33 | `GET /api/v1/finance/chart-of-accounts`, `hasRole('FINANCE_VIEW')` |
+| `ChartOfAccountNode` | `com.nubeero.cia.finance.gl` | 19 | Recursive nested-tree DTO record |
+| `ChartOfAccountNotFoundException` | `com.nubeero.cia.finance.gl` | 11 | `@ResponseStatus(NOT_FOUND)` |
+| `CiaApplication` | `com.nubeero.cia` | +2 | `@EnableCaching` added |
+| `ChartOfAccountServiceTest` | cia-finance test | 142 | 7 Mockito unit tests — green locally |
+| `ChartOfAccountServiceIT` | cia-api test | 213 | 12 `@DataJpaTest` + Testcontainers tests (V32 row count, tree shape, every finder, cache wiring) — runs in CI |
+| `docs-site/static/internal-api.json` | docs | +83 | new GET path + recursive `ChartOfAccountNode` schema |
+
+### Design decisions locked
+
+| ID | Decision | Why |
+|---|---|---|
+| Slice 1.2 R1=A | Seed inward FAC liabilities 2210/2220 now | Module 6 supports inward FAC end-to-end; first approval would otherwise fail `posting_rule.debit_account` FK |
+| Slice 1.2 R2=A | Seed insurance finance OCI 3430 unconditionally | OCI election is a tenant config decision, not a COA decision; account stays at zero until elected |
+| Slice 1.2 R3=A | Exclude DAC | Under IFRS 17 PAA there is no separate DAC asset; recovery flows through 4120 + 5130 |
+| Slice 1.3 D1=A | Module location: `cia-finance` | GL is a finance concept; premature module split harder to reverse than premature consolidation |
+| Slice 1.3 D2=A | `Ifrs17Role` / `Ifrs9Role` as Java enums (not strings) | Type safety on posting-rule lookups in Slice 2.x; new role = enum value + V-XX seed migration in same PR |
+| Slice 1.3 D3=B | Nested tree response (single endpoint) | Posting-rule editor + COA admin browser both consume tree; flat list can be added if/when needed |
+
+### Decision: caching strategy
+
+- Used Spring's default `ConcurrentMapCacheManager` (in-memory) — no Redis or Caffeine dependency for now.
+- Tenant-aware cache keys via SpEL: `T(com.nubeero.cia.common.tenant.TenantContext).getTenantId() + ':' + #code`. Today every tenant sees an identical seeded COA; post-Phase-7 per-tenant overrides will partition cleanly without code change.
+- Cache regions exposed as `public static final` constants on the service so test slices and future ops tools can clear them without string duplication.
+- No eviction policy registered for production — COA is immutable from the service layer.
+
+### Decision: no-defer principle reinforced
+
+Continued the principle established in Session 56. Slice 1.3 review surfaced a design tension (whether `ifrs17_role` enum could lock the vocabulary too early before posting rules stabilise) — resolved in-thread by keeping the DB column as free-text VARCHAR(50) while locking the vocabulary in Java. No "we'll decide later" outcome.
+
+### Verification
+
+- `mvn install -pl cia-finance -am` → BUILD SUCCESS
+- `mvn test -pl cia-finance -Dtest=ChartOfAccountServiceTest` → 7/7 pass (0.85 s)
+- `mvn test-compile -pl cia-api -am` → BUILD SUCCESS (IT compiles cleanly; runs in CI where Testcontainers + Docker work)
+- Local Testcontainers still blocked by Docker 29.x ↔ docker-java 3.4.0 negotiation — same workaround as Session 56 (smoke container approach validated V32 SQL behaviour).
+
+### Open questions
+
+None blocking — Slice 1.4 (JournalEntryService + TrialBalanceService, the gateway slice) is the next design pass.
+
+### Branch tally
+
+`module-12-period-end-closures` now contains:
+1. `b4652d1` design + implementation plan
+2. `29cc585` foundations PR-slice plan
+3. `38e8ac9` version-number renumber
+4. `96de0e7` **Slice 1.1** — V31 GL schema
+5. `ba9b957` session 56 log
+6. `b0ffd39` **Slice 1.2** — V32 COA seed (129 rows + fixture + 7 tests)
+7. `d0e86e3` **Slice 1.3** — ChartOfAccountService (read-only service + 7 unit + 12 IT)
+
+---
+
 ## 2026-05-11 — Session 56 (`module-12-period-end-closures`): Foundations plan published + Slice 1.1 (V31 GL schema) shipped + Slice 1.2 (COA seed) design pass in-thread
 
 ### Context
