@@ -331,6 +331,202 @@
           }
         }
       },
+      "JournalEntryLineRequest": {
+        "type": "object",
+        "description": "One leg of a POST /finance/journal-entries request. Exactly one of debitAmount / creditAmount must be > 0; the other must be 0.",
+        "required": ["accountCode", "debitAmount", "creditAmount"],
+        "properties": {
+          "accountCode": {
+            "type": "string",
+            "example": "1110",
+            "description": "COA leaf code; resolved server-side to the account id."
+          },
+          "debitAmount": {
+            "type": "number",
+            "format": "double",
+            "example": 100.00,
+            "minimum": 0
+          },
+          "creditAmount": {
+            "type": "number",
+            "format": "double",
+            "example": 0.00,
+            "minimum": 0
+          },
+          "currencyCode": {
+            "type": "string",
+            "example": "NGN",
+            "default": "NGN"
+          },
+          "cohortYear": {
+            "type": "integer",
+            "nullable": true,
+            "description": "IFRS 17 cohort year (Slice 2.x). Null in Slice 1.4."
+          },
+          "portfolioId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "contractGroupId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "holdingId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "IFRS 9 per-instrument tag (Slice 3.x)."
+          },
+          "dimensionTags": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Free-form analytic tags persisted as JSONB."
+          }
+        }
+      },
+      "PostJournalEntryRequest": {
+        "type": "object",
+        "description": "Wire contract for POST /finance/journal-entries. The service stamps postingDate=today (D5 default); callers cannot override it.",
+        "required": ["businessDate", "sourceModule", "sourceEventType", "sourceReference", "lines"],
+        "properties": {
+          "businessDate": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-05-14",
+            "description": "Economic event date. Drives period assignment via FiscalPeriodResolver and the 5-business-day late-posting cut-off (Slice 1.7)."
+          },
+          "sourceModule": {
+            "type": "string",
+            "maxLength": 40,
+            "example": "finance"
+          },
+          "sourceEventType": {
+            "type": "string",
+            "maxLength": 60,
+            "example": "MANUAL"
+          },
+          "sourceReference": {
+            "type": "string",
+            "maxLength": 100,
+            "example": "ref-2026-05-14-001",
+            "description": "Idempotency key (forms UNIQUE triple with sourceModule + sourceEventType). For manual postings, use a fresh UUID-derived value (D8)."
+          },
+          "narrative": {
+            "type": "string",
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "$ref": "#/components/schemas/JournalEntryLineRequest"
+            }
+          }
+        }
+      },
+      "ReverseJournalEntryRequest": {
+        "type": "object",
+        "description": "Wire contract for POST /finance/journal-entries/{id}/reverse. The reason is appended to the auto-built reversal narrative.",
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "example": "Misposting cleanup — wrong COA",
+            "description": "Audit trail justification. Appears in the reversal entry narrative as 'REVERSAL of JE {originalId}: {reason}'."
+          }
+        }
+      },
+      "JournalEntryLineResponse": {
+        "type": "object",
+        "description": "Read model for one journal entry line, with COA fields surfaced alongside the id.",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "lineNo": {"type": "integer", "example": 1},
+          "accountId": {"type": "string", "format": "uuid"},
+          "accountCode": {"type": "string", "example": "1110"},
+          "accountName": {"type": "string", "example": "Cash on hand"},
+          "debitAmount": {"type": "number", "format": "double", "example": 100.00},
+          "creditAmount": {"type": "number", "format": "double", "example": 0.00},
+          "currencyCode": {"type": "string", "example": "NGN"},
+          "cohortYear": {"type": "integer", "nullable": true},
+          "portfolioId": {"type": "string", "format": "uuid", "nullable": true},
+          "contractGroupId": {"type": "string", "format": "uuid", "nullable": true},
+          "holdingId": {"type": "string", "format": "uuid", "nullable": true},
+          "dimensionTags": {"type": "object", "additionalProperties": true}
+        }
+      },
+      "JournalEntryResponse": {
+        "type": "object",
+        "description": "Posted journal entry with all of its lines. Returned by POST /finance/journal-entries, GET /finance/journal-entries/{id}, and POST /finance/journal-entries/{id}/reverse.",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "postingDate": {"type": "string", "format": "date", "description": "Server-stamped record date (today)."},
+          "businessDate": {"type": "string", "format": "date", "description": "Economic event date supplied by caller."},
+          "periodId": {"type": "string", "format": "uuid", "description": "Resolved fiscal_period.id (MONTH period covering businessDate)."},
+          "sourceModule": {"type": "string"},
+          "sourceEventType": {"type": "string", "description": "On reversal entries this is the literal 'REVERSAL'."},
+          "sourceReference": {"type": "string", "description": "On reversal entries this is the original JE id."},
+          "narrative": {"type": "string", "nullable": true},
+          "postedBy": {"type": "string"},
+          "status": {
+            "type": "string",
+            "enum": ["DRAFT", "POSTED", "REVERSED"],
+            "example": "POSTED"
+          },
+          "reversalOf": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Non-null only on entries that themselves reverse an earlier JE."
+          },
+          "createdAt": {"type": "string", "format": "date-time"},
+          "lines": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/JournalEntryLineResponse"}
+          }
+        }
+      },
+      "TrialBalanceLine": {
+        "type": "object",
+        "description": "One row of a trial balance. debitBalance / creditBalance are mutually exclusive (exactly one > 0; the other is 0).",
+        "properties": {
+          "accountId": {"type": "string", "format": "uuid"},
+          "accountCode": {"type": "string", "example": "1110"},
+          "accountName": {"type": "string", "example": "Cash on hand"},
+          "accountType": {
+            "type": "string",
+            "enum": ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"]
+          },
+          "debitBalance": {"type": "number", "format": "double", "example": 400.00},
+          "creditBalance": {"type": "number", "format": "double", "example": 0.00}
+        }
+      },
+      "TrialBalanceFooter": {
+        "type": "object",
+        "description": "Aggregate footer attached to every TrialBalanceResponse (D3=A flat-list-plus-footer shape).",
+        "properties": {
+          "totalDebits": {"type": "number", "format": "double", "example": 505263.29},
+          "totalCredits": {"type": "number", "format": "double", "example": 505263.29},
+          "balanced": {"type": "boolean", "example": true, "description": "Pre-computed: totalDebits.compareTo(totalCredits) == 0."},
+          "lineCount": {"type": "integer", "format": "int64", "example": 200, "description": "Count of journal_entry_lines that contributed (not accounts)."}
+        }
+      },
+      "TrialBalanceResponse": {
+        "type": "object",
+        "description": "GET /finance/trial-balance?asOf= response. asOf is interpreted on business_date (D4=A) — cumulative since inception.",
+        "properties": {
+          "asOf": {"type": "string", "format": "date", "example": "2026-05-14"},
+          "generatedAt": {"type": "string", "format": "date-time"},
+          "lines": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/TrialBalanceLine"}
+          },
+          "footer": {"$ref": "#/components/schemas/TrialBalanceFooter"}
+        }
+      },
       "DashboardStats": {
         "type": "object",
         "properties": {
@@ -6140,6 +6336,151 @@
           "403": {
             "description": "Forbidden \u2014 missing FINANCE_VIEW role"
           }
+        }
+      }
+    },
+    "/finance/journal-entries": {
+      "post": {
+        "summary": "Post a journal entry",
+        "description": "Single authoritative path for inserting journal entries. Validates \u03a3 debits == \u03a3 credits, idempotency on (sourceModule, sourceEventType, sourceReference), fiscal period existence, and that every target COA account is active. Returns 201 with the saved JE + lines. Introduced by Module 12 Slice 1.4 (GATEWAY).",
+        "operationId": "postJournalEntry",
+        "tags": ["Finance \u2014 General Ledger"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/PostJournalEntryRequest"}
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/JournalEntryResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized \u2014 missing or expired JWT"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_CREATE role"},
+          "409": {"description": "Conflict \u2014 idempotency triple already in use (JOURNAL_ENTRY_DUPLICATE)"},
+          "422": {"description": "Unprocessable Entity \u2014 unbalanced / inactive account / invalid line / fiscal period missing"}
+        }
+      }
+    },
+    "/finance/journal-entries/{id}": {
+      "get": {
+        "summary": "Read a journal entry by id",
+        "operationId": "getJournalEntry",
+        "tags": ["Finance \u2014 General Ledger"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/JournalEntryResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"},
+          "404": {"description": "Not found"}
+        }
+      }
+    },
+    "/finance/journal-entries/{id}/reverse": {
+      "post": {
+        "summary": "Reverse a journal entry",
+        "description": "Records a mirror posting (debit \u2194 credit) and transitions the original to REVERSED. The reversal itself is POSTED (D2=A). The single-reversal rule (d11) rejects reversing an already-reversed entry or a reversal entry. Active-account check is skipped on this path (d7) so a cleanup is always possible.",
+        "operationId": "reverseJournalEntry",
+        "tags": ["Finance \u2014 General Ledger"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/ReverseJournalEntryRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/JournalEntryResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_APPROVE role"},
+          "404": {"description": "Not found"},
+          "422": {"description": "Unprocessable Entity \u2014 already reversed or not POSTED"}
+        }
+      }
+    },
+    "/finance/trial-balance": {
+      "get": {
+        "summary": "Trial balance as of a business date",
+        "description": "Cumulative-since-inception trial balance with asOf interpreted on journal_entry.business_date (D4=A). Returns a flat list per chart-of-account plus a footer summary (D3=A). Each row carries a balance on exactly one side (the netted side). Introduced by Module 12 Slice 1.4 (GATEWAY).",
+        "operationId": "getTrialBalance",
+        "tags": ["Finance \u2014 General Ledger"],
+        "parameters": [
+          {
+            "name": "asOf",
+            "in": "query",
+            "required": true,
+            "schema": {"type": "string", "format": "date"},
+            "example": "2026-05-14"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/TrialBalanceResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"}
         }
       }
     },
