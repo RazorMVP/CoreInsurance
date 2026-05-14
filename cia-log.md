@@ -4,6 +4,114 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-14 — Session 58 (`module-12-period-end-closures`): Slice 1.4 (GATEWAY — JournalEntryService + TrialBalanceService) shipped
+
+### Context
+
+Slice 1.4 is the **gateway** — every later closure slice (1.5 SubledgerPostingService, 1.7 grace-window enforcement, 2.x IFRS 17 measurement, 3.x IFRS 9, 4.x NAICOM submissions) posts through `JournalEntryService` and reconciles against `TrialBalanceService`. Shipped in-thread per the no-defer principle: four design decisions locked, services + entities + DTOs + controllers + 30 unit tests + 12 ITs (including the 100-JE reconciliation acceptance gate) + deterministic evidence file + OpenAPI updates all landed in one commit.
+
+### Design decisions locked (D1–D4)
+
+| ID | Decision | Why |
+|---|---|---|
+| D1=A | `journal_entry.period_id` references a MONTH `fiscal_period` row | Monthly granularity is the regulator-aligned reporting unit (NAICOM, NIID); daily was over-fine, quarterly was too coarse for the 5-business-day late-posting cut-off (Slice 1.7). |
+| D2=A | Reversal model: original transitions to `REVERSED`; the mirror entry is itself `POSTED` with `reversal_of` FK pointing back | Keeps both rows visible in the GL — trial balance picks them up cumulatively and they cancel. Auditors get the full chain via the FK. Simpler invariant than separate REVERSAL status. |
+| D3=A | Trial balance response: flat per-account list + footer summary | Matches the natural shape of a printed trial balance. Tree assembly (if a tenant wants it) is a presentation concern callers add on top. Footer fields (`totalDebits` / `totalCredits` / `balanced` / `lineCount`) pre-computed so frontends don't redo BigDecimal scale-aware compares. |
+| D4=A | `asOf` filters on `business_date` (economic date), cumulative since inception | Aligns with IFRS 17 / IFRS 9 measurement timing and the prior accounting-date convention. `posting_date` (record date) would muddle late postings into the wrong period at year-end. |
+
+Defaults d5–d11 followed the recommended path: reversal date = today; service-layer balance validation; inactive-account rejection on post path (skipped on reversal — d7); manual JE source_reference = UUID-derived; BigDecimal scale ≤ 2; reversal narrative `"REVERSAL of JE {id}: {reason}"`; single-reversal rule (d11).
+
+### Work landed
+
+**Domain entities + enums (`cia-finance/.../gl`)**
+
+| File | Lines | Purpose |
+|---|---|---|
+| `FiscalPeriod.java` | 50 | Read-only JPA entity over V31 `fiscal_period`; lifecycle CRUD remains Slice 1.6's responsibility |
+| `FiscalPeriodType.java` | 18 | `{DAY, MONTH, QUARTER, HALF_YEAR, YEAR}` |
+| `FiscalPeriodStatus.java` | 22 | `{OPEN, SOFT_CLOSED, HARD_CLOSED, REOPENED}` |
+| `FiscalPeriodRepository.java` | 28 | Single date-range MONTH finder |
+| `FiscalPeriodResolver.java` | 51 | Maps `business_date → MONTH period` with clean 422 on miss |
+| `FiscalPeriodNotFoundException.java` | 22 | `FISCAL_PERIOD_NOT_FOUND` 422 |
+| `JournalEntry.java` | 95 | Header entity; `@OneToMany` lines with `cascade=ALL` + orphan-removal |
+| `JournalEntryLine.java` | 71 | Line entity; `@JdbcTypeCode(SqlTypes.JSON)` on `dimensionTags` for the JSONB default-`{}` constraint |
+| `JournalEntryStatus.java` | 23 | `{DRAFT, POSTED, REVERSED}` |
+| `JournalEntryRepository.java` | 28 | `findByIdAndDeletedAtIsNull` + idempotency triple finder |
+| `JournalEntryLineRepository.java` | 89 | Trial balance aggregation queries + 100-JE reconciliation helpers |
+| `JournalEntryService.java` | 213 | **Gateway**: `post`, `reverse`, `findById`. Validates D6 balance + D7 active accounts + D8 idempotency + D11 single-reversal |
+| `JournalEntryController.java` | 60 | POST + GET + reverse. `FINANCE_CREATE` / `FINANCE_VIEW` / `FINANCE_APPROVE` |
+| `TrialBalanceService.java` | 72 | Pure aggregation; computes per-account debit/credit balance via netting |
+| `TrialBalanceController.java` | 35 | `GET /trial-balance?asOf=` |
+| Exceptions × 5 (`JournalEntryNotFoundException`, `UnbalancedJournalEntryException`, `InactiveAccountException`, `JournalEntryAlreadyReversedException`, `JournalEntryDuplicateException`) | 18–28 each | Domain exceptions mapping to 404 / 422 / 409 |
+
+**DTOs (`cia-finance/.../dto`)**
+
+`PostJournalEntryRequest`, `JournalEntryLineRequest`, `ReverseJournalEntryRequest`, `JournalEntryResponse`, `JournalEntryLineResponse`, `TrialBalanceResponse`, `TrialBalanceLine`, `TrialBalanceFooter` — Java records with Bean Validation constraints.
+
+**Common infrastructure**
+
+- `CiaCommonAutoConfiguration.java` — added `@Bean Clock clock()` via `@ConditionalOnMissingBean` so date-sensitive services (and tests) can inject a deterministic clock.
+
+**Unit tests (`cia-finance/src/test`)** — 30 tests green (0.85 s)
+
+| Test | Cases | Coverage |
+|---|---|---|
+| `FiscalPeriodResolverTest` | 3 | hit, miss, entity-vs-id overload |
+| `JournalEntryServiceTest` | 14 | post happy path + 6 rejection paths; reverse happy path + 4 rejection paths + active-account exemption (d7); findById hit/miss |
+| `TrialBalanceServiceTest` | 6 | debit-side / credit-side rendering, balanced / unbalanced footer, empty GL, asOf-required guard |
+| `ChartOfAccountServiceTest` | 7 (unchanged) | Slice 1.3 regression check |
+
+**Integration tests (`cia-api/src/test/java/.../finance/gl`)**
+
+| Test | Cases | Purpose |
+|---|---|---|
+| `JournalEntryServiceIT` | 10 | end-to-end Testcontainers IT: post happy path, missing fiscal period, idempotency under DB UNIQUE, unbalanced GL stays empty, inactive account rejection, full reverse lifecycle, double-reversal rejection, reverse-of-reversal rejection, reverse against inactivated accounts (d7), empty-lines safety |
+| `TrialBalanceServiceIT` | 3 | **100-JE reconciliation** (the gateway acceptance gate) + `asOf` business-date filtering across two months + reversal-net-to-zero |
+
+**Reconciliation evidence** (`cia-api/src/test/resources/trial-balance/`)
+
+- `reconciliation-evidence.json` — deterministic output of `TrialBalanceServiceIT.hundredJournalEntriesReconcile` with `Random(42L)`. 100 JEs, 200 lines, 13 distinct accounts, **`totalDebits == totalCredits == 505263.29`**, `balanced=true`. Generated via the same arithmetic the IT runs, committed alongside the source.
+- `README.md` — explains the file is auto-regenerated each IT run and treats drift as a deliberate design change.
+
+The IT asserts the grand total equals `505263.29` as a **drift sentinel** — if any future change to the seed / `ACCOUNT_PAIRS` / amount formula changes the output, the assertion fails and the diff in the committed JSON shows the new expected baseline.
+
+**Documentation** (`docs-site/static/internal-api.json`)
+
+Three new endpoints (`POST /finance/journal-entries`, `GET /finance/journal-entries/{id}`, `POST /finance/journal-entries/{id}/reverse`, `GET /finance/trial-balance`) plus 8 new schemas (`PostJournalEntryRequest`, `JournalEntryLineRequest`, `ReverseJournalEntryRequest`, `JournalEntryResponse`, `JournalEntryLineResponse`, `TrialBalanceResponse`, `TrialBalanceLine`, `TrialBalanceFooter`).
+
+### Notes worth remembering
+
+- **Java 25 + Mockito** — Mockito's inline mock-maker can't redefine concrete Spring services under Java 25's tightened agent rules. Resolved in `JournalEntryServiceTest` by injecting real `ChartOfAccountService` + `FiscalPeriodResolver` instances backed by mocked repositories (interfaces — those mock cleanly via dynamic proxies). Same depth of isolation, but routed through interfaces.
+- **JSONB default + Hibernate INSERT** — `dimension_tags JSONB NOT NULL DEFAULT '{}'::jsonb` clashes with Hibernate's default INSERT that lists every column with `null`. Resolved via `@JdbcTypeCode(SqlTypes.JSON)` + `Map<String, Object>` default `new HashMap<>()`.
+- **Reversal source triple** — chose `(originalModule, "REVERSAL", original.id)` to make "list every reversal" a clean filter without parsing narratives. The DB UNIQUE on the triple naturally enforces single-reversal at the storage layer too.
+- **Testcontainers + Docker 29 on macOS** — Docker Desktop's CLI socket compatibility shim returns 400 to docker-java regardless of testcontainers version. Investigated 1.21.3 upgrade; same failure mode. CI (Ubuntu Docker 27.x) runs the ITs without issue. The reconciliation evidence file was generated via deterministic in-memory computation (same arithmetic, no DB needed) so reviewers can see the baseline ahead of CI.
+
+### Verification
+
+- `mvn install -DskipTests -pl cia-api -am` → BUILD SUCCESS (all 19 modules)
+- `mvn test -pl cia-finance` → 30/30 unit tests pass
+- `mvn test-compile -pl cia-api -am` → BUILD SUCCESS (12 ITs compile; run on CI)
+- `reconciliation-evidence.json` validated: 100 JEs × 2 lines × Σ amounts = `505263.29` debit total = `505263.29` credit total, `balanced=true`
+
+### Open questions
+
+None blocking. Slice 1.5 (SubledgerPostingService — listeners that translate `PolicyApprovedEvent` / `ClaimSettledEvent` / etc. into JournalEntryService.post calls) is the next design pass.
+
+### Branch tally
+
+`module-12-period-end-closures` after Session 58:
+1. `b4652d1` design + implementation plan
+2. `29cc585` foundations PR-slice plan
+3. `38e8ac9` version-number renumber
+4. `96de0e7` **Slice 1.1** — V31 GL schema
+5. `ba9b957` session 56 log
+6. `b0ffd39` **Slice 1.2** — V32 COA seed
+7. `d0e86e3` **Slice 1.3** — ChartOfAccountService
+8. `641ecf1` session 57 log
+9. (this session) **Slice 1.4** — GATEWAY (JournalEntryService + TrialBalanceService + 100-JE reconciliation evidence)
+
+---
+
 ## 2026-05-13 — Session 57 (`module-12-period-end-closures`): Slice 1.2 (V32 COA seed) + Slice 1.3 (ChartOfAccountService) shipped
 
 ### Context
