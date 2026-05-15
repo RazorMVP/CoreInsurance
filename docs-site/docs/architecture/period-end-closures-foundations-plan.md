@@ -219,7 +219,7 @@ Total slices: 9. Estimated calendar time: 4–6 weeks single engineer; 3–4 wee
 - **Lock-history table already in V31** — the `period_lock` table is a Type-2 SCD (each soft/hard/release event is a row, `released_at IS NULL` = active). No separate `period_lock_history` is needed — the `period_lock` rows themselves are the NAICOM-grade evidence trail.
 - **Structured error contract** — `PeriodLockedException` extends `CiaException` and a dedicated `PeriodLockExceptionHandler` renders `{ code, periodLabel, status, graceEndsAt, overrideRoles }` as the response meta. Frontend toast reads fields by name; no string parsing.
 - **Bulk preview API in this slice** — `GET /api/v1/finance/period-locks/preview?from&to` returns one `LockReportEntry` per business date so Slice 1.8 backfill and Module 8 bulk receipts pre-check before kicking off the workflow, not discover the lock on row 4,837.
-- **Per-request fiscal-period lookup cache** — `FiscalPeriodLookupCache` is `@RequestScope` for tenant isolation. Multi-tenancy + cross-request invalidation cost is deferred until JMH shows the request scope is insufficient.
+- **Scope-aware fiscal-period lookup cache** — `FiscalPeriodLookupCache` originally shipped as `@RequestScope`; refactored in Slice 1.7-fix to a singleton with two storage backends: `SCOPE_REQUEST` attribute when an HTTP request is bound (production HTTP path, auto-cleaned by Spring) + per-thread `HashMap` fallback (Temporal activities, scheduled jobs). Cache key is `(tenantId, lockDate)` to prevent cross-tenant hits on pooled worker threads. Non-HTTP callers invoke `clearThreadCache()` at activity boundaries; Slice 1.8's Temporal `WorkerInterceptor` owns that lifecycle.
 - **Benchmark target tightened to <2 % p99** — 5 % on a 100M-write/year tenant is 5M wasted writes. Anything between 1 % and 2 % requires a flame-graph in the PR description.
 - **CFO + compliance email notification on every reopen** — `PeriodReopenedEvent` published from `cia-finance`, consumed by `PeriodReopenedNotificationListener` in `cia-api` (bridges to `NotificationService`). Recipients via Spring property `cia.finance.period-reopen-recipients` (CSV) for v1; per-tenant config table is a Slice 1.7c follow-up.
 
@@ -229,7 +229,7 @@ Total slices: 9. Estimated calendar time: 4–6 weeks single engineer; 3–4 wee
 - `cia-finance/gl/PeriodLock` entity over the V31 `period_lock` table + `PeriodLockRepository`.
 - `cia-finance/gl/LockType` (SOFT / HARD), `LockOutcome` (ALLOW / REJECT / OVERRIDE), `LockDecision` (structured envelope).
 - `cia-finance/gl/PeriodLockedException` (extends `CiaException`, HTTP 423).
-- `cia-finance/gl/FiscalPeriodLookupCache` (`@RequestScope` with `TARGET_CLASS` proxy).
+- `cia-finance/gl/FiscalPeriodLookupCache` — scope-aware singleton: request-attribute storage when an HTTP request is bound, ThreadLocal fallback otherwise; cache key `(tenantId, lockDate)`. (Slice 1.7 shipped `@RequestScope`; refactored in Slice 1.7-fix to unblock Slice 1.8 Temporal workflows.)
 - `cia-finance/gl/PeriodLockService` — `softClose / hardClose / reopen / previewLock / checkWrite / history / daysSinceSoftClose`. Auto-soft-before-hard to honour `ck_fiscal_period_close_chronology`.
 - `cia-finance/gl/PeriodLockInterceptor` (Hibernate `Interceptor`) — registered via `cia-finance/gl/PeriodLockInterceptorConfig` (`HibernatePropertiesCustomizer`).
 - `cia-finance/gl/PeriodLockController` — `POST /soft-close`, `POST /hard-close`, `POST /reopen`, `GET /history`, `GET /preview`.

@@ -4,6 +4,49 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-15 — Session 62 (`module-12-period-end-closures`): Slice 1.7-fix — scope-aware `FiscalPeriodLookupCache` + `LOCK_OVERRIDE` audit-trail IT
+
+### Context
+
+After Slice 1.7 (Session 61) shipped, the expert-critique pass identified five gaps. The user asked which were blockers for Slice 1.8 (`RetroactiveJournalBackfillWorkflow`, Temporal-orchestrated historical JE backfill). Ranked answer: only **#1** (cache scope) was a hard blocker — Slice 1.8 activities run on Temporal worker threads with no HTTP request bound, and the `@RequestScope` proxy on `FiscalPeriodLookupCache` would throw `IllegalStateException: No thread-bound request found` on the first JE post inside any backfill activity. **#3** (LOCK_OVERRIDE audit-trail verification) was strongly recommended alongside it — small scope, NAICOM-evidence-critical, and the cleanest moment to land it. The other three (#2 `@Async` listener, #4 frontend toast, #5 `previewLock` SQL optimisation) were classified as pre-production / queue-item, not Slice-1.8 gates.
+
+This commit lands #1 + #3 in a single `fix(finance)` commit on `module-12-period-end-closures`.
+
+### Files modified
+
+| File | Change |
+|---|---|
+| `cia-finance/gl/FiscalPeriodLookupCache.java` | Dropped `@RequestScope(proxyMode = TARGET_CLASS)`. Now a plain `@Component` singleton with two storage backends picked at each `get()` call: (a) **request-attribute** path — when `RequestContextHolder.getRequestAttributes()` is non-null, the cache map lives as a `SCOPE_REQUEST` attribute (Spring auto-cleans at request end, mirroring the old `@RequestScope` lifetime). (b) **ThreadLocal fallback** — when no request is bound (Temporal activities, scheduled jobs, batch imports), a per-thread `HashMap` takes over. New public method `clearThreadCache()` for explicit cleanup at non-HTTP scope boundaries. Cache key changed from `LocalDate` to `(tenantId, lockDate)` — under the ThreadLocal path, including `tenantId` (read from `TenantContext.getTenantId()`, sentinel `<unbound>` if null) reduces a hypothetical tenant-A-to-tenant-B cache hit on a pooled worker thread from a correctness bug to a cache miss. Public `get(LocalDate, Function)` signature unchanged — `PeriodLockInterceptor` requires no edits. |
+| `cia-api/test/finance/gl/PeriodLockInterceptorIT.java` | Class-level Javadoc updated — "Request-scope plumbing" section replaced with "Scope plumbing" reflecting the new dual-mode design. New test method `overrideEmitsAuditLogRow` — asserts exactly one `audit_log` row exists with `action='LOCK_OVERRIDE' AND entity_type='JournalEntry'` after an override write, that `entity_id` equals the persisted JE id (proves entity-id capture works post-flush, not the `(pre-id)` sentinel), and that the JSONB `new_value` payload contains `"periodLabel":"May 2026"`, `"lockDate":"2026-05-14"`, and `"periodId":"…"`. The assertion targets the serialised JSON field-name contract so `OverridePayload` record refactors don't silently break the test. |
+| `CLAUDE.md` (Period-Lock Design block) | Replaced the `@RequestScope with TARGET_CLASS proxy` bullet with the scope-aware singleton design note, documenting the request-attribute fast path, ThreadLocal fallback, `(tenantId, lockDate)` key, and the Slice 1.8 Temporal `WorkerInterceptor` responsibility for `clearThreadCache()` at activity boundaries. |
+| `.claude/skills/cia/SKILL.md` (Module 12 / Period Locks block) | Same wording update — the skill's Period Locks summary now reflects the post-refactor design rather than the original Slice 1.7 shape. |
+| `docs-site/docs/architecture/period-end-closures-foundations-plan.md` | Two bullets updated: the "Per-request fiscal-period lookup cache" decision rewritten as "Scope-aware fiscal-period lookup cache"; the deliverables list entry annotated to note the refactor. |
+
+### Why these changes survive the expert critique pass
+
+**`✓ What's solid`** — the original `@RequestScope` choice was correct for the HTTP-only world Slice 1.7 lived in: Spring guarantees per-request scoping → automatic tenant isolation, zero invalidation logic. The refactor preserves that guarantee on the HTTP path (the request-attribute backend is functionally identical) while adding a separate path for non-HTTP callers without changing call-site code.
+
+**`✗ What's over-simplified` (caught in this fix)** — Slice 1.7's design pass had silently assumed all callers run inside an HTTP request scope. Slice 1.8 is the first caller that doesn't, and discovering the assumption at Slice 1.8 implementation time would have stalled the backfill workflow on its first activity. Catching it now via the critique pass is the entire point of the [[feedback-expert-critique]] directive.
+
+**`→ Best-practice recommendation`** — the ThreadLocal fallback is the smallest change that unblocks Slice 1.8 without rewriting the cache contract. Including `tenantId` in the cache key is belt-and-braces under the ThreadLocal path; under the request-attribute path it's harmless redundancy. The explicit `clearThreadCache()` method gives Slice 1.8's worker interceptor a documented lifecycle hook — no implicit cleanup, no leaks on pooled threads.
+
+### Verification
+
+- `mvn -pl cia-finance compile -am -q` — exit 0
+- `mvn -pl cia-finance test -am -q` — exit 0 (`PeriodLockServiceTest` decision matrix still green)
+- `mvn -pl cia-api test-compile -am -q` — exit 0 (IT compiles cleanly with the new test method)
+- `mvn -pl cia-api test -am -Dtest=PeriodLockInterceptorIT` — local run blocked by absent Docker daemon (Testcontainers); CI environment runs Docker and will execute the IT, including the new `overrideEmitsAuditLogRow` test.
+
+### Open questions
+
+None. The remaining critique items (#2 `@Async` on `PeriodReopenedNotificationListener`, #4 frontend toast for HTTP 423 LOCKED, #5 `previewLock` window query) are tracked but not blockers for Slice 1.8.
+
+### Next slice
+
+Slice 1.8 — `RetroactiveJournalBackfillWorkflow` — now unblocked.
+
+---
+
 ## 2026-05-15 — Session 61 (`module-12-period-end-closures`): Expert-critique directive added to `/cia` skill + Slice 1.7 (PeriodLockService + Hibernate Interceptor) shipped
 
 ### Context

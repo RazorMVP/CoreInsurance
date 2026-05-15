@@ -69,13 +69,15 @@ import static org.mockito.Mockito.mock;
  *       via {@code JournalEntry.reversalOf} non-null.</li>
  * </ul>
  *
- * <h2>Request-scope plumbing</h2>
- * <p>{@link FiscalPeriodLookupCache} is {@code @RequestScope} in production
- * for tenant isolation. The IT runs outside a real HTTP request, so the
- * scoped-proxy would throw {@code IllegalStateException} on first access.
- * {@code @BeforeEach} binds a {@link MockHttpServletRequest} to the thread
- * via {@code RequestContextHolder} so the proxy can resolve; an
- * {@code @AfterEach} resets the binding so tests don't leak request state.
+ * <h2>Scope plumbing</h2>
+ * <p>Slice 1.7-fix refactored {@link FiscalPeriodLookupCache} from
+ * {@code @RequestScope} to a scope-aware singleton: when a request is bound
+ * the cache stores its map as a {@code SCOPE_REQUEST} attribute; otherwise it
+ * falls back to ThreadLocal. The IT continues to bind a
+ * {@link MockHttpServletRequest} so it exercises the request-attribute path
+ * (matching the HTTP-traffic production path). {@code @AfterEach} resets the
+ * binding so tests don't leak request state. The ThreadLocal-fallback path is
+ * exercised in unit tests and (Slice 1.8) Temporal-activity tests.
  *
  * @since Module 12, Slice 1.7
  */
@@ -236,6 +238,56 @@ class PeriodLockInterceptorIT {
         var response = journalEntryService.post(balancedRequest("ref-soft-override"));
         entityManager.flush();
         assertThat(response.id()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Override write produces audit_log row: action=LOCK_OVERRIDE, entity_type=JournalEntry, payload carries periodLabel + lockDate")
+    void overrideEmitsAuditLogRow() {
+        // Same setup as softPastGraceOverrideAllows — but here we assert the NAICOM evidence trail,
+        // not just the write outcome. Without this row, an auditor sample test on post-soft-close
+        // activity would not surface the override; the compliance feature would be silently broken.
+        periodLockService.softClose(periodId, "month-end soft");
+        entityManager.flush();
+        jdbcTemplate.update(
+            "UPDATE period_lock SET grace_window_until = now() - INTERVAL '1 day' " +
+            "WHERE fiscal_period_id = ? AND released_at IS NULL", periodId);
+        entityManager.clear();
+
+        SecurityContextHolder.getContext().setAuthentication(
+            new UsernamePasswordAuthenticationToken("auditor", "pw",
+                List.of(new SimpleGrantedAuthority(PeriodLockService.ROLE_OVERRIDE_LOCK))));
+
+        var response = journalEntryService.post(balancedRequest("ref-audit-trail"));
+        entityManager.flush();
+        assertThat(response.id()).isNotNull();
+
+        // Exactly one LOCK_OVERRIDE row, scoped to the JE we just posted.
+        // (The CLOSE row for softClose() above is action=CLOSE, not LOCK_OVERRIDE,
+        // and is keyed on entity_type='FiscalPeriod' — so it doesn't match this filter.)
+        Long overrideCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM audit_log WHERE action = 'LOCK_OVERRIDE' AND entity_type = 'JournalEntry'",
+            Long.class);
+        assertThat(overrideCount).isEqualTo(1L);
+
+        // The audit row's entity_id must equal the persisted JE id — proves the entity-id
+        // capture in recordOverride() works after the entity has been assigned its id at flush
+        // (the pre-id sentinel would be '(pre-id)' which would fail this assertion).
+        String auditedEntityId = jdbcTemplate.queryForObject(
+            "SELECT entity_id FROM audit_log WHERE action = 'LOCK_OVERRIDE' AND entity_type = 'JournalEntry'",
+            String.class);
+        assertThat(auditedEntityId).isEqualTo(response.id().toString());
+
+        // The new_value JSONB payload must carry the period label, the lock date, and the
+        // periodId — the structured evidence a regulator-facing report would render.
+        // We assert against the serialised JSON text (record field-name contract), not against
+        // a Java type, so refactoring OverridePayload doesn't silently break the test.
+        String auditPayload = jdbcTemplate.queryForObject(
+            "SELECT new_value::text FROM audit_log WHERE action = 'LOCK_OVERRIDE' AND entity_type = 'JournalEntry'",
+            String.class);
+        assertThat(auditPayload)
+            .contains("\"periodLabel\":\"May 2026\"")
+            .contains("\"lockDate\":\"2026-05-14\"")
+            .contains("\"periodId\":\"" + periodId + "\"");
     }
 
     @Test
