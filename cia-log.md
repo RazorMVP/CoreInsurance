@@ -4,6 +4,32 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-15 — Session 58b (`module-12-period-end-closures`): Continuation Q&A — insight callouts clarified as commentary, not pending work
+
+### Context
+
+Continuation of Session 58. After Slice 1.4 commits (`1f5948b` + `4b4cb81`) were pushed, the user asked whether the trailing `★ Insight` callouts implied any code changes still needed to land.
+
+### Resolution
+
+Confirmed all three insights are post-hoc commentary describing decisions already shipped:
+
+1. **GATEWAY drift sentinel** — the `grandTotalPosted == 505263.29` pin already lives in `TrialBalanceServiceIT.java` (within `hundredJournalEntriesReconcile`) and `reconciliation-evidence.json` already carries the deterministic baseline.
+2. **JSONB default-`{}` handling** — `@JdbcTypeCode(SqlTypes.JSON)` + `Map<String,Object> = new HashMap<>()` already in `JournalEntryLine.java`.
+3. **Java 25 + Mockito routing** — `JournalEntryServiceTest` already constructs real `ChartOfAccountService` + `FiscalPeriodResolver` with mocked repos (interfaces mock via dynamic proxies); no inline-mocking of concrete classes.
+
+Convention recorded for future sessions: `★ Insight` blocks are an educational layer over completed work. If an insight ever describes pending work, it will be flagged explicitly as "needs to be applied" rather than buried in commentary.
+
+### No code or doc changes
+
+Branch unchanged at `4b4cb81`. No commits, no pushes.
+
+### Open questions
+
+None. Slice 1.5 (SubledgerPostingService — listeners translating `PolicyApprovedEvent` / `EndorsementApprovedEvent` / `ClaimApprovedEvent` / `ClaimSettledEvent` / `FacPremiumCededEvent` into `JournalEntryService.post` calls) remains the next design pass.
+
+---
+
 ## 2026-05-14 — Session 58 (`module-12-period-end-closures`): Slice 1.4 (GATEWAY — JournalEntryService + TrialBalanceService) shipped
 
 ### Context
