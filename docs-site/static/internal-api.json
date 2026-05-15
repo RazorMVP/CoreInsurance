@@ -527,6 +527,46 @@
           "footer": {"$ref": "#/components/schemas/TrialBalanceFooter"}
         }
       },
+      "CreateFiscalYearRequest": {
+        "type": "object",
+        "description": "Wire contract for POST /finance/fiscal-years. All three fields are optional (D1=A): omitting all yields the current-calendar-year FY. If supplied, startDate must be the first day of a month and endDate must be exactly 12 months minus one day later. Name defaults to FY{year} (d9).",
+        "properties": {
+          "name": {"type": "string", "maxLength": 50, "nullable": true, "example": "FY2026"},
+          "startDate": {"type": "string", "format": "date", "nullable": true, "example": "2026-01-01"},
+          "endDate": {"type": "string", "format": "date", "nullable": true, "example": "2026-12-31"}
+        }
+      },
+      "FiscalPeriodResponse": {
+        "type": "object",
+        "description": "One fiscal period — child of a FiscalYear, generated at FY create time (D2=A). MONTH/QUARTER/HALF_YEAR boundaries are FY-relative (d8). softClosedAt/hardClosedAt arrive via Slice 1.7 (PeriodLockService).",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "fiscalYearId": {"type": "string", "format": "uuid"},
+          "periodType": {"type": "string", "enum": ["DAY", "MONTH", "QUARTER", "HALF_YEAR", "YEAR"]},
+          "startDate": {"type": "string", "format": "date"},
+          "endDate": {"type": "string", "format": "date"},
+          "status": {"type": "string", "enum": ["OPEN", "SOFT_CLOSED", "HARD_CLOSED", "REOPENED"]},
+          "softClosedAt": {"type": "string", "format": "date-time", "nullable": true},
+          "hardClosedAt": {"type": "string", "format": "date-time", "nullable": true}
+        }
+      },
+      "FiscalYearResponse": {
+        "type": "object",
+        "description": "Fiscal year with optional embedded periods. periods is non-null only when ?includePeriods=true on GET or on POST (create returns the freshly-generated set).",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "name": {"type": "string", "example": "FY2026"},
+          "startDate": {"type": "string", "format": "date"},
+          "endDate": {"type": "string", "format": "date"},
+          "status": {"type": "string", "enum": ["PLANNING", "ACTIVE", "CLOSED"], "example": "ACTIVE"},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "periods": {
+            "type": "array",
+            "nullable": true,
+            "items": {"$ref": "#/components/schemas/FiscalPeriodResponse"}
+          }
+        }
+      },
       "DashboardStats": {
         "type": "object",
         "properties": {
@@ -6481,6 +6521,260 @@
           },
           "401": {"description": "Unauthorized"},
           "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"}
+        }
+      }
+    },
+    "/finance/fiscal-years": {
+      "get": {
+        "summary": "List fiscal years",
+        "description": "Returns every non-deleted fiscal year, newest first. Periods are not embedded; use GET /{id}?includePeriods=true or GET /{id}/periods. Introduced by Module 12 Slice 1.6.",
+        "operationId": "listFiscalYears",
+        "tags": ["Finance \u2014 General Ledger"],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {"$ref": "#/components/schemas/FiscalYearResponse"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"}
+        }
+      },
+      "post": {
+        "summary": "Create a fiscal year",
+        "description": "Creates a fiscal year and immediately generates its 19 child periods (12 MONTH + 4 QUARTER + 2 HALF_YEAR + 1 YEAR, D2=A). All request fields are optional \u2014 omitting all yields the current-calendar-year FY (D1=A). Quarters and halves are FY-relative (d8). The new FY starts in PLANNING; activate it separately (D3=B).",
+        "operationId": "createFiscalYear",
+        "tags": ["Finance \u2014 General Ledger"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/CreateFiscalYearRequest"}
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/FiscalYearResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_APPROVE role"},
+          "409": {"description": "Conflict \u2014 fiscal year name already exists"},
+          "422": {"description": "Unprocessable Entity \u2014 bounds violation (not month-aligned or not 12-month span)"}
+        }
+      }
+    },
+    "/finance/fiscal-years/active": {
+      "get": {
+        "summary": "Get the active fiscal year",
+        "description": "Returns the single FiscalYear with status=ACTIVE. Throws 404 (FISCAL_YEAR_NO_ACTIVE) when no FY is currently active \u2014 e.g. before the tenant bootstrap has been called.",
+        "operationId": "getActiveFiscalYear",
+        "tags": ["Finance \u2014 General Ledger"],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/FiscalYearResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"},
+          "404": {"description": "Not found \u2014 no fiscal year is currently ACTIVE"}
+        }
+      }
+    },
+    "/finance/fiscal-years/{id}": {
+      "get": {
+        "summary": "Get a fiscal year by id",
+        "operationId": "getFiscalYear",
+        "tags": ["Finance \u2014 General Ledger"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          },
+          {
+            "name": "includePeriods",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "boolean", "default": false},
+            "description": "When true, embeds the 19 child periods in the response."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/FiscalYearResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"},
+          "404": {"description": "Fiscal year not found"}
+        }
+      },
+      "delete": {
+        "summary": "Soft-delete a fiscal year",
+        "description": "Soft-deletes the fiscal year. Refused with 422 if any journal_entry rows reference its child periods \u2014 the GL is immutable history. Close the fiscal year via /close instead when it has financial activity.",
+        "operationId": "deleteFiscalYear",
+        "tags": ["Finance \u2014 General Ledger"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          }
+        ],
+        "responses": {
+          "204": {"description": "Deleted"},
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_APPROVE role"},
+          "404": {"description": "Fiscal year not found"},
+          "422": {"description": "Unprocessable Entity \u2014 fiscal year has journal entries"}
+        }
+      }
+    },
+    "/finance/fiscal-years/{id}/periods": {
+      "get": {
+        "summary": "List child periods of a fiscal year",
+        "operationId": "listFiscalYearPeriods",
+        "tags": ["Finance \u2014 General Ledger"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {"$ref": "#/components/schemas/FiscalPeriodResponse"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"},
+          "404": {"description": "Fiscal year not found"}
+        }
+      }
+    },
+    "/finance/fiscal-years/{id}/activate": {
+      "post": {
+        "summary": "Activate a fiscal year",
+        "description": "Flips a PLANNING fiscal year to ACTIVE. D3=B: refused with 422 (FISCAL_YEAR_ACTIVATION_CONFLICT) if any other FY is already ACTIVE \u2014 admin must explicitly close the prior FY first. Idempotent on an already-ACTIVE row; refused on CLOSED.",
+        "operationId": "activateFiscalYear",
+        "tags": ["Finance \u2014 General Ledger"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/FiscalYearResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_APPROVE role"},
+          "404": {"description": "Fiscal year not found"},
+          "422": {"description": "Unprocessable Entity \u2014 another FY is ACTIVE or this FY is CLOSED"}
+        }
+      }
+    },
+    "/finance/fiscal-years/{id}/close": {
+      "post": {
+        "summary": "Close a fiscal year",
+        "description": "Flips an ACTIVE fiscal year to CLOSED. Period-level postings are governed independently by Slice 1.7 period_lock; closing the FY just retires the 'current year' badge so a successor can be activated.",
+        "operationId": "closeFiscalYear",
+        "tags": ["Finance \u2014 General Ledger"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/FiscalYearResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_APPROVE role"},
+          "404": {"description": "Fiscal year not found"},
+          "422": {"description": "Unprocessable Entity \u2014 fiscal year is not ACTIVE"}
         }
       }
     },

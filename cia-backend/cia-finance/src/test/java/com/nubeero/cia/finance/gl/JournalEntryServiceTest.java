@@ -63,6 +63,9 @@ class JournalEntryServiceTest {
     @Mock
     private FiscalPeriodRepository fiscalPeriodRepository;
 
+    @Mock
+    private FiscalYearRepository fiscalYearRepository;
+
     private JournalEntryService service;
     private ChartOfAccountService chartOfAccountService;
     private FiscalPeriodResolver fiscalPeriodResolver;
@@ -76,7 +79,7 @@ class JournalEntryServiceTest {
     @BeforeEach
     void seed() {
         chartOfAccountService = new ChartOfAccountService(coaRepository);
-        fiscalPeriodResolver = new FiscalPeriodResolver(fiscalPeriodRepository);
+        fiscalPeriodResolver = new FiscalPeriodResolver(fiscalPeriodRepository, fiscalYearRepository);
         service = new JournalEntryService(repository, chartOfAccountService, fiscalPeriodResolver, FIXED_CLOCK);
 
         cash = newAccount("1110", "Cash on hand", AccountType.ASSET, true);

@@ -52,6 +52,7 @@ class SubledgerPostingServiceTest {
     @Mock private JournalEntryRepository journalEntryRepository;
     @Mock private ChartOfAccountRepository coaRepository;
     @Mock private FiscalPeriodRepository fiscalPeriodRepository;
+    @Mock private FiscalYearRepository fiscalYearRepository;
     @Mock private PostingRuleRepository postingRuleRepository;
 
     private SubledgerPostingService service;
@@ -61,7 +62,7 @@ class SubledgerPostingServiceTest {
     @BeforeEach
     void wire() {
         ChartOfAccountService coaService = new ChartOfAccountService(coaRepository);
-        FiscalPeriodResolver resolver = new FiscalPeriodResolver(fiscalPeriodRepository);
+        FiscalPeriodResolver resolver = new FiscalPeriodResolver(fiscalPeriodRepository, fiscalYearRepository);
         JournalEntryService journalEntryService = new JournalEntryService(
             journalEntryRepository, coaService, resolver, FIXED_CLOCK);
         PostingRuleService postingRuleService = new PostingRuleService(postingRuleRepository);
