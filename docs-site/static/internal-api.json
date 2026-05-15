@@ -567,6 +567,34 @@
           }
         }
       },
+      "PeriodLockResponse": {
+        "type": "object",
+        "description": "Row from the V31 period_lock table. Type-2 SCD — released_at IS NULL = active lock; the full sequence of soft/hard/release rows IS the audit history.",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "fiscalPeriodId": {"type": "string", "format": "uuid"},
+          "lockType": {"type": "string", "enum": ["SOFT", "HARD"]},
+          "lockedAt": {"type": "string", "format": "date-time"},
+          "lockedBy": {"type": "string"},
+          "graceWindowUntil": {"type": "string", "format": "date-time", "nullable": true, "description": "SOFT locks: 5 business days past lockedAt; HARD locks: null"},
+          "releasedAt": {"type": "string", "format": "date-time", "nullable": true},
+          "releasedBy": {"type": "string", "nullable": true},
+          "releaseReason": {"type": "string", "nullable": true}
+        }
+      },
+      "LockReportEntry": {
+        "type": "object",
+        "description": "One day's row in a /finance/period-locks/preview report. Bulk-operation callers use this to pre-check a date range.",
+        "properties": {
+          "date": {"type": "string", "format": "date"},
+          "periodId": {"type": "string", "format": "uuid", "nullable": true},
+          "periodLabel": {"type": "string", "example": "May 2026"},
+          "status": {"type": "string", "enum": ["OPEN", "SOFT_CLOSED", "HARD_CLOSED", "REOPENED"], "nullable": true},
+          "graceWindowUntil": {"type": "string", "format": "date-time", "nullable": true},
+          "requiresOverride": {"type": "boolean"},
+          "rejected": {"type": "boolean"}
+        }
+      },
       "DashboardStats": {
         "type": "object",
         "properties": {
@@ -6775,6 +6803,85 @@
           "403": {"description": "Forbidden \u2014 missing FINANCE_APPROVE role"},
           "404": {"description": "Fiscal year not found"},
           "422": {"description": "Unprocessable Entity \u2014 fiscal year is not ACTIVE"}
+        }
+      }
+    },
+    "/finance/period-locks/{periodId}/soft-close": {
+      "post": {
+        "summary": "Soft-close a fiscal period",
+        "description": "Flips a fiscal period from OPEN to SOFT_CLOSED and opens the 5-business-day grace window. Idempotent. Module 12 Slice 1.7.",
+        "operationId": "softClosePeriod",
+        "tags": ["Finance \u2014 Period Locks"],
+        "parameters": [{"name": "periodId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["reason"], "properties": {"reason": {"type": "string", "maxLength": 500}}}}}},
+        "responses": {
+          "200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object", "properties": {"data": {"$ref": "#/components/schemas/PeriodLockResponse"}}}}}},
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_APPROVE role"},
+          "422": {"description": "Unprocessable Entity \u2014 period already HARD-closed"}
+        }
+      }
+    },
+    "/finance/period-locks/{periodId}/hard-close": {
+      "post": {
+        "summary": "Hard-close a fiscal period",
+        "description": "Flips a fiscal period to HARD_CLOSED. Auto-soft-closes first to honour the ck_fiscal_period_close_chronology invariant. Idempotent. Module 12 Slice 1.7.",
+        "operationId": "hardClosePeriod",
+        "tags": ["Finance \u2014 Period Locks"],
+        "parameters": [{"name": "periodId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["reason"], "properties": {"reason": {"type": "string", "maxLength": 500}}}}}},
+        "responses": {
+          "200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object", "properties": {"data": {"$ref": "#/components/schemas/PeriodLockResponse"}}}}}},
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_APPROVE role"}
+        }
+      }
+    },
+    "/finance/period-locks/{periodId}/reopen": {
+      "post": {
+        "summary": "Reopen a HARD-closed fiscal period",
+        "description": "Releases the active HARD lock and flips status to REOPENED. Publishes PeriodReopenedEvent \u2192 CFO + compliance email. NAICOM-grade audit trail in period_lock + audit_log. Module 12 Slice 1.7.",
+        "operationId": "reopenPeriod",
+        "tags": ["Finance \u2014 Period Locks"],
+        "parameters": [{"name": "periodId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["reason"], "properties": {"reason": {"type": "string", "maxLength": 500}}}}}},
+        "responses": {
+          "200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object", "properties": {"data": {"$ref": "#/components/schemas/PeriodLockResponse"}}}}}},
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_REOPEN_PERIOD role"},
+          "422": {"description": "Unprocessable Entity \u2014 period is not HARD-closed"}
+        }
+      }
+    },
+    "/finance/period-locks/{periodId}/history": {
+      "get": {
+        "summary": "Full lock history for a fiscal period",
+        "description": "Returns every soft/hard/release row for the period in reverse chronological order. Auditor-facing evidence chain. Module 12 Slice 1.7.",
+        "operationId": "periodLockHistory",
+        "tags": ["Finance \u2014 Period Locks"],
+        "parameters": [{"name": "periodId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "responses": {
+          "200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object", "properties": {"data": {"type": "array", "items": {"$ref": "#/components/schemas/PeriodLockResponse"}}}}}}},
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"}
+        }
+      }
+    },
+    "/finance/period-locks/preview": {
+      "get": {
+        "summary": "Preview lock status across a date range",
+        "description": "Returns one LockReportEntry per business date so bulk operations (Module 8 bulk receipts, Slice 1.8 backfill, bordereaux) can pre-check before kicking off the workflow. Module 12 Slice 1.7.",
+        "operationId": "previewPeriodLock",
+        "tags": ["Finance \u2014 Period Locks"],
+        "parameters": [
+          {"name": "from", "in": "query", "required": true, "schema": {"type": "string", "format": "date"}},
+          {"name": "to", "in": "query", "required": true, "schema": {"type": "string", "format": "date"}}
+        ],
+        "responses": {
+          "200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object", "properties": {"data": {"type": "array", "items": {"$ref": "#/components/schemas/LockReportEntry"}}}}}}},
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"},
+          "422": {"description": "Invalid date range"}
         }
       }
     },

@@ -804,6 +804,7 @@ Each tenant can optionally enable a **sandbox mode** for Insurtechs to test inte
 | 9 | Partner Open API | 15 | OAuth2 client management, REST partner API, webhooks, OpenAPI docs, Postman collection |
 | 10 | Audit & Compliance | 15 | Full audit trail, login logs, 6 reports, CSV export, real-time alerts, System Auditor role |
 | 11 | Reports & Analytics | 20 | 55 pre-built reports, custom report builder, CSV/PDF export, pin management, access control |
+| 12 | Period-End Closures (in progress) | 8 slices | GL foundation (V31), COA seed (V32), posting rules (V33), JournalEntryService gateway, SubledgerPostingService event listeners, FiscalYearService + period generation, PeriodLockService + Hibernate Interceptor with 5-business-day grace, future: retroactive backfill + reconciliation CI gate |
 
 ---
 
@@ -979,6 +980,19 @@ bash cia-frontend/scripts/check-api-wiring.sh
 - The `report_pin` table has a `UNIQUE(user_id, report_id)` constraint. `ReportRunnerService.pin()` checks `existsByUserIdAndReportId` before inserting to avoid duplicate key exceptions.
 - Regulatory reports (`REGULATORY` category, N01–N08) have `is_pinnable = FALSE`. `ReportViewerPage` must not render the Pin button for these reports.
 - Chart types: `BAR | LINE | PIE | TABLE_ONLY`. When `config.chart.type = TABLE_ONLY`, `ReportChart` returns `null` — no chart space is reserved. Both backend seed SQL and frontend `ReportChart` must handle this case.
+
+### Period-Lock Design (Module 12, Slice 1.7 — cia-finance)
+
+- **Lock enforcement is opt-in via `LockableByPeriod`** (in `cia-common.entity`). Entities that move money implement the interface; entities that don't (Customer, Broker, AccessGroup, ChartOfAccount) stay out. The Hibernate `PeriodLockInterceptor` checks `instanceof LockableByPeriod` per save — the marker interface IS the opt-in mechanism, not a config table.
+- **`getLockDate()` returns the booking date, not the business-effective date.** For Endorsement that means `bookedDate`, NOT `effectiveDate`. The IFRS 17 measurement engine (Phase 2) reads effective dates separately and never flows through this interceptor. Mixing the two anchors silently breaks the lock semantics.
+- **Reversal carve-out** — `LockableByPeriod.isReversal()` defaults to `false`. Entities with a reversal model (`JournalEntry.reversalOf != null`) override to return `true`. The interceptor short-circuits reversal rows before the period lookup so corrections to a closed period are always possible. Without this carve-out, post-close corrections become impossible and finance teams disable the interceptor "just this once."
+- **`period_lock` is a Type-2 SCD** (V31): `released_at IS NULL` row is the active lock; the sequence of soft/hard/release rows IS the audit history. There is no separate `period_lock_history` table.
+- **Two distinct override roles**: `FINANCE_OVERRIDE_LOCK` (soft-close grace bypass; senior accountant) and `FINANCE_REOPEN_PERIOD` (HARD lock release; CFO / FD). Bundling them is a segregation-of-duties audit finding.
+- **`PeriodLockedException` is HTTP 423 LOCKED**, distinct from 422 / 403, so the frontend toast can switch on status code alone. The structured `meta.{periodId, periodLabel, status, graceEndsAt, overrideRoles}` payload is rendered by `PeriodLockExceptionHandler`, not by `GlobalExceptionHandler`.
+- **`FiscalPeriodLookupCache` is `@RequestScope` with `TARGET_CLASS` proxy** — per-request memoisation for the interceptor hot path. Tests using `@DataJpaTest` must bind a `MockHttpServletRequest` via `RequestContextHolder` in `@BeforeEach` for the scoped proxy to resolve.
+- **Grace window is 5 business days (Mon–Fri, no holiday calendar in v1)** — `PeriodLockService.addBusinessDays`. Nigerian holiday-calendar awareness is a Slice 1.7c follow-up.
+- **`hardClose` on OPEN auto-soft-closes first** to honour V31's `ck_fiscal_period_close_chronology` invariant (`hard_closed_at >= soft_closed_at`). Service callers see a coherent API; the DB sees two `period_lock` rows.
+- **`PeriodReopenedEvent` notification recipients** read from `cia.finance.period-reopen-recipients` (Spring property, CSV). Per-tenant CFO config table is Slice 1.7c.
 
 ### Testing Requirements
 - Backend: unit tests for all business logic; integration tests for all repository methods (Testcontainers); API tests for all controllers.

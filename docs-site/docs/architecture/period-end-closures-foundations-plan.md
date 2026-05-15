@@ -207,31 +207,91 @@ Total slices: 9. Estimated calendar time: 4–6 weeks single engineer; 3–4 wee
 
 ---
 
-### Slice 1.7 — PeriodLockService Hibernate Interceptor + Benchmark
+### Slice 1.7 — PeriodLockService Hibernate Interceptor + Lock Mechanism (CANARY)
 
-**Goal:** enforce 5-business-day cutoff and soft/hard period locks across every persistent entity. Includes performance benchmark to detect throughput regression early.
+**Goal:** ship the lock mechanism + the `JournalEntry` canary opt-in. The Phase 1 exit criterion ("every business module covered") is satisfied across Slice 1.7 + 1.7a + 1.7b — opting in 30+ entities in one PR makes review impossible.
+
+**Scope adjustments after expert critique pass (2026-05-15):**
+
+- **Split override permission into two roles** — `finance:override_soft_close` (grace bypass) and `finance:reopen_period` (HARD release). One bundled role is a segregation-of-duties audit finding waiting to happen.
+- **Lock anchor is the BOOKING date, not the business-effective date** — endorsements return `bookedDate`, not `effectiveDate`. IFRS 17 measurement uses effective dates and never flows through this interceptor.
+- **Reversal carve-out is a first-class interface concern** — `LockableByPeriod.isReversal()` default `false`; entities with a reversal model override. Without this, post-close corrections become impossible and finance teams disable the interceptor "just this once."
+- **Lock-history table already in V31** — the `period_lock` table is a Type-2 SCD (each soft/hard/release event is a row, `released_at IS NULL` = active). No separate `period_lock_history` is needed — the `period_lock` rows themselves are the NAICOM-grade evidence trail.
+- **Structured error contract** — `PeriodLockedException` extends `CiaException` and a dedicated `PeriodLockExceptionHandler` renders `{ code, periodLabel, status, graceEndsAt, overrideRoles }` as the response meta. Frontend toast reads fields by name; no string parsing.
+- **Bulk preview API in this slice** — `GET /api/v1/finance/period-locks/preview?from&to` returns one `LockReportEntry` per business date so Slice 1.8 backfill and Module 8 bulk receipts pre-check before kicking off the workflow, not discover the lock on row 4,837.
+- **Per-request fiscal-period lookup cache** — `FiscalPeriodLookupCache` is `@RequestScope` for tenant isolation. Multi-tenancy + cross-request invalidation cost is deferred until JMH shows the request scope is insufficient.
+- **Benchmark target tightened to <2 % p99** — 5 % on a 100M-write/year tenant is 5M wasted writes. Anything between 1 % and 2 % requires a flame-graph in the PR description.
+- **CFO + compliance email notification on every reopen** — `PeriodReopenedEvent` published from `cia-finance`, consumed by `PeriodReopenedNotificationListener` in `cia-api` (bridges to `NotificationService`). Recipients via Spring property `cia.finance.period-reopen-recipients` (CSV) for v1; per-tenant config table is a Slice 1.7c follow-up.
+
+**Deliverables (shipped):**
+
+- `cia-common/LockableByPeriod` interface (`getLockDate`, default `isReversal`).
+- `cia-finance/gl/PeriodLock` entity over the V31 `period_lock` table + `PeriodLockRepository`.
+- `cia-finance/gl/LockType` (SOFT / HARD), `LockOutcome` (ALLOW / REJECT / OVERRIDE), `LockDecision` (structured envelope).
+- `cia-finance/gl/PeriodLockedException` (extends `CiaException`, HTTP 423).
+- `cia-finance/gl/FiscalPeriodLookupCache` (`@RequestScope` with `TARGET_CLASS` proxy).
+- `cia-finance/gl/PeriodLockService` — `softClose / hardClose / reopen / previewLock / checkWrite / history / daysSinceSoftClose`. Auto-soft-before-hard to honour `ck_fiscal_period_close_chronology`.
+- `cia-finance/gl/PeriodLockInterceptor` (Hibernate `Interceptor`) — registered via `cia-finance/gl/PeriodLockInterceptorConfig` (`HibernatePropertiesCustomizer`).
+- `cia-finance/gl/PeriodLockController` — `POST /soft-close`, `POST /hard-close`, `POST /reopen`, `GET /history`, `GET /preview`.
+- `cia-finance/gl/PeriodLockExceptionHandler` — structured 423 LOCKED body with `meta.{periodId, periodLabel, status, graceEndsAt, overrideRoles}`.
+- `cia-finance/gl/PeriodReopenedEvent` + `PeriodReopenedLogListener` (in-module log).
+- `cia-api/.../PeriodReopenedNotificationListener` — bridges to `NotificationService`.
+- `cia-finance/gl/JournalEntry implements LockableByPeriod` — `getLockDate = businessDate`, `isReversal = reversalOf != null`.
+- `cia-common.AuditAction` extended with `CLOSE`, `REOPEN`, `LOCK_OVERRIDE`.
+- Unit tests: `PeriodLockServiceTest` — 9-state decision matrix + lifecycle + business-day arithmetic (18 tests).
+- Integration test: `PeriodLockInterceptorIT` — Testcontainers, real Hibernate flush, 7 scenarios including reversal carve-out and override allow.
+- Benchmark scaffolding: `PeriodLockInterceptorBenchmark` (`@Disabled` JUnit pending JMH wiring follow-up).
+
+**Tests:**
+- Backdated entry past grace blocked with `PeriodLockedException` ✓
+- Override permission allows the entry; audit-log entry recorded ✓
+- Hard-closed period blocks even with override ✓
+- Reversal entry succeeds despite HARD lock ✓
+- Lock history accumulates soft/hard/release rows chronologically ✓
+- Benchmark CI workflow `module-12-benchmark.yml` — follow-up commit, see scaffolding class
+
+**Exit criteria:** lock mechanism in place + JournalEntry opted in + unit/IT green; entity-opt-in sweep tracked in 1.7a (Receipt, Payment, ClaimExpense, Endorsement) and 1.7b (remaining monetary entities).
+
+**Dependencies:** 1.6.
+
+---
+
+### Slice 1.7a — LockableByPeriod opt-in for Finance entities (follow-up)
+
+**Goal:** opt the four entities with direct monetary impact into the lock mechanism. One file per entity, easy to review, each module owner can sign off independently.
 
 **Deliverables:**
 
-- `PeriodLockInterceptor` extending Hibernate `Interceptor`:
-  - On `onSave` / `onFlushDirty`, look up the entity's `business_date` (where present); resolve the matching `fiscal_period`.
-  - Reject if period is HARD_CLOSED.
-  - Reject if period is SOFT_CLOSED **and** the change is more than 5 business days past the soft-close date **and** the user lacks `finance:override_period_lock`.
-- Registered via `HibernatePropertiesCustomizer` so it covers every entity.
-- `PeriodLockService.lock(periodId, type)`, `unlock(periodId, reason)`.
-- JMH benchmark `PeriodLockInterceptorBenchmark` measuring overhead on a synthetic 10,000-write workload. Pass criterion: less than 5 % p99 increase vs. baseline.
+- `Receipt implements LockableByPeriod { getLockDate() = receivedDate }`.
+- `Payment implements LockableByPeriod { getLockDate() = paidDate }`.
+- `ClaimExpense implements LockableByPeriod { getLockDate() = incurredDate }`.
+- `Endorsement implements LockableByPeriod { getLockDate() = bookedDate; isReversal() = reversalOf != null }`.
+- Per-entity opt-in test verifies the interceptor rejects backdated saves.
 
-**Tests:**
-- Backdated entry past cutoff blocked with `PeriodLockedException`.
-- Override permission allows the entry; audit-log entry recorded.
-- Hard-closed period blocks even with override.
-- Benchmark runs in CI as a separate workflow step (`module-12-benchmark.yml`); regression > 5 % fails the PR.
+**Dependencies:** 1.7.
 
-**Reconciliation gate evidence:** before/after JMH numbers in PR description.
+---
 
-**Exit criteria:** lock enforcement covers every business module (verified by grep of `BaseEntity` subclasses); benchmark passes.
+### Slice 1.7b — LockableByPeriod opt-in sweep (remaining business modules)
 
-**Dependencies:** 1.6.
+**Goal:** complete the Phase 1 exit criterion "every business module covered." Grep for `BaseEntity` subclasses and opt in the monetary ones (DebitNote, CreditNote, RiAllocation, RiFacCover, etc.).
+
+**Dependencies:** 1.7, 1.7a.
+
+---
+
+### Slice 1.7c — Prior-Period Adjustment posting workflow + tenant CFO config
+
+**Goal:** add the IFRS-compliant prior-period-adjustment path so audit-found errors in closed periods are posted as PPAs in the OPEN period (with IAS 8 disclosure metadata), not by reopening the closed period. Also adds the per-tenant CFO + compliance distro config that Slice 1.7's `cia.finance.period-reopen-recipients` property is a v1 stand-in for.
+
+**Deliverables:**
+
+- Flyway migration adding `journal_entry.prior_period_adjustment` boolean column + an audit-grade `prior_period_adjustment_reason` text column.
+- New REST endpoint `POST /api/v1/finance/journal-entries/prior-period-adjustment` gated by `FINANCE_APPROVE_PPA` — the elevated permission needed for IFRS-disclosed adjustments.
+- `tenant_reopen_recipient` table for the per-tenant CFO + compliance distro.
+- Holiday-calendar support extending `PeriodLockService.addBusinessDays` to honour a `tenant_holiday` table (NAICOM working-days alignment).
+
+**Dependencies:** 1.7.
 
 ---
 

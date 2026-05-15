@@ -1,6 +1,7 @@
 package com.nubeero.cia.finance.gl;
 
 import com.nubeero.cia.common.entity.BaseEntity;
+import com.nubeero.cia.common.entity.LockableByPeriod;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -53,7 +54,7 @@ import java.util.UUID;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "journal_entry")
-public class JournalEntry extends BaseEntity {
+public class JournalEntry extends BaseEntity implements LockableByPeriod {
 
     @Column(name = "posting_date", nullable = false)
     private LocalDate postingDate;
@@ -100,5 +101,24 @@ public class JournalEntry extends BaseEntity {
     public void addLine(JournalEntryLine line) {
         line.setJournalEntry(this);
         this.lines.add(line);
+    }
+
+    // ─── LockableByPeriod ─────────────────────────────────────────────────────
+    // Slice 1.7: JournalEntry is the canary opt-in. businessDate is the
+    // authoritative booking date for ledger-impact rows (postingDate is the
+    // recording timestamp; businessDate drives period assignment). The
+    // reversal carve-out hands the interceptor a "skip me" signal for entries
+    // whose reversalOf is set — reversals are corrections and must remain
+    // postable into the OPEN period even when the original sat in a now-closed
+    // period (see CIAGB IAS-8-style guidance documented in Slice 1.7c).
+
+    @Override
+    public LocalDate getLockDate() {
+        return businessDate;
+    }
+
+    @Override
+    public boolean isReversal() {
+        return reversalOf != null;
     }
 }
