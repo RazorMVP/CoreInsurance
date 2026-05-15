@@ -4,6 +4,136 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-15 — Session 61 (`module-12-period-end-closures`): Expert-critique directive added to `/cia` skill + Slice 1.7 (PeriodLockService + Hibernate Interceptor) shipped
+
+### Context
+
+Two distinct workstreams in one session:
+
+1. **`/cia` skill update — Expert Critique Pass directive.** User asked that every CIAGB design/architecture response adopt the persona of a 20+ year core-insurance-systems engineer and structure answers with three named blocks (✓ What's solid / ✗ What's over-simplified / → Best-practice recommendation given context). Committed `c48616a` to make the directive permanent and added the corresponding `feedback_expert_critique.md` memory.
+
+2. **Slice 1.7 — `PeriodLockService` + Hibernate `PeriodLockInterceptor`.** The expert-critique pass on the initial design surfaced 9 specific gaps a 20-year veteran would have flagged (reversal/PPA semantics, split override permissions, structured error payload, bulk-op preview API, per-request lookup cache, sub-2 % benchmark target, booking-date vs effective-date distinction, lock-history vs SCD, reopen notification path). Incorporated all 9 into the slice scope before writing code.
+
+### Critique-driven scope adjustments (vs initial design pass)
+
+| ID | Initial design | Adjusted scope |
+|---|---|---|
+| 1 | Single `finance:override_period_lock` role | **Split into `FINANCE_OVERRIDE_LOCK` (soft grace) + `FINANCE_REOPEN_PERIOD` (HARD release)** — segregation-of-duties |
+| 2 | Generic exception message | **HTTP 423 LOCKED with structured `meta.{periodId, periodLabel, status, graceEndsAt, overrideRoles}`** — dedicated `PeriodLockExceptionHandler` |
+| 3 | No reversal carve-out | **`LockableByPeriod.isReversal()` default false; `JournalEntry` overrides via `reversalOf != null`** — without it, post-close corrections become impossible |
+| 4 | No bulk preview | **`GET /period-locks/preview?from&to` returns one `LockReportEntry` per business date** — Slice 1.8 backfill + Module 8 bulk receipts pre-check the range |
+| 5 | New `period_lock_history` table planned | **DROPPED — V31's `period_lock` is already a Type-2 SCD**; the row sequence IS the audit history |
+| 6 | 5 % p99 benchmark target | **Tightened to <2 %**; anything 1–2 % requires flame-graph in PR |
+| 7 | `effectiveDate` as lock anchor | **`bookedDate` — IFRS 17 measurement uses effective dates separately and never flows through this interceptor** |
+| 8 | No request-scoped cache | **`FiscalPeriodLookupCache` `@RequestScope` with `TARGET_CLASS` proxy** — multi-tenancy correctness + cache hit rate |
+| 9 | Generic CFO email | **`PeriodReopenedEvent` → `PeriodReopenedNotificationListener` (cia-api) → `NotificationService`**; recipients via `cia.finance.period-reopen-recipients` |
+
+### Design decisions locked (D1–D10)
+
+| ID | Decision | Rationale |
+|---|---|---|
+| D1=A | `LockableByPeriod { LocalDate getLockDate(); default boolean isReversal() }` | Simplest contract; entities choose their own anchor and override reversal flag |
+| D2=cia-common | Interface lives in cia-common; interceptor in cia-finance | No module cycle; pure interface, zero Hibernate imports |
+| D3=A | Hibernate `Interceptor` (not `StatementInspector`) | Operates on entity objects; type-safe `instanceof LockableByPeriod` |
+| D4=B | 5 business days (Mon–Fri, no holiday calendar in v1) | NIA + NAICOM industry norm; Nigerian holidays = Slice 1.7c |
+| D5=B | Reject HARD always; SOFT past grace → reject or override based on role | Per critique split |
+| D6 | Service API: softClose / hardClose / reopen / previewLock / checkWrite / history | Single coherent surface |
+| D7=A | This slice opts in `JournalEntry` only (canary); 1.7a/b sweep remaining entities | One PR per opt-in entity batch makes review possible |
+| D8 | JMH benchmark scaffolding shipped; full JMH plugin wiring is a follow-up | Don't conflate mechanism review with benchmark plumbing |
+| D9 | New Keycloak roles documented (`FINANCE_OVERRIDE_LOCK`, `FINANCE_REOPEN_PERIOD`); no Flyway permission seed | Codebase uses `hasRole('...')`; roles live in Keycloak realm config |
+| D10 | Reversal carve-out happens BEFORE period lookup in `checkWrite` | Short-circuit means reversal rows never hit the cache or repository — sub-microsecond on the carve-out path |
+
+### Discovery during implementation
+
+- **V31 already created the `period_lock` table.** I was about to add V35; dropped it. The schema is a Type-2 SCD (`released_at IS NULL` = active; the row sequence is the history). My critique's recommendation for a `period_lock_history` table was reinventing what was there.
+- **`grace_window_until` is per-lock, not global.** V31 stores it as a TIMESTAMPTZ column so different period types (year-end vs monthly) could carry different grace windows without a schema change. Service computes `locked_at + 5 BD` for SOFT, NULL for HARD.
+- **Mockito 5.x under Java 25 cannot redefine concrete Spring services.** `JournalEntryServiceTest` documented this pattern (in-class header comment); I hit the same issue with `FiscalPeriodResolver`, `FiscalPeriodLookupCache`, and `AuditService`. Workaround: use real instances built from mocked repository interfaces. Audit assertions move from `verify(auditService).log(...)` to `ArgumentCaptor` on `auditLogRepository.save(...)`.
+
+### Work landed
+
+**cia-common**
+
+| File | Lines | Purpose |
+|---|---|---|
+| `entity/LockableByPeriod.java` | 59 | Marker interface — opt-in for lock enforcement. Pure interface, no Hibernate. |
+| `audit/AuditAction.java` | extended | Added `CLOSE`, `REOPEN`, `LOCK_OVERRIDE` enum values |
+
+**cia-finance** (`gl/` package)
+
+| File | Lines | Purpose |
+|---|---|---|
+| `PeriodLock.java` | 73 | JPA entity over V31 `period_lock`. Type-2 SCD — `isActive()` = `releasedAt == null && !deleted`. |
+| `PeriodLockRepository.java` | 36 | `findFirstByFiscalPeriodId...releasedAtIsNull` (hot path) + history finder. |
+| `LockType.java` | 30 | `SOFT / HARD` — matches V31 CHECK constraint. |
+| `LockOutcome.java` | 28 | `ALLOW / REJECT / OVERRIDE` — tri-state from `checkWrite`. |
+| `LockDecision.java` | 51 | Record carrying the structured rejection payload; static factories. |
+| `PeriodLockedException.java` | 47 | Extends `CiaException`, HTTP 423 LOCKED. Preserves `LockDecision` across the throw. |
+| `FiscalPeriodLookupCache.java` | 80 | `@RequestScope` `TARGET_CLASS` proxy. `compute-if-absent` per lock date per request. |
+| `PeriodLockService.java` | 290 | softClose / hardClose / reopen / previewLock / checkWrite / history / daysSinceSoftClose + business-day arithmetic. |
+| `PeriodLockInterceptor.java` | 92 | Hibernate `Interceptor`. `onSave / onFlushDirty` → `checkWrite` → throw or audit-override. |
+| `PeriodLockInterceptorConfig.java` | 42 | `HibernatePropertiesCustomizer` registering the interceptor via `AvailableSettings.INTERCEPTOR`. `ObjectProvider<>` defers bean lookup past the boot circular dep. |
+| `PeriodLockController.java` | 89 | 5 endpoints: soft-close / hard-close / reopen / history / preview. |
+| `PeriodLockExceptionHandler.java` | 80 | Dedicated `@RestControllerAdvice` — wins over `GlobalExceptionHandler` for structured 423 body. |
+| `PeriodReopenedEvent.java` | 38 | Spring `ApplicationEvent` published on reopen. |
+| `PeriodReopenedLogListener.java` | 28 | In-module WARN log so reopens are searchable even with no email recipients configured. |
+| `JournalEntry.java` | extended | `implements LockableByPeriod`: `getLockDate = businessDate`; `isReversal = reversalOf != null`. |
+
+**cia-finance/dto**
+
+| File | Lines | Purpose |
+|---|---|---|
+| `ClosePeriodRequest.java` | 19 | `{ reason: String }` body for soft/hard close. |
+| `ReopenPeriodRequest.java` | 24 | `{ reason: String }` body for reopen; ends up in `period_lock.release_reason`, `audit_log.new_value`, and the reopen-notification email body. |
+| `PeriodLockResponse.java` | 32 | Wire-shape DTO carrying every column an auditor or admin UI needs. |
+| `LockReportEntry.java` | 36 | One day's row in `previewLock` — `requiresOverride / rejected` flags. |
+
+**cia-api**
+
+| File | Lines | Purpose |
+|---|---|---|
+| `finance/event/PeriodReopenedNotificationListener.java` | 85 | Bridges `PeriodReopenedEvent` (cia-finance) → `NotificationService` (cia-notifications). Recipients from `cia.finance.period-reopen-recipients` (CSV). |
+
+**Tests**
+
+| File | Lines | Purpose |
+|---|---|---|
+| `cia-finance/test/PeriodLockServiceTest.java` | 380 | 9-state decision matrix + 7-test lifecycle + 2-test business-day arithmetic. **All 18/18 pass locally.** Real `FiscalPeriodResolver` + `FiscalPeriodLookupCache` + `AuditService` built from mocked repositories (Java-25 Mockito workaround). |
+| `cia-api/test/PeriodLockInterceptorIT.java` | 290 | Testcontainers IT — real Postgres + V31–V33 migrations + real Hibernate flush. 7 scenarios including reversal carve-out + override allow. **Compiles cleanly; runs when Docker is up (CI).** |
+| `cia-finance/test/PeriodLockInterceptorBenchmark.java` | 65 | `@Disabled` scaffolding documenting the JMH gate (<2 % p99). Full JMH wiring is a follow-up commit. |
+
+**Docs / Gate 9**
+
+- `docs-site/docs/architecture/period-end-closures-foundations-plan.md` — Slice 1.7 description rewritten to reflect critique-driven scope; added Slices 1.7a / 1.7b / 1.7c.
+- `docs-site/static/internal-api.json` — added 5 period-lock endpoints + `PeriodLockResponse` + `LockReportEntry` schemas. **Total paths: 210; schemas: 57.**
+- `CLAUDE.md` — Module 12 row added to Module Summary; new "Period-Lock Design (Module 12, Slice 1.7)" subsection in Development Standards.
+- `.claude/skills/cia/SKILL.md` — Module 12 block added to Module Inventory; period-lock convention bullet added to Development Conventions; new Module 12 entities listed.
+
+### Build + test verification
+
+- `mvn install -pl cia-api -am -DskipTests` → **BUILD SUCCESS** (all 17 modules compile; bean graph wires).
+- `mvn test -pl cia-finance -Dtest=PeriodLockServiceTest` → **18/18 pass**.
+- `mvn test-compile -pl cia-api` → **BUILD SUCCESS** (IT compiles).
+- `mvn test -pl cia-api -Dtest=PeriodLockInterceptorIT` → Docker required (Testcontainers); runs in CI.
+
+### Keycloak realm config requirements (deployment note)
+
+Two new realm roles to register before this slice goes live:
+
+- `FINANCE_OVERRIDE_LOCK` — granted to Finance Manager / Senior Accountant access groups. Bypasses the SOFT-close grace window past 5 BD; every override produces an `audit_log` row with action `LOCK_OVERRIDE`.
+- `FINANCE_REOPEN_PERIOD` — granted to CFO / Finance Director only. Required for `POST /finance/period-locks/{periodId}/reopen`. Every reopen publishes `PeriodReopenedEvent` → email to `cia.finance.period-reopen-recipients`.
+
+### Open questions
+
+- Per-tenant CFO + compliance distribution list table — deferred to Slice 1.7c. Until then the property is platform-wide.
+- Holiday calendar — deferred to Slice 1.7c. v1 uses Mon–Fri only.
+- JMH plugin wiring + `module-12-benchmark.yml` GitHub Actions workflow — follow-up commit; scaffolding class documents the contract.
+
+### Next slice
+
+- **Slice 1.7a** — opt `Receipt`, `Payment`, `ClaimExpense`, `Endorsement` into `LockableByPeriod`. One file per entity, per-module owner review.
+
+---
+
 ## 2026-05-15 — Session 60 (`module-12-period-end-closures`): Slice 1.6 (FiscalYearService + period generation + lazy DAY resolver) shipped
 
 ### Context
