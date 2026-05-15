@@ -4,6 +4,100 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-15 — Session 59 (`module-12-period-end-closures`): Slice 1.5 (SubledgerPostingService) shipped
+
+### Context
+
+Slice 1.5 wires the six sub-ledger business events (`PolicyApprovedEvent`, `ClaimApprovedEvent`, `ClaimSettledEvent`, `ClaimExpenseApprovedEvent`, `EndorsementApprovedEvent`, `FacPremiumCededEvent`) into the GL via a single `SubledgerPostingService` that calls `JournalEntryService.post` (the Slice 1.4 gateway). Five events flow through the new `posting_rule` table seeded by V33; the sixth (`FacPremiumCeded`) is a compound 3-line posting handled inline because `posting_rule`'s (1 Dr + 1 Cr per row, UNIQUE on event type) shape can't express it.
+
+### Design decisions locked (D1–D4 + d5–d11)
+
+| ID | Decision | Why |
+|---|---|---|
+| D1=A | `@EventListener` + `@Transactional` (sync, joins publisher's TX) | Atomicity is non-negotiable for accounting — if GL post fails, business commit (policy approval / claim settle) rolls back. The UNIQUE idempotency on `journal_entry.(source_module, source_event_type, source_reference)` closes the retry-correctness risk async would otherwise warrant. |
+| D2=A | `posting_rule` table seeded via V33 Flyway migration | V31 created the table for exactly this. Same SYSTEM-row pattern as COA / `cia-reports` definitions. Service exposes no mutation methods; tenant customisation is a post-Phase-7 epic. |
+| D3=A | All six events; FAC hardcoded inline | A GATEWAY-adjacent slice that leaves an event un-mapped becomes a debt that's easy to forget. Mixed approach: 5 table-driven, 1 hardcoded, same service. |
+| D4=A | `(business-module-name, EVENT_CONSTANT, entity.id.toString())` triple | Clear provenance — every JE traces back to a real business entity by UUID. Matches Slice 1.4 reversal convention. |
+| d5 | One `SubledgerPostingService` with six `@EventListener` methods | Single posting-authority surface |
+| d6 | `String.format` `%s` positional placeholders in narratives | Simple, no dependency on Mustache or template engine |
+| d7 | Missing rule → `PostingRuleNotFoundException` (422) | Fail loud — misconfiguration surfaces immediately rather than silently dropping JEs |
+| d8 | Per-event `business_date` sourcing: `PolicyApproved → policyStartDate`; `ClaimSettled → settledAt.toLocalDate(UTC)`; others → today | Matches each event's natural economic date |
+| d9 | Added `settledAmount` + `currencyCode` fields to `ClaimSettledEvent` | Listener stays self-sufficient without a `cia-claims` lookup. Single publisher (`ClaimService.markSettled`) updated. |
+| d10 | V33 seeds 6 posting rules; FAC hardcoded in service | One config surface for the simple cases |
+| d11 | Endorsement sign-dispatches: `> 0` → `ENDORSEMENT_PREMIUM_ADDITIONAL` (Dr 1310, Cr 2110); `< 0` → `ENDORSEMENT_PREMIUM_REFUND` (Dr 2110, Cr 1310); `== 0` → no JE | Two rules, mutually exclusive at the entity level |
+
+### Work landed
+
+**Domain (`cia-finance/.../gl`)**
+
+| File | Lines | Purpose |
+|---|---|---|
+| `PostingRule.java` | 51 | JPA entity over V31 `posting_rule` |
+| `PostingRuleRepository.java` | 16 | Single active-rule finder |
+| `PostingRuleService.java` | 41 | Read-only, cacheable lookup (`coa-by-code` pattern) — `@Cacheable` with tenant-prefixed SpEL key |
+| `PostingRuleNotFoundException.java` | 24 | `POSTING_RULE_NOT_FOUND` 422 |
+| `SubledgerPostingService.java` | 222 | Six `@EventListener` methods; 5 table-driven + 1 hardcoded; sign-dispatched endorsement direction; zero-amount short-circuit |
+
+**Common / Claims**
+
+| File | Change |
+|---|---|
+| `cia-common/.../event/ClaimSettledEvent.java` | Added `settledAmount BigDecimal` + `currencyCode String` fields |
+| `cia-claims/.../ClaimService.java` | Updated `markSettled` publisher to pass `dvAmount` + `currencyCode` |
+
+**Migration**
+
+- `V33__seed_posting_rules.sql` — 6 rows: POLICY_APPROVED, CLAIM_APPROVED, CLAIM_SETTLED, CLAIM_EXPENSE_APPROVED, ENDORSEMENT_PREMIUM_ADDITIONAL, ENDORSEMENT_PREMIUM_REFUND. `ON CONFLICT (source_event_type) DO NOTHING` for idempotency.
+
+**Unit tests (`cia-finance/src/test`)** — 13 new tests; 43 total green (0.85 s)
+
+| Test | Cases | Coverage |
+|---|---|---|
+| `PostingRuleServiceTest` | 3 | hit / miss / inactive-rule-as-miss |
+| `SubledgerPostingServiceTest` | 10 | one happy path per event (6), zero-amount skip, missing-rule propagation, endorsement sign-dispatch (additional + refund) |
+
+**Integration tests (`cia-api/src/test/java/.../finance/gl`)** — 9 ITs
+
+| Test | Purpose |
+|---|---|
+| `SubledgerPostingServiceIT` (9 cases) | One end-to-end happy path per event (PolicyApproved, ClaimApproved, ClaimSettled, ClaimExpenseApproved, EndorsementAdditional, EndorsementRefund), zero-amount no-op, FAC 3-line balance invariant, missing-rule fails loud, idempotency replay rejected |
+| `V33PostingRuleSeedMigrationTest` (7 cases) | Row count, exact Dr/Cr codes per event, narrative-template `%s` placeholders, `created_by='system-seed'` provenance, idempotent re-INSERT, FK integrity to chart_of_account.code, `ck_posting_rule_distinct_accounts` invariant |
+
+### Notes worth remembering
+
+- **`-am` matters when an upstream module's contract changes.** `mvn -pl cia-finance test` initially failed because the cia-common `ClaimSettledEvent` record gained two new fields, but the cached jar in `~/.m2` still had the old signature. `mvn -pl cia-finance -am test` rebuilds upstream modules in the reactor before running downstream tests — caught by the existing constructor call in `SubledgerPostingServiceTest`.
+- **Endorsement sign-dispatch keeps amounts positive.** The JE service requires `debitAmount >= 0 AND creditAmount >= 0` with exactly one > 0. The endorsement listener takes `abs(premiumAdjustment)` and picks the rule (ADDITIONAL or REFUND) — the sign is encoded in the rule choice, not the value. Same posting rule shape, different account direction.
+- **The FAC compound posting validates the v31 schema choice.** `posting_rule` was scoped to 2-line postings (UNIQUE on event_type, single Dr + single Cr per row). The FAC 3-line case (Dr 5210, Cr 4300, Cr 2310) bypasses the table cleanly without forcing a schema redesign — just a hardcoded listener building the `PostJournalEntryRequest` inline. Pattern transfers to Phase 2 IFRS 17 multi-line measurement postings.
+- **`ClaimSettledEvent` got two fields.** Single publisher (`ClaimService.markSettled`) and no tests construct the record directly — additive change was safe. Recorded in the event's Javadoc so future readers know when and why the shape changed.
+
+### Verification
+
+- `mvn install -DskipTests -pl cia-api -am` → BUILD SUCCESS (all 19 modules)
+- `mvn -pl cia-finance -am test` → 43/43 pass (3 new PostingRuleService + 10 new SubledgerPostingService + 30 prior)
+- `mvn -pl cia-api -am test-compile` → BUILD SUCCESS (9 IT cases + 7 migration test cases compile cleanly; run on CI where Docker is unblocked)
+
+### Open questions
+
+None blocking. Slice 1.6 (FiscalYearService — lifecycle for `fiscal_year` + auto-generation of MONTH/QUARTER/HALF/YEAR child periods on activation) is the next design pass.
+
+### Branch tally
+
+`module-12-period-end-closures` after Session 59:
+1. `b4652d1` design + implementation plan
+2. `29cc585` foundations PR-slice plan
+3. `38e8ac9` version-number renumber
+4. `96de0e7` **Slice 1.1** — V31 GL schema
+5. `ba9b957` session 56 log
+6. `b0ffd39` **Slice 1.2** — V32 COA seed
+7. `d0e86e3` **Slice 1.3** — ChartOfAccountService
+8. `641ecf1` session 57 log
+9. `1f5948b` **Slice 1.4** — GATEWAY (JournalEntryService + TrialBalanceService)
+10. `4b4cb81` session 58 log
+11. `9027473` session 58b log (continuation Q&A)
+12. (this session) **Slice 1.5** — SubledgerPostingService + V33 seed + ClaimSettledEvent amendment
+
+---
+
 ## 2026-05-15 — Session 58b (`module-12-period-end-closures`): Continuation Q&A — insight callouts clarified as commentary, not pending work
 
 ### Context
