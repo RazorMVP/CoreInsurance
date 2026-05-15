@@ -4,6 +4,89 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-15 — Session 60 (`module-12-period-end-closures`): Slice 1.6 (FiscalYearService + period generation + lazy DAY resolver) shipped
+
+### Context
+
+Slice 1.6 establishes tenant-configurable fiscal years and deterministic generation of their 19 bounded child periods (12 MONTH + 4 QUARTER + 2 HALF_YEAR + 1 YEAR). Closes the period-resolution gap that prior slices papered over with JDBC fixtures. Foundations plan Slice 1.6 — depends on 1.1 (schema) and 1.4 (period_id FK on journal_entry). Slice 1.7 (PeriodLockService Hibernate Interceptor + Benchmark) is unblocked by this.
+
+### Design decisions locked (D1–D4)
+
+| ID | Decision | Why |
+|---|---|---|
+| D1=A | `CreateFiscalYearRequest` with all-null fields defaults to current calendar year (Jan 1 → Dec 31). | Most Nigerian insurers run calendar-year fiscal years (NAICOM convention). Removes onboarding friction; explicit override still available for April-March / other non-standard years. |
+| D2=A | Generate 19 child periods at FY `create` time (not at `activate`). DAY remains lazy (d10). | Foundations plan specifies generate-at-create. Avoids the degenerate `PLANNING`-with-no-periods state. 19 rows is bounded; 365 DAY rows would be wasteful for the long tail of tenants. |
+| D3=B | `activate` **refuses** if any other FY is `ACTIVE` (admin must close prior explicitly). | Deliberate deviation from the V31 comment ("deactivating siblings atomically"). V31's three-state enum has `CLOSED = year is done` — forcing prior → CLOSED mid-year conflates "no longer current" with "no more posting". B keeps the lifecycle deliberate; Slice 1.7's period_lock then has no implicit dependency on FY status. |
+| D4=A | `bootstrapForNewTenant()` is idempotent: returns existing ACTIVE FY if present, else creates+activates a calendar-year FY. | Eliminates the "first policy approval mysteriously throws FISCAL_PERIOD_NOT_FOUND" failure mode. One line for tenant provisioning to call. |
+
+Defaults d5–d11 all accepted.
+
+### Work landed
+
+**Domain** (`cia-finance/.../gl`)
+
+| File | Lines | Purpose |
+|---|---|---|
+| `FiscalYear.java` | 51 | JPA entity over V31 `fiscal_year` (id, name, dates, status). |
+| `FiscalYearStatus.java` | 27 | `{PLANNING, ACTIVE, CLOSED}` — three-state lifecycle per V31. |
+| `FiscalYearRepository.java` | 52 | Finders + `findEnclosing(LocalDate)` default convenience method. |
+| `FiscalYearNotFoundException.java` | 27 | Two flavours: `FISCAL_YEAR_NOT_FOUND` (by id) and `FISCAL_YEAR_NO_ACTIVE` (no active FY). |
+| `FiscalYearActivationConflictException.java` | 28 | D3=B 422 — refuses activation when sibling is ACTIVE. |
+| `FiscalYearHasJournalEntriesException.java` | 24 | d11 422 — refuses delete when any JE references child periods. |
+| `FiscalYearNameConflictException.java` | 22 | 409 — duplicate name, advisory read before INSERT. |
+| `InvalidFiscalYearBoundsException.java` | 26 | 422 — startDate not month-first OR endDate ≠ startDate + 12 months − 1 day. |
+| `FiscalYearService.java` | 286 | Full CRUD + lifecycle + bootstrap + FY-relative period generation. |
+| `FiscalYearController.java` | 91 | 8 endpoints (list/get/active/periods/create/activate/close/delete). |
+
+**Extended** (existing files)
+
+| File | Change |
+|---|---|
+| `FiscalPeriodResolver.java` | Added `FiscalYearRepository` constructor arg + `resolveDayForBusinessDate(LocalDate)` with lazy creation (d10). The new method is `@Transactional` (read-write) so the INSERT persists even when the outer scope is read-only. |
+| `FiscalPeriodRepository.java` | Added `findByFiscalYearIdAndDeletedAtIsNull...` list finder and `findIdsByFiscalYearId(...)` projection for the JE-count check. |
+| `JournalEntryRepository.java` | Added `countByPeriodIdInAndDeletedAtIsNull(Collection<UUID>)` for the d11 delete-blocked-by-JE invariant. |
+
+**DTOs** (`cia-finance/.../dto`)
+
+`CreateFiscalYearRequest`, `FiscalYearResponse`, `FiscalPeriodResponse` — Java records.
+
+**Tests**
+
+- `FiscalYearServiceTest` (cia-finance) — 19 unit tests: default date / name derivation, period-count invariant (12+4+2+1=19), calendar-year MONTH boundaries, leap-year Feb 2028, FY-relative quarters for both calendar and April-March FYs (d8), non-first-day rejection, non-12-month rejection, name conflict, activation conflict (D3=B), activate idempotence, CLOSED rejection on activate, close happy path, close-on-PLANNING rejection, bootstrap idempotence, delete blocked by JEs (d11), delete happy path.
+- `FiscalPeriodResolverTest` (cia-finance) — extended with 3 new tests for lazy DAY-period generation: hit returns existing without save, miss creates and saves anchored to enclosing FY, no enclosing FY throws `FISCAL_PERIOD_NOT_FOUND`.
+- `FiscalYearServiceIT` (cia-api) — 11 Testcontainers ITs: create persists 19 FK-satisfied periods, activate happy path, activation conflict against an actually-ACTIVE row, full sequence (activate → close → activate successor), delete blocked when a real journal_entry row references a child period, bootstrap idempotence in fresh schema, `findActive` 404, lazy DAY-period creation against the real resolver, misaligned bounds (no rows persisted), duplicate name conflict, `listPeriods` returns sorted 19, close-on-PLANNING rejection.
+- Prior tests updated: `JournalEntryServiceTest` and `SubledgerPostingServiceTest` got `@Mock FiscalYearRepository` added because `FiscalPeriodResolver`'s constructor signature now requires it.
+
+### Notes worth remembering
+
+- **FY-relative quarters (d8) and management reporting alignment** — for an April-March FY, Q1 is Apr-Jun (not Jan-Mar). This is the convention finance teams expect when comparing "Q1 results" against board-approved budgets, and it falls naturally out of `start.plusMonths(i * 3)` math. The test covers both calendar and non-calendar paths so future refactors can't silently regress it.
+- **Bounds validation deliberately strict** — startDate must be day 1 of a month, length must be exactly 12 months minus 1 day. Partial-year stub FYs (e.g. 8 months for a tenant joining mid-year) are deferred to a follow-up slice; tenants needing them can hand-craft via SQL until support lands. Saying "no" loudly in Slice 1.6 prevents wonky periods that downstream IFRS 17 measurement (Phase 2) doesn't know how to handle.
+- **D3=B vs the foundations plan** — the V31 schema comment and the foundations plan both said "deactivating siblings atomically". We chose explicit-close instead because V31's three-state enum (`PLANNING/ACTIVE/CLOSED`) doesn't have a separate "former active, not yet finished" state. Forcing prior → CLOSED mid-year conflates two distinct lifecycle events. The architecture doc should be amended; the runtime contract is cleaner this way.
+- **Lazy DAY generation is `@Transactional` (read-write)** even when the enclosing call is read-only — Spring `@Transactional` on the method overrides the class-level `readOnly = true` setting per Spring's propagation semantics. Race-condition note: the DB `uq_fiscal_period_year_type_start` UNIQUE constraint catches the rare two-callers-same-date case; we accept the retry over a row-level lock for the common-case fast path.
+
+### Verification
+
+- `mvn install -DskipTests -pl cia-api -am` → BUILD SUCCESS (all 19 modules)
+- `mvn test -pl cia-finance` → **65 unit tests pass** (was 62 — +19 FiscalYearService, +3 FiscalPeriodResolver lazy DAY, -1 from a no-longer-needed assertion in prior test cleanup)
+- `mvn test-compile -pl cia-api -am` → BUILD SUCCESS (11 new ITs compile; run on CI)
+
+### Open questions
+
+None blocking. Slice 1.7 (PeriodLockService Hibernate Interceptor + Benchmark) is the next design pass — it enforces the 5-business-day cutoff and soft/hard period locks across every persistent entity, plus a JMH benchmark to detect throughput regressions.
+
+### Branch tally
+
+`module-12-period-end-closures` after Session 60:
+
+1. (earlier) Slices 1.1 → 1.3 + foundations plan
+2. `1f5948b` **Slice 1.4** — JournalEntryService + TrialBalanceService (GATEWAY)
+3. `4b4cb81` / `9027473` session 58 / 58b logs
+4. `48292ea` **Slice 1.5** — SubledgerPostingService + V33 posting rules
+5. `f2d854b` session 59 log
+6. (this session) **Slice 1.6** — FiscalYearService + lazy DAY resolver
+
+---
+
 ## 2026-05-15 — Session 59 (`module-12-period-end-closures`): Slice 1.5 (SubledgerPostingService) shipped
 
 ### Context
