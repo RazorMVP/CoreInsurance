@@ -4,6 +4,47 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-16 — Session 63 (`module-12-period-end-closures`): Expert-Critique-Pass directive removed from `/cia` skill
+
+### Context
+
+The Expert Critique Pass directive (added Session 61, `c48616a`) required every substantive CIAGB response to adopt a 20+ year core-insurance-engineer persona and structure design/architecture answers with three named blocks (✓ What's solid / ✗ What's over-simplified / → Best-practice recommendation). The Slice 1.7 → Slice 1.7-fix sequence demonstrated a structural failure mode: every fix surfaced a previously-over-simplified item, which became the next fix, which produced its own critique, and so on. The directive had no triage labels, no stopping rule, and no `[ACCEPTED]` disposition path — so the loop was infinite by construction.
+
+User considered an amendment (triage labels + critique-fires-once-per-slice + stopping rule) and ultimately decided to **remove the directive entirely** rather than amend it. Simpler is better: the in-thread design pass with explicit decisions (the pattern established by Slices 1.2 / 1.3 / 1.4 / 1.5 / 1.6 / 1.7 before the directive existed) was already working, and adding a mandatory three-block lens turned out to over-formalise responses and create a feedback loop instead of catching real risk.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `.claude/skills/cia/SKILL.md` | Removed the entire "Response Style — Expert Critique Pass (MANDATORY for every CIAGB response)" section between `## Project Identity` and `## Tech Stack (Locked)` — ~38 lines including the persona description, the three named blocks, and the five application rules. The skill now flows directly from Project Identity to Tech Stack as it did before Session 61. |
+| `~/.claude/projects/-Users-razormvp-CoreInsurance/memory/feedback_expert_critique.md` | Deleted. |
+| `~/.claude/projects/-Users-razormvp-CoreInsurance/memory/MEMORY.md` | Removed the `[Expert critique pass — mandatory for CIAGB responses]` pointer line. Now back to a single entry: `[Question style — clear and precise]`. |
+
+### What replaces it (nothing formal)
+
+The collaboration pattern reverts to the pre-Session-61 default:
+
+- **In-thread design pass before code.** Lock decisions explicitly (D1, D2, …) with rationale per decision, as in Slices 1.2 through 1.7.
+- **Confirm decisions with the user before code is written.** This was the load-bearing discipline all along — not the three-block lens.
+- **No mandatory critique structure.** When a real failure mode warrants flagging, flag it; when it doesn't, don't manufacture one to fill a block.
+
+If a Slice 1.8+ design pass needs an expert-lens stress-test, do it situationally — not as a standing requirement.
+
+### Why removal beats amendment
+
+The proposed triage-label amendment (`[BLOCKER]` / `[PRE-PROD]` / `[QUEUE]` / `[ACCEPTED]`) would have worked, but it added structure that the project doesn't actually need. The original Module-12 cadence (in-thread design pass → user confirms decisions → ship the slice) already achieves what the critique block was supposed to enforce — and it does so without imposing format on every response. Adding triage labels would have replaced one bureaucracy with a smaller one; removing the directive eliminates the bureaucracy entirely.
+
+### Status
+
+- **Pending commit:** the SKILL.md edit + memory file removal. This entry exists so the methodology shift is on record; the commit will land after this log entry is written.
+- **Slice 1.8 next.** `RetroactiveJournalBackfillWorkflow` design pass will follow the original in-thread-decisions pattern, not the removed critique structure.
+
+### Open questions
+
+None. The directive is removed; the prior pattern resumes.
+
+---
+
 ## 2026-05-15 — Session 62 (`module-12-period-end-closures`): Slice 1.7-fix — scope-aware `FiscalPeriodLookupCache` + `LOCK_OVERRIDE` audit-trail IT
 
 ### Context
