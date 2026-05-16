@@ -6885,6 +6885,64 @@
         }
       }
     },
+    "/admin/finance/backfill-journal-entries": {
+      "post": {
+        "summary": "Start retroactive journal-entry backfill",
+        "description": "Kicks off a per-tenant Temporal workflow that replays the six sub-ledger events (POLICY_APPROVED, CLAIM_APPROVED, CLAIM_SETTLED, CLAIM_EXPENSE_APPROVED, ENDORSEMENT_APPROVED, FAC_PREMIUM_CEDED) as JEs over the requested date range. Idempotent: re-running the same range posts zero new JEs (DB UNIQUE on idempotency triple). Pre-flight check refuses ranges that cross HARD-closed or SOFT-past-grace periods. Module 12 Slice 1.8a.",
+        "operationId": "startBackfillJournalEntries",
+        "tags": ["Finance \u2014 Admin"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["fromDate", "toDate"],
+                "properties": {
+                  "fromDate": {"type": "string", "format": "date", "description": "Inclusive lower bound on business date"},
+                  "toDate": {"type": "string", "format": "date", "description": "Inclusive upper bound on business date"},
+                  "eventTypes": {
+                    "type": "array",
+                    "description": "Narrowed event-type list. Empty or omitted means all six.",
+                    "items": {
+                      "type": "string",
+                      "enum": ["POLICY_APPROVED", "CLAIM_APPROVED", "CLAIM_SETTLED", "CLAIM_EXPENSE_APPROVED", "ENDORSEMENT_APPROVED", "FAC_PREMIUM_CEDED"]
+                    }
+                  },
+                  "dryRun": {"type": "boolean", "description": "When true, counts what would be posted but does not write any JEs"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Workflow started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "workflowId": {"type": "string", "description": "Temporal workflow id for status polling"},
+                        "tenantId": {"type": "string"},
+                        "dryRun": {"type": "boolean"},
+                        "startedAt": {"type": "string", "format": "date-time"}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing PLATFORM_ADMIN role"},
+          "422": {"description": "Invalid request body"}
+        }
+      }
+    },
     "/debit-notes": {
       "get": {
         "summary": "List",

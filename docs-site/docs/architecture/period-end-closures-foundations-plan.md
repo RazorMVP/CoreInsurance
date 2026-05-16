@@ -297,27 +297,45 @@ Total slices: 9. Estimated calendar time: 4–6 weeks single engineer; 3–4 wee
 
 ### Slice 1.8 — Retroactive JE Backfill
 
-**Goal:** for an existing tenant, generate the JEs that *would have been* posted by the new sub-ledger listeners had they existed historically. Idempotent and rerunnable.
+Split into two parts during design pass:
 
-**Deliverables:**
+#### Slice 1.8a — Mechanism (SHIPPED)
 
-- `RetroactiveJournalBackfillWorkflow` Temporal workflow iterating tenants × historical events.
-- Per-event idempotency check (re-using 1.5's existence query).
-- Progress reporting via Temporal heartbeats.
-- CLI trigger (`mvn -pl cia-api spring-boot:run -Dspring-boot.run.arguments=...`) plus admin-only REST endpoint `POST /api/v1/admin/finance/backfill-journal-entries` gated by a platform-admin scope.
-- Operational runbook entry in `docs-site/docs/operations/period-end-closures-backfill.md` (new file). The runbook covers: pre-checks, dry-run option, expected wall-clock per 10k events, abort/resume.
+**Goal:** per-tenant Temporal workflow that replays the six sub-ledger events as JEs over a date range. Idempotent and rerunnable.
 
-**Tests:**
-- Backfill on an empty tenant produces zero JEs.
-- Backfill on a tenant with 100 mixed historical events produces a balanced trial balance.
-- Re-running the backfill produces zero new JEs.
-- Aborted run resumes correctly.
+**Deliverables (shipped):**
 
-**Reconciliation gate evidence:** trial-balance dump before backfill (zero-balanced empty), after backfill (zero-balanced populated), after re-backfill (unchanged).
+- `RetroactiveJournalBackfillWorkflow` + `RetroactiveJournalBackfillActivities` interfaces in `cia-workflow` (queue `BACKFILL_QUEUE`).
+- Activities impl in `cia-finance/backfill/` — native SQL against `policies`, `claims`, `endorsements`, `claim_expenses`, `ri_fac_covers`; reuses the live event path via new public `replay*` methods on `SubledgerPostingService`.
+- `SubledgerPostingService` extracted: `@EventListener` methods delegate to public `replay*(event)` / `replay*(event, businessDate)` overloads. The 1-arg form (live path) preserves `today()`; the 2-arg form (backfill path) takes the historical date so JEs land in the period the approval actually occurred in.
+- `TenantAwareWorkerInterceptor` (in `cia-workflow/interceptor/`) plus `ActivityThreadCleanup` hook contract. Wired in `TemporalConfig`. `cia-finance` contributes `FinanceActivityCleanup` to clear the scope-aware `FiscalPeriodLookupCache` ThreadLocal on every activity boundary.
+- Pre-flight period-lock check via `PeriodLockService.previewLock` (D6) — refuses runs that cross HARD-closed or SOFT-past-grace periods.
+- Dry-run support from day one (D7) — `BackfillRequest.dryRun=true` builds the events and counts what would be posted without writing.
+- Admin REST endpoint `POST /api/v1/admin/finance/backfill-journal-entries` gated by `PLATFORM_ADMIN` (D8); `BackfillAdminService` writes an `audit_log` row capturing the request before starting the workflow.
+- Chunk size 100 (workflow constant); Temporal retry `maximumAttempts=3` with 5s→2m exponential backoff; heartbeat every 10 rows.
 
-**Exit criteria:** existing tenants in dev / staging environments backfilled cleanly; runbook reviewed by ops.
+**Tests (shipped):**
 
-**Dependencies:** 1.5.
+- `RetroactiveJournalBackfillActivitiesImplTest` — 7 unit tests covering preflight blocked/allowed, happy path, dry-run, duplicate→alreadyExists, unexpected→failed+continue, empty→exhausted.
+- `RetroactiveBackfillIT` — Testcontainers IT: 3 approved policies → 3 balanced JEs (total debits = total credits = ₦600k); second run reports `alreadyExists=3, posted=0` (idempotency held); HARD-close + preview = `hasBlockingLocks=true` with period label.
+
+**Exit criteria met:**
+
+- Re-running the backfill produces zero new JEs (DB UNIQUE on idempotency triple).
+- Pre-flight refuses HARD-closed range.
+- All cia-finance unit tests pass after the `SubledgerPostingService` refactor.
+
+#### Slice 1.8b — Operations & Polish (PENDING)
+
+**Deliverables remaining:**
+
+- CLI trigger (`mvn -pl cia-api spring-boot:run -Dspring-boot.run.arguments=...`).
+- `GET /api/v1/admin/finance/backfill-journal-entries/{workflowId}` status endpoint (poll the Temporal service for run state + final `BackfillResult`).
+- Operational runbook in `docs-site/docs/operations/period-end-closures-backfill.md` covering: pre-checks, dry-run option, expected wall-clock per 10k events, abort/resume, "what if a HARD-closed period is in range".
+- Aborted-run-resumes-correctly test (Temporal worker kill + restart).
+- Wall-clock benchmark on 10k-event fixture; tune chunk size if needed.
+
+**Dependencies:** 1.8a (shipped), 1.5.
 
 ---
 

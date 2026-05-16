@@ -81,9 +81,38 @@ public class SubledgerPostingService {
     private final PostingRuleService postingRuleService;
     private final Clock clock;
 
-    // ── 1. Policy approved → Dr Premium receivable, Cr LRC BEL ───────────────
+    // ── Event listeners (delegate to public replay methods) ───────────────────
+    //
+    // Slice 1.8a extracted the bodies of the listener methods into the public
+    // `replay*` methods below so the retroactive backfill workflow can invoke
+    // the same code path as the live event flow. The listeners stay public —
+    // Spring's @EventListener mechanism requires it — but their job is
+    // reduced to forwarding the event. Every JE this service emits, whether
+    // produced live or via backfill, traverses identical logic and writes
+    // identical (sourceModule, sourceEventType, sourceReference) triples.
+
     @EventListener
-    public void onPolicyApproved(PolicyApprovedEvent event) {
+    public void onPolicyApproved(PolicyApprovedEvent event) { replayPolicyApproved(event); }
+
+    @EventListener
+    public void onClaimApproved(ClaimApprovedEvent event) { replayClaimApproved(event); }
+
+    @EventListener
+    public void onClaimSettled(ClaimSettledEvent event) { replayClaimSettled(event); }
+
+    @EventListener
+    public void onClaimExpenseApproved(ClaimExpenseApprovedEvent event) { replayClaimExpenseApproved(event); }
+
+    @EventListener
+    public void onEndorsementApproved(EndorsementApprovedEvent event) { replayEndorsementApproved(event); }
+
+    @EventListener
+    public void onFacPremiumCeded(FacPremiumCededEvent event) { replayFacPremiumCeded(event); }
+
+    // ── Public replay methods — invoked by event listeners AND backfill ──────
+
+    /** 1. Policy approved → Dr Premium receivable, Cr LRC BEL. */
+    public void replayPolicyApproved(PolicyApprovedEvent event) {
         if (zeroOrNull(event.netPremium())) {
             log.debug("Skipping JE for PolicyApproved {} — net premium is zero", event.policyNumber());
             return;
@@ -98,9 +127,18 @@ public class SubledgerPostingService {
             event.policyNumber());
     }
 
-    // ── 2. Claim approved → Dr Incurred claims, Cr LIC OCR ───────────────────
-    @EventListener
-    public void onClaimApproved(ClaimApprovedEvent event) {
+    /** 2. Claim approved → Dr Incurred claims, Cr LIC OCR. Live path: uses {@code today()}. */
+    public void replayClaimApproved(ClaimApprovedEvent event) {
+        replayClaimApproved(event, today());
+    }
+
+    /**
+     * 2b. Backfill overload — caller supplies the historical {@code
+     * businessDate} (typically {@code claims.approved_at::date}) so the
+     * replayed JE lands in the period the approval actually occurred in
+     * rather than today's period.
+     */
+    public void replayClaimApproved(ClaimApprovedEvent event, LocalDate businessDate) {
         if (zeroOrNull(event.approvedAmount())) {
             log.debug("Skipping JE for ClaimApproved {} — approved amount is zero", event.claimNumber());
             return;
@@ -110,15 +148,14 @@ public class SubledgerPostingService {
             EVENT_CLAIM_APPROVED,
             event.claimId().toString(),
             event.approvedAmount(),
-            today(),
+            businessDate,
             event.currencyCode(),
             event.claimNumber(),
             event.policyNumber());
     }
 
-    // ── 3. Claim settled → Dr LIC OCR, Cr Bank current accounts ──────────────
-    @EventListener
-    public void onClaimSettled(ClaimSettledEvent event) {
+    /** 3. Claim settled → Dr LIC OCR, Cr Bank current accounts. */
+    public void replayClaimSettled(ClaimSettledEvent event) {
         if (zeroOrNull(event.settledAmount())) {
             log.debug("Skipping JE for ClaimSettled {} — settled amount is zero", event.claimNumber());
             return;
@@ -133,9 +170,16 @@ public class SubledgerPostingService {
             event.claimNumber());
     }
 
-    // ── 4. Claim expense approved → Dr Other direct expenses, Cr Claims payable
-    @EventListener
-    public void onClaimExpenseApproved(ClaimExpenseApprovedEvent event) {
+    /** 4. Claim expense approved → Dr Other direct expenses, Cr Claims payable. Live path: uses {@code today()}. */
+    public void replayClaimExpenseApproved(ClaimExpenseApprovedEvent event) {
+        replayClaimExpenseApproved(event, today());
+    }
+
+    /**
+     * 4b. Backfill overload — caller supplies historical {@code businessDate}
+     * (typically {@code claim_expenses.approved_at::date}).
+     */
+    public void replayClaimExpenseApproved(ClaimExpenseApprovedEvent event, LocalDate businessDate) {
         if (zeroOrNull(event.amount())) {
             log.debug("Skipping JE for ClaimExpenseApproved {} — amount is zero", event.expenseReference());
             return;
@@ -145,15 +189,29 @@ public class SubledgerPostingService {
             EVENT_CLAIM_EXPENSE_APPROVED,
             event.expenseId().toString(),
             event.amount(),
-            today(),
+            businessDate,
             event.currencyCode(),
             event.expenseReference(),
             event.claimNumber());
     }
 
-    // ── 5. Endorsement approved → sign-dispatched (ADDITIONAL or REFUND) ─────
-    @EventListener
-    public void onEndorsementApproved(EndorsementApprovedEvent event) {
+    /**
+     * 5. Endorsement approved → sign-dispatched (ADDITIONAL or REFUND). Live
+     * path: uses {@code today()}.
+     *
+     * <p>Refund posts the absolute amount against swapped Dr/Cr (encoded in
+     * the posting rule). The amount on the JE is always positive — sign is
+     * captured in the choice of rule, not the value.
+     */
+    public void replayEndorsementApproved(EndorsementApprovedEvent event) {
+        replayEndorsementApproved(event, today());
+    }
+
+    /**
+     * 5b. Backfill overload — caller supplies historical {@code businessDate}
+     * (typically {@code endorsements.approved_at::date}).
+     */
+    public void replayEndorsementApproved(EndorsementApprovedEvent event, LocalDate businessDate) {
         int sign = event.premiumAdjustment() == null ? 0 : event.premiumAdjustment().signum();
         if (sign == 0) {
             log.debug("Skipping JE for EndorsementApproved {} — premium adjustment is zero", event.endorsementNumber());
@@ -162,35 +220,43 @@ public class SubledgerPostingService {
         String eventType = sign > 0
             ? EVENT_ENDORSEMENT_PREMIUM_ADDITIONAL
             : EVENT_ENDORSEMENT_PREMIUM_REFUND;
-        // Refund posts the absolute amount against swapped Dr/Cr (encoded in the
-        // posting rule). The amount on the JE is always positive — sign is
-        // captured in the choice of rule, not the value.
         postTwoLine(
             MODULE_ENDORSEMENT,
             eventType,
             event.endorsementId().toString(),
             event.premiumAdjustment().abs(),
-            today(),
+            businessDate,
             event.currencyCode(),
             event.endorsementNumber(),
             event.policyNumber());
     }
 
-    // ── 6. FAC premium ceded → compound 3-line posting (hardcoded) ───────────
-    //
-    // posting_rule (1 Dr + 1 Cr per row, UNIQUE on source_event_type) cannot
-    // express three legs, so this listener bypasses the table and builds the
-    // request inline. The accounts and signs are explicit here so review can
-    // diff the contract directly.
-    //
-    //   Dr 5210 Outward RI premium expense       = premiumCeded
-    //   Cr 4300 RI commission income             = commissionAmount
-    //   Cr 2310 RI premium payable (outward)     = netPremiumCeded
-    //
-    // Invariant: premiumCeded == commissionAmount + netPremiumCeded.
-    // {@link JournalEntryService#post} re-checks this at the GL boundary.
-    @EventListener
-    public void onFacPremiumCeded(FacPremiumCededEvent event) {
+    /**
+     * 6. FAC premium ceded → compound 3-line posting (hardcoded).
+     *
+     * <p>{@code posting_rule} (1 Dr + 1 Cr per row, UNIQUE on
+     * {@code source_event_type}) cannot express three legs, so this method
+     * bypasses the table and builds the request inline. The accounts and
+     * signs are explicit so review can diff the contract directly.
+     *
+     * <pre>
+     *   Dr 5210 Outward RI premium expense       = premiumCeded
+     *   Cr 4300 RI commission income             = commissionAmount
+     *   Cr 2310 RI premium payable (outward)     = netPremiumCeded
+     * </pre>
+     *
+     * <p>Invariant: {@code premiumCeded == commissionAmount + netPremiumCeded}.
+     * {@link JournalEntryService#post} re-checks this at the GL boundary.
+     */
+    public void replayFacPremiumCeded(FacPremiumCededEvent event) {
+        replayFacPremiumCeded(event, today());
+    }
+
+    /**
+     * 6b. Backfill overload — caller supplies historical {@code businessDate}
+     * (typically {@code ri_fac_covers.approved_at::date}).
+     */
+    public void replayFacPremiumCeded(FacPremiumCededEvent event, LocalDate businessDate) {
         if (zeroOrNull(event.premiumCeded())) {
             log.debug("Skipping JE for FacPremiumCeded {} — premium ceded is zero", event.facReference());
             return;
@@ -200,7 +266,7 @@ public class SubledgerPostingService {
             event.facReference(), event.reinsuranceCompanyName());
 
         PostJournalEntryRequest request = new PostJournalEntryRequest(
-            today(),
+            businessDate,
             MODULE_REINSURANCE,
             EVENT_FAC_PREMIUM_CEDED,
             event.facCoverId().toString(),

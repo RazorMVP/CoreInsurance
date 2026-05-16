@@ -4,6 +4,93 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-16 — Session 64 (`module-12-period-end-closures`): Slice 1.8a — Retroactive JE Backfill mechanism shipped
+
+### Context
+
+With Slice 1.7-fix (Session 62) clearing the `FiscalPeriodLookupCache` scope blocker, Slice 1.8 was ready. The in-thread design pass split Slice 1.8 into two parts: **1.8a** the per-tenant mechanism (workflow + activities + admin endpoint + idempotency contract), and **1.8b** the operational polish (CLI trigger, status poll endpoint, runbook, 10k-event benchmark). This session ships 1.8a end-to-end.
+
+The slice answers ten decision questions locked before code (D1–D10):
+
+- **D1** extract public `replay*` methods on `SubledgerPostingService` (live `@EventListener` path delegates → identical replay semantics for backfill).
+- **D2** one workflow execution per tenant; tenant id travels with every chunk request so worker threads can rebind.
+- **D3** batched activities, chunk size 100 (cursor pagination via `LIMIT/OFFSET`).
+- **D4** idempotency via `journal_entry` UNIQUE on `(sourceModule, sourceEventType, sourceReference)` — activity catches `JournalEntryDuplicateException` and counts `alreadyExists`.
+- **D5** Temporal heartbeats every 10 rows (liveness, not resumption — restart relies on idempotency).
+- **D6** pre-flight period-lock check via `PeriodLockService.previewLock(from, to)`; refuses runs that cross HARD-closed or SOFT-past-grace periods.
+- **D7** dry-run from day one — `BackfillRequest.dryRun=true` counts what would be posted without writing.
+- **D8** admin REST endpoint `POST /api/v1/admin/finance/backfill-journal-entries`, gated by `PLATFORM_ADMIN` role.
+- **D9** workflow + activity interfaces in `cia-workflow`; impl in `cia-finance` so the workflow module remains a leaf dependency.
+- **D10** `TenantAwareWorkerInterceptor` in `cia-workflow` with an `ActivityThreadCleanup` hook contract; `cia-finance` contributes a cleanup that drains `FiscalPeriodLookupCache.clearThreadCache()` on every activity boundary.
+
+### Files created
+
+| File | Purpose |
+|---|---|
+| `cia-workflow/TemporalQueues.java` | Added `BACKFILL_QUEUE` constant (`"backfill-queue"`). |
+| `cia-workflow/backfill/BackfillEventType.java` | Six-value enum: POLICY_APPROVED, CLAIM_APPROVED, CLAIM_SETTLED, CLAIM_EXPENSE_APPROVED, ENDORSEMENT_APPROVED, FAC_PREMIUM_CEDED. |
+| `cia-workflow/backfill/BackfillRequest.java` | Workflow input record — tenantId, requestId, requestedBy, fromDate, toDate, eventTypes (empty = all), dryRun. |
+| `cia-workflow/backfill/BackfillResult.java` | Workflow output — Status (SUCCESS / PARTIAL_FAILURE / REFUSED), totals, per-event-type breakdown, refusalReason. |
+| `cia-workflow/backfill/BackfillEventTypeCount.java` | Per-type aggregation with `plus(chunk)` accumulator. |
+| `cia-workflow/backfill/BackfillChunkRequest.java` | Activity input — tenantId, eventType, fromDate, toDate, offset, limit, dryRun. |
+| `cia-workflow/backfill/BackfillChunkResult.java` | Activity output — attempted, posted, alreadyExists, failed, exhausted (signals end of pagination). |
+| `cia-workflow/backfill/BackfillPreflightResult.java` | Pre-flight output — hasBlockingLocks, blockingPeriodLabels, summary. |
+| `cia-workflow/backfill/RetroactiveJournalBackfillWorkflow.java` | `@WorkflowInterface` with `backfill(BackfillRequest)` method. |
+| `cia-workflow/backfill/RetroactiveJournalBackfillActivities.java` | `@ActivityInterface` with `previewPeriodLocks(tenantId, from, to)` + `processChunk(BackfillChunkRequest)`. |
+| `cia-workflow/interceptor/ActivityThreadCleanup.java` | Functional-interface contract — `void clear()`. Module-local ThreadLocal cleanup hook. |
+| `cia-workflow/interceptor/TenantAwareWorkerInterceptor.java` | Extends `WorkerInterceptorBase`. Wraps every activity execution: `try { super.execute() } finally { TenantContext.clear(); cleanups.forEach(c -> c.clear()); }`. Catches RuntimeException from each cleanup so a faulty hook can't mask the activity result. |
+| `cia-finance/backfill/FinanceActivityCleanup.java` | `@Component` adapter — wraps `FiscalPeriodLookupCache::clearThreadCache` and contributes it to the interceptor's list. Package-private; arrow points cia-finance → cia-workflow only. |
+| `cia-finance/backfill/RetroactiveJournalBackfillActivitiesImpl.java` | Activities impl. Six private `process<EventType>` methods, each running a parameterised native SQL query against the source table (`policies`, `claims`, `endorsements`, `claim_expenses`, `ri_fac_covers`) with `LIMIT/OFFSET` pagination. Native-row coercion helpers (`uuid`, `bd`, `date`, `instant`, `instantToDate`) absorb driver-version variance for UUID / NUMERIC / DATE / TIMESTAMPTZ. Per-row exception isolation: `JournalEntryDuplicateException` → alreadyExists, other `RuntimeException` → failed + log + continue. Heartbeats every 10 rows via `Activity.getExecutionContext().heartbeat(index)`; falls back to no-op when called from unit tests (no Temporal context bound). |
+| `cia-finance/backfill/RetroactiveJournalBackfillWorkflowImpl.java` | Workflow impl. `chunk size = 100`; activity options `startToCloseTimeout=5min`, `heartbeatTimeout=30s`, retries 3× exponential (5s→2m). Pre-flight check first; if blocked, returns REFUSED. Then for each event type, pages chunks until `exhausted=true`. Aggregates per-type counts via `BackfillEventTypeCount.plus(chunk)`. Status `SUCCESS` if `totalFailed == 0` else `PARTIAL_FAILURE`. |
+| `cia-finance/backfill/BackfillWorkerConfig.java` | `@Configuration` with `@PostConstruct` worker registration on `BACKFILL_QUEUE`. Follows `WebhookWorkerConfig` pattern; inherits the `TenantAwareWorkerInterceptor` from the shared `WorkerFactory`. |
+| `cia-finance/backfill/BackfillAdminService.java` | Bridges the REST DTO to the workflow start. Writes an `audit_log` row (`entity_type=JournalBackfillJob`, action `CREATE`) on the request thread before calling `WorkflowClient.start`. Workflow id format `backfill-{tenantId}-{epochMillis}`. |
+| `cia-finance/backfill/BackfillAdminController.java` | `POST /api/v1/admin/finance/backfill-journal-entries`, `@PreAuthorize("hasRole('PLATFORM_ADMIN')")`. Returns `StartBackfillResponse` with workflow id + tenant id + dryRun + startedAt. |
+| `cia-finance/backfill/dto/StartBackfillRequest.java` | Wire contract — `@NotNull fromDate`, `@NotNull toDate`, optional `eventTypes`, `dryRun`. |
+| `cia-finance/backfill/dto/StartBackfillResponse.java` | Wire contract — workflowId, tenantId, dryRun, startedAt. |
+| `cia-finance/test/backfill/RetroactiveJournalBackfillActivitiesImplTest.java` | 7 unit tests (preflight blocked/allowed, happy path, dry-run, duplicate, unexpected failure with continuation, empty exhausted). Uses hand-rolled subclass test doubles for `SubledgerPostingService` and `PeriodLockService` (Java 25 + Mockito-inline can't redefine concrete classes that inherit from sealed bootstrap types); a JDK reflective `Proxy` substitutes for `EntityManager` (same Mockito issue with `AutoCloseable`-derived interfaces). |
+| `cia-api/test/finance/backfill/RetroactiveBackfillIT.java` | Testcontainers IT — seeds 3 approved policies → asserts 3 balanced JEs (total Dr = total Cr = ₦600k); re-runs same request → asserts `alreadyExists=3, posted=0`; HARD-closes May 2026 → asserts `previewPeriodLocks` returns `hasBlockingLocks=true` with `"May 2026"` label. |
+
+### Files modified
+
+| File | Change |
+|---|---|
+| `cia-finance/pom.xml` | Added `cia-workflow` dependency. |
+| `cia-workflow/config/TemporalConfig.java` | `WorkerFactory` bean now constructs `WorkerFactoryOptions` with `TenantAwareWorkerInterceptor(cleanups)`. Spring auto-injects `List<ActivityThreadCleanup>` (empty list if no module contributes). |
+| `cia-finance/gl/SubledgerPostingService.java` | Listener methods (`onPolicyApproved`, etc.) extracted to public `replay*(event)` methods. For the 4 events that lack a date field (`ClaimApproved`, `ClaimSettled` carries it; `ClaimExpense`, `Endorsement`, `Fac` don't), added `replay*(event, LocalDate businessDate)` overloads — the 1-arg form (live path) preserves `today()`, the 2-arg form (backfill path) takes the historical `approved_at::date`. Same UNIQUE-triple keys ensure live + backfill produce identical JEs. |
+| `docs-site/docs/architecture/period-end-closures-foundations-plan.md` | Slice 1.8 section split into 1.8a (SHIPPED, full deliverables list) and 1.8b (PENDING, ops polish). |
+
+### Verification
+
+- `mvn install -DskipTests -pl cia-api -am` — exit 0 (full transitive compile + test-compile).
+- `mvn test -pl cia-finance -am` — exit 0; all cia-finance tests pass, including the existing `SubledgerPostingServiceTest` (refactor preserved behaviour).
+- `mvn test -pl cia-finance -Dtest=RetroactiveJournalBackfillActivitiesImplTest` — 7/7 pass.
+- Integration test (`RetroactiveBackfillIT`) compiles cleanly; local run blocked by absent Docker daemon; CI environment runs Testcontainers and will execute it.
+
+### Why D1 (extract `replay*` methods) was the right shape
+
+The naïve alternative was to call `subledgerPostingService.onPolicyApproved(event)` from the backfill activity. That works, but `onX` is the event-listener convention and a name that pretends "this is an event reaction" elsewhere; calling it from an admin tool would have read as a layering violation. The 1-arg/2-arg overload pair makes the intent explicit at the call site: `replayPolicyApproved(event)` for live (today's date), `replayClaimApproved(event, businessDate)` for historical replay. Both paths share the same posting body and the same idempotency triple.
+
+### Why per-row exception isolation matters
+
+Without it, a single poisoned row (e.g. `InactiveAccountException` because a historical COA code has since been decommissioned) would fail the entire chunk activity. Temporal would retry, hit the same row, fail again, and the workflow would either consume all retries or run forever. By catching `RuntimeException` per row and counting it as `failed`, the activity always returns a successful chunk result with structured counts. The workflow surfaces `PARTIAL_FAILURE` so an operator can investigate the failed rows without re-running everything.
+
+### Why the IT seeds via `JdbcTemplate` and not entities
+
+`cia-finance` doesn't (and shouldn't) depend on `cia-policy`, `cia-claims`, `cia-endorsement`, or `cia-reinsurance` — the dependency arrows would invert the module hierarchy and produce cycle risk. Native SQL via `EntityManager.createNativeQuery` is the right abstraction in production; the IT mirrors that by inserting fixture rows directly into the source tables with `JdbcTemplate`.
+
+### Open questions (not blockers for 1.8a)
+
+- **CLI trigger** — Slice 1.8b will add `BackfillCliRunner` so ops can launch a backfill without an HTTP client.
+- **Status poll endpoint** — `GET /api/v1/admin/finance/backfill-journal-entries/{workflowId}` will read Temporal's `DescribeWorkflowExecution` and return run state + final `BackfillResult`.
+- **10k-event benchmark** — chunk size 100 is a guess that needs validation; Slice 1.8b will measure wall-clock per 10k events on a representative dev tenant and tune.
+- **Aborted-run-resumes test** — needs a Temporal worker kill-and-restart harness; deferred to 1.8b.
+
+### Next slice
+
+Slice 1.8b — Operations & Polish (CLI trigger, status endpoint, runbook, benchmark, abort/resume test).
+
+---
+
 ## 2026-05-16 — Session 63 (`module-12-period-end-closures`): Expert-Critique-Pass directive removed from `/cia` skill
 
 ### Context
