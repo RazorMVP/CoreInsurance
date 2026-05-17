@@ -38,6 +38,13 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: "category",
+      label: "Operations",
+      items: [
+        "operations/period-end-closures-backfill",
+      ],
+    },
+    {
+      type: "category",
       label: "Development",
       items: [
         "development/coding-standards",

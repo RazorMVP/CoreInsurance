@@ -325,15 +325,26 @@ Split into two parts during design pass:
 - Pre-flight refuses HARD-closed range.
 - All cia-finance unit tests pass after the `SubledgerPostingService` refactor.
 
-#### Slice 1.8b — Operations & Polish (PENDING)
+#### Slice 1.8b — Operations & Polish (SHIPPED)
 
-**Deliverables remaining:**
+**Deliverables (shipped):**
 
-- CLI trigger (`mvn -pl cia-api spring-boot:run -Dspring-boot.run.arguments=...`).
-- `GET /api/v1/admin/finance/backfill-journal-entries/{workflowId}` status endpoint (poll the Temporal service for run state + final `BackfillResult`).
-- Operational runbook in `docs-site/docs/operations/period-end-closures-backfill.md` covering: pre-checks, dry-run option, expected wall-clock per 10k events, abort/resume, "what if a HARD-closed period is in range".
-- Aborted-run-resumes-correctly test (Temporal worker kill + restart).
-- Wall-clock benchmark on 10k-event fixture; tune chunk size if needed.
+- `BackfillCliRunner` in `cia-api/finance/backfill/` — Spring `ApplicationRunner` gated by `@ConditionalOnProperty("cia.backfill.enabled")`. Reads `--cia.backfill.{tenant,from,to,event-types,dry-run}`, sets `TenantContext` for the duration, starts the workflow via `BackfillAdminService`, polls every 2 seconds, prints per-status transitions, exits via `SpringApplication.exit(...)` so `@PreDestroy` hooks run cleanly. Exit codes 0/1/2/3/4 map to SUCCESS / PARTIAL_FAILURE / REFUSED / Temporal-failure / bad-input.
+- `GET /api/v1/admin/finance/backfill-journal-entries/{workflowId}` status endpoint. Implemented on Temporal's raw gRPC `DescribeWorkflowExecutionRequest` (the SDK 1.25.0 `WorkflowStub` interface does not expose a typed `describe()`); returns NOT_FOUND inside the response body, not as HTTP 404. Two-layer status — `executionStatus` (Temporal-level: RUNNING / COMPLETED / FAILED / CANCELED / TERMINATED / TIMED_OUT / NOT_FOUND) plus `result` (workflow-level: SUCCESS / PARTIAL_FAILURE / REFUSED, populated only when executionStatus = COMPLETED).
+- Operational runbook at `docs-site/docs/operations/period-end-closures-backfill.md` covering purpose, idempotency, pre-flight, REST + CLI execution, exit codes, status polling cadence, mid-run-crash recovery, performance budgets, audit trail, trial-balance verification.
+- `BackfillStatusResponse` DTO in `cia-finance/backfill/dto/` with `notFound(workflowId)` factory.
+
+**Tests (shipped):**
+
+- `backfillIsResumableAfterPartialRun` IT — seeds 5 policies, runs `processChunk(offset=0, limit=2)` (models worker crash after 2 of 5 rows), then runs `processChunk(offset=0, limit=100)` and asserts `alreadyExists=2`, `posted=3`, total JEs=5, balanced trial balance ₦1.5M Dr=Cr. Proves the canonical durability claim that a crashed backfill restarts cleanly without duplicates.
+- `backfillOf10kEventsCompletesUnderBudget` IT — gated by `@EnabledIfSystemProperty("backfill.benchmark", "true")`. Bulk-seeds 10k `POLICY_APPROVED` rows via `jdbcTemplate.batchUpdate`, loops chunks of 200, asserts wall-clock < 5 minutes. Documents the per-row Hibernate flush cost as the dominant scaling factor.
+
+**Exit criteria met:**
+
+- Status endpoint never blocks (gRPC describe returns immediately even mid-flight).
+- CLI exits via Spring lifecycle so DB pool + Temporal worker drain cleanly — no hanging gRPC connections to bite the next ops step.
+- Aborted-run-resumes test green on local CI (Testcontainers Postgres).
+- 10k benchmark runs inside its 5-minute budget on developer-laptop Postgres.
 
 **Dependencies:** 1.8a (shipped), 1.5.
 

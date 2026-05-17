@@ -6943,6 +6943,88 @@
         }
       }
     },
+    "/admin/finance/backfill-journal-entries/{workflowId}": {
+      "get": {
+        "summary": "Get backfill workflow status",
+        "description": "Returns the current Temporal execution status of a previously started backfill workflow, plus the materialised BackfillResult when the workflow has completed. Never blocks. Returns executionStatus=NOT_FOUND when Temporal has no execution with the supplied id (e.g. id was never started, started in a different namespace, or aged out of the visibility retention window). Module 12 Slice 1.8b.",
+        "operationId": "getBackfillJournalEntriesStatus",
+        "tags": ["Finance \u2014 Admin"],
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"},
+            "description": "Temporal workflow id returned from the POST start call (format: backfill-{tenantId}-{epochMillis})"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status snapshot \u2014 always returned (NOT_FOUND surfaces inside executionStatus, not as HTTP 404)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "workflowId": {"type": "string"},
+                        "executionStatus": {
+                          "type": "string",
+                          "enum": ["RUNNING", "COMPLETED", "FAILED", "CANCELED", "TERMINATED", "TIMED_OUT", "CONTINUED_AS_NEW", "UNSPECIFIED", "NOT_FOUND"],
+                          "description": "Temporal's view of the workflow"
+                        },
+                        "result": {
+                          "type": "object",
+                          "nullable": true,
+                          "description": "Materialised only when executionStatus=COMPLETED",
+                          "properties": {
+                            "tenantId": {"type": "string"},
+                            "requestId": {"type": "string"},
+                            "status": {
+                              "type": "string",
+                              "enum": ["SUCCESS", "PARTIAL_FAILURE", "REFUSED"],
+                              "description": "Workflow's own verdict; distinct from executionStatus"
+                            },
+                            "dryRun": {"type": "boolean"},
+                            "startedAt": {"type": "string", "format": "date-time"},
+                            "completedAt": {"type": "string", "format": "date-time"},
+                            "totalAttempted": {"type": "integer", "format": "int64"},
+                            "totalPosted": {"type": "integer", "format": "int64"},
+                            "totalAlreadyExists": {"type": "integer", "format": "int64"},
+                            "totalFailed": {"type": "integer", "format": "int64"},
+                            "byEventType": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "eventType": {
+                                    "type": "string",
+                                    "enum": ["POLICY_APPROVED", "CLAIM_APPROVED", "CLAIM_SETTLED", "CLAIM_EXPENSE_APPROVED", "ENDORSEMENT_APPROVED", "FAC_PREMIUM_CEDED"]
+                                  },
+                                  "attempted": {"type": "integer", "format": "int64"},
+                                  "posted": {"type": "integer", "format": "int64"},
+                                  "alreadyExists": {"type": "integer", "format": "int64"},
+                                  "failed": {"type": "integer", "format": "int64"}
+                                }
+                              }
+                            },
+                            "refusalReason": {"type": "string", "nullable": true}
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing PLATFORM_ADMIN role"}
+        }
+      }
+    },
     "/debit-notes": {
       "get": {
         "summary": "List",

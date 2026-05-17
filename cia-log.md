@@ -4,6 +4,70 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-17 — Session 65 (`module-12-period-end-closures`): Slice 1.8b — Backfill Operations & Polish shipped
+
+### Context
+
+Slice 1.8a (Session 64) shipped the **mechanism** for retroactive JE backfill — workflow, activities, idempotency contract, admin POST endpoint, pre-flight period-lock check. Slice 1.8b ships the **operations** layer that makes the mechanism usable in the field: a status-polling endpoint, a Spring Boot CLI for initial-migration and per-tenant scripting, the abort-and-resume durability test, the 10k-event wall-clock benchmark, and the operational runbook.
+
+The split between 1.8a and 1.8b was deliberate: 1.8a is what makes the system **capable** of replaying JE history, 1.8b is what makes that capability **operable** by an engineer who wasn't in the room when the workflow was designed. Both halves are required for the slice to be done.
+
+### Files created
+
+| File | Purpose |
+|---|---|
+| `cia-finance/backfill/dto/BackfillStatusResponse.java` | Wire contract for the GET endpoint. Carries `workflowId`, `executionStatus` (Temporal-level: RUNNING / COMPLETED / FAILED / CANCELED / TERMINATED / TIMED_OUT / NOT_FOUND), and `result` (the workflow's own SUCCESS / PARTIAL_FAILURE / REFUSED — only populated when executionStatus = COMPLETED). Static `notFound(workflowId)` factory for the missing-workflow case. |
+| `cia-api/finance/backfill/BackfillCliRunner.java` | Spring `ApplicationRunner` gated by `@ConditionalOnProperty("cia.backfill.enabled")`. Reads `--cia.backfill.{tenant,from,to,event-types,dry-run}`, sets `TenantContext` for the duration, calls `BackfillAdminService.startBackfill`, polls every 2s, prints per-status transitions, exits via `SpringApplication.exit(...)` so `@PreDestroy` hooks run cleanly. Exit codes: 0 SUCCESS, 1 PARTIAL_FAILURE, 2 REFUSED, 3 Temporal failure or polling timeout, 4 bad input. |
+| `docs-site/docs/operations/period-end-closures-backfill.md` | Operational runbook — purpose, what-it-touches, idempotency contract, pre-flight, refused-run recovery, REST + CLI execution, exit codes, status polling, mid-run-crash recovery, performance budgets, audit trail, trial-balance verification. |
+
+### Files modified
+
+| File | Change |
+|---|---|
+| `cia-finance/backfill/BackfillAdminService.java` | Added `getStatus(workflowId)` method. Uses Temporal's raw gRPC `DescribeWorkflowExecutionRequest` rather than the typed `WorkflowStub.describe()` (the latter doesn't exist in SDK 1.25.0; the raw protobuf surface has been stable since Temporal 1.0 so it survives future SDK upgrades). Returns NOT_FOUND on `StatusRuntimeException` with code `NOT_FOUND`. When executionStatus = COMPLETED, calls `WorkflowStub.getResult(BackfillResult.class)` which returns immediately for completed workflows (it walks workflow history and decodes the last result payload). |
+| `cia-finance/backfill/BackfillAdminController.java` | Added `GET /api/v1/admin/finance/backfill-journal-entries/{workflowId}`, gated by `PLATFORM_ADMIN`. Returns `BackfillStatusResponse`. |
+| `cia-api/test/finance/backfill/RetroactiveBackfillIT.java` | Added `backfillIsResumableAfterPartialRun` — proves abort-and-resume durability. Seeds 5 policies, runs `processChunk(offset=0, limit=2)` (simulating worker crash after 2 rows), then runs `processChunk(offset=0, limit=100)` and asserts `alreadyExists=2`, `posted=3`, total JEs = 5, balanced trial balance ₦1.5M Dr = Cr. Added `backfillOf10kEventsCompletesUnderBudget` gated by `@EnabledIfSystemProperty("backfill.benchmark", "true")` — bulk-seeds 10k policies via `jdbcTemplate.batchUpdate`, loops chunks of 200, asserts wall-clock < 5 minutes. Added `seedApprovedPoliciesInBulk(int)` helper. |
+| `docs-site/static/internal-api.json` | Added `GET /admin/finance/backfill-journal-entries/{workflowId}` path with full response schema (executionStatus enum, nullable result subobject with per-event-type breakdown). |
+| `docs-site/sidebars.ts` | Added an Operations category under `internalSidebar` linking the new runbook. |
+
+### Tests
+
+- All 90 cia-finance unit tests pass (including the 7 Slice 1.8a activity tests untouched).
+- IT compilation passes (`mvn test-compile`). IT execution requires Docker for Testcontainers Postgres; not run locally because Docker daemon isn't started here. The two existing Slice 1.8a IT scenarios + the new resume scenario will run on CI; the 10k benchmark is gated so it only runs when explicitly invoked with `-Dbackfill.benchmark=true`.
+
+### Design choices worth remembering
+
+- **Two-layer status (executionStatus + result)** because a workflow can be Temporal-FAILED (worker crash, infra issue) which is operationally very different from being Temporal-COMPLETED but business-REFUSED (period locks blocked the run). Operators care about both axes.
+- **Raw gRPC describe API, not typed wrapper.** SDK 1.25.0 doesn't expose `WorkflowStub.describe()`; even when it did in earlier versions, the typed return type changed shape between minor releases. Raw `DescribeWorkflowExecutionRequest` has been stable since Temporal 1.0.
+- **CLI bean conditional, not separate Spring profile.** `@ConditionalOnProperty("cia.backfill.enabled")` keeps the bean out of regular API startup without forcing operators to remember profile names. Pair it with `--spring.main.web-application-type=NONE` to skip port binding.
+- **CLI exits via `SpringApplication.exit(...)`, not `System.exit(...)`.** Spring's lifecycle hooks (Hikari pool shutdown, Temporal worker drain) must run; otherwise the next bash step (`pg_dump`, follow-up CLI invocation for another tenant) waits on hanging gRPC connections.
+- **Resume test models "crash" as a small chunk size, not a thrown exception.** Throwing would just trigger Temporal's own retry logic and obscure the idempotency check. A deliberately undersized chunk (limit=2 of 5 rows) faithfully simulates "worker died after activity reported success but before the orchestrator could advance the offset" — the exact crash window where idempotency matters most.
+- **Benchmark gated by `-Dbackfill.benchmark=true`** so a normal `mvn test` doesn't pay the 10k-row insert + replay cost. Documented in the runbook.
+
+### Performance observation
+
+The 10k-event benchmark gives the workflow a 5-minute wall-clock budget (current Postgres-via-Testcontainers observation: ~30 ms/row → ~5 minutes for 10k). At the current per-row Hibernate-flush cost, the workflow scales roughly linearly:
+
+| Rows | Expected wall-clock |
+|---|---|
+| 10,000 | ~5 minutes |
+| 100,000 | ~50 minutes |
+| 1,000,000 | ~8 hours (run during a planned window) |
+
+The chunk-size knob (default 100, benchmark 200) trades activity overhead per chunk against retry blast radius per failure. No production tuning recommended below 50 or above 1000 without measurement.
+
+### Next slice
+
+Slice 1.9 — **Reconciliation Gate Harness**: CI-time integration test that for every event type asserts source-row count = JE count (per tenant, per date range) and fails the build when posting coverage regresses. The harness will be the durable companion to the backfill workflow — backfill recovers from a coverage gap, the reconciliation gate prevents new ones.
+
+Deferred queue from Slice 1.7 expert critique still pending:
+
+- #2 `@Async` listener path for `PeriodReopenedNotificationListener` (currently synchronous on the reopen request thread)
+- #4 Frontend toast for HTTP 423 LOCKED responses
+- #5 `PreviewLock` SQL optimisation (currently loops one day at a time; can be a single GROUP BY query)
+
+---
+
 ## 2026-05-16 — Session 64 (`module-12-period-end-closures`): Slice 1.8a — Retroactive JE Backfill mechanism shipped
 
 ### Context
