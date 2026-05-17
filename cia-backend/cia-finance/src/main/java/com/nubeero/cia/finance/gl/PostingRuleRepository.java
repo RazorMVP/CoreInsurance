@@ -11,5 +11,5 @@ import java.util.UUID;
  */
 public interface PostingRuleRepository extends JpaRepository<PostingRule, UUID> {
 
-    Optional<PostingRule> findBySourceEventTypeAndIsActiveTrueAndDeletedAtIsNull(String sourceEventType);
+    Optional<PostingRule> findBySourceEventTypeAndActiveTrueAndDeletedAtIsNull(String sourceEventType);
 }

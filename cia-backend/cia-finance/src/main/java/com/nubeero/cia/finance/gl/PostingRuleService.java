@@ -35,7 +35,7 @@ public class PostingRuleService {
         key = "T(com.nubeero.cia.common.tenant.TenantContext).getTenantId() + ':' + #sourceEventType"
     )
     public PostingRule findByEventType(String sourceEventType) {
-        return repository.findBySourceEventTypeAndIsActiveTrueAndDeletedAtIsNull(sourceEventType)
+        return repository.findBySourceEventTypeAndActiveTrueAndDeletedAtIsNull(sourceEventType)
             .orElseThrow(() -> new PostingRuleNotFoundException(sourceEventType));
     }
 }

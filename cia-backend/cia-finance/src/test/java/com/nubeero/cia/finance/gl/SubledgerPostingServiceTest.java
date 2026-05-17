@@ -126,7 +126,7 @@ class SubledgerPostingServiceTest {
     @Test
     @DisplayName("onPolicyApproved propagates PostingRuleNotFoundException when rule is missing")
     void onPolicyApproved_MissingRule() {
-        when(postingRuleRepository.findBySourceEventTypeAndIsActiveTrueAndDeletedAtIsNull(
+        when(postingRuleRepository.findBySourceEventTypeAndActiveTrueAndDeletedAtIsNull(
             SubledgerPostingService.EVENT_POLICY_APPROVED)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.onPolicyApproved(new PolicyApprovedEvent(
@@ -319,7 +319,7 @@ class SubledgerPostingServiceTest {
         rule.setCreditAccountCode(cr);
         rule.setNarrativeTemplate(narrativeTemplate);
         rule.setActive(true);
-        when(postingRuleRepository.findBySourceEventTypeAndIsActiveTrueAndDeletedAtIsNull(eventType))
+        when(postingRuleRepository.findBySourceEventTypeAndActiveTrueAndDeletedAtIsNull(eventType))
             .thenReturn(Optional.of(rule));
     }
 

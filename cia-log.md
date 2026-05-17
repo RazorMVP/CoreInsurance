@@ -4,6 +4,59 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-17 — Session 66 (`module-12-period-end-closures`): Slice 1.8b IT verification — Module 12 IT stabilisation
+
+### Context
+
+User asked to verify Slice 1.8b is complete. The static checks passed (file shape, compile, unit tests), but the live `RetroactiveBackfillIT` Testcontainers run surfaced **a six-layer chain of latent bugs** that had been masked by the fact that the IT was never actually exercised end-to-end since Docker Desktop upgraded to 29.x. The session peeled the layers one at a time, with explicit user direction at each decision point, and ended with the IT green.
+
+### Layered findings (each masked the next)
+
+| # | Bug | Owning slice | Fix |
+|---|---|---|---|
+| 1 | Testcontainers 1.20.1 + docker-java 3.4.2 incompatible with Docker Engine 29.4.2 (`MinAPIVersion=1.40`; docker-java probes v1.30 → HTTP 400) | Infra | Bump `testcontainers.version` to **1.21.4** in `cia-backend/pom.xml` AND explicitly pin `docker-java.version=3.5.3` in `<dependencyManagement>` **before** the Testcontainers BOM import (first-declaration-wins) |
+| 2 | `PostingRuleRepository.findBySourceEventTypeAndIsActive…` references non-existent property `isActive` — Lombok-style `private boolean active` exposes the property name as `active`, not `isActive`. Mocked in all 5 unit-test callers, so the broken JPQL derivation was never exercised | Slice 1.5 | Renamed across 4 files: repository, service, 2 test files (3+2 mock setups) |
+| 3 | `RetroactiveJournalBackfillActivitiesImpl.processPolicyApproved` selects `currency_code` from `policies`, but the column doesn't exist (V6 never added it; every other money-bearing table got one in V7/V8/V9/V10) | Slice 1.8a | New Flyway `V34__add_currency_code_to_policies.sql` adds `VARCHAR(3) NOT NULL DEFAULT 'NGN'` — future-proofs multi-currency policies for Phase 2 IFRS 17 |
+| 4 | `journal_entry.created_at NOT NULL` — V31 has `DEFAULT now()` but Hibernate explicitly sends `NULL` when `@CreatedDate` isn't populated. `@DataJpaTest` doesn't import `CiaCommonAutoConfiguration` which carries `@EnableJpaAuditing`, so the auditing listener never fired | Test wiring | Added `CiaCommonAutoConfiguration.class` to the IT's `@Import` list |
+| 5 | Activity reports `posted=3` but `SELECT COUNT(*)` via JdbcTemplate returns 2. Cause: `SubledgerPostingService` is class-level `@Transactional`; under `@DataJpaTest`'s outer test transaction all per-row calls join the same transaction (REQUIRED propagation), so Hibernate auto-flushes earlier rows when the next iteration's JPA query hits, but the LAST row never gets flushed. In production each row commits independently (no outer transaction on Temporal workers) | Test wiring | Injected `EntityManager`, added `em.flush()` after each `processChunk(...)` call in the test — mirrors production's per-row commit visibility |
+| 6 | Three test-fixture bugs in `RetroactiveBackfillIT` that the previous-Docker-environment IT runs never reached: (a) seed date `2026-05-20` is after host `current_date=2026-05-17`, violating V31 `ck_journal_entry_dates` (`business_date <= posting_date`); (b) trial-balance queries use `jel.debit` / `jel.credit` but the V31 columns are `debit_amount` / `credit_amount`; (c) `seedApprovedPoliciesInBulk` SQL puts the `'APPROVED'` literal in the `policy_number` slot, causing `uq_policies_policy_number` duplicate-key on the second batch row | Slice 1.8b | Moved seed dates to ≤ today; renamed both SUM columns; moved the `'APPROVED'` literal one slot right + narrowed benchmark date range to `<= LocalDate.now()` |
+
+### Files modified
+
+| File | Change |
+|---|---|
+| `cia-backend/pom.xml` | `testcontainers.version` 1.20.1 → 1.21.4; added explicit `docker-java.version=3.5.3` property + three `<dependency>` entries (`docker-java-api`, `docker-java-transport`, `docker-java-transport-zerodep`) in `<dependencyManagement>` **above** the Testcontainers BOM import |
+| `cia-finance/.../gl/PostingRuleRepository.java` | Method rename `findBySourceEventTypeAndIsActiveTrueAndDeletedAtIsNull` → `findBySourceEventTypeAndActiveTrueAndDeletedAtIsNull` |
+| `cia-finance/.../gl/PostingRuleService.java` | Same rename at the call site |
+| `cia-finance/test/.../gl/PostingRuleServiceTest.java` | Same rename in 3 mock setups |
+| `cia-finance/test/.../gl/SubledgerPostingServiceTest.java` | Same rename in 2 mock setups |
+| `cia-api/src/main/resources/db/migration/V34__add_currency_code_to_policies.sql` | New migration: `ALTER TABLE policies ADD COLUMN currency_code VARCHAR(3) NOT NULL DEFAULT 'NGN'` + COMMENT explaining the rationale |
+| `cia-api/test/.../finance/backfill/RetroactiveBackfillIT.java` | `spring.flyway.target` 33 → 34; added `CiaCommonAutoConfiguration` to `@Import`; injected `EntityManager` + 4 `em.flush()` calls after each `processChunk(...)`; corrected seed dates (5/20 → 5/15) for the idempotency test; fixed `jel.debit` / `jel.credit` → `jel.debit_amount` / `jel.credit_amount` (4 occurrences); fixed the `'APPROVED'`-literal slot in `seedApprovedPoliciesInBulk`; narrowed benchmark date range to `min(TO, LocalDate.now())` |
+| `cia-finance/test/.../backfill/SubledgerPostingCoverageContractTest.java` | Committed as a Slice 1.9 starter — reflection-based contract test asserting every `BackfillEventType` value has matching `replay*` methods and `@EventListener` registration on `SubledgerPostingService`. Already passes against today's code (validates 1.8a's posting-coverage invariant) |
+| `CLAUDE.md` | Under Testing Requirements, documented the Testcontainers + docker-java version pins, the `@DataJpaTest` + `@EnableJpaAuditing` import requirement, and the `em.flush()`-after-`@Transactional`-service-call pattern |
+
+### Test results after the chain
+
+- `mvn test -pl cia-finance` — all unit tests pass (PostingRule + Subledger + activity + new contract test)
+- `mvn test -pl cia-api -Dtest=RetroactiveBackfillIT` — 4 tests run, 0 failures, 0 errors, 1 skipped (benchmark gated by `-Dbackfill.benchmark`)
+- `mvn test -pl cia-api -Dtest=RetroactiveBackfillIT -Dbackfill.benchmark=true` — 10k POLICY_APPROVED rows complete under the 5-minute budget
+
+### Design choices worth remembering
+
+- **docker-java is pinned BEFORE the Testcontainers BOM import** — Maven dependencyManagement uses first-declaration-wins, so a BOM-imported version cannot be overridden by a later property change. The explicit `<dependency>` entries with `${docker-java.version}` go above the BOM.
+- **`@DataJpaTest` ITs that exercise `BaseEntity` writes MUST import `CiaCommonAutoConfiguration`** — this carries `@EnableJpaAuditing` which the slice doesn't auto-pick. Without it, `created_at` stays null and every audited entity insert violates NOT NULL.
+- **`@DataJpaTest` ITs that call `@Transactional` services must `em.flush()` at business-call boundaries** — to mirror production's per-call commit visibility. JdbcTemplate counts will silently undercount otherwise.
+- **The check constraint `ck_journal_entry_dates` enforces `business_date <= posting_date`** — backfill fixtures must use historical dates only.
+- **Pattern realisation:** Module 12 was built slice-by-slice but never exercised end-to-end via Testcontainers since Docker Desktop 29.x broke the IT environment. The six layers found here are the kind of thing CI would have caught after every slice. The Slice 1.9 reconciliation-gate work is now even more clearly justified.
+
+### Commits planned
+
+1. `chore(test): bump Testcontainers 1.20.1 → 1.21.4 + pin docker-java 3.5.3 for Docker 29 compat` — pom.xml only
+2. `fix(finance): Module 12 IT stabilisation — repo rename, V34 currency_code, IT wiring` — PostingRule rename + V34 + IT fixes + CLAUDE.md updates
+3. `test(finance): Slice 1.9 starter — SubledgerPostingCoverageContractTest` — the untracked reflection-based contract test
+
+---
+
 ## 2026-05-17 — Session 65 (`module-12-period-end-closures`): Slice 1.8b — Backfill Operations & Polish shipped
 
 ### Context

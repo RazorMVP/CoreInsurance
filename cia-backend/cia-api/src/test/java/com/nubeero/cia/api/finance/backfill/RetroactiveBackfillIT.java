@@ -1,6 +1,7 @@
 package com.nubeero.cia.api.finance.backfill;
 
 import com.nubeero.cia.common.audit.AuditService;
+import com.nubeero.cia.common.config.CiaCommonAutoConfiguration;
 import com.nubeero.cia.finance.backfill.RetroactiveJournalBackfillActivitiesImpl;
 import com.nubeero.cia.finance.gl.ChartOfAccountService;
 import com.nubeero.cia.finance.gl.FiscalPeriodLookupCache;
@@ -66,6 +67,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({
+    // CiaCommonAutoConfiguration enables @EnableJpaAuditing so @CreatedDate
+    // on BaseEntity populates created_at / updated_at on every insert.
+    // @DataJpaTest does NOT pick up component-scanned auto-configurations, so
+    // we must @Import it explicitly — without this, journal_entry rows fail
+    // the NOT NULL constraint on created_at and the backfill activity
+    // catches the SQLGrammarException as a per-row failure.
+    CiaCommonAutoConfiguration.class,
     ChartOfAccountService.class,
     FiscalPeriodResolver.class,
     FiscalPeriodLookupCache.class,
@@ -91,7 +99,7 @@ class RetroactiveBackfillIT {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.target", () -> "33");
+        registry.add("spring.flyway.target", () -> "34");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 
@@ -100,6 +108,16 @@ class RetroactiveBackfillIT {
 
     @Autowired private RetroactiveJournalBackfillActivitiesImpl activities;
     @Autowired private JdbcTemplate jdbcTemplate;
+    // EntityManager so the test can flush after processChunk completes.
+    // In production the activity runs on a Temporal worker with no outer
+    // transaction, so each row's @Transactional SubledgerPostingService call
+    // opens-and-commits its own transaction (per-row visibility). Under
+    // @DataJpaTest the test method itself is @Transactional, so all rows
+    // JOIN that outer transaction — Hibernate's auto-flush hits earlier rows
+    // (triggered by each subsequent JPA query) but the LAST row remains in
+    // the session until something forces a flush. Without this call,
+    // JdbcTemplate's SELECT COUNT(*) misses the final JE in every chunk.
+    @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
 
     private UUID fiscalYearId;
     private UUID periodId;
@@ -123,10 +141,15 @@ class RetroactiveBackfillIT {
     @Test
     @DisplayName("processChunk for POLICY_APPROVED posts one JE per source row, second run reports all alreadyExists")
     void policyApprovedBackfillIsIdempotent() {
-        // Arrange: three approved policies inside the May 2026 period.
+        // Arrange: three approved policies inside the May 2026 period. Dates
+        // must be on-or-before the host system's current_date because V31's
+        // journal_entry uses DEFAULT current_date for posting_date and a
+        // check constraint requires business_date <= posting_date. Backfill
+        // is by definition historical, so future-dated policies are not a
+        // legitimate fixture for this contract.
         seedApprovedPolicy("POL-IT-001", LocalDate.of(2026, 5,  5), new BigDecimal("100000.00"));
-        seedApprovedPolicy("POL-IT-002", LocalDate.of(2026, 5, 12), new BigDecimal("200000.00"));
-        seedApprovedPolicy("POL-IT-003", LocalDate.of(2026, 5, 20), new BigDecimal("300000.00"));
+        seedApprovedPolicy("POL-IT-002", LocalDate.of(2026, 5, 10), new BigDecimal("200000.00"));
+        seedApprovedPolicy("POL-IT-003", LocalDate.of(2026, 5, 15), new BigDecimal("300000.00"));
 
         BackfillChunkRequest request = new BackfillChunkRequest(
                 "test-tenant", "admin@example.com",
@@ -135,6 +158,7 @@ class RetroactiveBackfillIT {
 
         // Act 1 — first run.
         BackfillChunkResult first = activities.processChunk(request);
+        em.flush();   // see EntityManager javadoc above — mirrors per-row commit visibility.
 
         // Assert: three JEs landed; one per source row.
         assertThat(first.attempted()).isEqualTo(3);
@@ -151,13 +175,13 @@ class RetroactiveBackfillIT {
 
         // Trial balance: total debits must equal total credits across the new JEs.
         BigDecimal totalDebits = jdbcTemplate.queryForObject(
-                "SELECT COALESCE(SUM(jel.debit), 0) " +
+                "SELECT COALESCE(SUM(jel.debit_amount), 0) " +
                 "FROM journal_entry_line jel " +
                 "JOIN journal_entry je ON je.id = jel.journal_entry_id " +
                 "WHERE je.source_event_type = 'POLICY_APPROVED'",
                 BigDecimal.class);
         BigDecimal totalCredits = jdbcTemplate.queryForObject(
-                "SELECT COALESCE(SUM(jel.credit), 0) " +
+                "SELECT COALESCE(SUM(jel.credit_amount), 0) " +
                 "FROM journal_entry_line jel " +
                 "JOIN journal_entry je ON je.id = jel.journal_entry_id " +
                 "WHERE je.source_event_type = 'POLICY_APPROVED'",
@@ -167,6 +191,7 @@ class RetroactiveBackfillIT {
 
         // Act 2 — second run with the same request.
         BackfillChunkResult second = activities.processChunk(request);
+        em.flush();
 
         // Assert: nothing new posted; idempotency held.
         assertThat(second.attempted()).isEqualTo(3);
@@ -201,6 +226,7 @@ class RetroactiveBackfillIT {
                 BackfillEventType.POLICY_APPROVED, FROM, TO,
                 0, 2, false);
         BackfillChunkResult phase1 = activities.processChunk(partial);
+        em.flush();
         assertThat(phase1.attempted()).isEqualTo(2);
         assertThat(phase1.posted()).isEqualTo(2);
         assertThat(phase1.alreadyExists()).isZero();
@@ -221,6 +247,7 @@ class RetroactiveBackfillIT {
                 BackfillEventType.POLICY_APPROVED, FROM, TO,
                 0, 100, false);
         BackfillChunkResult phase2 = activities.processChunk(resume);
+        em.flush();
         assertThat(phase2.attempted()).isEqualTo(5);
         assertThat(phase2.alreadyExists()).isEqualTo(2);
         assertThat(phase2.posted()).isEqualTo(3);
@@ -234,13 +261,13 @@ class RetroactiveBackfillIT {
         assertThat(totalJEs).as("exactly one JE per source row — no duplicates").isEqualTo(5);
 
         BigDecimal totalDebits = jdbcTemplate.queryForObject(
-                "SELECT COALESCE(SUM(jel.debit), 0) " +
+                "SELECT COALESCE(SUM(jel.debit_amount), 0) " +
                 "FROM journal_entry_line jel " +
                 "JOIN journal_entry je ON je.id = jel.journal_entry_id " +
                 "WHERE je.source_event_type = 'POLICY_APPROVED'",
                 BigDecimal.class);
         BigDecimal totalCredits = jdbcTemplate.queryForObject(
-                "SELECT COALESCE(SUM(jel.credit), 0) " +
+                "SELECT COALESCE(SUM(jel.credit_amount), 0) " +
                 "FROM journal_entry_line jel " +
                 "JOIN journal_entry je ON je.id = jel.journal_entry_id " +
                 "WHERE je.source_event_type = 'POLICY_APPROVED'",
@@ -277,6 +304,13 @@ class RetroactiveBackfillIT {
                     "test-tenant", "bench@example.com",
                     BackfillEventType.POLICY_APPROVED, FROM, TO,
                     offset, chunkSize, false));
+            // Flush + clear per chunk. Without clear() the @DataJpaTest outer
+            // transaction keeps every JE entity in Hibernate's session;
+            // dirty-checking on each new row becomes O(N) and the 10k bench
+            // degrades to ~13 rows/sec. In production each Temporal activity
+            // invocation has its own fresh session, so this loop mirrors that.
+            em.flush();
+            em.clear();
             totalAttempted += chunk.attempted();
             totalPosted += chunk.posted();
             totalAlreadyExists += chunk.alreadyExists();
@@ -328,7 +362,12 @@ class RetroactiveBackfillIT {
      * so all rows fall inside the resolvable fiscal period.
      */
     private void seedApprovedPoliciesInBulk(int count) {
-        long rangeDays = TO.toEpochDay() - FROM.toEpochDay() + 1;
+        // Cap the upper bound at today so policy_start_date never falls
+        // after current_date — V31's ck_journal_entry_dates requires
+        // business_date <= posting_date, and the activity uses
+        // policy_start_date as business_date.
+        LocalDate benchTo = TO.isAfter(LocalDate.now()) ? LocalDate.now() : TO;
+        long rangeDays = benchTo.toEpochDay() - FROM.toEpochDay() + 1;
         java.util.List<Object[]> batch = new java.util.ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             LocalDate start = FROM.plusDays(i % rangeDays);
@@ -352,7 +391,13 @@ class RetroactiveBackfillIT {
                 "policy_start_date, policy_end_date, " +
                 "total_sum_insured, total_premium, net_premium, " +
                 "approved_by, approved_at, created_by) " +
-                "VALUES (?, 'APPROVED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                // The 'APPROVED' literal occupies the status column (slot 3),
+                // mirroring the single-row seedApprovedPolicy helper. The
+                // earlier shape pushed the literal into the policy_number
+                // slot, so every batch row tried to insert
+                // policy_number='APPROVED' and the second INSERT collided on
+                // uq_policies_policy_number.
+                "VALUES (?, ?, 'APPROVED', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 batch);
     }
 

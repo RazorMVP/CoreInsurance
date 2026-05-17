@@ -999,6 +999,9 @@ bash cia-frontend/scripts/check-api-wiring.sh
 - Frontend: unit tests for all utility functions and hooks; component tests for critical flows.
 - E2E: golden paths for each module (Playwright).
 - Minimum coverage: 80% line coverage on backend business logic.
+- **Testcontainers stack pins:** `testcontainers.version=1.21.4` + explicit `docker-java.version=3.5.3` override (in the parent pom's `<dependencyManagement>`, declared **before** the Testcontainers BOM). Docker Engine 29.x reports `MinAPIVersion=1.40` and rejects v1.30 probes with HTTP 400; docker-java 3.4.x (the version Testcontainers 1.21.4 still bundles) hard-pins v1.30 for initial negotiation, so every IT fails with "Could not find a valid Docker environment". Keep the override until Testcontainers upgrades its bundled docker-java past 3.5.x.
+- **@DataJpaTest ITs that exercise `BaseEntity` writes must `@Import(CiaCommonAutoConfiguration.class)`.** Slice's auto-config carries `@EnableJpaAuditing`, which `@DataJpaTest` does not autodiscover — without it `@CreatedDate` never fires, `created_at` stays null, and every insert hits the NOT NULL constraint. Spring lets you import the config class directly; no `@AutoConfigureDataJpa` slicing change needed.
+- **@DataJpaTest ITs that exercise `@Transactional` services (e.g. `SubledgerPostingService`) need an explicit `em.flush()` after each business-call boundary.** `@DataJpaTest` wraps the test in a transaction; service-level `@Transactional` with REQUIRED propagation joins that outer transaction instead of committing per-call. Hibernate auto-flushes only when subsequent JPA queries demand it — JdbcTemplate counts will silently undercount unless the test forces a flush. Production callers (e.g. Temporal workers) commit per-call because they have no outer transaction; the test wiring is what drifts, not the service contract.
 
 ### Database
 - Migrations via Flyway. One migration file per change. Never edit existing migrations.

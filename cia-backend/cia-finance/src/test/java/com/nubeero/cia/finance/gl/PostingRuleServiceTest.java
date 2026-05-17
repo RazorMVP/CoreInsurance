@@ -32,7 +32,7 @@ class PostingRuleServiceTest {
     @DisplayName("findByEventType returns the active rule for a known event type")
     void findByEventTypeHit() {
         PostingRule rule = newRule("POLICY_APPROVED", "1310", "2110");
-        when(repository.findBySourceEventTypeAndIsActiveTrueAndDeletedAtIsNull("POLICY_APPROVED"))
+        when(repository.findBySourceEventTypeAndActiveTrueAndDeletedAtIsNull("POLICY_APPROVED"))
             .thenReturn(Optional.of(rule));
 
         PostingRule resolved = service.findByEventType("POLICY_APPROVED");
@@ -43,7 +43,7 @@ class PostingRuleServiceTest {
     @Test
     @DisplayName("findByEventType throws PostingRuleNotFoundException for unknown event type")
     void findByEventTypeMiss() {
-        when(repository.findBySourceEventTypeAndIsActiveTrueAndDeletedAtIsNull("UNKNOWN_EVENT"))
+        when(repository.findBySourceEventTypeAndActiveTrueAndDeletedAtIsNull("UNKNOWN_EVENT"))
             .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.findByEventType("UNKNOWN_EVENT"))
@@ -57,7 +57,7 @@ class PostingRuleServiceTest {
         // The repository's finder filters on is_active=TRUE, so an inactive rule
         // never returns from the Optional. Verify the service still surfaces a
         // clean miss rather than a partial result.
-        when(repository.findBySourceEventTypeAndIsActiveTrueAndDeletedAtIsNull("DEACTIVATED"))
+        when(repository.findBySourceEventTypeAndActiveTrueAndDeletedAtIsNull("DEACTIVATED"))
             .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.findByEventType("DEACTIVATED"))
