@@ -5,690 +5,590 @@
   "lineCount" : 200,
   "grandTotalPosted" : "505263.29",
   "trialBalance" : {
-    "lineCount" : 200,
+    "asOf" : "2026-05-14",
     "totalDebits" : "505263.29",
+    "totalCredits" : "505263.29",
+    "balanced" : true,
+    "lineCount" : 200,
     "perAccount" : [ {
       "code" : "1110",
-      "type" : "ASSET",
       "name" : "Cash on hand",
+      "type" : "ASSET",
       "debitBalance" : "0.00",
       "creditBalance" : "126881.00"
     }, {
       "code" : "1120",
-      "type" : "ASSET",
       "name" : "Bank current accounts",
+      "type" : "ASSET",
       "debitBalance" : "50174.62",
       "creditBalance" : "0.00"
     }, {
       "code" : "1130",
-      "type" : "ASSET",
       "name" : "Bank call deposits",
+      "type" : "ASSET",
       "debitBalance" : "97131.42",
       "creditBalance" : "0.00"
     }, {
       "code" : "1310",
-      "type" : "ASSET",
       "name" : "Premium receivable - Direct",
+      "type" : "ASSET",
       "debitBalance" : "84593.88",
       "creditBalance" : "0.00"
     }, {
       "code" : "2310",
-      "type" : "LIABILITY",
       "name" : "Reinsurance premium payable (outward)",
+      "type" : "LIABILITY",
       "debitBalance" : "0.00",
       "creditBalance" : "76909.75"
     }, {
       "code" : "4110",
-      "type" : "INCOME",
       "name" : "Insurance revenue - LRC release",
+      "type" : "INCOME",
       "debitBalance" : "0.00",
       "creditBalance" : "34786.31"
     }, {
       "code" : "4120",
-      "type" : "INCOME",
       "name" : "Insurance revenue - Acquisition cost recovery",
+      "type" : "INCOME",
       "debitBalance" : "0.00",
       "creditBalance" : "50174.62"
     }, {
       "code" : "4130",
-      "type" : "INCOME",
       "name" : "Change in risk adjustment (non-financial)",
+      "type" : "INCOME",
       "debitBalance" : "0.00",
       "creditBalance" : "97131.42"
     }, {
       "code" : "4140",
-      "type" : "INCOME",
       "name" : "Experience adjustment",
+      "type" : "INCOME",
       "debitBalance" : "0.00",
       "creditBalance" : "84593.88"
     }, {
       "code" : "5110",
-      "type" : "EXPENSE",
       "name" : "Incurred claims",
+      "type" : "EXPENSE",
       "debitBalance" : "56133.95",
       "creditBalance" : "0.00"
     }, {
       "code" : "5210",
-      "type" : "EXPENSE",
       "name" : "Outward reinsurance premium",
+      "type" : "EXPENSE",
       "debitBalance" : "55780.48",
       "creditBalance" : "0.00"
     }, {
       "code" : "5310",
-      "type" : "EXPENSE",
       "name" : "Investment management fees",
+      "type" : "EXPENSE",
       "debitBalance" : "49752.88",
       "creditBalance" : "0.00"
     }, {
       "code" : "5410",
-      "type" : "EXPENSE",
       "name" : "Staff costs",
+      "type" : "EXPENSE",
       "debitBalance" : "76909.75",
       "creditBalance" : "0.00"
-    } ],
-    "totalCredits" : "505263.29",
-    "asOf" : "2026-05-14",
-    "balanced" : true
+    } ]
   },
   "journalEntries" : [ {
-    "creditAccount" : "2310",
     "seq" : 1,
-    "amount" : "5727.45",
     "debitAccount" : "5410",
-    "id" : "7dcf4b7a-538a-4c63-a725-8572333cdcdf"
-  }, {
     "creditAccount" : "2310",
+    "amount" : "5727.45"
+  }, {
     "seq" : 2,
-    "amount" : "9788.81",
     "debitAccount" : "5410",
-    "id" : "68159484-b5d1-4fe5-bc1e-c3b4ed73833a"
+    "creditAccount" : "2310",
+    "amount" : "9788.81"
   }, {
-    "creditAccount" : "4130",
     "seq" : 3,
-    "amount" : "5155.82",
     "debitAccount" : "1130",
-    "id" : "e8a37af5-f1a8-4776-af90-93262bfca572"
-  }, {
     "creditAccount" : "4130",
+    "amount" : "5155.82"
+  }, {
     "seq" : 4,
-    "amount" : "1454.83",
     "debitAccount" : "1130",
-    "id" : "92c5bd96-9abe-4ad9-9127-ceda3ff64a2d"
+    "creditAccount" : "4130",
+    "amount" : "1454.83"
   }, {
-    "creditAccount" : "2310",
     "seq" : 5,
-    "amount" : "979.95",
     "debitAccount" : "5410",
-    "id" : "c222c8b7-a406-4521-b93c-8dfb80a5a92d"
+    "creditAccount" : "2310",
+    "amount" : "979.95"
   }, {
-    "creditAccount" : "1110",
     "seq" : 6,
-    "amount" : "8466.24",
     "debitAccount" : "5310",
-    "id" : "c670dafc-ff0d-4b61-a834-e0d0a501b357"
+    "creditAccount" : "1110",
+    "amount" : "8466.24"
   }, {
-    "creditAccount" : "4130",
     "seq" : 7,
-    "amount" : "8415.65",
     "debitAccount" : "1130",
-    "id" : "09b9c6cc-663e-4f84-be8e-51c1911734ed"
-  }, {
     "creditAccount" : "4130",
+    "amount" : "8415.65"
+  }, {
     "seq" : 8,
-    "amount" : "6466.35",
     "debitAccount" : "1130",
-    "id" : "652442ff-adc9-476f-932b-afc2fe295e2e"
+    "creditAccount" : "4130",
+    "amount" : "6466.35"
   }, {
-    "creditAccount" : "4140",
     "seq" : 9,
-    "amount" : "1046.17",
     "debitAccount" : "1310",
-    "id" : "9e6bf199-a4fb-4087-921d-cf26c306b334"
+    "creditAccount" : "4140",
+    "amount" : "1046.17"
   }, {
-    "creditAccount" : "1110",
     "seq" : 10,
-    "amount" : "2201.44",
     "debitAccount" : "5210",
-    "id" : "878917b0-ea0c-4239-980c-cc7d3d32bd4c"
-  }, {
     "creditAccount" : "1110",
+    "amount" : "2201.44"
+  }, {
     "seq" : 11,
-    "amount" : "6176.34",
     "debitAccount" : "5310",
-    "id" : "ed4e0e7a-25e4-4d6c-af17-be8c24cf8837"
+    "creditAccount" : "1110",
+    "amount" : "6176.34"
   }, {
-    "creditAccount" : "4140",
     "seq" : 12,
-    "amount" : "20.59",
     "debitAccount" : "1310",
-    "id" : "81523923-737c-426b-8d77-0f28da6efb07"
+    "creditAccount" : "4140",
+    "amount" : "20.59"
   }, {
-    "creditAccount" : "2310",
     "seq" : 13,
-    "amount" : "6933.23",
     "debitAccount" : "5410",
-    "id" : "ee0311a8-1731-4b71-bfd7-f10812bca384"
+    "creditAccount" : "2310",
+    "amount" : "6933.23"
   }, {
-    "creditAccount" : "4140",
     "seq" : 14,
-    "amount" : "6158.27",
     "debitAccount" : "1310",
-    "id" : "78f885b2-84ca-48a2-adaf-15c073b86b6d"
+    "creditAccount" : "4140",
+    "amount" : "6158.27"
   }, {
-    "creditAccount" : "4120",
     "seq" : 15,
-    "amount" : "5580.20",
     "debitAccount" : "1120",
-    "id" : "2083eba9-4c33-4ce2-a522-c36fa693c598"
+    "creditAccount" : "4120",
+    "amount" : "5580.20"
   }, {
-    "creditAccount" : "1110",
     "seq" : 16,
-    "amount" : "8401.23",
     "debitAccount" : "5110",
-    "id" : "6e58882a-f57a-4ffb-8e75-17a7ba7bd5ac"
+    "creditAccount" : "1110",
+    "amount" : "8401.23"
   }, {
-    "creditAccount" : "4120",
     "seq" : 17,
-    "amount" : "7206.42",
     "debitAccount" : "1120",
-    "id" : "bd2ae9b7-906c-4d8c-a295-9679fde26dd3"
+    "creditAccount" : "4120",
+    "amount" : "7206.42"
   }, {
-    "creditAccount" : "1110",
     "seq" : 18,
-    "amount" : "970.35",
     "debitAccount" : "5210",
-    "id" : "c5e7e401-0cc8-4403-b043-10d298fb4279"
+    "creditAccount" : "1110",
+    "amount" : "970.35"
   }, {
-    "creditAccount" : "4120",
     "seq" : 19,
-    "amount" : "1478.49",
     "debitAccount" : "1120",
-    "id" : "eae996e3-28cb-4729-b11b-daeb6b8d2a0c"
+    "creditAccount" : "4120",
+    "amount" : "1478.49"
   }, {
-    "creditAccount" : "1110",
     "seq" : 20,
-    "amount" : "7206.70",
     "debitAccount" : "5110",
-    "id" : "33c42c92-5894-4093-b524-9bca3ccb06d9"
-  }, {
     "creditAccount" : "1110",
+    "amount" : "7206.70"
+  }, {
     "seq" : 21,
-    "amount" : "1267.69",
     "debitAccount" : "5210",
-    "id" : "aa9d368f-baee-480d-a69d-1b7df59f5e2f"
-  }, {
     "creditAccount" : "1110",
+    "amount" : "1267.69"
+  }, {
     "seq" : 22,
-    "amount" : "1526.63",
     "debitAccount" : "5110",
-    "id" : "688c4d80-1857-45e9-ae80-2ba4bef04e63"
-  }, {
     "creditAccount" : "1110",
+    "amount" : "1526.63"
+  }, {
     "seq" : 23,
-    "amount" : "6604.38",
     "debitAccount" : "5110",
-    "id" : "6945f91f-6bac-4ff0-a1fa-d9152d0ee52d"
-  }, {
     "creditAccount" : "1110",
+    "amount" : "6604.38"
+  }, {
     "seq" : 24,
-    "amount" : "3353.03",
     "debitAccount" : "5210",
-    "id" : "01fb4014-d947-453f-90de-878854af8659"
+    "creditAccount" : "1110",
+    "amount" : "3353.03"
   }, {
-    "creditAccount" : "4110",
     "seq" : 25,
-    "amount" : "6078.57",
     "debitAccount" : "1110",
-    "id" : "bcabb6e6-f642-4c06-b33a-587b562b3fe8"
+    "creditAccount" : "4110",
+    "amount" : "6078.57"
   }, {
-    "creditAccount" : "4130",
     "seq" : 26,
-    "amount" : "8341.09",
     "debitAccount" : "1130",
-    "id" : "a607272c-b47e-4752-8762-b47180ca3cf0"
+    "creditAccount" : "4130",
+    "amount" : "8341.09"
   }, {
-    "creditAccount" : "1110",
     "seq" : 27,
-    "amount" : "48.32",
     "debitAccount" : "5210",
-    "id" : "76642bcf-32be-42aa-b674-d4cc58a13a12"
+    "creditAccount" : "1110",
+    "amount" : "48.32"
   }, {
-    "creditAccount" : "4140",
     "seq" : 28,
-    "amount" : "2528.41",
     "debitAccount" : "1310",
-    "id" : "855b6aef-729c-4beb-9e5a-3c115c613842"
+    "creditAccount" : "4140",
+    "amount" : "2528.41"
   }, {
-    "creditAccount" : "1110",
     "seq" : 29,
-    "amount" : "9439.85",
     "debitAccount" : "5310",
-    "id" : "371104bd-ce22-4ba3-9ef8-e914a4d842d3"
+    "creditAccount" : "1110",
+    "amount" : "9439.85"
   }, {
-    "creditAccount" : "2310",
     "seq" : 30,
-    "amount" : "1849.47",
     "debitAccount" : "5410",
-    "id" : "c04acf4e-152b-40e0-bdcb-aa84e35ac561"
+    "creditAccount" : "2310",
+    "amount" : "1849.47"
   }, {
-    "creditAccount" : "4140",
     "seq" : 31,
-    "amount" : "6610.25",
     "debitAccount" : "1310",
-    "id" : "c61254a8-6ee4-488d-b841-180c7e7c542a"
+    "creditAccount" : "4140",
+    "amount" : "6610.25"
   }, {
-    "creditAccount" : "4130",
     "seq" : 32,
-    "amount" : "1862.25",
     "debitAccount" : "1130",
-    "id" : "22470a37-7a7d-44c5-b93f-2e23d48fa553"
+    "creditAccount" : "4130",
+    "amount" : "1862.25"
   }, {
-    "creditAccount" : "1110",
     "seq" : 33,
-    "amount" : "5696.02",
     "debitAccount" : "5310",
-    "id" : "30a8a455-ec37-4149-9988-10d56bfb85ba"
-  }, {
     "creditAccount" : "1110",
+    "amount" : "5696.02"
+  }, {
     "seq" : 34,
-    "amount" : "4194.10",
     "debitAccount" : "5210",
-    "id" : "82115b40-2a19-418b-a20d-8a7a166fae21"
+    "creditAccount" : "1110",
+    "amount" : "4194.10"
   }, {
-    "creditAccount" : "2310",
     "seq" : 35,
-    "amount" : "8687.79",
     "debitAccount" : "5410",
-    "id" : "1825b53e-9d31-4b62-84fd-743222f842c5"
+    "creditAccount" : "2310",
+    "amount" : "8687.79"
   }, {
-    "creditAccount" : "4130",
     "seq" : 36,
-    "amount" : "9173.06",
     "debitAccount" : "1130",
-    "id" : "9e1b188e-b497-4e41-a74a-bae3c516f8d0"
-  }, {
     "creditAccount" : "4130",
+    "amount" : "9173.06"
+  }, {
     "seq" : 37,
-    "amount" : "3695.83",
     "debitAccount" : "1130",
-    "id" : "1c00414d-9c36-45e7-bd83-6e36c83d1072"
+    "creditAccount" : "4130",
+    "amount" : "3695.83"
   }, {
-    "creditAccount" : "4140",
     "seq" : 38,
-    "amount" : "3424.26",
     "debitAccount" : "1310",
-    "id" : "0325bc31-729d-4d0e-b3d9-fbf2826536b7"
-  }, {
     "creditAccount" : "4140",
+    "amount" : "3424.26"
+  }, {
     "seq" : 39,
-    "amount" : "6710.51",
     "debitAccount" : "1310",
-    "id" : "276ded1e-2633-489a-876f-6d0b383e0372"
-  }, {
     "creditAccount" : "4140",
+    "amount" : "6710.51"
+  }, {
     "seq" : 40,
-    "amount" : "7301.31",
     "debitAccount" : "1310",
-    "id" : "3ca778db-c410-47f9-b82f-f1fe682260e8"
-  }, {
     "creditAccount" : "4140",
+    "amount" : "7301.31"
+  }, {
     "seq" : 41,
-    "amount" : "7115.04",
     "debitAccount" : "1310",
-    "id" : "d72c01e1-dfc4-4c12-b2b7-50c30da95557"
+    "creditAccount" : "4140",
+    "amount" : "7115.04"
   }, {
-    "creditAccount" : "1110",
     "seq" : 42,
-    "amount" : "671.61",
     "debitAccount" : "5210",
-    "id" : "d2c508f7-e6aa-48ff-83da-a7dcc69d75dd"
+    "creditAccount" : "1110",
+    "amount" : "671.61"
   }, {
-    "creditAccount" : "4120",
     "seq" : 43,
-    "amount" : "525.79",
     "debitAccount" : "1120",
-    "id" : "440a8239-6d8e-4def-9b74-618126fd2a1e"
+    "creditAccount" : "4120",
+    "amount" : "525.79"
   }, {
-    "creditAccount" : "1110",
     "seq" : 44,
-    "amount" : "6351.34",
     "debitAccount" : "5210",
-    "id" : "1afd35b3-6079-4bbd-b9cc-89907796a3af"
+    "creditAccount" : "1110",
+    "amount" : "6351.34"
   }, {
-    "creditAccount" : "4140",
     "seq" : 45,
-    "amount" : "2829.28",
     "debitAccount" : "1310",
-    "id" : "d543bb40-3fa3-4a61-abed-fa8c23b6aa51"
+    "creditAccount" : "4140",
+    "amount" : "2829.28"
   }, {
-    "creditAccount" : "4130",
     "seq" : 46,
-    "amount" : "5664.27",
     "debitAccount" : "1130",
-    "id" : "6ec3fade-3460-4275-9dbd-94b8a0ad5c26"
+    "creditAccount" : "4130",
+    "amount" : "5664.27"
   }, {
-    "creditAccount" : "4120",
     "seq" : 47,
-    "amount" : "9826.48",
     "debitAccount" : "1120",
-    "id" : "46665645-cf8c-4e29-a32d-33e0cba2a251"
-  }, {
     "creditAccount" : "4120",
+    "amount" : "9826.48"
+  }, {
     "seq" : 48,
-    "amount" : "7928.36",
     "debitAccount" : "1120",
-    "id" : "b4fc87e4-8e74-4a6a-87f1-258cb5082abb"
+    "creditAccount" : "4120",
+    "amount" : "7928.36"
   }, {
-    "creditAccount" : "1110",
     "seq" : 49,
-    "amount" : "830.32",
     "debitAccount" : "5210",
-    "id" : "7eefa720-3221-4195-99eb-6f68d9e56d8f"
+    "creditAccount" : "1110",
+    "amount" : "830.32"
   }, {
-    "creditAccount" : "4140",
     "seq" : 50,
-    "amount" : "622.39",
     "debitAccount" : "1310",
-    "id" : "f367e1f4-375b-4373-8eb7-53c9a4879b1d"
-  }, {
     "creditAccount" : "4140",
+    "amount" : "622.39"
+  }, {
     "seq" : 51,
-    "amount" : "6712.23",
     "debitAccount" : "1310",
-    "id" : "3a2fab77-cae4-443d-8f98-8d69a8944ed7"
+    "creditAccount" : "4140",
+    "amount" : "6712.23"
   }, {
-    "creditAccount" : "2310",
     "seq" : 52,
-    "amount" : "4384.86",
     "debitAccount" : "5410",
-    "id" : "fd9c03bd-0490-4155-8206-ffda74c96444"
-  }, {
     "creditAccount" : "2310",
+    "amount" : "4384.86"
+  }, {
     "seq" : 53,
-    "amount" : "8206.43",
     "debitAccount" : "5410",
-    "id" : "efe010c3-92c1-4e47-976a-e7a17385e65b"
+    "creditAccount" : "2310",
+    "amount" : "8206.43"
   }, {
-    "creditAccount" : "4130",
     "seq" : 54,
-    "amount" : "3831.94",
     "debitAccount" : "1130",
-    "id" : "00c2d000-f88f-4888-988c-7f6adea96f3d"
+    "creditAccount" : "4130",
+    "amount" : "3831.94"
   }, {
-    "creditAccount" : "1110",
     "seq" : 55,
-    "amount" : "18.77",
     "debitAccount" : "5110",
-    "id" : "089b779b-eed8-4f96-b79c-9934c3e8cf52"
+    "creditAccount" : "1110",
+    "amount" : "18.77"
   }, {
-    "creditAccount" : "4130",
     "seq" : 56,
-    "amount" : "6075.74",
     "debitAccount" : "1130",
-    "id" : "ef3dafbe-e6ab-4a60-87d0-7e1d6a016678"
+    "creditAccount" : "4130",
+    "amount" : "6075.74"
   }, {
-    "creditAccount" : "1110",
     "seq" : 57,
-    "amount" : "6542.18",
     "debitAccount" : "5210",
-    "id" : "e3e889b2-b376-4cc3-8ee4-6c362d35534a"
-  }, {
     "creditAccount" : "1110",
+    "amount" : "6542.18"
+  }, {
     "seq" : 58,
-    "amount" : "9622.25",
     "debitAccount" : "5210",
-    "id" : "afd0829b-a0b1-415b-a1d2-ed8ed08721b6"
-  }, {
     "creditAccount" : "1110",
+    "amount" : "9622.25"
+  }, {
     "seq" : 59,
-    "amount" : "8770.63",
     "debitAccount" : "5110",
-    "id" : "34d03e73-94e9-4c68-b4d1-ea1d77657abc"
+    "creditAccount" : "1110",
+    "amount" : "8770.63"
   }, {
-    "creditAccount" : "4130",
     "seq" : 60,
-    "amount" : "2455.30",
     "debitAccount" : "1130",
-    "id" : "2c34f1df-6f7b-4b51-b47d-e9eb32d00827"
+    "creditAccount" : "4130",
+    "amount" : "2455.30"
   }, {
-    "creditAccount" : "2310",
     "seq" : 61,
-    "amount" : "2910.10",
     "debitAccount" : "5410",
-    "id" : "a784ef3b-c2ae-48ea-824f-df1aad0ee942"
+    "creditAccount" : "2310",
+    "amount" : "2910.10"
   }, {
-    "creditAccount" : "1110",
     "seq" : 62,
-    "amount" : "4547.91",
     "debitAccount" : "5310",
-    "id" : "c827831b-e11c-478c-85ab-a4849009ef6b"
+    "creditAccount" : "1110",
+    "amount" : "4547.91"
   }, {
-    "creditAccount" : "4120",
     "seq" : 63,
-    "amount" : "7420.62",
     "debitAccount" : "1120",
-    "id" : "449a9a4b-fbb6-4245-b909-93ef546424e1"
+    "creditAccount" : "4120",
+    "amount" : "7420.62"
   }, {
-    "creditAccount" : "1110",
     "seq" : 64,
-    "amount" : "7874.06",
     "debitAccount" : "5210",
-    "id" : "7bab17a6-d186-4617-9f7d-6eb97674e543"
+    "creditAccount" : "1110",
+    "amount" : "7874.06"
   }, {
-    "creditAccount" : "2310",
     "seq" : 65,
-    "amount" : "6778.09",
     "debitAccount" : "5410",
-    "id" : "012dd07d-809b-4543-851a-e09bbbce7e94"
+    "creditAccount" : "2310",
+    "amount" : "6778.09"
   }, {
-    "creditAccount" : "4140",
     "seq" : 66,
-    "amount" : "4468.47",
     "debitAccount" : "1310",
-    "id" : "56131332-0984-4f6a-bb62-e730cd34f9d2"
+    "creditAccount" : "4140",
+    "amount" : "4468.47"
   }, {
-    "creditAccount" : "4130",
     "seq" : 67,
-    "amount" : "8258.66",
     "debitAccount" : "1130",
-    "id" : "b244309c-b305-46da-a9d4-d3371c018b7d"
+    "creditAccount" : "4130",
+    "amount" : "8258.66"
   }, {
-    "creditAccount" : "1110",
     "seq" : 68,
-    "amount" : "7175.42",
     "debitAccount" : "5110",
-    "id" : "2be51e8c-1c49-4c56-91b7-4dd68d518e77"
+    "creditAccount" : "1110",
+    "amount" : "7175.42"
   }, {
-    "creditAccount" : "2310",
     "seq" : 69,
-    "amount" : "5220.37",
     "debitAccount" : "5410",
-    "id" : "31cc507e-ca72-4f9b-9d1a-e04f88b25df5"
+    "creditAccount" : "2310",
+    "amount" : "5220.37"
   }, {
-    "creditAccount" : "4120",
     "seq" : 70,
-    "amount" : "663.32",
     "debitAccount" : "1120",
-    "id" : "07e146d7-f696-4dbb-9df0-2a3182707118"
+    "creditAccount" : "4120",
+    "amount" : "663.32"
   }, {
-    "creditAccount" : "4140",
     "seq" : 71,
-    "amount" : "1834.12",
     "debitAccount" : "1310",
-    "id" : "42b9fdae-7162-475b-b836-3e935bc04a67"
+    "creditAccount" : "4140",
+    "amount" : "1834.12"
   }, {
-    "creditAccount" : "4110",
     "seq" : 72,
-    "amount" : "5515.69",
     "debitAccount" : "1110",
-    "id" : "237f9ba3-59b4-41af-a106-144cde4d4220"
-  }, {
     "creditAccount" : "4110",
+    "amount" : "5515.69"
+  }, {
     "seq" : 73,
-    "amount" : "6238.87",
     "debitAccount" : "1110",
-    "id" : "248c19d0-8de0-4b11-9686-cf089b5cf32c"
+    "creditAccount" : "4110",
+    "amount" : "6238.87"
   }, {
-    "creditAccount" : "4140",
     "seq" : 74,
-    "amount" : "4361.97",
     "debitAccount" : "1310",
-    "id" : "295c452c-2af2-4c83-9152-8b58ea59226d"
+    "creditAccount" : "4140",
+    "amount" : "4361.97"
   }, {
-    "creditAccount" : "2310",
     "seq" : 75,
-    "amount" : "2152.65",
     "debitAccount" : "5410",
-    "id" : "178bf102-1c7b-4be9-a63f-4a17ede5be2b"
+    "creditAccount" : "2310",
+    "amount" : "2152.65"
   }, {
-    "creditAccount" : "4140",
     "seq" : 76,
-    "amount" : "4071.12",
     "debitAccount" : "1310",
-    "id" : "438f571b-17bd-4160-9485-b6a11d89b792"
+    "creditAccount" : "4140",
+    "amount" : "4071.12"
   }, {
-    "creditAccount" : "1110",
     "seq" : 77,
-    "amount" : "4905.60",
     "debitAccount" : "5310",
-    "id" : "b4578d57-4cdc-4d3d-b079-b4d8ffdb8e98"
+    "creditAccount" : "1110",
+    "amount" : "4905.60"
   }, {
-    "creditAccount" : "4140",
     "seq" : 78,
-    "amount" : "186.26",
     "debitAccount" : "1310",
-    "id" : "c03a1855-eb76-4329-b73a-51c8393f12fe"
+    "creditAccount" : "4140",
+    "amount" : "186.26"
   }, {
-    "creditAccount" : "2310",
     "seq" : 79,
-    "amount" : "5391.31",
     "debitAccount" : "5410",
-    "id" : "58c351b0-f07e-46a1-8c74-4fa2a6853461"
-  }, {
-    "creditAccount" : "1110",
-    "seq" : 80,
-    "amount" : "8480.19",
-    "debitAccount" : "5210",
-    "id" : "f1638f10-b420-4e99-ab97-03929de0cdef"
-  }, {
-    "creditAccount" : "1110",
-    "seq" : 81,
-    "amount" : "2942.40",
-    "debitAccount" : "5310",
-    "id" : "3616691d-e313-4028-8c9c-4449647509bf"
-  }, {
-    "creditAccount" : "1110",
-    "seq" : 82,
-    "amount" : "8800.95",
-    "debitAccount" : "5110",
-    "id" : "1b7c07f2-0eb0-4666-91ad-254dd5256c1a"
-  }, {
-    "creditAccount" : "1110",
-    "seq" : 83,
-    "amount" : "3668.36",
-    "debitAccount" : "5310",
-    "id" : "05b90a2f-22be-4112-9614-70b0859d70f7"
-  }, {
-    "creditAccount" : "4110",
-    "seq" : 84,
-    "amount" : "7548.48",
-    "debitAccount" : "1110",
-    "id" : "e33398ee-b1c4-4b25-96dd-ff5748ecd43a"
-  }, {
-    "creditAccount" : "1110",
-    "seq" : 85,
-    "amount" : "1355.96",
-    "debitAccount" : "5210",
-    "id" : "1d2b460a-a551-4b52-9ad5-ea000731e204"
-  }, {
-    "creditAccount" : "4130",
-    "seq" : 86,
-    "amount" : "6524.12",
-    "debitAccount" : "1130",
-    "id" : "05df0f8b-94c1-4ae6-9163-4418161be242"
-  }, {
-    "creditAccount" : "1110",
-    "seq" : 87,
-    "amount" : "3910.16",
-    "debitAccount" : "5310",
-    "id" : "38cf67bc-a367-46e5-8c88-40e89c453a80"
-  }, {
-    "creditAccount" : "4130",
-    "seq" : 88,
-    "amount" : "7499.85",
-    "debitAccount" : "1130",
-    "id" : "283f21a7-ade6-4981-8429-03342891c059"
-  }, {
-    "creditAccount" : "4140",
-    "seq" : 89,
-    "amount" : "9064.95",
-    "debitAccount" : "1310",
-    "id" : "a2d08048-631c-47c3-a7ea-dbc6f20e430e"
-  }, {
-    "creditAccount" : "4130",
-    "seq" : 90,
-    "amount" : "7137.03",
-    "debitAccount" : "1130",
-    "id" : "7486f62a-8094-49b9-ae64-713f623430cc"
-  }, {
-    "creditAccount" : "4130",
-    "seq" : 91,
-    "amount" : "5119.63",
-    "debitAccount" : "1130",
-    "id" : "dbaf84ba-1ad9-4a27-ad70-c4abd2e01cbd"
-  }, {
-    "creditAccount" : "4140",
-    "seq" : 92,
-    "amount" : "9528.28",
-    "debitAccount" : "1310",
-    "id" : "85e172aa-c8cf-40b1-9092-0211c0990298"
-  }, {
-    "creditAccount" : "4110",
-    "seq" : 93,
-    "amount" : "1230.25",
-    "debitAccount" : "1110",
-    "id" : "bc4163c1-47c5-45e7-b215-9db7250f9cb7"
-  }, {
     "creditAccount" : "2310",
-    "seq" : 94,
-    "amount" : "7899.24",
-    "debitAccount" : "5410",
-    "id" : "cb8a2397-1117-4192-95a9-b48ce3ad6549"
+    "amount" : "5391.31"
   }, {
-    "creditAccount" : "4120",
-    "seq" : 95,
-    "amount" : "7084.52",
-    "debitAccount" : "1120",
-    "id" : "ccbf3a78-beef-4d20-8612-d2bcd4627646"
-  }, {
-    "creditAccount" : "1110",
-    "seq" : 96,
-    "amount" : "2017.64",
+    "seq" : 80,
     "debitAccount" : "5210",
-    "id" : "565e75c4-2bfd-4228-9333-816c537bd1c7"
-  }, {
-    "creditAccount" : "4120",
-    "seq" : 97,
-    "amount" : "2460.42",
-    "debitAccount" : "1120",
-    "id" : "905e57c5-a0a9-4532-aec0-58239cdf8382"
-  }, {
-    "creditAccount" : "4110",
-    "seq" : 98,
-    "amount" : "188.34",
-    "debitAccount" : "1110",
-    "id" : "8532bca1-2065-41a9-a167-51c31cf13154"
-  }, {
-    "creditAccount" : "4110",
-    "seq" : 99,
-    "amount" : "7986.11",
-    "debitAccount" : "1110",
-    "id" : "4cfeaa5f-a490-4d83-9857-e7f9b0741449"
-  }, {
     "creditAccount" : "1110",
-    "seq" : 100,
-    "amount" : "7629.24",
+    "amount" : "8480.19"
+  }, {
+    "seq" : 81,
+    "debitAccount" : "5310",
+    "creditAccount" : "1110",
+    "amount" : "2942.40"
+  }, {
+    "seq" : 82,
     "debitAccount" : "5110",
-    "id" : "f6292130-449c-4ec1-a384-69e7750a6434"
+    "creditAccount" : "1110",
+    "amount" : "8800.95"
+  }, {
+    "seq" : 83,
+    "debitAccount" : "5310",
+    "creditAccount" : "1110",
+    "amount" : "3668.36"
+  }, {
+    "seq" : 84,
+    "debitAccount" : "1110",
+    "creditAccount" : "4110",
+    "amount" : "7548.48"
+  }, {
+    "seq" : 85,
+    "debitAccount" : "5210",
+    "creditAccount" : "1110",
+    "amount" : "1355.96"
+  }, {
+    "seq" : 86,
+    "debitAccount" : "1130",
+    "creditAccount" : "4130",
+    "amount" : "6524.12"
+  }, {
+    "seq" : 87,
+    "debitAccount" : "5310",
+    "creditAccount" : "1110",
+    "amount" : "3910.16"
+  }, {
+    "seq" : 88,
+    "debitAccount" : "1130",
+    "creditAccount" : "4130",
+    "amount" : "7499.85"
+  }, {
+    "seq" : 89,
+    "debitAccount" : "1310",
+    "creditAccount" : "4140",
+    "amount" : "9064.95"
+  }, {
+    "seq" : 90,
+    "debitAccount" : "1130",
+    "creditAccount" : "4130",
+    "amount" : "7137.03"
+  }, {
+    "seq" : 91,
+    "debitAccount" : "1130",
+    "creditAccount" : "4130",
+    "amount" : "5119.63"
+  }, {
+    "seq" : 92,
+    "debitAccount" : "1310",
+    "creditAccount" : "4140",
+    "amount" : "9528.28"
+  }, {
+    "seq" : 93,
+    "debitAccount" : "1110",
+    "creditAccount" : "4110",
+    "amount" : "1230.25"
+  }, {
+    "seq" : 94,
+    "debitAccount" : "5410",
+    "creditAccount" : "2310",
+    "amount" : "7899.24"
+  }, {
+    "seq" : 95,
+    "debitAccount" : "1120",
+    "creditAccount" : "4120",
+    "amount" : "7084.52"
+  }, {
+    "seq" : 96,
+    "debitAccount" : "5210",
+    "creditAccount" : "1110",
+    "amount" : "2017.64"
+  }, {
+    "seq" : 97,
+    "debitAccount" : "1120",
+    "creditAccount" : "4120",
+    "amount" : "2460.42"
+  }, {
+    "seq" : 98,
+    "debitAccount" : "1110",
+    "creditAccount" : "4110",
+    "amount" : "188.34"
+  }, {
+    "seq" : 99,
+    "debitAccount" : "1110",
+    "creditAccount" : "4110",
+    "amount" : "7986.11"
+  }, {
+    "seq" : 100,
+    "debitAccount" : "5110",
+    "creditAccount" : "1110",
+    "amount" : "7629.24"
   } ]
 }

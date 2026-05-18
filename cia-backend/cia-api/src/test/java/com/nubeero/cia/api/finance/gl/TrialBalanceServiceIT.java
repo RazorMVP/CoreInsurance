@@ -145,14 +145,19 @@ class TrialBalanceServiceIT {
                 List.of(
                     line(pair[0], amount.toPlainString(), "0.00"),
                     line(pair[1], "0.00",                 amount.toPlainString())));
-            JournalEntryResponse response = journalEntryService.post(request);
+            journalEntryService.post(request);
             grandTotalPosted = grandTotalPosted.add(amount);
-            manifest.add(Map.of(
-                "seq", i,
-                "id", response.id().toString(),
-                "debitAccount", pair[0],
-                "creditAccount", pair[1],
-                "amount", amount.toPlainString()));
+            // LinkedHashMap so JSON key order is deterministic across runs.
+            // The JE id (a fresh UUID per run) is deliberately omitted — the
+            // evidence file is a check-in snapshot, so every value must be
+            // deterministic. The seq + (debit, credit, amount) tuple is
+            // enough to identify a JE within a fixed-seed run.
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("seq", i);
+            entry.put("debitAccount", pair[0]);
+            entry.put("creditAccount", pair[1]);
+            entry.put("amount", amount.toPlainString());
+            manifest.add(entry);
         }
         entityManager.flush();
         entityManager.clear();
@@ -292,20 +297,26 @@ class TrialBalanceServiceIT {
         evidence.put("journalEntryCount", manifest.size());
         evidence.put("lineCount", trialBalance.footer().lineCount());
         evidence.put("grandTotalPosted", grandTotalPosted.toPlainString());
-        evidence.put("trialBalance", Map.of(
-            "asOf", trialBalance.asOf().toString(),
-            "totalDebits", trialBalance.footer().totalDebits().toPlainString(),
-            "totalCredits", trialBalance.footer().totalCredits().toPlainString(),
-            "balanced", trialBalance.footer().balanced(),
-            "lineCount", trialBalance.footer().lineCount(),
-            "perAccount", trialBalance.lines().stream().map(line -> Map.of(
-                "code", line.accountCode(),
-                "name", line.accountName(),
-                "type", line.accountType().name(),
-                "debitBalance", line.debitBalance().toPlainString(),
-                "creditBalance", line.creditBalance().toPlainString()
-            )).toList()
-        ));
+        // LinkedHashMap (not Map.of) so JSON key order is deterministic across
+        // runs — Map.of returns an iteration-unordered map and the evidence file
+        // is checked in as a snapshot, so any spurious reordering shows up as
+        // a noisy diff with no semantic content.
+        Map<String, Object> trialBalanceMap = new LinkedHashMap<>();
+        trialBalanceMap.put("asOf", trialBalance.asOf().toString());
+        trialBalanceMap.put("totalDebits", trialBalance.footer().totalDebits().toPlainString());
+        trialBalanceMap.put("totalCredits", trialBalance.footer().totalCredits().toPlainString());
+        trialBalanceMap.put("balanced", trialBalance.footer().balanced());
+        trialBalanceMap.put("lineCount", trialBalance.footer().lineCount());
+        trialBalanceMap.put("perAccount", trialBalance.lines().stream().map(line -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("code", line.accountCode());
+            row.put("name", line.accountName());
+            row.put("type", line.accountType().name());
+            row.put("debitBalance", line.debitBalance().toPlainString());
+            row.put("creditBalance", line.creditBalance().toPlainString());
+            return row;
+        }).toList());
+        evidence.put("trialBalance", trialBalanceMap);
         evidence.put("journalEntries", manifest);
 
         Path target = Paths.get("src/test/resources/trial-balance/reconciliation-evidence.json");
