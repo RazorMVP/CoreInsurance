@@ -73,6 +73,16 @@ public interface JournalEntryLineRepository extends JpaRepository<JournalEntryLi
      *   <li>{@code line_count} — Long</li>
      * </ol>
      */
+    /**
+     * Returned as {@code List<Object[]>} rather than {@code Object[]} so the
+     * call goes through {@code getResultList()} instead of {@code
+     * getSingleResult()}. Hibernate 6's {@code getSingleResult()} on a
+     * multi-column aggregate JPQL query returns a wrapped
+     * {@code Object[]{Object[]}} that breaks the caller's cast — the
+     * existing {@link #aggregateByAccountAsOf} pattern (which returns a
+     * list and takes {@code .get(0)} downstream) is the workaround.
+     * Aggregate query is guaranteed to produce exactly one row.
+     */
     @Query("""
         SELECT COALESCE(SUM(line.debitAmount), 0),
                COALESCE(SUM(line.creditAmount), 0),
@@ -83,7 +93,7 @@ public interface JournalEntryLineRepository extends JpaRepository<JournalEntryLi
            AND line.deletedAt IS NULL
            AND je.businessDate <= :asOf
         """)
-    Object[] totalsAsOf(@Param("asOf") LocalDate asOf);
+    List<Object[]> totalsAsOf(@Param("asOf") LocalDate asOf);
 
     /**
      * Used by the 100-JE reconciliation IT to take a hash-friendly snapshot

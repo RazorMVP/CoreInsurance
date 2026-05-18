@@ -354,17 +354,25 @@ Split into two parts during design pass:
 
 **Goal:** durable CI gate that fails any future PR which leaves trial balance unbalanced after running the seeded event fixture set.
 
-**Deliverables:**
+**Status:** **1.9a SHIPPED** (Session 67, commit on `module-12-period-end-closures`). 1.9b pending.
 
-- `ReconciliationGateTest` integration test (Testcontainers) that:
-  1. Starts a fresh tenant schema.
-  2. Plays the canonical event fixture set (a fixed 200-event JSON file under `cia-finance/src/test/resources/reconciliation/`).
-  3. Calls `TrialBalanceService.compute(...)`.
-  4. Asserts global net == 0 and per-account totals match the snapshot under `cia-finance/src/test/resources/reconciliation/expected-trial-balance.json`.
-- GitHub workflow `.github/workflows/module-12-reconciliation.yml` running this test on every PR touching `cia-finance/**`, `cia-closure/**`, `cia-investments/**`.
-- Snapshot-update flow: when an intentional change shifts the expected balance, the PR author runs `./mvnw -pl cia-finance test -Dtest=ReconciliationGateTest -Dsnapshot.update=true` and commits the new expected file. The PR description must explain why the snapshot moved.
+**1.9a deliverables (shipped):**
 
-**Tests:** the gate test itself plus a meta-test that breaks deliberately (mutation testing) to confirm CI catches it.
+- `ReconciliationGateIT` integration test (Testcontainers) at `cia-api/src/test/java/.../finance/reconciliation/`:
+  1. Starts a fresh tenant schema (Flyway target 34).
+  2. Plays the canonical 50-event fixture (`cia-api/src/test/resources/reconciliation/events.json`) via `ApplicationEventPublisher` → `SubledgerPostingService` → `JournalEntryService`.
+  3. Calls `TrialBalanceService.trialBalanceAsOf(...)`.
+  4. Asserts the trial balance matches the snapshot `expected-trial-balance.json` exactly (per-account `{debit, credit}` keyed by account code).
+- **Mutation guard** test in the same class: deliberately swaps Dr/Cr on the POLICY_APPROVED posting rule, asserts the snapshot match FAILS — proves the gate is not a tautology.
+- GitHub workflow `.github/workflows/module-12-reconciliation.yml` scoped to `cia-finance/**`, GL Flyway migrations, fixture/snapshot files, and the IT class itself. Faster signal than the full `mvn verify`.
+- Snapshot-update flow: `mvn test -pl cia-api -Dtest=ReconciliationGateIT -Dsnapshot.update=true`. PR description must explain why the snapshot moved.
+
+**1.9b deliverables (pending):**
+
+- Scale fixture from 50 → 200 events with edge cases: FX-rounding boundary amounts, mid-period business dates, zero-net endorsement pairs, claim approve-then-settle pairs on the same claim.
+- Per-JE evidence file output (companion to the per-account snapshot) so finance can audit individual postings at PR-review time. Lives under `cia-api/src/test/resources/reconciliation/per-je-evidence.json`.
+
+**Tests (1.9a):** the gate test itself + the mutation guard meta-test that breaks deliberately to confirm CI catches it.
 
 **Reconciliation gate evidence:** the gate is the evidence; PR shows green workflow run.
 

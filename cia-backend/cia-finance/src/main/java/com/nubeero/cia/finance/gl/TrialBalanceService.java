@@ -74,7 +74,8 @@ public class TrialBalanceService {
                 accountId, accountCode, accountName, accountType, debitBalance, creditBalance));
         }
 
-        Object[] totals = lineRepository.totalsAsOf(asOf);
+        // List<Object[]> rather than Object[] — see repository javadoc.
+        Object[] totals = lineRepository.totalsAsOf(asOf).get(0);
         BigDecimal totalDebits = scale((BigDecimal) totals[0]);
         BigDecimal totalCredits = scale((BigDecimal) totals[1]);
         long lineCount = ((Number) totals[2]).longValue();
