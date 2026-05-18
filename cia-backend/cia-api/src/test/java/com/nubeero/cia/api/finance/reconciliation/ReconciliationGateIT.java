@@ -55,6 +55,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -113,8 +114,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ReconciliationGateIT {
 
     private static final String FIXTURE_RESOURCE = "/reconciliation/events.json";
-    private static final Path SNAPSHOT_PATH =
+    private static final Path TRIAL_BALANCE_SNAPSHOT_PATH =
         Paths.get("src/test/resources/reconciliation/expected-trial-balance.json");
+    private static final Path JOURNAL_ENTRIES_SNAPSHOT_PATH =
+        Paths.get("src/test/resources/reconciliation/expected-journal-entries.json");
+    private static final String JOURNAL_ENTRIES_SNAPSHOT_RESOURCE =
+        "/reconciliation/expected-journal-entries.json";
     private static final LocalDate AS_OF = LocalDate.of(2026, 5, 31);
 
     @Container
@@ -174,29 +179,52 @@ class ReconciliationGateIT {
             .as("trial balance must always balance (totalDebits == totalCredits)")
             .isTrue();
 
-        ObjectNode actualSnapshot = serialise(actual);
+        ObjectNode actualTrialBalance = serialise(actual);
+        ObjectNode actualJournalEntries = serialiseJournalEntries();
 
         if (Boolean.getBoolean("snapshot.update")) {
             ObjectMapper writer = newMapper().enable(SerializationFeature.INDENT_OUTPUT);
-            Files.writeString(SNAPSHOT_PATH, writer.writeValueAsString(actualSnapshot) + "\n");
-            System.out.println("[snapshot.update] wrote " + SNAPSHOT_PATH.toAbsolutePath());
+            Files.writeString(TRIAL_BALANCE_SNAPSHOT_PATH,
+                writer.writeValueAsString(actualTrialBalance) + "\n");
+            Files.writeString(JOURNAL_ENTRIES_SNAPSHOT_PATH,
+                writer.writeValueAsString(actualJournalEntries) + "\n");
+            System.out.println("[snapshot.update] wrote " + TRIAL_BALANCE_SNAPSHOT_PATH.toAbsolutePath());
+            System.out.println("[snapshot.update] wrote " + JOURNAL_ENTRIES_SNAPSHOT_PATH.toAbsolutePath());
             return;
         }
 
-        ObjectNode expectedSnapshot = (ObjectNode) newMapper()
+        ObjectNode expectedTrialBalance = (ObjectNode) newMapper()
             .readTree(new ClassPathResource("/reconciliation/expected-trial-balance.json").getInputStream());
 
-        assertThat(actualSnapshot.get("accounts"))
-            .as("per-account net balances must match the checked-in snapshot — "
+        assertThat(actualTrialBalance.get("accounts"))
+            .as("per-account net balances must match the checked-in trial-balance snapshot — "
                 + "if this is an intentional change, regenerate with -Dsnapshot.update=true "
                 + "and explain why in the PR description")
-            .isEqualTo(expectedSnapshot.get("accounts"));
-        assertThat(actualSnapshot.get("totalDebits"))
+            .isEqualTo(expectedTrialBalance.get("accounts"));
+        assertThat(actualTrialBalance.get("totalDebits"))
             .as("totalDebits must match the checked-in snapshot")
-            .isEqualTo(expectedSnapshot.get("totalDebits"));
-        assertThat(actualSnapshot.get("totalCredits"))
+            .isEqualTo(expectedTrialBalance.get("totalDebits"));
+        assertThat(actualTrialBalance.get("totalCredits"))
             .as("totalCredits must match the checked-in snapshot")
-            .isEqualTo(expectedSnapshot.get("totalCredits"));
+            .isEqualTo(expectedTrialBalance.get("totalCredits"));
+
+        // Per-JE evidence snapshot (Slice 1.9b) — finer-grained than the
+        // per-account trial balance. Catches drift that re-orders lines
+        // within a JE or rewrites a narrative template (cases where account
+        // aggregates would still match by coincidence).
+        ObjectNode expectedJournalEntries = (ObjectNode) newMapper()
+            .readTree(new ClassPathResource(JOURNAL_ENTRIES_SNAPSHOT_RESOURCE).getInputStream());
+        assertThat(actualJournalEntries.get("entries"))
+            .as("per-JE evidence must match the checked-in journal-entries snapshot — "
+                + "regenerate with -Dsnapshot.update=true if the drift is intentional. "
+                + "This is the finer-grained gate that catches changes invisible to per-account aggregation.")
+            .isEqualTo(expectedJournalEntries.get("entries"));
+        assertThat(actualJournalEntries.get("entryCount"))
+            .as("entryCount must match the snapshot")
+            .isEqualTo(expectedJournalEntries.get("entryCount"));
+        assertThat(actualJournalEntries.get("lineCount"))
+            .as("lineCount must match the snapshot")
+            .isEqualTo(expectedJournalEntries.get("lineCount"));
     }
 
     @Test
@@ -245,7 +273,7 @@ class ReconciliationGateIT {
         JsonNode root = mapper.readTree(new ClassPathResource(FIXTURE_RESOURCE).getInputStream());
         JsonNode events = root.get("events");
         assertThat(events).as("fixture must contain an events array").isNotNull();
-        assertThat(events.size()).as("Slice 1.9a fixture invariant: 50 events").isEqualTo(50);
+        assertThat(events.size()).as("Slice 1.9b fixture invariant: 200 events").isEqualTo(200);
 
         for (JsonNode envelope : events) {
             BackfillEventType type = BackfillEventType.valueOf(envelope.get("type").asText());
@@ -277,7 +305,7 @@ class ReconciliationGateIT {
         ObjectMapper mapper = newMapper().enable(SerializationFeature.INDENT_OUTPUT);
         ObjectNode root = mapper.createObjectNode();
         root.put("_description",
-            "Slice 1.9a — expected trial balance after playing the 50-event canonical fixture. "
+            "Slice 1.9b — expected trial balance after playing the 200-event canonical fixture. "
             + "Regenerate with -Dsnapshot.update=true.");
         root.put("balanced", response.footer().balanced());
         root.put("totalDebits", scale(response.footer().totalDebits()).toPlainString());
@@ -306,9 +334,115 @@ class ReconciliationGateIT {
         return v.setScale(2, RoundingMode.HALF_UP);
     }
 
+    /**
+     * Per-JE evidence (Slice 1.9b): a finer-grained snapshot than the per-
+     * account trial balance. Captures each journal entry as
+     * {@code (sourceModule, sourceEventType, sourceReference, businessDate,
+     * narrative, lines[])}; lines are {@code (accountCode, debit, credit)}
+     * ordered by their original {@code line_no}. The DB UNIQUE constraint
+     * on the source triple guarantees stable identity across runs; we
+     * deliberately exclude {@code id}, {@code created_at}, {@code updated_at},
+     * {@code period_id}, {@code account_id}, {@code posting_date} (all
+     * non-deterministic across days, schemas, or test isolation).
+     *
+     * <p>Drift this catches that the per-account snapshot does not:
+     * <ul>
+     *   <li>narrative-template rewording in a posting rule</li>
+     *   <li>line-order swap within a JE (e.g. credit-then-debit instead of debit-then-credit)</li>
+     *   <li>change to which event type maps to which posting rule when the
+     *       net per-account effect happens to coincide</li>
+     * </ul>
+     */
+    private ObjectNode serialiseJournalEntries() {
+        ObjectMapper mapper = newMapper().enable(SerializationFeature.INDENT_OUTPUT);
+        ObjectNode root = mapper.createObjectNode();
+        root.put("_description",
+            "Slice 1.9b — expected journal-entry shape after playing the 200-event canonical fixture. "
+            + "Each entry is keyed by the (source_module, source_event_type, source_reference) DB UNIQUE "
+            + "triple; lines preserve the posting-rule's original order. Regenerate with -Dsnapshot.update=true.");
+
+        List<Map<String, Object>> rows = jdbcTemplate.query(
+            """
+            SELECT je.source_module,
+                   je.source_event_type,
+                   je.source_reference,
+                   je.business_date,
+                   je.narrative,
+                   jel.line_no,
+                   coa.code AS account_code,
+                   jel.debit_amount,
+                   jel.credit_amount
+              FROM journal_entry je
+              JOIN journal_entry_line jel ON jel.journal_entry_id = je.id
+              JOIN chart_of_account coa   ON coa.id = jel.account_id
+             WHERE je.deleted_at IS NULL
+               AND jel.deleted_at IS NULL
+             ORDER BY je.source_module,
+                      je.source_event_type,
+                      je.source_reference,
+                      jel.line_no
+            """,
+            (rs, n) -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("sourceModule", rs.getString("source_module"));
+                row.put("sourceEventType", rs.getString("source_event_type"));
+                row.put("sourceReference", rs.getString("source_reference"));
+                row.put("businessDate", rs.getDate("business_date").toLocalDate().toString());
+                row.put("narrative", rs.getString("narrative"));
+                row.put("lineNo", rs.getInt("line_no"));
+                row.put("accountCode", rs.getString("account_code"));
+                row.put("debit", scale(rs.getBigDecimal("debit_amount")).toPlainString());
+                row.put("credit", scale(rs.getBigDecimal("credit_amount")).toPlainString());
+                return row;
+            });
+
+        // Group flat rows back into nested (entry → lines) shape.
+        Map<String, ObjectNode> entriesByKey = new LinkedHashMap<>();
+        // int (not long) so Jackson serialises as IntNode — the snapshot file's
+        // numeric literal parses as IntNode too, and Jackson's node equality
+        // distinguishes Int from Long even when the value is identical.
+        int lineCount = 0;
+        for (Map<String, Object> row : rows) {
+            String key = row.get("sourceModule") + "|" + row.get("sourceEventType") + "|" + row.get("sourceReference");
+            ObjectNode entry = entriesByKey.computeIfAbsent(key, k -> {
+                ObjectNode e = mapper.createObjectNode();
+                e.put("sourceModule", (String) row.get("sourceModule"));
+                e.put("sourceEventType", (String) row.get("sourceEventType"));
+                e.put("sourceReference", (String) row.get("sourceReference"));
+                e.put("businessDate", (String) row.get("businessDate"));
+                e.put("narrative", (String) row.get("narrative"));
+                e.set("lines", mapper.createArrayNode());
+                return e;
+            });
+            ObjectNode line = mapper.createObjectNode();
+            line.put("accountCode", (String) row.get("accountCode"));
+            line.put("debit", (String) row.get("debit"));
+            line.put("credit", (String) row.get("credit"));
+            ((com.fasterxml.jackson.databind.node.ArrayNode) entry.get("lines")).add(line);
+            lineCount++;
+        }
+
+        root.put("entryCount", entriesByKey.size());
+        root.put("lineCount", lineCount);
+        com.fasterxml.jackson.databind.node.ArrayNode entries = mapper.createArrayNode();
+        entriesByKey.values().forEach(entries::add);
+        root.set("entries", entries);
+        return root;
+    }
+
     @TestConfiguration
     static class TestSupportConfig {
+        // @Primary so this clock wins over CiaCommonAutoConfiguration.clock()
+        // (which is @ConditionalOnMissingBean by type — but the conditional
+        // evaluation order for @Import'd configs vs auto-discovered ones is
+        // not reliable; without @Primary the system clock can sneak in and
+        // any event handler that calls `today()` to derive business_date
+        // produces a non-deterministic snapshot value). 2026-05-31 is end
+        // of fiscal period and on-or-after every fixture event date, so
+        // the V31 ck_journal_entry_dates constraint (business_date <=
+        // posting_date) is satisfied for backfilled events too.
         @Bean
+        @org.springframework.context.annotation.Primary
         Clock fixedClock() {
             return Clock.fixed(Instant.parse("2026-05-31T10:00:00Z"), ZoneOffset.UTC);
         }

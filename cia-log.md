@@ -4,6 +4,47 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-18 — Session 68 (`module-12-period-end-closures`): Slice 1.9b — gate scaled to 200 events + per-JE evidence
+
+### Context
+
+Slice 1.9b completes the reconciliation gate by scaling the canonical fixture from 50 → 200 events and adding a per-JE evidence snapshot alongside the per-account trial-balance snapshot. The per-JE evidence catches drift the per-account snapshot can't see — line-order swaps within a JE, narrative-template rewording, or any change where account aggregates happen to coincide by accident.
+
+### Files modified
+
+| File | Change |
+|---|---|
+| `cia-api/src/test/resources/reconciliation/events.json` | Regenerated to 200 events (3,248 lines). New distribution: 60 POLICY_APPROVED @ 100k, 40 CLAIM_APPROVED @ 50k, 40 CLAIM_SETTLED @ 40k (20 paired to approved claims by claim_id, 20 standalone), 20 ENDORSEMENT (5 zero-net ADD/REFUND pairs @ 20k on same policy + 5 standalone ADD @ 20k + 5 standalone REFUND @ 15k), 20 CLAIM_EXPENSE_APPROVED @ 10k (each tied to one of the 40 approved claims), 20 FAC_PREMIUM_CEDED. Documents the three edge cases (zero-net pairs, approve-then-settle, expense-tied-to-claim) in the `_edgeCases` JSON metadata. |
+| `cia-api/src/test/resources/reconciliation/expected-trial-balance.json` | Regenerated for 200 events. `totalDebits=totalCredits=11,175,000`; 420 lines across 10 accounts. |
+| `cia-api/src/test/resources/reconciliation/expected-journal-entries.json` | **NEW** — per-JE evidence file (~3,000 lines). Each entry keyed by `(sourceModule, sourceEventType, sourceReference)` triple with deterministic businessDate, narrative, and lines preserving the posting-rule's original order. Excludes non-deterministic fields (id, created_at, updated_at, period_id, account_id, posting_date). |
+| `cia-api/src/test/.../finance/reconciliation/ReconciliationGateIT.java` | Added `serialiseJournalEntries()` helper that queries journal_entry + journal_entry_line + chart_of_account via JdbcTemplate (ordered by source triple + line_no), groups flat rows into nested entry+lines shape, returns deterministic ObjectNode. Test now asserts both snapshots; snapshot-update mode writes both files. Bean rename to `@Primary` on `fixedClock` so it wins the `@ConditionalOnMissingBean` race against the auto-config's system clock (the race is unstable for `@Import`'d configs vs auto-discovered ones, and without `@Primary` events that derive businessDate from `today()` produced non-deterministic snapshots tied to host current_date). |
+
+### Design choices worth remembering
+
+- **Per-JE evidence is the finer-grained gate.** The per-account snapshot misses three failure modes the per-JE snapshot catches: (a) re-ordering lines within a JE (e.g. credit-then-debit instead of debit-then-credit), (b) rewording a narrative template, (c) mapping an event type to a different posting rule when the net per-account effect happens to coincide. Both snapshots run in the same test, so neither adds a separate test-spin-up cost.
+- **JE entries keyed by `(sourceModule, sourceEventType, sourceReference)`** — this triple is the DB UNIQUE constraint, so it's the natural stable identity. UUIDs of the JE row itself are not deterministic and would force snapshot drift; the source triple comes from the event payload so it's stable.
+- **Deterministic businessDate via `@Primary` fixed clock.** Three concerns line up: (i) `JournalEntryService.newHeader` sets `posting_date = LocalDate.now(clock)`, (ii) `SubledgerPostingService.replay*()` no-arg overloads use `today()` from the same clock for events without a payload date, (iii) the V31 `ck_journal_entry_dates` constraint requires `business_date <= posting_date`. Setting fixed clock to 2026-05-31 (≥ every fixture date) keeps all three in agreement and snapshot-stable across CI runs.
+- **Excluded from the per-JE snapshot:** `id`, `created_at`, `updated_at`, `period_id` (UUID lookup result), `account_id` (UUID — accountCode is the stable handle), `posting_date` (tracks the clock so it's stable BUT the snapshot value lives in `businessDate` since that's the audit-meaningful date). Anyone debugging a snapshot mismatch should look at `(accountCode, debit, credit)` first — that's where almost all real drift surfaces.
+- **`int` not `long` for `lineCount`.** Jackson's `IntNode` ≠ `LongNode` even when the numeric value matches; the JSON literal `420` parses as IntNode, so the serialiser must also use Int. Pure type-discipline issue, but every snapshot-based assertion needs to think about it.
+- **Edge cases that show up in the fixture but cancel at the per-account level:** the 5 zero-net endorsement pairs (5 ADD @ 20k + 5 REFUND @ 20k on the same policies) produce 10 JEs and 20 lines but net to ZERO at the per-account level — exercise the line-level audit trail without disturbing the aggregate. A future regression that converts the zero-net cancel into a non-zero net (e.g. accidentally posting both as ADD) would surface in the per-JE snapshot first.
+
+### Tests after this slice
+
+- `mvn test -pl cia-api -Dtest=ReconciliationGateIT` — 2 tests pass:
+  - `reconciliationGateMatchesSnapshot` — 200 events post 420 lines, both snapshots match exactly
+  - `mutatingPostingRuleBreaksReconciliation` — Dr/Cr swap on POLICY_APPROVED catches as snapshot mismatch (per-account assertion fires; per-JE assertion would also fire if mutation guard reached that point)
+- `mvn test -pl cia-api -Dtest=ReconciliationGateIT -Dsnapshot.update=true` — writes both snapshot files; useful when an intentional posting-rule change shifts the expected balance
+
+### Foundations plan now fully closes out Slice 1.9
+
+Both 1.9a (50-event gate + mutation guard + workflow) and 1.9b (200-event scale + per-JE evidence + zero-net pair edge case + approve-then-settle pairs) shipped. Phase 1 is complete; Phase 2 (IFRS 17 PAA) and Phase 3 (IFRS 9) are unblocked.
+
+### Commits planned
+
+1. `feat(finance): slice 1.9b — scale gate to 200 events + per-JE evidence snapshot`
+
+---
+
 ## 2026-05-17 — Session 67 (`module-12-period-end-closures`): Slice 1.9a — Reconciliation Gate Harness shipped
 
 ### Context

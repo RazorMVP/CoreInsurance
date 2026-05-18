@@ -1,68 +1,68 @@
 {
-  "_description" : "Slice 1.9a — expected trial balance after playing the 50-event canonical fixture. Regenerate with -Dsnapshot.update=true.",
+  "_description" : "Slice 1.9b — expected trial balance after playing the 200-event canonical fixture. Regenerate with -Dsnapshot.update=true.",
   "balanced" : true,
-  "totalDebits" : "2790000.00",
-  "totalCredits" : "2790000.00",
-  "lineCount" : 105,
+  "totalDebits" : "11175000.00",
+  "totalCredits" : "11175000.00",
+  "lineCount" : 420,
   "accounts" : {
     "1120" : {
       "name" : "Bank current accounts",
       "type" : "ASSET",
       "debitBalance" : "0.00",
-      "creditBalance" : "400000.00"
+      "creditBalance" : "1600000.00"
     },
     "1310" : {
       "name" : "Premium receivable - Direct",
       "type" : "ASSET",
-      "debitBalance" : "1530000.00",
+      "debitBalance" : "6025000.00",
       "creditBalance" : "0.00"
     },
     "2110" : {
       "name" : "LRC - Best estimate of liabilities",
       "type" : "LIABILITY",
       "debitBalance" : "0.00",
-      "creditBalance" : "1530000.00"
+      "creditBalance" : "6025000.00"
     },
     "2140" : {
       "name" : "LIC - Outstanding claims reserve",
       "type" : "LIABILITY",
       "debitBalance" : "0.00",
-      "creditBalance" : "100000.00"
+      "creditBalance" : "400000.00"
     },
     "2310" : {
       "name" : "Reinsurance premium payable (outward)",
       "type" : "LIABILITY",
       "debitBalance" : "0.00",
-      "creditBalance" : "200000.00"
+      "creditBalance" : "800000.00"
     },
     "2350" : {
       "name" : "Claims payable",
       "type" : "LIABILITY",
       "debitBalance" : "0.00",
-      "creditBalance" : "50000.00"
+      "creditBalance" : "200000.00"
     },
     "4300" : {
       "name" : "Reinsurance income (ceded)",
       "type" : "INCOME",
       "debitBalance" : "0.00",
-      "creditBalance" : "50000.00"
+      "creditBalance" : "200000.00"
     },
     "5110" : {
       "name" : "Incurred claims",
       "type" : "EXPENSE",
-      "debitBalance" : "500000.00",
+      "debitBalance" : "2000000.00",
       "creditBalance" : "0.00"
     },
     "5140" : {
       "name" : "Other directly attributable expenses",
       "type" : "EXPENSE",
-      "debitBalance" : "50000.00",
+      "debitBalance" : "200000.00",
       "creditBalance" : "0.00"
     },
     "5210" : {
       "name" : "Outward reinsurance premium",
       "type" : "EXPENSE",
-      "debitBalance" : "250000.00",
+      "debitBalance" : "1000000.00",
       "creditBalance" : "0.00"
     }
   }

@@ -354,7 +354,7 @@ Split into two parts during design pass:
 
 **Goal:** durable CI gate that fails any future PR which leaves trial balance unbalanced after running the seeded event fixture set.
 
-**Status:** **1.9a SHIPPED** (Session 67, commit on `module-12-period-end-closures`). 1.9b pending.
+**Status:** **1.9a + 1.9b BOTH SHIPPED** (Sessions 67 + 68, on `module-12-period-end-closures`). Phase 1 complete.
 
 **1.9a deliverables (shipped):**
 

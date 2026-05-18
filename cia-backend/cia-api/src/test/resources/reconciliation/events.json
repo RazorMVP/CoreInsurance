@@ -1,7 +1,8 @@
 {
-  "_description": "Slice 1.9a \u2014 canonical 50-event reconciliation fixture",
-  "_invariant": "After playing all events through SubledgerPostingService, totalDebits must equal totalCredits.",
-  "_distribution": "15 POLICY_APPROVED @ NGN 100k | 10 CLAIM_APPROVED @ NGN 50k | 10 CLAIM_SETTLED @ NGN 40k | 3 ENDORSEMENT_PREMIUM_ADDITIONAL @ NGN 20k | 2 ENDORSEMENT_PREMIUM_REFUND @ NGN 15k | 5 CLAIM_EXPENSE_APPROVED @ NGN 10k | 5 FAC_PREMIUM_CEDED (50k = 10k commission + 40k net)",
+  "_description": "Slice 1.9b \u2014 canonical 200-event reconciliation fixture (scaled from 50)",
+  "_invariant": "After playing all events through SubledgerPostingService, totalDebits must equal totalCredits and the snapshot files must match.",
+  "_distribution": "60 POLICY_APPROVED @ NGN 100k | 40 CLAIM_APPROVED @ NGN 50k | 40 CLAIM_SETTLED @ NGN 40k (20 paired to approved claims by claim_id, 20 standalone) | 20 ENDORSEMENT: 5 zero-net ADD/REFUND pairs @ NGN 20k on same policy (cancel at trial balance) + 5 standalone ADD @ NGN 20k + 5 standalone REFUND @ NGN 15k | 20 CLAIM_EXPENSE_APPROVED @ NGN 10k (each tied to one of the 40 approved claims) | 20 FAC_PREMIUM_CEDED (NGN 50k = 10k commission + 40k net)",
+  "_edgeCases": "(a) zero-net endorsement pairs: 5 ADD + 5 REFUND at NGN 20k on policies 1-5 \u2014 at the policy level these cancel, but each one produces its own JE so the reconciliation gate sees 10 distinct entries. (b) claim approve-then-settle pairs: 20 claims (1-20) have BOTH a CLAIM_APPROVED and a CLAIM_SETTLED event in the fixture, exercising the dual flow through 5110\u21922140 (approval) and 2140\u21921120 (settlement) on the same claim_id. (c) claim expenses tied to approved claims: each of the 20 expense events references one of the 40 approved claims, exercising the claim \u2192 expense flow.",
   "events": [
     {
       "type": "POLICY_APPROVED",
@@ -289,6 +290,861 @@
       }
     },
     {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000010",
+        "policyNumber": "REC-POL-016",
+        "customerId": "00000c01-0000-0000-0000-000000000010",
+        "customerName": "Recon Customer 016",
+        "brokerId": "00000b01-0000-0000-0000-000000000010",
+        "brokerName": "Recon Broker 016",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000011",
+        "policyNumber": "REC-POL-017",
+        "customerId": "00000c01-0000-0000-0000-000000000011",
+        "customerName": "Recon Customer 017",
+        "brokerId": "00000b01-0000-0000-0000-000000000011",
+        "brokerName": "Recon Broker 017",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000012",
+        "policyNumber": "REC-POL-018",
+        "customerId": "00000c01-0000-0000-0000-000000000012",
+        "customerName": "Recon Customer 018",
+        "brokerId": "00000b01-0000-0000-0000-000000000012",
+        "brokerName": "Recon Broker 018",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000013",
+        "policyNumber": "REC-POL-019",
+        "customerId": "00000c01-0000-0000-0000-000000000013",
+        "customerName": "Recon Customer 019",
+        "brokerId": "00000b01-0000-0000-0000-000000000013",
+        "brokerName": "Recon Broker 019",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000014",
+        "policyNumber": "REC-POL-020",
+        "customerId": "00000c01-0000-0000-0000-000000000014",
+        "customerName": "Recon Customer 020",
+        "brokerId": "00000b01-0000-0000-0000-000000000014",
+        "brokerName": "Recon Broker 020",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000015",
+        "policyNumber": "REC-POL-021",
+        "customerId": "00000c01-0000-0000-0000-000000000015",
+        "customerName": "Recon Customer 021",
+        "brokerId": "00000b01-0000-0000-0000-000000000015",
+        "brokerName": "Recon Broker 021",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000016",
+        "policyNumber": "REC-POL-022",
+        "customerId": "00000c01-0000-0000-0000-000000000016",
+        "customerName": "Recon Customer 022",
+        "brokerId": "00000b01-0000-0000-0000-000000000016",
+        "brokerName": "Recon Broker 022",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000017",
+        "policyNumber": "REC-POL-023",
+        "customerId": "00000c01-0000-0000-0000-000000000017",
+        "customerName": "Recon Customer 023",
+        "brokerId": "00000b01-0000-0000-0000-000000000017",
+        "brokerName": "Recon Broker 023",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000018",
+        "policyNumber": "REC-POL-024",
+        "customerId": "00000c01-0000-0000-0000-000000000018",
+        "customerName": "Recon Customer 024",
+        "brokerId": "00000b01-0000-0000-0000-000000000018",
+        "brokerName": "Recon Broker 024",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000019",
+        "policyNumber": "REC-POL-025",
+        "customerId": "00000c01-0000-0000-0000-000000000019",
+        "customerName": "Recon Customer 025",
+        "brokerId": "00000b01-0000-0000-0000-000000000019",
+        "brokerName": "Recon Broker 025",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-00000000001a",
+        "policyNumber": "REC-POL-026",
+        "customerId": "00000c01-0000-0000-0000-00000000001a",
+        "customerName": "Recon Customer 026",
+        "brokerId": "00000b01-0000-0000-0000-00000000001a",
+        "brokerName": "Recon Broker 026",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-00000000001b",
+        "policyNumber": "REC-POL-027",
+        "customerId": "00000c01-0000-0000-0000-00000000001b",
+        "customerName": "Recon Customer 027",
+        "brokerId": "00000b01-0000-0000-0000-00000000001b",
+        "brokerName": "Recon Broker 027",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-00000000001c",
+        "policyNumber": "REC-POL-028",
+        "customerId": "00000c01-0000-0000-0000-00000000001c",
+        "customerName": "Recon Customer 028",
+        "brokerId": "00000b01-0000-0000-0000-00000000001c",
+        "brokerName": "Recon Broker 028",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-00000000001d",
+        "policyNumber": "REC-POL-029",
+        "customerId": "00000c01-0000-0000-0000-00000000001d",
+        "customerName": "Recon Customer 029",
+        "brokerId": "00000b01-0000-0000-0000-00000000001d",
+        "brokerName": "Recon Broker 029",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-00000000001e",
+        "policyNumber": "REC-POL-030",
+        "customerId": "00000c01-0000-0000-0000-00000000001e",
+        "customerName": "Recon Customer 030",
+        "brokerId": "00000b01-0000-0000-0000-00000000001e",
+        "brokerName": "Recon Broker 030",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-00000000001f",
+        "policyNumber": "REC-POL-031",
+        "customerId": "00000c01-0000-0000-0000-00000000001f",
+        "customerName": "Recon Customer 031",
+        "brokerId": "00000b01-0000-0000-0000-00000000001f",
+        "brokerName": "Recon Broker 031",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000020",
+        "policyNumber": "REC-POL-032",
+        "customerId": "00000c01-0000-0000-0000-000000000020",
+        "customerName": "Recon Customer 032",
+        "brokerId": "00000b01-0000-0000-0000-000000000020",
+        "brokerName": "Recon Broker 032",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000021",
+        "policyNumber": "REC-POL-033",
+        "customerId": "00000c01-0000-0000-0000-000000000021",
+        "customerName": "Recon Customer 033",
+        "brokerId": "00000b01-0000-0000-0000-000000000021",
+        "brokerName": "Recon Broker 033",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000022",
+        "policyNumber": "REC-POL-034",
+        "customerId": "00000c01-0000-0000-0000-000000000022",
+        "customerName": "Recon Customer 034",
+        "brokerId": "00000b01-0000-0000-0000-000000000022",
+        "brokerName": "Recon Broker 034",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000023",
+        "policyNumber": "REC-POL-035",
+        "customerId": "00000c01-0000-0000-0000-000000000023",
+        "customerName": "Recon Customer 035",
+        "brokerId": "00000b01-0000-0000-0000-000000000023",
+        "brokerName": "Recon Broker 035",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000024",
+        "policyNumber": "REC-POL-036",
+        "customerId": "00000c01-0000-0000-0000-000000000024",
+        "customerName": "Recon Customer 036",
+        "brokerId": "00000b01-0000-0000-0000-000000000024",
+        "brokerName": "Recon Broker 036",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000025",
+        "policyNumber": "REC-POL-037",
+        "customerId": "00000c01-0000-0000-0000-000000000025",
+        "customerName": "Recon Customer 037",
+        "brokerId": "00000b01-0000-0000-0000-000000000025",
+        "brokerName": "Recon Broker 037",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000026",
+        "policyNumber": "REC-POL-038",
+        "customerId": "00000c01-0000-0000-0000-000000000026",
+        "customerName": "Recon Customer 038",
+        "brokerId": "00000b01-0000-0000-0000-000000000026",
+        "brokerName": "Recon Broker 038",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000027",
+        "policyNumber": "REC-POL-039",
+        "customerId": "00000c01-0000-0000-0000-000000000027",
+        "customerName": "Recon Customer 039",
+        "brokerId": "00000b01-0000-0000-0000-000000000027",
+        "brokerName": "Recon Broker 039",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000028",
+        "policyNumber": "REC-POL-040",
+        "customerId": "00000c01-0000-0000-0000-000000000028",
+        "customerName": "Recon Customer 040",
+        "brokerId": "00000b01-0000-0000-0000-000000000028",
+        "brokerName": "Recon Broker 040",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000029",
+        "policyNumber": "REC-POL-041",
+        "customerId": "00000c01-0000-0000-0000-000000000029",
+        "customerName": "Recon Customer 041",
+        "brokerId": "00000b01-0000-0000-0000-000000000029",
+        "brokerName": "Recon Broker 041",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-00000000002a",
+        "policyNumber": "REC-POL-042",
+        "customerId": "00000c01-0000-0000-0000-00000000002a",
+        "customerName": "Recon Customer 042",
+        "brokerId": "00000b01-0000-0000-0000-00000000002a",
+        "brokerName": "Recon Broker 042",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-00000000002b",
+        "policyNumber": "REC-POL-043",
+        "customerId": "00000c01-0000-0000-0000-00000000002b",
+        "customerName": "Recon Customer 043",
+        "brokerId": "00000b01-0000-0000-0000-00000000002b",
+        "brokerName": "Recon Broker 043",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-00000000002c",
+        "policyNumber": "REC-POL-044",
+        "customerId": "00000c01-0000-0000-0000-00000000002c",
+        "customerName": "Recon Customer 044",
+        "brokerId": "00000b01-0000-0000-0000-00000000002c",
+        "brokerName": "Recon Broker 044",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-00000000002d",
+        "policyNumber": "REC-POL-045",
+        "customerId": "00000c01-0000-0000-0000-00000000002d",
+        "customerName": "Recon Customer 045",
+        "brokerId": "00000b01-0000-0000-0000-00000000002d",
+        "brokerName": "Recon Broker 045",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-00000000002e",
+        "policyNumber": "REC-POL-046",
+        "customerId": "00000c01-0000-0000-0000-00000000002e",
+        "customerName": "Recon Customer 046",
+        "brokerId": "00000b01-0000-0000-0000-00000000002e",
+        "brokerName": "Recon Broker 046",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-00000000002f",
+        "policyNumber": "REC-POL-047",
+        "customerId": "00000c01-0000-0000-0000-00000000002f",
+        "customerName": "Recon Customer 047",
+        "brokerId": "00000b01-0000-0000-0000-00000000002f",
+        "brokerName": "Recon Broker 047",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000030",
+        "policyNumber": "REC-POL-048",
+        "customerId": "00000c01-0000-0000-0000-000000000030",
+        "customerName": "Recon Customer 048",
+        "brokerId": "00000b01-0000-0000-0000-000000000030",
+        "brokerName": "Recon Broker 048",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000031",
+        "policyNumber": "REC-POL-049",
+        "customerId": "00000c01-0000-0000-0000-000000000031",
+        "customerName": "Recon Customer 049",
+        "brokerId": "00000b01-0000-0000-0000-000000000031",
+        "brokerName": "Recon Broker 049",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000032",
+        "policyNumber": "REC-POL-050",
+        "customerId": "00000c01-0000-0000-0000-000000000032",
+        "customerName": "Recon Customer 050",
+        "brokerId": "00000b01-0000-0000-0000-000000000032",
+        "brokerName": "Recon Broker 050",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000033",
+        "policyNumber": "REC-POL-051",
+        "customerId": "00000c01-0000-0000-0000-000000000033",
+        "customerName": "Recon Customer 051",
+        "brokerId": "00000b01-0000-0000-0000-000000000033",
+        "brokerName": "Recon Broker 051",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000034",
+        "policyNumber": "REC-POL-052",
+        "customerId": "00000c01-0000-0000-0000-000000000034",
+        "customerName": "Recon Customer 052",
+        "brokerId": "00000b01-0000-0000-0000-000000000034",
+        "brokerName": "Recon Broker 052",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000035",
+        "policyNumber": "REC-POL-053",
+        "customerId": "00000c01-0000-0000-0000-000000000035",
+        "customerName": "Recon Customer 053",
+        "brokerId": "00000b01-0000-0000-0000-000000000035",
+        "brokerName": "Recon Broker 053",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000036",
+        "policyNumber": "REC-POL-054",
+        "customerId": "00000c01-0000-0000-0000-000000000036",
+        "customerName": "Recon Customer 054",
+        "brokerId": "00000b01-0000-0000-0000-000000000036",
+        "brokerName": "Recon Broker 054",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000037",
+        "policyNumber": "REC-POL-055",
+        "customerId": "00000c01-0000-0000-0000-000000000037",
+        "customerName": "Recon Customer 055",
+        "brokerId": "00000b01-0000-0000-0000-000000000037",
+        "brokerName": "Recon Broker 055",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000038",
+        "policyNumber": "REC-POL-056",
+        "customerId": "00000c01-0000-0000-0000-000000000038",
+        "customerName": "Recon Customer 056",
+        "brokerId": "00000b01-0000-0000-0000-000000000038",
+        "brokerName": "Recon Broker 056",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-000000000039",
+        "policyNumber": "REC-POL-057",
+        "customerId": "00000c01-0000-0000-0000-000000000039",
+        "customerName": "Recon Customer 057",
+        "brokerId": "00000b01-0000-0000-0000-000000000039",
+        "brokerName": "Recon Broker 057",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-00000000003a",
+        "policyNumber": "REC-POL-058",
+        "customerId": "00000c01-0000-0000-0000-00000000003a",
+        "customerName": "Recon Customer 058",
+        "brokerId": "00000b01-0000-0000-0000-00000000003a",
+        "brokerName": "Recon Broker 058",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-00000000003b",
+        "policyNumber": "REC-POL-059",
+        "customerId": "00000c01-0000-0000-0000-00000000003b",
+        "customerName": "Recon Customer 059",
+        "brokerId": "00000b01-0000-0000-0000-00000000003b",
+        "brokerName": "Recon Broker 059",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
+      "type": "POLICY_APPROVED",
+      "payload": {
+        "policyId": "00000a01-0000-0000-0000-00000000003c",
+        "policyNumber": "REC-POL-060",
+        "customerId": "00000c01-0000-0000-0000-00000000003c",
+        "customerName": "Recon Customer 060",
+        "brokerId": "00000b01-0000-0000-0000-00000000003c",
+        "brokerName": "Recon Broker 060",
+        "productName": "Motor Comprehensive",
+        "netPremium": "100000.00",
+        "currencyCode": "NGN",
+        "policyEndDate": "2027-05-01",
+        "productId": "00000d01-0000-0000-0000-000000000001",
+        "classOfBusinessId": "00000e01-0000-0000-0000-000000000001",
+        "totalSumInsured": "5000000.00",
+        "policyStartDate": "2026-05-01"
+      }
+    },
+    {
       "type": "CLAIM_APPROVED",
       "payload": {
         "claimId": "00000a02-0000-0000-0000-000000000001",
@@ -449,9 +1305,489 @@
       }
     },
     {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-00000000000b",
+        "claimNumber": "REC-CLM-011",
+        "policyId": "00000a01-0000-0000-0000-00000000000b",
+        "policyNumber": "REC-POL-011",
+        "customerId": "00000c01-0000-0000-0000-00000000000b",
+        "customerName": "Recon Customer 011",
+        "brokerId": "00000b01-0000-0000-0000-00000000000b",
+        "brokerName": "Recon Broker 011",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-00000000000c",
+        "claimNumber": "REC-CLM-012",
+        "policyId": "00000a01-0000-0000-0000-00000000000c",
+        "policyNumber": "REC-POL-012",
+        "customerId": "00000c01-0000-0000-0000-00000000000c",
+        "customerName": "Recon Customer 012",
+        "brokerId": "00000b01-0000-0000-0000-00000000000c",
+        "brokerName": "Recon Broker 012",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-00000000000d",
+        "claimNumber": "REC-CLM-013",
+        "policyId": "00000a01-0000-0000-0000-00000000000d",
+        "policyNumber": "REC-POL-013",
+        "customerId": "00000c01-0000-0000-0000-00000000000d",
+        "customerName": "Recon Customer 013",
+        "brokerId": "00000b01-0000-0000-0000-00000000000d",
+        "brokerName": "Recon Broker 013",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-00000000000e",
+        "claimNumber": "REC-CLM-014",
+        "policyId": "00000a01-0000-0000-0000-00000000000e",
+        "policyNumber": "REC-POL-014",
+        "customerId": "00000c01-0000-0000-0000-00000000000e",
+        "customerName": "Recon Customer 014",
+        "brokerId": "00000b01-0000-0000-0000-00000000000e",
+        "brokerName": "Recon Broker 014",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-00000000000f",
+        "claimNumber": "REC-CLM-015",
+        "policyId": "00000a01-0000-0000-0000-00000000000f",
+        "policyNumber": "REC-POL-015",
+        "customerId": "00000c01-0000-0000-0000-00000000000f",
+        "customerName": "Recon Customer 015",
+        "brokerId": "00000b01-0000-0000-0000-00000000000f",
+        "brokerName": "Recon Broker 015",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000010",
+        "claimNumber": "REC-CLM-016",
+        "policyId": "00000a01-0000-0000-0000-000000000010",
+        "policyNumber": "REC-POL-016",
+        "customerId": "00000c01-0000-0000-0000-000000000010",
+        "customerName": "Recon Customer 016",
+        "brokerId": "00000b01-0000-0000-0000-000000000010",
+        "brokerName": "Recon Broker 016",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000011",
+        "claimNumber": "REC-CLM-017",
+        "policyId": "00000a01-0000-0000-0000-000000000011",
+        "policyNumber": "REC-POL-017",
+        "customerId": "00000c01-0000-0000-0000-000000000011",
+        "customerName": "Recon Customer 017",
+        "brokerId": "00000b01-0000-0000-0000-000000000011",
+        "brokerName": "Recon Broker 017",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000012",
+        "claimNumber": "REC-CLM-018",
+        "policyId": "00000a01-0000-0000-0000-000000000012",
+        "policyNumber": "REC-POL-018",
+        "customerId": "00000c01-0000-0000-0000-000000000012",
+        "customerName": "Recon Customer 018",
+        "brokerId": "00000b01-0000-0000-0000-000000000012",
+        "brokerName": "Recon Broker 018",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000013",
+        "claimNumber": "REC-CLM-019",
+        "policyId": "00000a01-0000-0000-0000-000000000013",
+        "policyNumber": "REC-POL-019",
+        "customerId": "00000c01-0000-0000-0000-000000000013",
+        "customerName": "Recon Customer 019",
+        "brokerId": "00000b01-0000-0000-0000-000000000013",
+        "brokerName": "Recon Broker 019",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000014",
+        "claimNumber": "REC-CLM-020",
+        "policyId": "00000a01-0000-0000-0000-000000000014",
+        "policyNumber": "REC-POL-020",
+        "customerId": "00000c01-0000-0000-0000-000000000014",
+        "customerName": "Recon Customer 020",
+        "brokerId": "00000b01-0000-0000-0000-000000000014",
+        "brokerName": "Recon Broker 020",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000015",
+        "claimNumber": "REC-CLM-021",
+        "policyId": "00000a01-0000-0000-0000-000000000015",
+        "policyNumber": "REC-POL-021",
+        "customerId": "00000c01-0000-0000-0000-000000000015",
+        "customerName": "Recon Customer 021",
+        "brokerId": "00000b01-0000-0000-0000-000000000015",
+        "brokerName": "Recon Broker 021",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000016",
+        "claimNumber": "REC-CLM-022",
+        "policyId": "00000a01-0000-0000-0000-000000000016",
+        "policyNumber": "REC-POL-022",
+        "customerId": "00000c01-0000-0000-0000-000000000016",
+        "customerName": "Recon Customer 022",
+        "brokerId": "00000b01-0000-0000-0000-000000000016",
+        "brokerName": "Recon Broker 022",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000017",
+        "claimNumber": "REC-CLM-023",
+        "policyId": "00000a01-0000-0000-0000-000000000017",
+        "policyNumber": "REC-POL-023",
+        "customerId": "00000c01-0000-0000-0000-000000000017",
+        "customerName": "Recon Customer 023",
+        "brokerId": "00000b01-0000-0000-0000-000000000017",
+        "brokerName": "Recon Broker 023",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000018",
+        "claimNumber": "REC-CLM-024",
+        "policyId": "00000a01-0000-0000-0000-000000000018",
+        "policyNumber": "REC-POL-024",
+        "customerId": "00000c01-0000-0000-0000-000000000018",
+        "customerName": "Recon Customer 024",
+        "brokerId": "00000b01-0000-0000-0000-000000000018",
+        "brokerName": "Recon Broker 024",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000019",
+        "claimNumber": "REC-CLM-025",
+        "policyId": "00000a01-0000-0000-0000-000000000019",
+        "policyNumber": "REC-POL-025",
+        "customerId": "00000c01-0000-0000-0000-000000000019",
+        "customerName": "Recon Customer 025",
+        "brokerId": "00000b01-0000-0000-0000-000000000019",
+        "brokerName": "Recon Broker 025",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-00000000001a",
+        "claimNumber": "REC-CLM-026",
+        "policyId": "00000a01-0000-0000-0000-00000000001a",
+        "policyNumber": "REC-POL-026",
+        "customerId": "00000c01-0000-0000-0000-00000000001a",
+        "customerName": "Recon Customer 026",
+        "brokerId": "00000b01-0000-0000-0000-00000000001a",
+        "brokerName": "Recon Broker 026",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-00000000001b",
+        "claimNumber": "REC-CLM-027",
+        "policyId": "00000a01-0000-0000-0000-00000000001b",
+        "policyNumber": "REC-POL-027",
+        "customerId": "00000c01-0000-0000-0000-00000000001b",
+        "customerName": "Recon Customer 027",
+        "brokerId": "00000b01-0000-0000-0000-00000000001b",
+        "brokerName": "Recon Broker 027",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-00000000001c",
+        "claimNumber": "REC-CLM-028",
+        "policyId": "00000a01-0000-0000-0000-00000000001c",
+        "policyNumber": "REC-POL-028",
+        "customerId": "00000c01-0000-0000-0000-00000000001c",
+        "customerName": "Recon Customer 028",
+        "brokerId": "00000b01-0000-0000-0000-00000000001c",
+        "brokerName": "Recon Broker 028",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-00000000001d",
+        "claimNumber": "REC-CLM-029",
+        "policyId": "00000a01-0000-0000-0000-00000000001d",
+        "policyNumber": "REC-POL-029",
+        "customerId": "00000c01-0000-0000-0000-00000000001d",
+        "customerName": "Recon Customer 029",
+        "brokerId": "00000b01-0000-0000-0000-00000000001d",
+        "brokerName": "Recon Broker 029",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-00000000001e",
+        "claimNumber": "REC-CLM-030",
+        "policyId": "00000a01-0000-0000-0000-00000000001e",
+        "policyNumber": "REC-POL-030",
+        "customerId": "00000c01-0000-0000-0000-00000000001e",
+        "customerName": "Recon Customer 030",
+        "brokerId": "00000b01-0000-0000-0000-00000000001e",
+        "brokerName": "Recon Broker 030",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-00000000001f",
+        "claimNumber": "REC-CLM-031",
+        "policyId": "00000a01-0000-0000-0000-00000000001f",
+        "policyNumber": "REC-POL-031",
+        "customerId": "00000c01-0000-0000-0000-00000000001f",
+        "customerName": "Recon Customer 031",
+        "brokerId": "00000b01-0000-0000-0000-00000000001f",
+        "brokerName": "Recon Broker 031",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000020",
+        "claimNumber": "REC-CLM-032",
+        "policyId": "00000a01-0000-0000-0000-000000000020",
+        "policyNumber": "REC-POL-032",
+        "customerId": "00000c01-0000-0000-0000-000000000020",
+        "customerName": "Recon Customer 032",
+        "brokerId": "00000b01-0000-0000-0000-000000000020",
+        "brokerName": "Recon Broker 032",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000021",
+        "claimNumber": "REC-CLM-033",
+        "policyId": "00000a01-0000-0000-0000-000000000021",
+        "policyNumber": "REC-POL-033",
+        "customerId": "00000c01-0000-0000-0000-000000000021",
+        "customerName": "Recon Customer 033",
+        "brokerId": "00000b01-0000-0000-0000-000000000021",
+        "brokerName": "Recon Broker 033",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000022",
+        "claimNumber": "REC-CLM-034",
+        "policyId": "00000a01-0000-0000-0000-000000000022",
+        "policyNumber": "REC-POL-034",
+        "customerId": "00000c01-0000-0000-0000-000000000022",
+        "customerName": "Recon Customer 034",
+        "brokerId": "00000b01-0000-0000-0000-000000000022",
+        "brokerName": "Recon Broker 034",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000023",
+        "claimNumber": "REC-CLM-035",
+        "policyId": "00000a01-0000-0000-0000-000000000023",
+        "policyNumber": "REC-POL-035",
+        "customerId": "00000c01-0000-0000-0000-000000000023",
+        "customerName": "Recon Customer 035",
+        "brokerId": "00000b01-0000-0000-0000-000000000023",
+        "brokerName": "Recon Broker 035",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000024",
+        "claimNumber": "REC-CLM-036",
+        "policyId": "00000a01-0000-0000-0000-000000000024",
+        "policyNumber": "REC-POL-036",
+        "customerId": "00000c01-0000-0000-0000-000000000024",
+        "customerName": "Recon Customer 036",
+        "brokerId": "00000b01-0000-0000-0000-000000000024",
+        "brokerName": "Recon Broker 036",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000025",
+        "claimNumber": "REC-CLM-037",
+        "policyId": "00000a01-0000-0000-0000-000000000025",
+        "policyNumber": "REC-POL-037",
+        "customerId": "00000c01-0000-0000-0000-000000000025",
+        "customerName": "Recon Customer 037",
+        "brokerId": "00000b01-0000-0000-0000-000000000025",
+        "brokerName": "Recon Broker 037",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000026",
+        "claimNumber": "REC-CLM-038",
+        "policyId": "00000a01-0000-0000-0000-000000000026",
+        "policyNumber": "REC-POL-038",
+        "customerId": "00000c01-0000-0000-0000-000000000026",
+        "customerName": "Recon Customer 038",
+        "brokerId": "00000b01-0000-0000-0000-000000000026",
+        "brokerName": "Recon Broker 038",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000027",
+        "claimNumber": "REC-CLM-039",
+        "policyId": "00000a01-0000-0000-0000-000000000027",
+        "policyNumber": "REC-POL-039",
+        "customerId": "00000c01-0000-0000-0000-000000000027",
+        "customerName": "Recon Customer 039",
+        "brokerId": "00000b01-0000-0000-0000-000000000027",
+        "brokerName": "Recon Broker 039",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_APPROVED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000028",
+        "claimNumber": "REC-CLM-040",
+        "policyId": "00000a01-0000-0000-0000-000000000028",
+        "policyNumber": "REC-POL-040",
+        "customerId": "00000c01-0000-0000-0000-000000000028",
+        "customerName": "Recon Customer 040",
+        "brokerId": "00000b01-0000-0000-0000-000000000028",
+        "brokerName": "Recon Broker 040",
+        "productName": "Motor Comprehensive",
+        "approvedAmount": "50000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
       "type": "CLAIM_SETTLED",
       "payload": {
-        "claimId": "00000a03-0000-0000-0000-000000000001",
+        "claimId": "00000a02-0000-0000-0000-000000000001",
         "claimNumber": "REC-CLM-001",
         "policyId": "00000a01-0000-0000-0000-000000000001",
         "policyNumber": "REC-POL-001",
@@ -465,7 +1801,7 @@
     {
       "type": "CLAIM_SETTLED",
       "payload": {
-        "claimId": "00000a03-0000-0000-0000-000000000002",
+        "claimId": "00000a02-0000-0000-0000-000000000002",
         "claimNumber": "REC-CLM-002",
         "policyId": "00000a01-0000-0000-0000-000000000002",
         "policyNumber": "REC-POL-002",
@@ -479,7 +1815,7 @@
     {
       "type": "CLAIM_SETTLED",
       "payload": {
-        "claimId": "00000a03-0000-0000-0000-000000000003",
+        "claimId": "00000a02-0000-0000-0000-000000000003",
         "claimNumber": "REC-CLM-003",
         "policyId": "00000a01-0000-0000-0000-000000000003",
         "policyNumber": "REC-POL-003",
@@ -493,7 +1829,7 @@
     {
       "type": "CLAIM_SETTLED",
       "payload": {
-        "claimId": "00000a03-0000-0000-0000-000000000004",
+        "claimId": "00000a02-0000-0000-0000-000000000004",
         "claimNumber": "REC-CLM-004",
         "policyId": "00000a01-0000-0000-0000-000000000004",
         "policyNumber": "REC-POL-004",
@@ -507,7 +1843,7 @@
     {
       "type": "CLAIM_SETTLED",
       "payload": {
-        "claimId": "00000a03-0000-0000-0000-000000000005",
+        "claimId": "00000a02-0000-0000-0000-000000000005",
         "claimNumber": "REC-CLM-005",
         "policyId": "00000a01-0000-0000-0000-000000000005",
         "policyNumber": "REC-POL-005",
@@ -521,7 +1857,7 @@
     {
       "type": "CLAIM_SETTLED",
       "payload": {
-        "claimId": "00000a03-0000-0000-0000-000000000006",
+        "claimId": "00000a02-0000-0000-0000-000000000006",
         "claimNumber": "REC-CLM-006",
         "policyId": "00000a01-0000-0000-0000-000000000006",
         "policyNumber": "REC-POL-006",
@@ -535,7 +1871,7 @@
     {
       "type": "CLAIM_SETTLED",
       "payload": {
-        "claimId": "00000a03-0000-0000-0000-000000000007",
+        "claimId": "00000a02-0000-0000-0000-000000000007",
         "claimNumber": "REC-CLM-007",
         "policyId": "00000a01-0000-0000-0000-000000000007",
         "policyNumber": "REC-POL-007",
@@ -549,7 +1885,7 @@
     {
       "type": "CLAIM_SETTLED",
       "payload": {
-        "claimId": "00000a03-0000-0000-0000-000000000008",
+        "claimId": "00000a02-0000-0000-0000-000000000008",
         "claimNumber": "REC-CLM-008",
         "policyId": "00000a01-0000-0000-0000-000000000008",
         "policyNumber": "REC-POL-008",
@@ -563,7 +1899,7 @@
     {
       "type": "CLAIM_SETTLED",
       "payload": {
-        "claimId": "00000a03-0000-0000-0000-000000000009",
+        "claimId": "00000a02-0000-0000-0000-000000000009",
         "claimNumber": "REC-CLM-009",
         "policyId": "00000a01-0000-0000-0000-000000000009",
         "policyNumber": "REC-POL-009",
@@ -577,7 +1913,7 @@
     {
       "type": "CLAIM_SETTLED",
       "payload": {
-        "claimId": "00000a03-0000-0000-0000-00000000000a",
+        "claimId": "00000a02-0000-0000-0000-00000000000a",
         "claimNumber": "REC-CLM-010",
         "policyId": "00000a01-0000-0000-0000-00000000000a",
         "policyNumber": "REC-POL-010",
@@ -589,10 +1925,430 @@
       }
     },
     {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-00000000000b",
+        "claimNumber": "REC-CLM-011",
+        "policyId": "00000a01-0000-0000-0000-00000000000b",
+        "policyNumber": "REC-POL-011",
+        "customerId": "00000c01-0000-0000-0000-00000000000b",
+        "customerName": "Recon Customer 011",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-00000000000c",
+        "claimNumber": "REC-CLM-012",
+        "policyId": "00000a01-0000-0000-0000-00000000000c",
+        "policyNumber": "REC-POL-012",
+        "customerId": "00000c01-0000-0000-0000-00000000000c",
+        "customerName": "Recon Customer 012",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-00000000000d",
+        "claimNumber": "REC-CLM-013",
+        "policyId": "00000a01-0000-0000-0000-00000000000d",
+        "policyNumber": "REC-POL-013",
+        "customerId": "00000c01-0000-0000-0000-00000000000d",
+        "customerName": "Recon Customer 013",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-00000000000e",
+        "claimNumber": "REC-CLM-014",
+        "policyId": "00000a01-0000-0000-0000-00000000000e",
+        "policyNumber": "REC-POL-014",
+        "customerId": "00000c01-0000-0000-0000-00000000000e",
+        "customerName": "Recon Customer 014",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-00000000000f",
+        "claimNumber": "REC-CLM-015",
+        "policyId": "00000a01-0000-0000-0000-00000000000f",
+        "policyNumber": "REC-POL-015",
+        "customerId": "00000c01-0000-0000-0000-00000000000f",
+        "customerName": "Recon Customer 015",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000010",
+        "claimNumber": "REC-CLM-016",
+        "policyId": "00000a01-0000-0000-0000-000000000010",
+        "policyNumber": "REC-POL-016",
+        "customerId": "00000c01-0000-0000-0000-000000000010",
+        "customerName": "Recon Customer 016",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000011",
+        "claimNumber": "REC-CLM-017",
+        "policyId": "00000a01-0000-0000-0000-000000000011",
+        "policyNumber": "REC-POL-017",
+        "customerId": "00000c01-0000-0000-0000-000000000011",
+        "customerName": "Recon Customer 017",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000012",
+        "claimNumber": "REC-CLM-018",
+        "policyId": "00000a01-0000-0000-0000-000000000012",
+        "policyNumber": "REC-POL-018",
+        "customerId": "00000c01-0000-0000-0000-000000000012",
+        "customerName": "Recon Customer 018",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000013",
+        "claimNumber": "REC-CLM-019",
+        "policyId": "00000a01-0000-0000-0000-000000000013",
+        "policyNumber": "REC-POL-019",
+        "customerId": "00000c01-0000-0000-0000-000000000013",
+        "customerName": "Recon Customer 019",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a02-0000-0000-0000-000000000014",
+        "claimNumber": "REC-CLM-020",
+        "policyId": "00000a01-0000-0000-0000-000000000014",
+        "policyNumber": "REC-POL-020",
+        "customerId": "00000c01-0000-0000-0000-000000000014",
+        "customerName": "Recon Customer 020",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-000000000015",
+        "claimNumber": "REC-CLM-STA-021",
+        "policyId": "00000a01-0000-0000-0000-000000000015",
+        "policyNumber": "REC-POL-021",
+        "customerId": "00000c01-0000-0000-0000-000000000015",
+        "customerName": "Recon Customer 021",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-000000000016",
+        "claimNumber": "REC-CLM-STA-022",
+        "policyId": "00000a01-0000-0000-0000-000000000016",
+        "policyNumber": "REC-POL-022",
+        "customerId": "00000c01-0000-0000-0000-000000000016",
+        "customerName": "Recon Customer 022",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-000000000017",
+        "claimNumber": "REC-CLM-STA-023",
+        "policyId": "00000a01-0000-0000-0000-000000000017",
+        "policyNumber": "REC-POL-023",
+        "customerId": "00000c01-0000-0000-0000-000000000017",
+        "customerName": "Recon Customer 023",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-000000000018",
+        "claimNumber": "REC-CLM-STA-024",
+        "policyId": "00000a01-0000-0000-0000-000000000018",
+        "policyNumber": "REC-POL-024",
+        "customerId": "00000c01-0000-0000-0000-000000000018",
+        "customerName": "Recon Customer 024",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-000000000019",
+        "claimNumber": "REC-CLM-STA-025",
+        "policyId": "00000a01-0000-0000-0000-000000000019",
+        "policyNumber": "REC-POL-025",
+        "customerId": "00000c01-0000-0000-0000-000000000019",
+        "customerName": "Recon Customer 025",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-00000000001a",
+        "claimNumber": "REC-CLM-STA-026",
+        "policyId": "00000a01-0000-0000-0000-00000000001a",
+        "policyNumber": "REC-POL-026",
+        "customerId": "00000c01-0000-0000-0000-00000000001a",
+        "customerName": "Recon Customer 026",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-00000000001b",
+        "claimNumber": "REC-CLM-STA-027",
+        "policyId": "00000a01-0000-0000-0000-00000000001b",
+        "policyNumber": "REC-POL-027",
+        "customerId": "00000c01-0000-0000-0000-00000000001b",
+        "customerName": "Recon Customer 027",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-00000000001c",
+        "claimNumber": "REC-CLM-STA-028",
+        "policyId": "00000a01-0000-0000-0000-00000000001c",
+        "policyNumber": "REC-POL-028",
+        "customerId": "00000c01-0000-0000-0000-00000000001c",
+        "customerName": "Recon Customer 028",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-00000000001d",
+        "claimNumber": "REC-CLM-STA-029",
+        "policyId": "00000a01-0000-0000-0000-00000000001d",
+        "policyNumber": "REC-POL-029",
+        "customerId": "00000c01-0000-0000-0000-00000000001d",
+        "customerName": "Recon Customer 029",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-00000000001e",
+        "claimNumber": "REC-CLM-STA-030",
+        "policyId": "00000a01-0000-0000-0000-00000000001e",
+        "policyNumber": "REC-POL-030",
+        "customerId": "00000c01-0000-0000-0000-00000000001e",
+        "customerName": "Recon Customer 030",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-00000000001f",
+        "claimNumber": "REC-CLM-STA-031",
+        "policyId": "00000a01-0000-0000-0000-00000000001f",
+        "policyNumber": "REC-POL-031",
+        "customerId": "00000c01-0000-0000-0000-00000000001f",
+        "customerName": "Recon Customer 031",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-000000000020",
+        "claimNumber": "REC-CLM-STA-032",
+        "policyId": "00000a01-0000-0000-0000-000000000020",
+        "policyNumber": "REC-POL-032",
+        "customerId": "00000c01-0000-0000-0000-000000000020",
+        "customerName": "Recon Customer 032",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-000000000021",
+        "claimNumber": "REC-CLM-STA-033",
+        "policyId": "00000a01-0000-0000-0000-000000000021",
+        "policyNumber": "REC-POL-033",
+        "customerId": "00000c01-0000-0000-0000-000000000021",
+        "customerName": "Recon Customer 033",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-000000000022",
+        "claimNumber": "REC-CLM-STA-034",
+        "policyId": "00000a01-0000-0000-0000-000000000022",
+        "policyNumber": "REC-POL-034",
+        "customerId": "00000c01-0000-0000-0000-000000000022",
+        "customerName": "Recon Customer 034",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-000000000023",
+        "claimNumber": "REC-CLM-STA-035",
+        "policyId": "00000a01-0000-0000-0000-000000000023",
+        "policyNumber": "REC-POL-035",
+        "customerId": "00000c01-0000-0000-0000-000000000023",
+        "customerName": "Recon Customer 035",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-000000000024",
+        "claimNumber": "REC-CLM-STA-036",
+        "policyId": "00000a01-0000-0000-0000-000000000024",
+        "policyNumber": "REC-POL-036",
+        "customerId": "00000c01-0000-0000-0000-000000000024",
+        "customerName": "Recon Customer 036",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-000000000025",
+        "claimNumber": "REC-CLM-STA-037",
+        "policyId": "00000a01-0000-0000-0000-000000000025",
+        "policyNumber": "REC-POL-037",
+        "customerId": "00000c01-0000-0000-0000-000000000025",
+        "customerName": "Recon Customer 037",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-000000000026",
+        "claimNumber": "REC-CLM-STA-038",
+        "policyId": "00000a01-0000-0000-0000-000000000026",
+        "policyNumber": "REC-POL-038",
+        "customerId": "00000c01-0000-0000-0000-000000000026",
+        "customerName": "Recon Customer 038",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-000000000027",
+        "claimNumber": "REC-CLM-STA-039",
+        "policyId": "00000a01-0000-0000-0000-000000000027",
+        "policyNumber": "REC-POL-039",
+        "customerId": "00000c01-0000-0000-0000-000000000027",
+        "customerName": "Recon Customer 039",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
+      "type": "CLAIM_SETTLED",
+      "payload": {
+        "claimId": "00000a03-0000-0000-0000-000000000028",
+        "claimNumber": "REC-CLM-STA-040",
+        "policyId": "00000a01-0000-0000-0000-000000000028",
+        "policyNumber": "REC-POL-040",
+        "customerId": "00000c01-0000-0000-0000-000000000028",
+        "customerName": "Recon Customer 040",
+        "settledAmount": "40000.00",
+        "currencyCode": "NGN",
+        "settledAt": "2026-05-10T12:00:00Z"
+      }
+    },
+    {
       "type": "ENDORSEMENT_APPROVED",
       "payload": {
         "endorsementId": "00000a04-0000-0000-0000-000000000001",
-        "endorsementNumber": "REC-END-001",
+        "endorsementNumber": "REC-END-PAIR-001A",
         "policyId": "00000a01-0000-0000-0000-000000000001",
         "policyNumber": "REC-POL-001",
         "customerId": "00000c01-0000-0000-0000-000000000001",
@@ -608,7 +2364,7 @@
       "type": "ENDORSEMENT_APPROVED",
       "payload": {
         "endorsementId": "00000a04-0000-0000-0000-000000000002",
-        "endorsementNumber": "REC-END-002",
+        "endorsementNumber": "REC-END-PAIR-002A",
         "policyId": "00000a01-0000-0000-0000-000000000002",
         "policyNumber": "REC-POL-002",
         "customerId": "00000c01-0000-0000-0000-000000000002",
@@ -624,7 +2380,7 @@
       "type": "ENDORSEMENT_APPROVED",
       "payload": {
         "endorsementId": "00000a04-0000-0000-0000-000000000003",
-        "endorsementNumber": "REC-END-003",
+        "endorsementNumber": "REC-END-PAIR-003A",
         "policyId": "00000a01-0000-0000-0000-000000000003",
         "policyNumber": "REC-POL-003",
         "customerId": "00000c01-0000-0000-0000-000000000003",
@@ -640,13 +2396,205 @@
       "type": "ENDORSEMENT_APPROVED",
       "payload": {
         "endorsementId": "00000a04-0000-0000-0000-000000000004",
-        "endorsementNumber": "REC-END-004",
+        "endorsementNumber": "REC-END-PAIR-004A",
         "policyId": "00000a01-0000-0000-0000-000000000004",
         "policyNumber": "REC-POL-004",
         "customerId": "00000c01-0000-0000-0000-000000000004",
         "customerName": "Recon Customer 004",
         "brokerId": "00000b01-0000-0000-0000-000000000004",
         "brokerName": "Recon Broker 004",
+        "productName": "Motor Comprehensive",
+        "premiumAdjustment": "20000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "ENDORSEMENT_APPROVED",
+      "payload": {
+        "endorsementId": "00000a04-0000-0000-0000-000000000005",
+        "endorsementNumber": "REC-END-PAIR-005A",
+        "policyId": "00000a01-0000-0000-0000-000000000005",
+        "policyNumber": "REC-POL-005",
+        "customerId": "00000c01-0000-0000-0000-000000000005",
+        "customerName": "Recon Customer 005",
+        "brokerId": "00000b01-0000-0000-0000-000000000005",
+        "brokerName": "Recon Broker 005",
+        "productName": "Motor Comprehensive",
+        "premiumAdjustment": "20000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "ENDORSEMENT_APPROVED",
+      "payload": {
+        "endorsementId": "00000a04-0000-0000-0000-000000000065",
+        "endorsementNumber": "REC-END-PAIR-001R",
+        "policyId": "00000a01-0000-0000-0000-000000000001",
+        "policyNumber": "REC-POL-001",
+        "customerId": "00000c01-0000-0000-0000-000000000001",
+        "customerName": "Recon Customer 001",
+        "brokerId": "00000b01-0000-0000-0000-000000000001",
+        "brokerName": "Recon Broker 001",
+        "productName": "Motor Comprehensive",
+        "premiumAdjustment": "-20000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "ENDORSEMENT_APPROVED",
+      "payload": {
+        "endorsementId": "00000a04-0000-0000-0000-000000000066",
+        "endorsementNumber": "REC-END-PAIR-002R",
+        "policyId": "00000a01-0000-0000-0000-000000000002",
+        "policyNumber": "REC-POL-002",
+        "customerId": "00000c01-0000-0000-0000-000000000002",
+        "customerName": "Recon Customer 002",
+        "brokerId": "00000b01-0000-0000-0000-000000000002",
+        "brokerName": "Recon Broker 002",
+        "productName": "Motor Comprehensive",
+        "premiumAdjustment": "-20000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "ENDORSEMENT_APPROVED",
+      "payload": {
+        "endorsementId": "00000a04-0000-0000-0000-000000000067",
+        "endorsementNumber": "REC-END-PAIR-003R",
+        "policyId": "00000a01-0000-0000-0000-000000000003",
+        "policyNumber": "REC-POL-003",
+        "customerId": "00000c01-0000-0000-0000-000000000003",
+        "customerName": "Recon Customer 003",
+        "brokerId": "00000b01-0000-0000-0000-000000000003",
+        "brokerName": "Recon Broker 003",
+        "productName": "Motor Comprehensive",
+        "premiumAdjustment": "-20000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "ENDORSEMENT_APPROVED",
+      "payload": {
+        "endorsementId": "00000a04-0000-0000-0000-000000000068",
+        "endorsementNumber": "REC-END-PAIR-004R",
+        "policyId": "00000a01-0000-0000-0000-000000000004",
+        "policyNumber": "REC-POL-004",
+        "customerId": "00000c01-0000-0000-0000-000000000004",
+        "customerName": "Recon Customer 004",
+        "brokerId": "00000b01-0000-0000-0000-000000000004",
+        "brokerName": "Recon Broker 004",
+        "productName": "Motor Comprehensive",
+        "premiumAdjustment": "-20000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "ENDORSEMENT_APPROVED",
+      "payload": {
+        "endorsementId": "00000a04-0000-0000-0000-000000000069",
+        "endorsementNumber": "REC-END-PAIR-005R",
+        "policyId": "00000a01-0000-0000-0000-000000000005",
+        "policyNumber": "REC-POL-005",
+        "customerId": "00000c01-0000-0000-0000-000000000005",
+        "customerName": "Recon Customer 005",
+        "brokerId": "00000b01-0000-0000-0000-000000000005",
+        "brokerName": "Recon Broker 005",
+        "productName": "Motor Comprehensive",
+        "premiumAdjustment": "-20000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "ENDORSEMENT_APPROVED",
+      "payload": {
+        "endorsementId": "00000a04-0000-0000-0000-0000000000c9",
+        "endorsementNumber": "REC-END-201",
+        "policyId": "00000a01-0000-0000-0000-000000000006",
+        "policyNumber": "REC-POL-006",
+        "customerId": "00000c01-0000-0000-0000-000000000006",
+        "customerName": "Recon Customer 006",
+        "brokerId": "00000b01-0000-0000-0000-000000000006",
+        "brokerName": "Recon Broker 006",
+        "productName": "Motor Comprehensive",
+        "premiumAdjustment": "20000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "ENDORSEMENT_APPROVED",
+      "payload": {
+        "endorsementId": "00000a04-0000-0000-0000-0000000000ca",
+        "endorsementNumber": "REC-END-202",
+        "policyId": "00000a01-0000-0000-0000-000000000007",
+        "policyNumber": "REC-POL-007",
+        "customerId": "00000c01-0000-0000-0000-000000000007",
+        "customerName": "Recon Customer 007",
+        "brokerId": "00000b01-0000-0000-0000-000000000007",
+        "brokerName": "Recon Broker 007",
+        "productName": "Motor Comprehensive",
+        "premiumAdjustment": "20000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "ENDORSEMENT_APPROVED",
+      "payload": {
+        "endorsementId": "00000a04-0000-0000-0000-0000000000cb",
+        "endorsementNumber": "REC-END-203",
+        "policyId": "00000a01-0000-0000-0000-000000000008",
+        "policyNumber": "REC-POL-008",
+        "customerId": "00000c01-0000-0000-0000-000000000008",
+        "customerName": "Recon Customer 008",
+        "brokerId": "00000b01-0000-0000-0000-000000000008",
+        "brokerName": "Recon Broker 008",
+        "productName": "Motor Comprehensive",
+        "premiumAdjustment": "20000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "ENDORSEMENT_APPROVED",
+      "payload": {
+        "endorsementId": "00000a04-0000-0000-0000-0000000000cc",
+        "endorsementNumber": "REC-END-204",
+        "policyId": "00000a01-0000-0000-0000-000000000009",
+        "policyNumber": "REC-POL-009",
+        "customerId": "00000c01-0000-0000-0000-000000000009",
+        "customerName": "Recon Customer 009",
+        "brokerId": "00000b01-0000-0000-0000-000000000009",
+        "brokerName": "Recon Broker 009",
+        "productName": "Motor Comprehensive",
+        "premiumAdjustment": "20000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "ENDORSEMENT_APPROVED",
+      "payload": {
+        "endorsementId": "00000a04-0000-0000-0000-0000000000cd",
+        "endorsementNumber": "REC-END-205",
+        "policyId": "00000a01-0000-0000-0000-00000000000a",
+        "policyNumber": "REC-POL-010",
+        "customerId": "00000c01-0000-0000-0000-00000000000a",
+        "customerName": "Recon Customer 010",
+        "brokerId": "00000b01-0000-0000-0000-00000000000a",
+        "brokerName": "Recon Broker 010",
+        "productName": "Motor Comprehensive",
+        "premiumAdjustment": "20000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "ENDORSEMENT_APPROVED",
+      "payload": {
+        "endorsementId": "00000a04-0000-0000-0000-00000000012d",
+        "endorsementNumber": "REC-END-301",
+        "policyId": "00000a01-0000-0000-0000-000000000006",
+        "policyNumber": "REC-POL-006",
+        "customerId": "00000c01-0000-0000-0000-000000000006",
+        "customerName": "Recon Customer 006",
+        "brokerId": "00000b01-0000-0000-0000-000000000006",
+        "brokerName": "Recon Broker 006",
         "productName": "Motor Comprehensive",
         "premiumAdjustment": "-15000.00",
         "currencyCode": "NGN"
@@ -655,14 +2603,62 @@
     {
       "type": "ENDORSEMENT_APPROVED",
       "payload": {
-        "endorsementId": "00000a04-0000-0000-0000-000000000005",
-        "endorsementNumber": "REC-END-005",
-        "policyId": "00000a01-0000-0000-0000-000000000005",
-        "policyNumber": "REC-POL-005",
-        "customerId": "00000c01-0000-0000-0000-000000000005",
-        "customerName": "Recon Customer 005",
-        "brokerId": "00000b01-0000-0000-0000-000000000005",
-        "brokerName": "Recon Broker 005",
+        "endorsementId": "00000a04-0000-0000-0000-00000000012e",
+        "endorsementNumber": "REC-END-302",
+        "policyId": "00000a01-0000-0000-0000-000000000007",
+        "policyNumber": "REC-POL-007",
+        "customerId": "00000c01-0000-0000-0000-000000000007",
+        "customerName": "Recon Customer 007",
+        "brokerId": "00000b01-0000-0000-0000-000000000007",
+        "brokerName": "Recon Broker 007",
+        "productName": "Motor Comprehensive",
+        "premiumAdjustment": "-15000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "ENDORSEMENT_APPROVED",
+      "payload": {
+        "endorsementId": "00000a04-0000-0000-0000-00000000012f",
+        "endorsementNumber": "REC-END-303",
+        "policyId": "00000a01-0000-0000-0000-000000000008",
+        "policyNumber": "REC-POL-008",
+        "customerId": "00000c01-0000-0000-0000-000000000008",
+        "customerName": "Recon Customer 008",
+        "brokerId": "00000b01-0000-0000-0000-000000000008",
+        "brokerName": "Recon Broker 008",
+        "productName": "Motor Comprehensive",
+        "premiumAdjustment": "-15000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "ENDORSEMENT_APPROVED",
+      "payload": {
+        "endorsementId": "00000a04-0000-0000-0000-000000000130",
+        "endorsementNumber": "REC-END-304",
+        "policyId": "00000a01-0000-0000-0000-000000000009",
+        "policyNumber": "REC-POL-009",
+        "customerId": "00000c01-0000-0000-0000-000000000009",
+        "customerName": "Recon Customer 009",
+        "brokerId": "00000b01-0000-0000-0000-000000000009",
+        "brokerName": "Recon Broker 009",
+        "productName": "Motor Comprehensive",
+        "premiumAdjustment": "-15000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "ENDORSEMENT_APPROVED",
+      "payload": {
+        "endorsementId": "00000a04-0000-0000-0000-000000000131",
+        "endorsementNumber": "REC-END-305",
+        "policyId": "00000a01-0000-0000-0000-00000000000a",
+        "policyNumber": "REC-POL-010",
+        "customerId": "00000c01-0000-0000-0000-00000000000a",
+        "customerName": "Recon Customer 010",
+        "brokerId": "00000b01-0000-0000-0000-00000000000a",
+        "brokerName": "Recon Broker 010",
         "productName": "Motor Comprehensive",
         "premiumAdjustment": "-15000.00",
         "currencyCode": "NGN"
@@ -739,6 +2735,216 @@
       }
     },
     {
+      "type": "CLAIM_EXPENSE_APPROVED",
+      "payload": {
+        "expenseId": "00000a05-0000-0000-0000-000000000006",
+        "expenseReference": "REC-EXP-006",
+        "claimId": "00000a02-0000-0000-0000-000000000006",
+        "claimNumber": "REC-CLM-006",
+        "vendorId": "00000a06-0000-0000-0000-000000000006",
+        "vendorName": "Recon Vendor 006",
+        "expenseType": "ADJUSTER_FEE",
+        "amount": "10000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_EXPENSE_APPROVED",
+      "payload": {
+        "expenseId": "00000a05-0000-0000-0000-000000000007",
+        "expenseReference": "REC-EXP-007",
+        "claimId": "00000a02-0000-0000-0000-000000000007",
+        "claimNumber": "REC-CLM-007",
+        "vendorId": "00000a06-0000-0000-0000-000000000007",
+        "vendorName": "Recon Vendor 007",
+        "expenseType": "ADJUSTER_FEE",
+        "amount": "10000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_EXPENSE_APPROVED",
+      "payload": {
+        "expenseId": "00000a05-0000-0000-0000-000000000008",
+        "expenseReference": "REC-EXP-008",
+        "claimId": "00000a02-0000-0000-0000-000000000008",
+        "claimNumber": "REC-CLM-008",
+        "vendorId": "00000a06-0000-0000-0000-000000000008",
+        "vendorName": "Recon Vendor 008",
+        "expenseType": "ADJUSTER_FEE",
+        "amount": "10000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_EXPENSE_APPROVED",
+      "payload": {
+        "expenseId": "00000a05-0000-0000-0000-000000000009",
+        "expenseReference": "REC-EXP-009",
+        "claimId": "00000a02-0000-0000-0000-000000000009",
+        "claimNumber": "REC-CLM-009",
+        "vendorId": "00000a06-0000-0000-0000-000000000009",
+        "vendorName": "Recon Vendor 009",
+        "expenseType": "ADJUSTER_FEE",
+        "amount": "10000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_EXPENSE_APPROVED",
+      "payload": {
+        "expenseId": "00000a05-0000-0000-0000-00000000000a",
+        "expenseReference": "REC-EXP-010",
+        "claimId": "00000a02-0000-0000-0000-00000000000a",
+        "claimNumber": "REC-CLM-010",
+        "vendorId": "00000a06-0000-0000-0000-00000000000a",
+        "vendorName": "Recon Vendor 010",
+        "expenseType": "ADJUSTER_FEE",
+        "amount": "10000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_EXPENSE_APPROVED",
+      "payload": {
+        "expenseId": "00000a05-0000-0000-0000-00000000000b",
+        "expenseReference": "REC-EXP-011",
+        "claimId": "00000a02-0000-0000-0000-00000000000b",
+        "claimNumber": "REC-CLM-011",
+        "vendorId": "00000a06-0000-0000-0000-00000000000b",
+        "vendorName": "Recon Vendor 011",
+        "expenseType": "ADJUSTER_FEE",
+        "amount": "10000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_EXPENSE_APPROVED",
+      "payload": {
+        "expenseId": "00000a05-0000-0000-0000-00000000000c",
+        "expenseReference": "REC-EXP-012",
+        "claimId": "00000a02-0000-0000-0000-00000000000c",
+        "claimNumber": "REC-CLM-012",
+        "vendorId": "00000a06-0000-0000-0000-00000000000c",
+        "vendorName": "Recon Vendor 012",
+        "expenseType": "ADJUSTER_FEE",
+        "amount": "10000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_EXPENSE_APPROVED",
+      "payload": {
+        "expenseId": "00000a05-0000-0000-0000-00000000000d",
+        "expenseReference": "REC-EXP-013",
+        "claimId": "00000a02-0000-0000-0000-00000000000d",
+        "claimNumber": "REC-CLM-013",
+        "vendorId": "00000a06-0000-0000-0000-00000000000d",
+        "vendorName": "Recon Vendor 013",
+        "expenseType": "ADJUSTER_FEE",
+        "amount": "10000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_EXPENSE_APPROVED",
+      "payload": {
+        "expenseId": "00000a05-0000-0000-0000-00000000000e",
+        "expenseReference": "REC-EXP-014",
+        "claimId": "00000a02-0000-0000-0000-00000000000e",
+        "claimNumber": "REC-CLM-014",
+        "vendorId": "00000a06-0000-0000-0000-00000000000e",
+        "vendorName": "Recon Vendor 014",
+        "expenseType": "ADJUSTER_FEE",
+        "amount": "10000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_EXPENSE_APPROVED",
+      "payload": {
+        "expenseId": "00000a05-0000-0000-0000-00000000000f",
+        "expenseReference": "REC-EXP-015",
+        "claimId": "00000a02-0000-0000-0000-00000000000f",
+        "claimNumber": "REC-CLM-015",
+        "vendorId": "00000a06-0000-0000-0000-00000000000f",
+        "vendorName": "Recon Vendor 015",
+        "expenseType": "ADJUSTER_FEE",
+        "amount": "10000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_EXPENSE_APPROVED",
+      "payload": {
+        "expenseId": "00000a05-0000-0000-0000-000000000010",
+        "expenseReference": "REC-EXP-016",
+        "claimId": "00000a02-0000-0000-0000-000000000010",
+        "claimNumber": "REC-CLM-016",
+        "vendorId": "00000a06-0000-0000-0000-000000000010",
+        "vendorName": "Recon Vendor 016",
+        "expenseType": "ADJUSTER_FEE",
+        "amount": "10000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_EXPENSE_APPROVED",
+      "payload": {
+        "expenseId": "00000a05-0000-0000-0000-000000000011",
+        "expenseReference": "REC-EXP-017",
+        "claimId": "00000a02-0000-0000-0000-000000000011",
+        "claimNumber": "REC-CLM-017",
+        "vendorId": "00000a06-0000-0000-0000-000000000011",
+        "vendorName": "Recon Vendor 017",
+        "expenseType": "ADJUSTER_FEE",
+        "amount": "10000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_EXPENSE_APPROVED",
+      "payload": {
+        "expenseId": "00000a05-0000-0000-0000-000000000012",
+        "expenseReference": "REC-EXP-018",
+        "claimId": "00000a02-0000-0000-0000-000000000012",
+        "claimNumber": "REC-CLM-018",
+        "vendorId": "00000a06-0000-0000-0000-000000000012",
+        "vendorName": "Recon Vendor 018",
+        "expenseType": "ADJUSTER_FEE",
+        "amount": "10000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_EXPENSE_APPROVED",
+      "payload": {
+        "expenseId": "00000a05-0000-0000-0000-000000000013",
+        "expenseReference": "REC-EXP-019",
+        "claimId": "00000a02-0000-0000-0000-000000000013",
+        "claimNumber": "REC-CLM-019",
+        "vendorId": "00000a06-0000-0000-0000-000000000013",
+        "vendorName": "Recon Vendor 019",
+        "expenseType": "ADJUSTER_FEE",
+        "amount": "10000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "CLAIM_EXPENSE_APPROVED",
+      "payload": {
+        "expenseId": "00000a05-0000-0000-0000-000000000014",
+        "expenseReference": "REC-EXP-020",
+        "claimId": "00000a02-0000-0000-0000-000000000014",
+        "claimNumber": "REC-CLM-020",
+        "vendorId": "00000a06-0000-0000-0000-000000000014",
+        "vendorName": "Recon Vendor 020",
+        "expenseType": "ADJUSTER_FEE",
+        "amount": "10000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
       "type": "FAC_PREMIUM_CEDED",
       "payload": {
         "facCoverId": "00000a07-0000-0000-0000-000000000001",
@@ -807,6 +3013,231 @@
         "policyNumber": "REC-POL-005",
         "reinsuranceCompanyId": "00000a08-0000-0000-0000-000000000005",
         "reinsuranceCompanyName": "Recon Reinsurer 005",
+        "premiumCeded": "50000.00",
+        "commissionAmount": "10000.00",
+        "netPremiumCeded": "40000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "FAC_PREMIUM_CEDED",
+      "payload": {
+        "facCoverId": "00000a07-0000-0000-0000-000000000006",
+        "facReference": "REC-FAC-006",
+        "policyId": "00000a01-0000-0000-0000-000000000006",
+        "policyNumber": "REC-POL-006",
+        "reinsuranceCompanyId": "00000a08-0000-0000-0000-000000000006",
+        "reinsuranceCompanyName": "Recon Reinsurer 006",
+        "premiumCeded": "50000.00",
+        "commissionAmount": "10000.00",
+        "netPremiumCeded": "40000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "FAC_PREMIUM_CEDED",
+      "payload": {
+        "facCoverId": "00000a07-0000-0000-0000-000000000007",
+        "facReference": "REC-FAC-007",
+        "policyId": "00000a01-0000-0000-0000-000000000007",
+        "policyNumber": "REC-POL-007",
+        "reinsuranceCompanyId": "00000a08-0000-0000-0000-000000000007",
+        "reinsuranceCompanyName": "Recon Reinsurer 007",
+        "premiumCeded": "50000.00",
+        "commissionAmount": "10000.00",
+        "netPremiumCeded": "40000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "FAC_PREMIUM_CEDED",
+      "payload": {
+        "facCoverId": "00000a07-0000-0000-0000-000000000008",
+        "facReference": "REC-FAC-008",
+        "policyId": "00000a01-0000-0000-0000-000000000008",
+        "policyNumber": "REC-POL-008",
+        "reinsuranceCompanyId": "00000a08-0000-0000-0000-000000000008",
+        "reinsuranceCompanyName": "Recon Reinsurer 008",
+        "premiumCeded": "50000.00",
+        "commissionAmount": "10000.00",
+        "netPremiumCeded": "40000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "FAC_PREMIUM_CEDED",
+      "payload": {
+        "facCoverId": "00000a07-0000-0000-0000-000000000009",
+        "facReference": "REC-FAC-009",
+        "policyId": "00000a01-0000-0000-0000-000000000009",
+        "policyNumber": "REC-POL-009",
+        "reinsuranceCompanyId": "00000a08-0000-0000-0000-000000000009",
+        "reinsuranceCompanyName": "Recon Reinsurer 009",
+        "premiumCeded": "50000.00",
+        "commissionAmount": "10000.00",
+        "netPremiumCeded": "40000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "FAC_PREMIUM_CEDED",
+      "payload": {
+        "facCoverId": "00000a07-0000-0000-0000-00000000000a",
+        "facReference": "REC-FAC-010",
+        "policyId": "00000a01-0000-0000-0000-00000000000a",
+        "policyNumber": "REC-POL-010",
+        "reinsuranceCompanyId": "00000a08-0000-0000-0000-00000000000a",
+        "reinsuranceCompanyName": "Recon Reinsurer 010",
+        "premiumCeded": "50000.00",
+        "commissionAmount": "10000.00",
+        "netPremiumCeded": "40000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "FAC_PREMIUM_CEDED",
+      "payload": {
+        "facCoverId": "00000a07-0000-0000-0000-00000000000b",
+        "facReference": "REC-FAC-011",
+        "policyId": "00000a01-0000-0000-0000-00000000000b",
+        "policyNumber": "REC-POL-011",
+        "reinsuranceCompanyId": "00000a08-0000-0000-0000-00000000000b",
+        "reinsuranceCompanyName": "Recon Reinsurer 011",
+        "premiumCeded": "50000.00",
+        "commissionAmount": "10000.00",
+        "netPremiumCeded": "40000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "FAC_PREMIUM_CEDED",
+      "payload": {
+        "facCoverId": "00000a07-0000-0000-0000-00000000000c",
+        "facReference": "REC-FAC-012",
+        "policyId": "00000a01-0000-0000-0000-00000000000c",
+        "policyNumber": "REC-POL-012",
+        "reinsuranceCompanyId": "00000a08-0000-0000-0000-00000000000c",
+        "reinsuranceCompanyName": "Recon Reinsurer 012",
+        "premiumCeded": "50000.00",
+        "commissionAmount": "10000.00",
+        "netPremiumCeded": "40000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "FAC_PREMIUM_CEDED",
+      "payload": {
+        "facCoverId": "00000a07-0000-0000-0000-00000000000d",
+        "facReference": "REC-FAC-013",
+        "policyId": "00000a01-0000-0000-0000-00000000000d",
+        "policyNumber": "REC-POL-013",
+        "reinsuranceCompanyId": "00000a08-0000-0000-0000-00000000000d",
+        "reinsuranceCompanyName": "Recon Reinsurer 013",
+        "premiumCeded": "50000.00",
+        "commissionAmount": "10000.00",
+        "netPremiumCeded": "40000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "FAC_PREMIUM_CEDED",
+      "payload": {
+        "facCoverId": "00000a07-0000-0000-0000-00000000000e",
+        "facReference": "REC-FAC-014",
+        "policyId": "00000a01-0000-0000-0000-00000000000e",
+        "policyNumber": "REC-POL-014",
+        "reinsuranceCompanyId": "00000a08-0000-0000-0000-00000000000e",
+        "reinsuranceCompanyName": "Recon Reinsurer 014",
+        "premiumCeded": "50000.00",
+        "commissionAmount": "10000.00",
+        "netPremiumCeded": "40000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "FAC_PREMIUM_CEDED",
+      "payload": {
+        "facCoverId": "00000a07-0000-0000-0000-00000000000f",
+        "facReference": "REC-FAC-015",
+        "policyId": "00000a01-0000-0000-0000-00000000000f",
+        "policyNumber": "REC-POL-015",
+        "reinsuranceCompanyId": "00000a08-0000-0000-0000-00000000000f",
+        "reinsuranceCompanyName": "Recon Reinsurer 015",
+        "premiumCeded": "50000.00",
+        "commissionAmount": "10000.00",
+        "netPremiumCeded": "40000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "FAC_PREMIUM_CEDED",
+      "payload": {
+        "facCoverId": "00000a07-0000-0000-0000-000000000010",
+        "facReference": "REC-FAC-016",
+        "policyId": "00000a01-0000-0000-0000-000000000010",
+        "policyNumber": "REC-POL-016",
+        "reinsuranceCompanyId": "00000a08-0000-0000-0000-000000000010",
+        "reinsuranceCompanyName": "Recon Reinsurer 016",
+        "premiumCeded": "50000.00",
+        "commissionAmount": "10000.00",
+        "netPremiumCeded": "40000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "FAC_PREMIUM_CEDED",
+      "payload": {
+        "facCoverId": "00000a07-0000-0000-0000-000000000011",
+        "facReference": "REC-FAC-017",
+        "policyId": "00000a01-0000-0000-0000-000000000011",
+        "policyNumber": "REC-POL-017",
+        "reinsuranceCompanyId": "00000a08-0000-0000-0000-000000000011",
+        "reinsuranceCompanyName": "Recon Reinsurer 017",
+        "premiumCeded": "50000.00",
+        "commissionAmount": "10000.00",
+        "netPremiumCeded": "40000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "FAC_PREMIUM_CEDED",
+      "payload": {
+        "facCoverId": "00000a07-0000-0000-0000-000000000012",
+        "facReference": "REC-FAC-018",
+        "policyId": "00000a01-0000-0000-0000-000000000012",
+        "policyNumber": "REC-POL-018",
+        "reinsuranceCompanyId": "00000a08-0000-0000-0000-000000000012",
+        "reinsuranceCompanyName": "Recon Reinsurer 018",
+        "premiumCeded": "50000.00",
+        "commissionAmount": "10000.00",
+        "netPremiumCeded": "40000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "FAC_PREMIUM_CEDED",
+      "payload": {
+        "facCoverId": "00000a07-0000-0000-0000-000000000013",
+        "facReference": "REC-FAC-019",
+        "policyId": "00000a01-0000-0000-0000-000000000013",
+        "policyNumber": "REC-POL-019",
+        "reinsuranceCompanyId": "00000a08-0000-0000-0000-000000000013",
+        "reinsuranceCompanyName": "Recon Reinsurer 019",
+        "premiumCeded": "50000.00",
+        "commissionAmount": "10000.00",
+        "netPremiumCeded": "40000.00",
+        "currencyCode": "NGN"
+      }
+    },
+    {
+      "type": "FAC_PREMIUM_CEDED",
+      "payload": {
+        "facCoverId": "00000a07-0000-0000-0000-000000000014",
+        "facReference": "REC-FAC-020",
+        "policyId": "00000a01-0000-0000-0000-000000000014",
+        "policyNumber": "REC-POL-020",
+        "reinsuranceCompanyId": "00000a08-0000-0000-0000-000000000014",
+        "reinsuranceCompanyName": "Recon Reinsurer 020",
         "premiumCeded": "50000.00",
         "commissionAmount": "10000.00",
         "netPremiumCeded": "40000.00",
