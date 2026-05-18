@@ -2,6 +2,8 @@ package com.nubeero.cia.api.finance.event;
 
 import com.nubeero.cia.common.tenant.TenantContext;
 import com.nubeero.cia.finance.gl.PeriodReopenedEvent;
+import com.nubeero.cia.finance.gl.TenantReopenRecipient;
+import com.nubeero.cia.finance.gl.TenantReopenRecipientRepository;
 import com.nubeero.cia.notifications.NotificationService;
 import com.nubeero.cia.notifications.model.NotificationChannel;
 import com.nubeero.cia.notifications.model.NotificationRequest;
@@ -39,16 +41,31 @@ import java.util.List;
 public class PeriodReopenedNotificationListener {
 
     private final NotificationService notificationService;
+    // Slice 1.7c — per-tenant recipient list takes precedence over the
+    // legacy CSV Spring property. The property remains as a fallback for
+    // environments that haven't migrated their config to the DB yet.
+    private final TenantReopenRecipientRepository recipientRepository;
 
     @Value("${cia.finance.period-reopen-recipients:}")
     private String recipientsCsv;
 
     @EventListener
     public void onReopen(PeriodReopenedEvent event) {
-        List<String> recipients = parseRecipients(recipientsCsv);
+        // DB-first, CSV-fallback per Slice 1.7c. The DB query is fast (single
+        // unique-indexed sort) and falls through to the property only when
+        // the tenant hasn't seeded the table.
+        List<String> recipients = recipientRepository
+            .findAllByActiveTrueAndDeletedAtIsNullOrderByRecipientAsc()
+            .stream()
+            .map(TenantReopenRecipient::getRecipient)
+            .toList();
+        if (recipients.isEmpty()) {
+            recipients = parseRecipients(recipientsCsv);
+        }
         if (recipients.isEmpty()) {
             log.info("PeriodReopenedEvent fired but no recipients configured "
-                + "(cia.finance.period-reopen-recipients) — skipping email dispatch");
+                + "(tenant_reopen_recipient empty and cia.finance.period-reopen-recipients unset) "
+                + "— skipping email dispatch");
             return;
         }
 

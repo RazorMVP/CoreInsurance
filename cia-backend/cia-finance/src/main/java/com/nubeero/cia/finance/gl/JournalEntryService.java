@@ -5,6 +5,7 @@ import com.nubeero.cia.finance.dto.JournalEntryLineRequest;
 import com.nubeero.cia.finance.dto.JournalEntryLineResponse;
 import com.nubeero.cia.finance.dto.JournalEntryResponse;
 import com.nubeero.cia.finance.dto.PostJournalEntryRequest;
+import com.nubeero.cia.finance.dto.PriorPeriodAdjustmentRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -84,6 +85,44 @@ public class JournalEntryService {
      */
     @Transactional
     public JournalEntryResponse post(PostJournalEntryRequest request) {
+        return postInternal(request, false, null);
+    }
+
+    /**
+     * Slice 1.7c — post an IAS-8 prior-period adjustment. The PPA flow:
+     * <ul>
+     *   <li>Forces {@code business_date = today} so the JE lands in the
+     *       currently-open period regardless of which closed period the
+     *       audit-found error originated in. The reason text carries the
+     *       cross-reference to the original period.</li>
+     *   <li>Forces {@code source_module = finance} and
+     *       {@code source_event_type = PRIOR_PERIOD_ADJUSTMENT} so every PPA
+     *       is filterable by the idempotency triple AND by the V35
+     *       {@code prior_period_adjustment} boolean (the partial index
+     *       {@code idx_journal_entry_ppa} makes the audit query fast).</li>
+     *   <li>Stamps {@code prior_period_adjustment = TRUE} and the reason text
+     *       on the JE header.</li>
+     * </ul>
+     * <p>Authorisation: the controller gates this with {@code FINANCE_APPROVE_PPA}
+     * (distinct from the {@code FINANCE_CREATE} used for normal posts) for
+     * segregation-of-duties — the same officer who booked the original JE
+     * cannot approve its restatement.
+     */
+    @Transactional
+    public JournalEntryResponse postPriorPeriodAdjustment(PriorPeriodAdjustmentRequest request) {
+        PostJournalEntryRequest synthetic = new PostJournalEntryRequest(
+            LocalDate.now(clock),               // business_date = today (lands in OPEN period)
+            "finance",                          // source_module — fixed
+            "PRIOR_PERIOD_ADJUSTMENT",          // source_event_type — fixed
+            request.sourceReference(),
+            request.narrative(),
+            request.lines());
+        return postInternal(synthetic, true, request.reason());
+    }
+
+    private JournalEntryResponse postInternal(PostJournalEntryRequest request,
+                                              boolean priorPeriodAdjustment,
+                                              String priorPeriodAdjustmentReason) {
         validateLineAmounts(request.lines());
 
         BigDecimal totalDebits = sum(request.lines(), JournalEntryLineRequest::debitAmount);
@@ -102,6 +141,10 @@ public class JournalEntryService {
         UUID periodId = fiscalPeriodResolver.resolveMonthIdForBusinessDate(request.businessDate());
 
         JournalEntry je = newHeader(request, periodId);
+        if (priorPeriodAdjustment) {
+            je.setPriorPeriodAdjustment(true);
+            je.setPriorPeriodAdjustmentReason(priorPeriodAdjustmentReason);
+        }
         int lineNo = 1;
         for (JournalEntryLineRequest lineReq : request.lines()) {
             ChartOfAccount account = chartOfAccountService.findByCode(lineReq.accountCode());

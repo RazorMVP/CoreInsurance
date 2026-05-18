@@ -1,6 +1,7 @@
 package com.nubeero.cia.finance;
 
 import com.nubeero.cia.common.entity.BaseEntity;
+import com.nubeero.cia.common.entity.LockableByPeriod;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -9,11 +10,17 @@ import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Entity
 @Table(name = "credit_notes")
-public class CreditNote extends BaseEntity {
+public class CreditNote extends BaseEntity implements LockableByPeriod {
+
+    // ── Slice 1.7b — period-lock opt-in (same shape as DebitNote) ────────────
+    @Override public LocalDate getLockDate() {
+        return getCreatedAt() == null ? null : getCreatedAt().atOffset(ZoneOffset.UTC).toLocalDate();
+    }
 
     @Column(name = "credit_note_number", nullable = false, unique = true, length = 30)
     private String creditNoteNumber;

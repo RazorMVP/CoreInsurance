@@ -1,11 +1,14 @@
 package com.nubeero.cia.claims;
 
 import com.nubeero.cia.common.entity.BaseEntity;
+import com.nubeero.cia.common.entity.LockableByPeriod;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Entity
@@ -15,7 +18,21 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ClaimExpense extends BaseEntity {
+public class ClaimExpense extends BaseEntity implements LockableByPeriod {
+
+    // ── Slice 1.7a — period-lock opt-in ──────────────────────────────────────
+    // Lock date is the approval timestamp truncated to LocalDate (UTC). A
+    // draft/non-approved expense has no booking date yet; returning null
+    // lets PeriodLockService.checkWrite ALLOW the save (it short-circuits on
+    // null lockDate).
+    @Override public LocalDate getLockDate() {
+        return approvedAt == null ? null : approvedAt.atOffset(ZoneOffset.UTC).toLocalDate();
+    }
+
+    // Cancellation is the closest thing to a reversal for ClaimExpense —
+    // marking cancelledAt must be permitted after the original period
+    // closes so audit-found errors can be corrected without reopening.
+    @Override public boolean isReversal() { return cancelledAt != null; }
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "claim_id", nullable = false)

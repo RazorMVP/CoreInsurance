@@ -286,7 +286,8 @@ class RetroactiveJournalBackfillActivitiesImplTest {
         List<LockReportEntry> previewLockResult = List.of();
 
         StubbingPeriodLockService() {
-            super(null, null, null, null, null, null);
+            // Slice 1.7c added the 7th constructor arg (TenantHolidayRepository).
+            super(null, null, null, null, null, null, null);
         }
 
         @Override

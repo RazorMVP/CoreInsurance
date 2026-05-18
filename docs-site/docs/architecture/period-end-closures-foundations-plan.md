@@ -256,40 +256,45 @@ Total slices: 9. Estimated calendar time: 4–6 weeks single engineer; 3–4 wee
 
 ---
 
-### Slice 1.7a — LockableByPeriod opt-in for Finance entities (follow-up)
+### Slice 1.7a — LockableByPeriod opt-in for Finance entities (follow-up) — SHIPPED (Session 69)
 
 **Goal:** opt the four entities with direct monetary impact into the lock mechanism. One file per entity, easy to review, each module owner can sign off independently.
 
-**Deliverables:**
+**Shipped:**
 
-- `Receipt implements LockableByPeriod { getLockDate() = receivedDate }`.
-- `Payment implements LockableByPeriod { getLockDate() = paidDate }`.
-- `ClaimExpense implements LockableByPeriod { getLockDate() = incurredDate }`.
-- `Endorsement implements LockableByPeriod { getLockDate() = bookedDate; isReversal() = reversalOf != null }`.
-- Per-entity opt-in test verifies the interceptor rejects backdated saves.
+- `Receipt implements LockableByPeriod { getLockDate() = paymentDate; isReversal() = reversedAt != null }`.
+- `Payment implements LockableByPeriod { getLockDate() = paymentDate; isReversal() = reversedAt != null }`.
+- `ClaimExpense implements LockableByPeriod { getLockDate() = approvedAt?.toLocalDate(); isReversal() = cancelledAt != null }`.
+- `Endorsement implements LockableByPeriod { getLockDate() = approvedAt?.toLocalDate(); isReversal() = cancelledAt != null }`. **Critical:** booking date, NOT effectiveDate.
+- Per-entity contract test for each (`ReceiptLockableByPeriodTest`, `PaymentLockableByPeriodTest`, `ClaimExpenseLockableByPeriodTest`, `EndorsementLockableByPeriodTest`).
 
 **Dependencies:** 1.7.
 
 ---
 
-### Slice 1.7b — LockableByPeriod opt-in sweep (remaining business modules)
+### Slice 1.7b — LockableByPeriod opt-in sweep (remaining business modules) — SHIPPED (Session 69)
 
-**Goal:** complete the Phase 1 exit criterion "every business module covered." Grep for `BaseEntity` subclasses and opt in the monetary ones (DebitNote, CreditNote, RiAllocation, RiFacCover, etc.).
+**Shipped:**
+
+- `DebitNote`, `CreditNote`, `RiAllocation` — `getLockDate() = getCreatedAt()?.toLocalDate()` (UTC). These entities have no explicit booked-date field; `BaseEntity.createdAt` IS the booking date.
+- `RiFacCover` — `getLockDate() = approvedAt?.toLocalDate()`; `isReversal() = cancelledAt != null`. Same shape as Endorsement.
+- Per-entity contract test for each (reflectively sets `BaseEntity.createdAt` in pure unit tests).
 
 **Dependencies:** 1.7, 1.7a.
 
 ---
 
-### Slice 1.7c — Prior-Period Adjustment posting workflow + tenant CFO config
+### Slice 1.7c — Prior-Period Adjustment posting workflow + tenant CFO config + holiday calendar — SHIPPED (Session 69)
 
-**Goal:** add the IFRS-compliant prior-period-adjustment path so audit-found errors in closed periods are posted as PPAs in the OPEN period (with IAS 8 disclosure metadata), not by reopening the closed period. Also adds the per-tenant CFO + compliance distro config that Slice 1.7's `cia.finance.period-reopen-recipients` property is a v1 stand-in for.
+**Goal:** add the IFRS-compliant prior-period-adjustment path so audit-found errors in closed periods are posted as PPAs in the OPEN period (with IAS 8 disclosure metadata), not by reopening the closed period. Also adds the per-tenant CFO + compliance distro config + NAICOM holiday calendar.
 
-**Deliverables:**
+**Shipped:**
 
-- Flyway migration adding `journal_entry.prior_period_adjustment` boolean column + an audit-grade `prior_period_adjustment_reason` text column.
-- New REST endpoint `POST /api/v1/finance/journal-entries/prior-period-adjustment` gated by `FINANCE_APPROVE_PPA` — the elevated permission needed for IFRS-disclosed adjustments.
-- `tenant_reopen_recipient` table for the per-tenant CFO + compliance distro.
-- Holiday-calendar support extending `PeriodLockService.addBusinessDays` to honour a `tenant_holiday` table (NAICOM working-days alignment).
+- Flyway V35 — `journal_entry.prior_period_adjustment BOOLEAN NOT NULL DEFAULT FALSE` + `prior_period_adjustment_reason TEXT` + partial index `idx_journal_entry_ppa`. New tables `tenant_reopen_recipient` and `tenant_holiday`.
+- REST endpoint `POST /api/v1/finance/journal-entries/prior-period-adjustment` gated by `FINANCE_APPROVE_PPA`. The service forces `business_date=today`, `source_module="finance"`, `source_event_type="PRIOR_PERIOD_ADJUSTMENT"` so every PPA lands in the OPEN period regardless of which closed period the error originated in.
+- `TenantHoliday` + `TenantHolidayRepository`. `PeriodLockService.addBusinessDays` overload accepts `Set<LocalDate>`; instance method `addBusinessDaysWithHolidays` loads from the table. `softClose` uses the holiday-aware path.
+- `TenantReopenRecipient` + `TenantReopenRecipientRepository`. `PeriodReopenedNotificationListener` reads DB-first; falls back to the `cia.finance.period-reopen-recipients` CSV property only when no rows are configured (smooth migration).
+- `PeriodLockServiceHolidayTest` — 6 unit tests covering weekend skip, mid-week holiday shift, consecutive holidays, weekend-flagged-as-holiday no-op, and the back-compat 2-arg ↔ 3-arg equivalence.
 
 **Dependencies:** 1.7.
 

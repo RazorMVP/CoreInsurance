@@ -79,7 +79,7 @@ class FiscalYearServiceIT {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         // V33 was the last migration shipped by Slice 1.5.
-        registry.add("spring.flyway.target", () -> "33");
+        registry.add("spring.flyway.target", () -> "35");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 

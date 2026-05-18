@@ -3,6 +3,7 @@ package com.nubeero.cia.finance.gl;
 import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.finance.dto.JournalEntryResponse;
 import com.nubeero.cia.finance.dto.PostJournalEntryRequest;
+import com.nubeero.cia.finance.dto.PriorPeriodAdjustmentRequest;
 import com.nubeero.cia.finance.dto.ReverseJournalEntryRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -60,5 +61,20 @@ public class JournalEntryController {
         @PathVariable UUID id,
         @Valid @RequestBody ReverseJournalEntryRequest request) {
         return ApiResponse.success(service.reverse(id, request.reason()));
+    }
+
+    /**
+     * Slice 1.7c — IAS-8 Prior-Period Adjustment endpoint. Gated by the
+     * elevated {@code FINANCE_APPROVE_PPA} role (distinct from
+     * {@code FINANCE_CREATE} used for normal posts) so segregation of duties
+     * is enforced: the officer who booked the original JE cannot approve its
+     * restatement.
+     */
+    @PostMapping("/prior-period-adjustment")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('FINANCE_APPROVE_PPA')")
+    public ApiResponse<JournalEntryResponse> postPriorPeriodAdjustment(
+        @Valid @RequestBody PriorPeriodAdjustmentRequest request) {
+        return ApiResponse.success(service.postPriorPeriodAdjustment(request));
     }
 }

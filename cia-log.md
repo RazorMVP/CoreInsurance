@@ -4,6 +4,79 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-18 — Session 69 (`module-12-period-end-closures`): Phase 1 follow-ups — Slices 1.7a, 1.7b, 1.7c
+
+### Context
+
+Three Phase-1 follow-up slices shipped together. The user direction was "start with Phase 1 follow-ups and resolve it" — meaning all three: `LockableByPeriod` opt-in for the four direct-monetary Finance entities (1.7a), the sweep across the remaining monetary entities (1.7b), and the IFRS-compliant Prior-Period-Adjustment workflow + per-tenant CFO config + Nigerian holiday calendar (1.7c).
+
+### Slice 1.7a — LockableByPeriod opt-in for 4 Finance entities
+
+| Entity | `getLockDate()` | `isReversal()` |
+|---|---|---|
+| `Receipt` | `paymentDate` (the date money was received — booking date for GL purposes) | `reversedAt != null` |
+| `Payment` | `paymentDate` (the date money was paid out) | `reversedAt != null` |
+| `ClaimExpense` | `approvedAt?.toLocalDate()` (UTC; null when unapproved → ALLOW) | `cancelledAt != null` |
+| `Endorsement` | `approvedAt?.toLocalDate()` (BOOKING date, NOT `effectiveDate` per LockableByPeriod javadoc) | `cancelledAt != null` |
+
+Per-entity contract tests (`ReceiptLockableByPeriodTest`, etc.) verify the contract at the entity level — no DB/Spring context needed. The runtime interceptor behaviour is already exercised by `ReconciliationGateIT` against a real Postgres.
+
+### Slice 1.7b — sweep over remaining monetary entities
+
+| Entity | `getLockDate()` | `isReversal()` |
+|---|---|---|
+| `DebitNote` | `getCreatedAt()?.toLocalDate()` (UTC) — no explicit booked-date field; `BaseEntity.createdAt` IS the booking date | default false |
+| `CreditNote` | same shape as DebitNote | default false |
+| `RiAllocation` | same shape as DebitNote | default false |
+| `RiFacCover` | `approvedAt?.toLocalDate()` (UTC) — explicit approval timestamp like Endorsement | `cancelledAt != null` |
+
+Per-entity contract tests use reflection on `BaseEntity.createdAt` to simulate post-persist state (no JPA lifecycle in a pure unit test).
+
+### Slice 1.7c — IAS-8 PPA workflow + tenant CFO config + holiday calendar
+
+| File | Change |
+|---|---|
+| `V35__ppa_and_tenant_close_config.sql` | New migration — adds `journal_entry.prior_period_adjustment BOOLEAN NOT NULL DEFAULT FALSE` + `prior_period_adjustment_reason TEXT`, partial index `idx_journal_entry_ppa` on `business_date WHERE prior_period_adjustment=TRUE`, plus two new tables: `tenant_reopen_recipient` (CFO/compliance distro) and `tenant_holiday` (NAICOM-aligned calendar). |
+| `JournalEntry.java` | Adds `priorPeriodAdjustment` + `priorPeriodAdjustmentReason` fields. |
+| `PriorPeriodAdjustmentRequest.java` | New wire DTO: `sourceReference`, `reason` (mandatory NotBlank), `narrative`, `lines` (min 2). NO `businessDate` — service forces today's date so the PPA lands in the OPEN period regardless of which closed period the audit-found error originated in. |
+| `JournalEntryService.java` | Extracted `postInternal(request, ppa, reason)`. Existing `post()` is a thin wrapper passing `ppa=false`; new `postPriorPeriodAdjustment(PriorPeriodAdjustmentRequest)` constructs a synthetic `PostJournalEntryRequest` with `businessDate=today`, `sourceModule="finance"`, `sourceEventType="PRIOR_PERIOD_ADJUSTMENT"`, then calls `postInternal` with `ppa=true`. |
+| `JournalEntryController.java` | New endpoint `POST /api/v1/finance/journal-entries/prior-period-adjustment` gated by `@PreAuthorize("hasRole('FINANCE_APPROVE_PPA')")` — elevated permission distinct from `FINANCE_CREATE` to enforce segregation of duties (officer who booked the original cannot approve its restatement). |
+| `TenantHoliday` + `TenantHolidayRepository` | JPA entity + read-only repo. Consumed by `PeriodLockService.addBusinessDays`. |
+| `TenantReopenRecipient` + `TenantReopenRecipientRepository` | JPA entity + repo. Consumed by `PeriodReopenedNotificationListener` — DB-first, falls back to the legacy `cia.finance.period-reopen-recipients` CSV Spring property only when no DB rows are configured (smooth migration path). |
+| `PeriodLockService.java` | Kept static `addBusinessDays(Instant, int)` and `addBusinessDays(Instant, int, Set<LocalDate>)` as back-compat for unit tests; added instance method `addBusinessDaysWithHolidays(Instant, int)` that loads from `tenant_holiday` and delegates. Production `softClose` now uses the instance form. Constructor gained a 7th param: nullable `TenantHolidayRepository`. |
+| `PeriodLockServiceHolidayTest.java` | 6 new unit tests for the holiday-aware overload: weekend skip, single mid-week holiday shifts grace by one day, two consecutive holidays shift by two, weekend-overlapping holiday is no-op, back-compat 2-arg matches 3-arg with empty set. |
+| `PeriodReopenedNotificationListener.java` | Now queries `tenant_reopen_recipient` first via the new repository; CSV property is the fallback when DB returns empty. |
+
+### Incidental fixes
+
+- `TrialBalanceServiceTest.java` — 5 Mockito stubs updated to wrap `Object[]` in `List.<Object[]>of(...)` (fallout from the Hibernate-6 fix in Slice 1.9a's `JournalEntryLineRepository.totalsAsOf` return type change).
+- Flyway target bumped from 32/33/34 → 35 across all six finance/closure ITs (entity now references the V35 columns; Hibernate fails the SELECT if the DB hasn't migrated them).
+- Existing `PeriodLockServiceTest` and `RetroactiveJournalBackfillActivitiesImplTest.StubbingPeriodLockService` constructor calls updated for the new 7th `TenantHolidayRepository` arg (passed `null` to preserve weekends-only behaviour).
+
+### Design choices worth remembering
+
+- **Booking-date vs effective-date** (`LockableByPeriod`): `getLockDate()` returns the BOOKING date (when the row hits the books) — for Endorsement that's `approvedAt → LocalDate`, NOT `effectiveDate`. The IFRS 17 measurement engine (Phase 2) reads effective dates separately and never flows through this interceptor. Mixing them silently routes the lock check to the wrong period.
+- **PPA is a SEPARATE endpoint, not a flag on the normal post**. Segregation of duties requires a distinct authorization gate (`FINANCE_APPROVE_PPA`), and IAS-8 disclosure demands the reason text be mandatory at the API surface — both achieved by giving the PPA flow its own DTO + controller method. The service-level internal method shares the validation/posting plumbing.
+- **DB-first with CSV fallback for recipients** — smoothest migration path. Tenants migrate at their own pace; deployments that haven't seeded the table still get the email. Once the table is populated for a tenant, the property is dead code for that tenant.
+- **`addBusinessDays` kept static with a Set<LocalDate> parameter** — unit tests fix their own NAICOM calendar without spinning up the repository. The instance-level `addBusinessDaysWithHolidays` is the production path; the static form is the testability seam.
+- **Saturday-flagged-as-holiday must NOT double-skip** — a CFO loading a holiday calendar that mistakenly includes weekends should produce the same grace cut-off as the weekends-only calculation. Defensive test `holidayOnWeekendIsNoOp` enforces this; the calendar skip is order-independent of the weekend skip in the implementation.
+
+### Tests after this session
+
+- `mvn test -pl cia-finance,cia-claims,cia-endorsement,cia-reinsurance -Dtest='*LockableByPeriodTest,PeriodLockServiceTest,PeriodLockServiceHolidayTest,TrialBalanceServiceTest,RetroactiveJournalBackfillActivitiesImplTest,SubledgerPostingServiceTest'` — all green.
+- `mvn test -pl cia-api -Dtest='ReconciliationGateIT,RetroactiveBackfillIT,TrialBalanceServiceIT'` — all green (after flyway target bumped to 35).
+- 8 new entity-level contract tests + 6 new holiday-aware unit tests + flyway bumps across 8 ITs.
+
+### Phase 1 of Module 12 — fully closed
+
+All 12 shipped slices: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.7a, 1.7b, 1.7c, 1.8a/b, 1.9a/b.
+
+### Commits planned
+
+1. `feat(finance): slice 1.7a/b/c — period-lock entity opt-in + PPA workflow + tenant calendar/recipients` — bundles the 8 entity changes, V35 migration, PPA endpoint, holiday-aware addBusinessDays, recipient table consumer, contract tests, and flyway target bumps. Single coherent unit; splitting would leave the IT in a half-fixed state across commits.
+
+---
+
 ## 2026-05-18 — Session 68 (`module-12-period-end-closures`): Slice 1.9b — gate scaled to 200 events + per-JE evidence
 
 ### Context

@@ -1,6 +1,7 @@
 package com.nubeero.cia.finance;
 
 import com.nubeero.cia.common.entity.BaseEntity;
+import com.nubeero.cia.common.entity.LockableByPeriod;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -9,11 +10,22 @@ import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Entity
 @Table(name = "debit_notes")
-public class DebitNote extends BaseEntity {
+public class DebitNote extends BaseEntity implements LockableByPeriod {
+
+    // ── Slice 1.7b — period-lock opt-in ──────────────────────────────────────
+    // DebitNote has no explicit booked-date field; createdAt (set by
+    // @CreatedDate at @PrePersist time) IS the booking date. The lock check
+    // mainly catches UPDATEs against a DN whose createdAt is in a closed
+    // period. For brand-new INSERTs, createdAt is null until the JPA
+    // listener fires — PeriodLockService.checkWrite treats null as ALLOW.
+    @Override public LocalDate getLockDate() {
+        return getCreatedAt() == null ? null : getCreatedAt().atOffset(ZoneOffset.UTC).toLocalDate();
+    }
 
     @Column(name = "debit_note_number", nullable = false, unique = true, length = 30)
     private String debitNoteNumber;

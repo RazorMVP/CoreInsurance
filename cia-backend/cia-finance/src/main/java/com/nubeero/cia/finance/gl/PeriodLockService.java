@@ -84,6 +84,10 @@ public class PeriodLockService {
     private final FiscalPeriodLookupCache lookupCache;
     private final AuditService auditService;
     private final ApplicationEventPublisher events;
+    // Slice 1.7c — optional holiday repository. Constructor-injected by
+    // Spring; null is tolerated so existing tests (and pre-V35 schemas)
+    // continue to work without forcing every wiring path to provide one.
+    private final TenantHolidayRepository tenantHolidayRepository;
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -109,7 +113,10 @@ public class PeriodLockService {
         lock.setLockType(LockType.SOFT);
         lock.setLockedAt(now);
         lock.setLockedBy(currentUser());
-        lock.setGraceWindowUntil(addBusinessDays(now, DEFAULT_GRACE_BUSINESS_DAYS));
+        // Slice 1.7c — production close uses the holiday-aware instance
+        // method; the static overload is kept only for back-compat with the
+        // pre-1.7c unit tests that don't have a TenantHolidayRepository.
+        lock.setGraceWindowUntil(addBusinessDaysWithHolidays(now, DEFAULT_GRACE_BUSINESS_DAYS));
         PeriodLock saved = lockRepository.save(lock);
 
         period.setStatus(FiscalPeriodStatus.SOFT_CLOSED);
@@ -306,19 +313,47 @@ public class PeriodLockService {
     // ─── Helpers ───────────────────────────────────────────────────────────────
 
     /**
-     * Add N business days to a UTC instant (Mon–Fri, weekends skipped, no
-     * holiday calendar). Per-tenant Nigerian holiday calendar is a Slice
-     * 1.7c follow-up.
+     * Slice 1.7 back-compat — weekends-only addition (no holidays).
+     * Kept as a static convenience for existing unit tests; the production
+     * close-flow uses {@link #addBusinessDaysWithHolidays} which consults
+     * the tenant_holiday table.
      */
     static Instant addBusinessDays(Instant from, int days) {
+        return addBusinessDays(from, days, java.util.Set.of());
+    }
+
+    /**
+     * Slice 1.7c — holiday-aware overload. Skips weekends AND any date in
+     * {@code holidays}. Static + parameterised so unit tests can fix the
+     * holiday set without spinning up the repository.
+     */
+    static Instant addBusinessDays(Instant from, int days, java.util.Set<LocalDate> holidays) {
         LocalDate date = from.atOffset(ZoneOffset.UTC).toLocalDate();
         int added = 0;
         while (added < days) {
             date = date.plusDays(1);
             DayOfWeek dow = date.getDayOfWeek();
-            if (dow != DayOfWeek.SATURDAY && dow != DayOfWeek.SUNDAY) added++;
+            if (dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY) continue;
+            if (holidays.contains(date)) continue;
+            added++;
         }
         return date.atStartOfDay(ZoneOffset.UTC).toInstant();
+    }
+
+    /**
+     * Instance-level entry point used by softClose — loads holidays from
+     * {@code tenant_holiday} and delegates to the static overload. Falls
+     * back to weekends-only when the repository isn't wired (legacy tests).
+     */
+    Instant addBusinessDaysWithHolidays(Instant from, int days) {
+        return addBusinessDays(from, days, loadHolidays());
+    }
+
+    private java.util.Set<LocalDate> loadHolidays() {
+        if (tenantHolidayRepository == null) return java.util.Set.of();
+        return tenantHolidayRepository.findAllByDeletedAtIsNullOrderByHolidayDateAsc().stream()
+            .map(TenantHoliday::getHolidayDate)
+            .collect(java.util.stream.Collectors.toSet());
     }
 
     /** Days since the soft-close timestamp, in business days. Public helper used by previewer + frontend. */

@@ -1,10 +1,13 @@
 package com.nubeero.cia.reinsurance;
 
 import com.nubeero.cia.common.entity.BaseEntity;
+import com.nubeero.cia.common.entity.LockableByPeriod;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -16,7 +19,12 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class RiAllocation extends BaseEntity {
+public class RiAllocation extends BaseEntity implements LockableByPeriod {
+
+    // ── Slice 1.7b — period-lock opt-in (same shape as DebitNote) ────────────
+    @Override public LocalDate getLockDate() {
+        return getCreatedAt() == null ? null : getCreatedAt().atOffset(ZoneOffset.UTC).toLocalDate();
+    }
 
     @Column(name = "allocation_number", unique = true, nullable = false, length = 30)
     private String allocationNumber;

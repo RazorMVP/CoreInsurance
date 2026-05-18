@@ -87,6 +87,18 @@ public class JournalEntry extends BaseEntity implements LockableByPeriod {
     @Column(name = "reversal_of")
     private UUID reversalOf;
 
+    // ── Slice 1.7c — Prior-Period Adjustment (IAS 8) markers ─────────────────
+    // Set TRUE by the dedicated /journal-entries/prior-period-adjustment
+    // endpoint (gated by FINANCE_APPROVE_PPA) so audit-found errors in closed
+    // periods land in the OPEN period as PPAs instead of forcing a reopen.
+    // Normal posts leave this FALSE and reason NULL — the V35 partial index
+    // (idx_journal_entry_ppa) makes the PPA-filtered audit query fast.
+    @Column(name = "prior_period_adjustment", nullable = false)
+    private boolean priorPeriodAdjustment = false;
+
+    @Column(name = "prior_period_adjustment_reason", columnDefinition = "TEXT")
+    private String priorPeriodAdjustmentReason;
+
     /**
      * Lines belonging to this JE. Cascade ALL + orphan-removal aren't used —
      * the service inserts header then lines explicitly so the line FK can be

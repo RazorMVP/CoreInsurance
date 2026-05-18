@@ -50,7 +50,7 @@ class TrialBalanceServiceTest {
         when(lineRepository.aggregateByAccountAsOf(eq(AS_OF))).thenReturn(List.<Object[]>of(
             new Object[] { cashId, "1110", "Cash on hand", AccountType.ASSET, new BigDecimal("500.00"), new BigDecimal("100.00") }));
         when(lineRepository.totalsAsOf(eq(AS_OF))).thenReturn(
-            new Object[] { new BigDecimal("500.00"), new BigDecimal("100.00"), 2L });
+            List.<Object[]>of(new Object[] { new BigDecimal("500.00"), new BigDecimal("100.00"), 2L }));
 
         TrialBalanceResponse response = service.trialBalanceAsOf(AS_OF);
 
@@ -69,7 +69,7 @@ class TrialBalanceServiceTest {
         when(lineRepository.aggregateByAccountAsOf(eq(AS_OF))).thenReturn(List.<Object[]>of(
             new Object[] { revenueId, "4110", "Premium revenue", AccountType.INCOME, new BigDecimal("0.00"), new BigDecimal("500.00") }));
         when(lineRepository.totalsAsOf(eq(AS_OF))).thenReturn(
-            new Object[] { new BigDecimal("0.00"), new BigDecimal("500.00"), 1L });
+            List.<Object[]>of(new Object[] { new BigDecimal("0.00"), new BigDecimal("500.00"), 1L }));
 
         TrialBalanceResponse response = service.trialBalanceAsOf(AS_OF);
 
@@ -84,7 +84,7 @@ class TrialBalanceServiceTest {
             new Object[] { UUID.randomUUID(), "1110", "Cash", AccountType.ASSET, new BigDecimal("500.00"), new BigDecimal("0.00") },
             new Object[] { UUID.randomUUID(), "4110", "Revenue", AccountType.INCOME, new BigDecimal("0.00"), new BigDecimal("500.00") }));
         when(lineRepository.totalsAsOf(eq(AS_OF))).thenReturn(
-            new Object[] { new BigDecimal("500.00"), new BigDecimal("500.00"), 2L });
+            List.<Object[]>of(new Object[] { new BigDecimal("500.00"), new BigDecimal("500.00"), 2L }));
 
         TrialBalanceResponse response = service.trialBalanceAsOf(AS_OF);
 
@@ -101,7 +101,7 @@ class TrialBalanceServiceTest {
             new Object[] { UUID.randomUUID(), "1110", "Cash", AccountType.ASSET, new BigDecimal("500.00"), new BigDecimal("0.00") },
             new Object[] { UUID.randomUUID(), "4110", "Revenue", AccountType.INCOME, new BigDecimal("0.00"), new BigDecimal("450.00") }));
         when(lineRepository.totalsAsOf(eq(AS_OF))).thenReturn(
-            new Object[] { new BigDecimal("500.00"), new BigDecimal("450.00"), 2L });
+            List.<Object[]>of(new Object[] { new BigDecimal("500.00"), new BigDecimal("450.00"), 2L }));
 
         TrialBalanceResponse response = service.trialBalanceAsOf(AS_OF);
         assertThat(response.footer().balanced()).isFalse();
@@ -112,7 +112,7 @@ class TrialBalanceServiceTest {
     void empty() {
         when(lineRepository.aggregateByAccountAsOf(eq(AS_OF))).thenReturn(List.of());
         when(lineRepository.totalsAsOf(eq(AS_OF))).thenReturn(
-            new Object[] { BigDecimal.ZERO, BigDecimal.ZERO, 0L });
+            List.<Object[]>of(new Object[] { BigDecimal.ZERO, BigDecimal.ZERO, 0L }));
 
         TrialBalanceResponse response = service.trialBalanceAsOf(AS_OF);
         assertThat(response.lines()).isEmpty();

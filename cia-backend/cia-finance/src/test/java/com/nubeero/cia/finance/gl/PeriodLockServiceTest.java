@@ -96,8 +96,11 @@ class PeriodLockServiceTest {
         org.mockito.Mockito.lenient()
             .when(auditLogRepository.save(org.mockito.ArgumentMatchers.any(AuditLog.class)))
             .thenAnswer(inv -> inv.getArgument(0));
+        // Slice 1.7c added the optional TenantHolidayRepository — pass null
+        // here so weekends-only behaviour is preserved for the pre-1.7c
+        // assertions; a dedicated holiday-aware test lives separately.
         service = new PeriodLockService(periodRepository, lockRepository, resolver,
-            cache, auditService, events);
+            cache, auditService, events, null);
 
         period = new FiscalPeriod();
         period.setId(PERIOD_ID);
