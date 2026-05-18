@@ -29,6 +29,13 @@ public record PaaPeriodCloseResult(
      * Nigerian short-tail GB.
      */
     DiscountUnwindResult discountUnwind,
+    /**
+     * Result of the §47-49 onerous contract test. Always present —
+     * {@link OnerousTestResult#groupsWithLossComponentChange()} is zero when
+     * no group's cumulative incurred-vs-earned ratio crossed the threshold
+     * since the last test.
+     */
+    OnerousTestResult onerousTest,
     /** §83/§84 disclosure view, always present (always re-derivable from paa_lrc + paa_lic). */
     InsuranceServiceResult insuranceServiceResult
 

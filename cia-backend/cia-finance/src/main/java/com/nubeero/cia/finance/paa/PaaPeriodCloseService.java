@@ -49,6 +49,7 @@ public class PaaPeriodCloseService {
     private final LrcEngine lrcEngine;
     private final LicEngine licEngine;
     private final DiscountUnwindEngine discountUnwindEngine;
+    private final OnerousContractTestEngine onerousContractTestEngine;
     private final PaaLrcRepository lrcRepository;
     private final PaaLicRepository licRepository;
     private final InsuranceServiceResultService insuranceServiceResultService;
@@ -91,20 +92,31 @@ public class PaaPeriodCloseService {
         // on a re-run of an already-closed period.
         DiscountUnwindResult unwindResult = discountUnwindEngine.recognise(periodId);
 
-        // Flush again so the InsuranceServiceResultService's JdbcTemplate
-        // sees both the LIC inserts AND any unwind-driven LIC updates.
+        entityManager.flush();
+
+        // Slice 2.7: onerous contract test. Naturally idempotent — computes
+        // target loss component vs current state and reconciles. A re-run
+        // with no underlying movement produces zero deltas and zero JEs.
+        OnerousTestResult onerousResult = onerousContractTestEngine.test(periodId);
+
+        // Final flush so InsuranceServiceResultService's JdbcTemplate sees
+        // all measurement engine writes (LRC, LIC, unwind LIC updates,
+        // onerous-test LRC updates).
         entityManager.flush();
 
         InsuranceServiceResult serviceResult = insuranceServiceResultService.compute(periodId);
 
         log.info("PAA period close complete for {} — revenue {}, expense {}, result {}; "
-                + "unwind {} ({} JEs posted)",
+                + "unwind {} ({} JEs); onerous test: {} LC changes (+{} / -{})",
             periodId,
             serviceResult.totalInsuranceRevenue(),
             serviceResult.totalInsuranceServiceExpense(),
             serviceResult.totalInsuranceServiceResult(),
             unwindResult.totalUnwind(),
-            unwindResult.groupsWithJournalEntry());
+            unwindResult.groupsWithJournalEntry(),
+            onerousResult.groupsWithLossComponentChange(),
+            onerousResult.totalLossComponentIncrease(),
+            onerousResult.totalLossComponentReversal());
 
         return new PaaPeriodCloseResult(
             period.getId(),
@@ -113,6 +125,7 @@ public class PaaPeriodCloseService {
             lrcResult,
             licResult,
             unwindResult,
+            onerousResult,
             serviceResult);
     }
 }

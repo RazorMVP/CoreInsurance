@@ -9,6 +9,7 @@ import com.nubeero.cia.finance.paa.InsuranceServiceResult;
 import com.nubeero.cia.finance.paa.InsuranceServiceResultService;
 import com.nubeero.cia.finance.paa.LicEngine;
 import com.nubeero.cia.finance.paa.LrcEngine;
+import com.nubeero.cia.finance.paa.OnerousContractTestEngine;
 import com.nubeero.cia.finance.paa.PaaPeriodCloseResult;
 import com.nubeero.cia.finance.paa.PaaPeriodCloseService;
 import jakarta.persistence.EntityManager;
@@ -70,6 +71,7 @@ import static org.assertj.core.api.Assertions.assertThat;
     LrcEngine.class,
     LicEngine.class,
     DiscountUnwindEngine.class,
+    OnerousContractTestEngine.class,
     InsuranceServiceResultService.class,
     PaaPeriodCloseService.class,
     PaaPeriodCloseServiceIT.TestSupportConfig.class
