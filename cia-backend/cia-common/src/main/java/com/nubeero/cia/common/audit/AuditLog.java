@@ -2,6 +2,8 @@ package com.nubeero.cia.common.audit;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -38,10 +40,17 @@ public class AuditLog {
     @Column(nullable = false)
     private Instant timestamp;
 
+    // @JdbcTypeCode(SqlTypes.JSON) — Hibernate 6 contract for String→jsonb.
+    // Without it, the JPA driver binds via PreparedStatement.setString which
+    // ships parameters as TEXT/varchar; Postgres rejects TEXT→jsonb without
+    // an explicit cast and the audit_log INSERT fails. The columnDefinition
+    // controls DDL generation only — not parameter binding.
     @Column(name = "old_value", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String oldValue;
 
     @Column(name = "new_value", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String newValue;
 
     @Column(name = "ip_address")

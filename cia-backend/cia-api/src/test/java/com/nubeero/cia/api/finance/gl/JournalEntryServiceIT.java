@@ -101,8 +101,22 @@ class JournalEntryServiceIT {
     @Autowired private JournalEntryRepository journalEntryRepository;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private EntityManager entityManager;
+    @Autowired private CacheManager cacheManager;
 
     private LocalDate businessDate;
+
+    @org.junit.jupiter.api.AfterEach
+    void clearCacheAcrossTests() {
+        // The ChartOfAccountService @Cacheable cache survives @DataJpaTest's
+        // transactional rollback — a test that UPDATEs is_active=FALSE on
+        // 1110 (then rolls back) leaves the inactive snapshot in the cache,
+        // breaking subsequent tests that need 1110 active. Manual clear at
+        // the end of each test method is the surgical fix.
+        cacheManager.getCacheNames().forEach(n -> {
+            var cache = cacheManager.getCache(n);
+            if (cache != null) cache.clear();
+        });
+    }
 
     @BeforeEach
     void seedFiscalPeriod() {

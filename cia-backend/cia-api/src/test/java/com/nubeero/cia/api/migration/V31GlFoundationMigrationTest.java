@@ -309,9 +309,13 @@ class V31GlFoundationMigrationTest {
             String pid = runSqlReturningId(
                 "INSERT INTO fiscal_period (fiscal_year_id, period_type, start_date, end_date) " +
                 "VALUES ('" + fyId + "','MONTH','2034-01-01','2034-01-31') RETURNING id");
+            // chart_of_account.code is VARCHAR(20); "COA-JEL-" leaves 12 chars
+            // for the suffix. System.nanoTime() is 19 digits on macOS / modern
+            // Linux, so truncate to the low 10 digits — still uniquely
+            // distinguishes test runs within a single JVM and fits the column.
             String acctId = runSqlReturningId(
                 "INSERT INTO chart_of_account (code, name, account_type) " +
-                "VALUES ('COA-JEL-" + System.nanoTime() + "','Test','ASSET') RETURNING id");
+                "VALUES ('COA-JEL-" + (System.nanoTime() % 10_000_000_000L) + "','Test','ASSET') RETURNING id");
             return new String[] { pid, acctId };
         }
 

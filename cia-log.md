@@ -4,6 +4,92 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-18 — Session 70 (`module-12-period-end-closures`): Cleared the 4-layer Module-12 IT debt queue + wired failsafe so CI actually runs ITs
+
+### Context
+
+The user asked "what are the implications of the three deeper-bug ITs from Session 67 on the build?" The audit surfaced a bigger truth: `mvn verify` was running surefire only — failsafe was never bound in `cia-api/pom.xml`, so **NO `*IT.java` tests had ever run in main CI**, including the working `ReconciliationGateIT` (Slice 1.9's gateway). The scoped `module-12-reconciliation.yml` workflow runs that IT via `mvn test -Dtest=...` which bypasses surefire's `*IT` exclusion; the main `ci.yml`'s `mvn verify` did not. CI had been silently green for the wrong reason.
+
+The user said "yes" to clearing the queue. We peeled four layers of broken-IT bugs and wired failsafe at the end so CI now exercises every IT.
+
+### Layer 1 — V31GlFoundationMigrationTest (Slice 1.1 latent)
+
+`'COA-JEL-' + System.nanoTime()` produced 27-char strings; `chart_of_account.code` is `VARCHAR(20)`. Fixed by `System.nanoTime() % 10_000_000_000L` (low 10 digits — still unique within a JVM run, fits the column).
+
+This bug has been latent since `96de0e7` (Slice 1.1, ~14 sessions ago); masked first by Docker discovery failures (Sessions ≤66) and then by failsafe being unbound (the test is a `*Test.java`, runs in surefire — `mvn verify` would have caught it but surefire was the only phase running). The test now goes green and unblocks all subsequent migration tests.
+
+### Layer 2 — PeriodLockInterceptorIT (4 production bugs in one IT)
+
+**Bug 2a (Slice 1.7): `@Lazy` on Lombok-generated constructor parameters is silently ignored.** Spring honours `@Lazy` only when it's on the actual constructor parameter; Lombok's `@RequiredArgsConstructor` keeps it on the field. The interceptor's two eager dependencies (`PeriodLockService`, `AuditService`) formed an EMF cycle: interceptor wired INTO EntityManagerFactory → needs PeriodLockService → needs FiscalPeriodRepository → needs EntityManager → cycle. **Fixed** by removing `@RequiredArgsConstructor` and writing the constructor manually with `@Lazy` on parameters.
+
+**Bug 2b (Slice 1.7): Hibernate auto-flush during interceptor's own period lookup re-enters the interceptor on the same in-flight save, infinite recursion.** When the interceptor calls `PeriodLockService.checkWrite` → cache lookup → `FiscalPeriodResolver.resolveMonthForBusinessDate` → repository query → Hibernate's default AUTO flush mode flushes pending writes including the JE currently being saved → `onFlushDirty` re-enters the interceptor → cache miss again (`computeIfAbsent` still in flight) → 28-deep recursion → `StackOverflowError`. **Fixed** by adding a `ThreadLocal<Boolean> CHECKING` reentry guard.
+
+**Bug 2c (Slice 1.7 or earlier): `AuditLog.oldValue` / `newValue` are `String` mapped to `jsonb` columns; Hibernate binds via `setString` so the parameter ships as TEXT.** Postgres rejects TEXT→jsonb without an explicit cast. `columnDefinition = "jsonb"` controls DDL generation only — not parameter binding. **Fixed** by adding `@JdbcTypeCode(SqlTypes.JSON)` on both fields. Production bug — every `AuditService.log` call with a non-null value object would have failed at runtime once the code path was exercised. The only reason it didn't fail earlier in production: no successful end-to-end flow reached a code path that calls `AuditService.log` with a non-null value object until now.
+
+**Bug 2d (Slice 1.7): `AuditService.log` saves an `AuditLog` while called from inside a Hibernate flush — Hibernate forbids non-cascade saves during a flush ("There are delayed insert actions before operation").** **Fixed** by annotating all four public `AuditService.log` / `logWithAmount` entry points with `@Transactional(propagation = REQUIRES_NEW)`. Also the correct production semantic: audit logs survive business-transaction rollback.
+
+**Bug 2e (test fixture): Postgres jsonb `::text` rendering adds whitespace after keys; the test's `contains("\"periodLabel\":\"May 2026\"")` assumed compact JSON.** **Fixed** by switching the assertion to `new_value->>'periodLabel'` which returns the raw value without rendering concerns.
+
+All 8 PeriodLockInterceptorIT tests now pass.
+
+### Layer 3 — JournalEntryServiceIT (cache survival + empty-lines guard)
+
+**Bug 3a (test wiring): `ChartOfAccountService.@Cacheable` survives `@DataJpaTest`'s transactional rollback.** Test `postInactiveAccountRejected` UPDATEs `is_active=FALSE` on 1110 (rolled back at end), but the cache retains the `isActive=false` snapshot — polluting subsequent tests that need 1110 active. **Fixed** with `@AfterEach { cacheManager.getCacheNames().forEach(...).clear(); }`.
+
+**Bug 3b (Slice 1.4 production gap): empty `lines` list passes the balance check (`0 == 0`) and a zero-line JE header persists.** The DTO carries `@NotEmpty @Size(min=2)` enforced at the controller, but service callers that bypass the controller (`SubledgerPostingService` listeners, backfill activities, unit tests) would silently land a zero-line header. **Fixed** with an explicit guard in `JournalEntryService.postInternal` throwing `BusinessRuleException("JOURNAL_ENTRY_EMPTY_LINES")`.
+
+All 10 JournalEntryServiceIT tests now pass.
+
+### Layer 4 — ChartOfAccountServiceIT (`@Cacheable` SpEL null key)
+
+**Bug 4 (test wiring): The `@Cacheable` SpEL key `T(TenantContext).getTenantId()` resolves to null in a test with no HTTP filter setting the ThreadLocal.** Spring rejects the cache operation with "Null key returned for cache operation". **Fixed** with `@BeforeEach { TenantContext.setTenantId("test-tenant"); }` + `@AfterEach { TenantContext.clear(); cacheManager.clearAll(); }` + updating two cache-assertion tests to query the new key (`"test-tenant:2110"` instead of `"null:2110"`).
+
+All 12 ChartOfAccountServiceIT tests now pass.
+
+### Wire failsafe — the underlying "CI was silently skipping every IT" finding
+
+Added `maven-failsafe-plugin` binding in `cia-api/pom.xml` with `integration-test` + `verify` goals. Before this change, `mvn verify` ran surefire only — every `*IT.java` test in `cia-api` was dead code in CI. After this change:
+
+- `mvn verify` surefire phase runs all `*Test.java` (151 tests) — green
+- `mvn verify` failsafe phase runs all `*IT.java` (61 tests, 1 skipped = benchmark) — green
+
+Both CI workflows (`ci.yml` main + `module-12-reconciliation.yml` scoped) now exercise the gate end-to-end.
+
+### Files modified
+
+| File | Change |
+|---|---|
+| `V31GlFoundationMigrationTest.java` | nanoTime truncation for VARCHAR(20) COA codes |
+| `PeriodLockInterceptor.java` | Manual constructor with @Lazy on parameters + ThreadLocal CHECKING reentry guard |
+| `AuditLog.java` | `@JdbcTypeCode(SqlTypes.JSON)` on `oldValue` and `newValue` |
+| `AuditService.java` | `@Transactional(REQUIRES_NEW)` on all 4 public log methods |
+| `JournalEntryService.java` | Empty-lines guard in `postInternal` |
+| `PeriodLockInterceptorIT.java` | Switched audit JSON assertion to `new_value->>'periodLabel'` |
+| `JournalEntryServiceIT.java` | `@AfterEach` cache clear via CacheManager |
+| `ChartOfAccountServiceIT.java` | `@BeforeEach` TenantContext.setTenantId + `@AfterEach` clear + 2 cache-key assertions updated to `"test-tenant"` prefix |
+| `cia-api/pom.xml` | Added maven-failsafe-plugin binding |
+
+### Design choices worth remembering
+
+- **`@Lazy` MUST be on the constructor parameter, not the field, when using constructor injection.** Lombok's `@RequiredArgsConstructor` doesn't propagate field annotations to constructor parameters. For any class that needs a lazy dependency to break a cycle, write the constructor manually.
+- **`@JdbcTypeCode(SqlTypes.JSON)` is the Hibernate 6 way to bind String → jsonb.** `columnDefinition` controls only DDL; parameter binding is separate. Same pattern applies to any other `String` field mapped to a jsonb / json column.
+- **`@Transactional(REQUIRES_NEW)` on `AuditService.log` is the right production semantic, not just a test fix.** Audit logs should outlive business-transaction rollbacks — auditors sample exactly the rows that would otherwise disappear.
+- **Hibernate's AUTO flush mode triggers on every JPA query during a flush in progress** — any service called from inside an interceptor needs a reentry guard or it'll recurse on itself when it queries.
+- **`@DataJpaTest` rolls back the test transaction but does NOT clear Spring caches.** Cached entity state outlives rollback. ITs that mutate cached domains need explicit `@AfterEach` cache clears.
+- **Spring `@Cacheable` SpEL keys involving `TenantContext.getTenantId()` need the ThreadLocal set in `@BeforeEach`** when there's no HTTP filter, or the key is null and Spring rejects the operation.
+- **Failsafe must be explicitly bound** — Spring Boot's parent has it in `pluginManagement` only. Without an `<executions>` declaration in the project pom, `*IT.java` tests are skipped silently. This is the most insidious form of CI failure: green for the wrong reason.
+
+### Tests after this session
+
+- `mvn verify` from `cia-backend/` — BUILD SUCCESS. 109 + 42 surefire + 61 failsafe (1 skipped) = 212 tests run, 0 failures, 0 errors.
+- Every previously-broken Module-12 IT now passes: `PeriodLockInterceptorIT` (8), `JournalEntryServiceIT` (10), `ChartOfAccountServiceIT` (12), plus the already-passing `ReconciliationGateIT` (2), `RetroactiveBackfillIT` (3+1), `TrialBalanceServiceIT` (3), `FiscalYearServiceIT` (12), `SubledgerPostingServiceIT` (10), `V31`/`V32`/`V33` migration tests.
+
+### Commit planned
+
+1. `fix(finance): clear Module-12 IT debt + wire failsafe so CI exercises ITs` — single commit because the changes are tightly coupled. The IT fixes only matter once failsafe is wired; failsafe wiring only matters once the ITs pass.
+
+---
+
 ## 2026-05-18 — Session 69 (`module-12-period-end-closures`): Phase 1 follow-ups — Slices 1.7a, 1.7b, 1.7c
 
 ### Context

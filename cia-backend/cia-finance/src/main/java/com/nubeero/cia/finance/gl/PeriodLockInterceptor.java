@@ -4,10 +4,10 @@ import com.nubeero.cia.common.audit.AuditAction;
 import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.common.entity.BaseEntity;
 import com.nubeero.cia.common.entity.LockableByPeriod;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Interceptor;
 import org.hibernate.type.Type;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
@@ -41,11 +41,31 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class PeriodLockInterceptor implements Interceptor {
 
-    @Lazy private final PeriodLockService lockService;
-    @Lazy private final AuditService auditService;
+    // ─────────────────────────────────────────────────────────────────────────
+    // Manual constructor (not Lombok-generated) because @Lazy only takes
+    // effect on Spring's constructor-parameter dependency resolution path
+    // when it's annotated ON THE PARAMETER. Lombok's @RequiredArgsConstructor
+    // copies field annotations to the field declarations, not the generated
+    // constructor parameters — so Spring eagerly resolves PeriodLockService
+    // here, which transitively needs FiscalPeriodRepository → EntityManager →
+    // EntityManagerFactory — but THIS interceptor is wired INTO the EMF
+    // construction, so a cycle forms and the IT context fails to load.
+    //
+    // Keeping the constructor manual makes the lazy contract explicit at the
+    // wiring point rather than at the unrelated field declaration. Same beans,
+    // same behaviour at runtime — only the bean-initialisation order differs.
+    // ─────────────────────────────────────────────────────────────────────────
+    private final PeriodLockService lockService;
+    private final AuditService auditService;
+
+    @Autowired
+    public PeriodLockInterceptor(@Lazy PeriodLockService lockService,
+                                 @Lazy AuditService auditService) {
+        this.lockService = lockService;
+        this.auditService = auditService;
+    }
 
     @Override
     public boolean onSave(Object entity, Object id, Object[] state, String[] propertyNames, Type[] types) {
@@ -60,8 +80,28 @@ public class PeriodLockInterceptor implements Interceptor {
         return false;
     }
 
+    // Reentry guard. Hibernate's default AUTO flush mode flushes pending
+    // writes before every JPA query — so when our check() calls into
+    // PeriodLockService → cache → resolver → repository.findFirst, Hibernate
+    // flushes the in-flight LockableByPeriod entity that triggered THIS
+    // check() pass, firing onFlushDirty → check() recursively on the same
+    // entity, on the same thread, with the same in-flight lookupCache load
+    // pending. We exit fast on reentry; the outer call already owns the
+    // check decision for this save.
+    private static final ThreadLocal<Boolean> CHECKING = ThreadLocal.withInitial(() -> false);
+
     private void check(Object entity) {
         if (!(entity instanceof LockableByPeriod lockable)) return;
+        if (CHECKING.get()) return;
+        CHECKING.set(true);
+        try {
+            doCheck(entity, lockable);
+        } finally {
+            CHECKING.set(false);
+        }
+    }
+
+    private void doCheck(Object entity, LockableByPeriod lockable) {
 
         LockDecision decision = lockService.checkWrite(lockable);
         switch (decision.outcome()) {

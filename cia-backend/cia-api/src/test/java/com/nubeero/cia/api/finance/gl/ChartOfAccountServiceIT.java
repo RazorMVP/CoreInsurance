@@ -86,6 +86,26 @@ class ChartOfAccountServiceIT {
     @Autowired
     private CacheManager cacheManager;
 
+    @org.junit.jupiter.api.BeforeEach
+    void seedTenantContext() {
+        // ChartOfAccountService's @Cacheable methods use a SpEL key that calls
+        // TenantContext.getTenantId(). With no HTTP filter running in this
+        // test slice, the ThreadLocal is null and Spring rejects the cache
+        // operation with "Null key returned for cache operation". Setting an
+        // explicit tenant id here matches what TenantContextFilter would do
+        // for every production request.
+        com.nubeero.cia.common.tenant.TenantContext.setTenantId("test-tenant");
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearTenantContextAndCaches() {
+        com.nubeero.cia.common.tenant.TenantContext.clear();
+        cacheManager.getCacheNames().forEach(n -> {
+            var cache = cacheManager.getCache(n);
+            if (cache != null) cache.clear();
+        });
+    }
+
     @Test
     @DisplayName("V32 seed delivers 129 rows visible to the repository")
     void seedRowCount() {
@@ -176,8 +196,10 @@ class ChartOfAccountServiceIT {
         cache.clear();
 
         service.findByCode("2110");
-        // Tenant prefix is null:CODE because TenantContext is unset in tests.
-        Cache.ValueWrapper hit = cache.get("null:2110");
+        // Tenant prefix is "test-tenant:CODE" because @BeforeEach now sets the
+        // TenantContext (otherwise the @Cacheable SpEL key resolves to null,
+        // which Spring rejects with "Null key returned for cache operation").
+        Cache.ValueWrapper hit = cache.get("test-tenant:2110");
         assertThat(hit).as("cache miss after first call — @Cacheable not wired")
             .isNotNull();
         assertThat(((ChartOfAccount) hit.get()).getCode()).isEqualTo("2110");
@@ -191,7 +213,7 @@ class ChartOfAccountServiceIT {
         cache.clear();
 
         service.getTree();
-        Cache.ValueWrapper hit = cache.get("null");
+        Cache.ValueWrapper hit = cache.get("test-tenant");
         assertThat(hit).as("tree cache miss after first call — @Cacheable not wired")
             .isNotNull();
     }

@@ -123,6 +123,19 @@ public class JournalEntryService {
     private JournalEntryResponse postInternal(PostJournalEntryRequest request,
                                               boolean priorPeriodAdjustment,
                                               String priorPeriodAdjustmentReason) {
+        // Defensive guard: an empty lines list satisfies the
+        // "Σ debits == Σ credits" check trivially (0 == 0), but a header
+        // with no lines is GL-invalid by definition. The DTO carries
+        // @NotEmpty + @Size(min=2) which the controller enforces via @Valid,
+        // but service callers that bypass the controller (Slice 1.5
+        // SubledgerPostingService listeners, Slice 1.8 backfill activities,
+        // unit tests) would otherwise silently persist a zero-line header.
+        if (request.lines() == null || request.lines().isEmpty()) {
+            throw new BusinessRuleException(
+                "JOURNAL_ENTRY_EMPTY_LINES",
+                "A journal entry must have at least two lines (one debit and one credit). "
+                    + "Received zero lines for source reference '" + request.sourceReference() + "'.");
+        }
         validateLineAmounts(request.lines());
 
         BigDecimal totalDebits = sum(request.lines(), JournalEntryLineRequest::debitAmount);
