@@ -4,6 +4,7 @@ import com.nubeero.cia.finance.gl.ChartOfAccountService;
 import com.nubeero.cia.finance.gl.FiscalPeriodResolver;
 import com.nubeero.cia.finance.gl.JournalEntryService;
 import com.nubeero.cia.finance.gl.PostingRuleService;
+import com.nubeero.cia.finance.paa.DiscountUnwindEngine;
 import com.nubeero.cia.finance.paa.InsuranceServiceResult;
 import com.nubeero.cia.finance.paa.InsuranceServiceResultService;
 import com.nubeero.cia.finance.paa.LicEngine;
@@ -68,6 +69,7 @@ import static org.assertj.core.api.Assertions.assertThat;
     PostingRuleService.class,
     LrcEngine.class,
     LicEngine.class,
+    DiscountUnwindEngine.class,
     InsuranceServiceResultService.class,
     PaaPeriodCloseService.class,
     PaaPeriodCloseServiceIT.TestSupportConfig.class

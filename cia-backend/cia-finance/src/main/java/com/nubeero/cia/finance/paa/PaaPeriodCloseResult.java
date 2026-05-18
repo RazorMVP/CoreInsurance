@@ -21,6 +21,14 @@ public record PaaPeriodCloseResult(
     LrcRecognitionResult lrc,
     /** Result of the LIC engine run, or null if it had already run for this period. */
     LicRecognitionResult lic,
+    /**
+     * Result of the §87-92 discount unwind engine. Always present (the engine
+     * is internally idempotent at the per-row grain), but
+     * {@link DiscountUnwindResult#discountingDisabled()} is TRUE when the
+     * tenant's paa_config.discount_lic election is FALSE — the no-op case for
+     * Nigerian short-tail GB.
+     */
+    DiscountUnwindResult discountUnwind,
     /** §83/§84 disclosure view, always present (always re-derivable from paa_lrc + paa_lic). */
     InsuranceServiceResult insuranceServiceResult
 

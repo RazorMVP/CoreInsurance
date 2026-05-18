@@ -48,6 +48,7 @@ public class PaaPeriodCloseService {
     private final FiscalPeriodRepository fiscalPeriodRepository;
     private final LrcEngine lrcEngine;
     private final LicEngine licEngine;
+    private final DiscountUnwindEngine discountUnwindEngine;
     private final PaaLrcRepository lrcRepository;
     private final PaaLicRepository licRepository;
     private final InsuranceServiceResultService insuranceServiceResultService;
@@ -77,20 +78,33 @@ public class PaaPeriodCloseService {
             licResult = licEngine.recognise(periodId);
         }
 
-        // Force-push engine writes to PG before the InsuranceServiceResultService
-        // reads paa_lrc + paa_lic via JdbcTemplate. Within a single @Transactional
-        // boundary Hibernate may keep the inserts buffered in its persistence
-        // context until commit — JdbcTemplate uses the same JDBC connection so
-        // a flush makes them visible without committing.
+        // Force-push engine writes to PG before the discount-unwind engine
+        // reads paa_lic via JPA. Within a single @Transactional boundary
+        // Hibernate may keep the inserts buffered in its persistence context;
+        // the unwind engine needs the LIC engine's just-inserted rows visible
+        // for its findByPeriodId query to see them.
+        entityManager.flush();
+
+        // Slice 2.6: discount unwind. The engine is internally idempotent at
+        // the paa_lic row grain (skips rows already carrying a non-zero
+        // discount_unwind), so unconditionally invoking it here is safe even
+        // on a re-run of an already-closed period.
+        DiscountUnwindResult unwindResult = discountUnwindEngine.recognise(periodId);
+
+        // Flush again so the InsuranceServiceResultService's JdbcTemplate
+        // sees both the LIC inserts AND any unwind-driven LIC updates.
         entityManager.flush();
 
         InsuranceServiceResult serviceResult = insuranceServiceResultService.compute(periodId);
 
-        log.info("PAA period close complete for {} — revenue {}, expense {}, result {}",
+        log.info("PAA period close complete for {} — revenue {}, expense {}, result {}; "
+                + "unwind {} ({} JEs posted)",
             periodId,
             serviceResult.totalInsuranceRevenue(),
             serviceResult.totalInsuranceServiceExpense(),
-            serviceResult.totalInsuranceServiceResult());
+            serviceResult.totalInsuranceServiceResult(),
+            unwindResult.totalUnwind(),
+            unwindResult.groupsWithJournalEntry());
 
         return new PaaPeriodCloseResult(
             period.getId(),
@@ -98,6 +112,7 @@ public class PaaPeriodCloseService {
             period.getEndDate(),
             lrcResult,
             licResult,
+            unwindResult,
             serviceResult);
     }
 }
