@@ -15,4 +15,6 @@ public interface PaaLrcRepository extends JpaRepository<PaaLrc, UUID> {
     List<PaaLrc> findByGroupIdAndDeletedAtIsNullOrderByPeriodIdAsc(UUID groupId);
 
     List<PaaLrc> findByPeriodIdAndDeletedAtIsNullOrderByGroupIdAsc(UUID periodId);
+
+    boolean existsByPeriodIdAndDeletedAtIsNull(UUID periodId);
 }

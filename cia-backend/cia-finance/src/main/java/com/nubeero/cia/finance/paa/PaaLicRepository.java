@@ -15,4 +15,6 @@ public interface PaaLicRepository extends JpaRepository<PaaLic, UUID> {
     List<PaaLic> findByGroupIdAndDeletedAtIsNullOrderByPeriodIdAsc(UUID groupId);
 
     List<PaaLic> findByPeriodIdAndDeletedAtIsNullOrderByGroupIdAsc(UUID periodId);
+
+    boolean existsByPeriodIdAndDeletedAtIsNull(UUID periodId);
 }
