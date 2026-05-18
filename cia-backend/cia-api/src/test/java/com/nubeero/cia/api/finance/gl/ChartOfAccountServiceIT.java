@@ -50,7 +50,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Testcontainers
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({ChartOfAccountService.class, ChartOfAccountServiceIT.TestCachingConfig.class})
+@Import({
+    com.nubeero.cia.common.config.CiaCommonAutoConfiguration.class,
+    ChartOfAccountService.class,
+    ChartOfAccountServiceIT.TestCachingConfig.class
+})
 class ChartOfAccountServiceIT {
 
     @Container

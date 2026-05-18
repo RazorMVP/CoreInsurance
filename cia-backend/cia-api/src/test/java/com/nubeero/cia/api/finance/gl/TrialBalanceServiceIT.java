@@ -72,6 +72,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({
+    // CiaCommonAutoConfiguration enables @EnableJpaAuditing so @CreatedDate
+    // on BaseEntity populates journal_entry.created_at — without it the JE
+    // INSERTs hit a NOT NULL violation (see CLAUDE.md / Module 12 IT
+    // wiring note).
+    com.nubeero.cia.common.config.CiaCommonAutoConfiguration.class,
     ChartOfAccountService.class,
     FiscalPeriodResolver.class,
     JournalEntryService.class,
@@ -319,7 +324,12 @@ class TrialBalanceServiceIT {
     static class TestSupportConfig {
 
         @Bean
-        Clock clock() {
+        // Renamed from `clock` to avoid a bean-name collision with
+        // CiaCommonAutoConfiguration.clock() — that bean is
+        // @ConditionalOnMissingBean by TYPE (Clock), so a Clock bean under
+        // any name suppresses it, but two beans with the same name throw
+        // BeanDefinitionOverrideException.
+        Clock systemClock() {
             return Clock.systemDefaultZone();
         }
 

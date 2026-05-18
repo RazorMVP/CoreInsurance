@@ -72,6 +72,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({
+    com.nubeero.cia.common.config.CiaCommonAutoConfiguration.class,
     ChartOfAccountService.class,
     FiscalPeriodResolver.class,
     JournalEntryService.class,
@@ -349,7 +350,7 @@ class JournalEntryServiceIT {
     static class TestSupportConfig {
 
         @Bean
-        Clock clock() {
+        Clock systemClock() {  // renamed from clock() — see TrialBalanceServiceIT note
             return Clock.systemDefaultZone();
         }
 

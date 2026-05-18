@@ -85,6 +85,10 @@ import static org.mockito.Mockito.mock;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({
+    // CiaCommonAutoConfiguration enables @EnableJpaAuditing so @CreatedDate
+    // populates created_at on BaseEntity inserts — see Module 12 IT wiring
+    // note in CLAUDE.md.
+    com.nubeero.cia.common.config.CiaCommonAutoConfiguration.class,
     ChartOfAccountService.class,
     FiscalPeriodResolver.class,
     JournalEntryService.class,
