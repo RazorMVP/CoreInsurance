@@ -106,6 +106,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
     FiscalPeriodLookupCache.class,
     JournalEntryService.class,
     PostingRuleService.class,
+    com.nubeero.cia.finance.gl.PolicyClassResolver.class,
     SubledgerPostingService.class,
     PeriodLockService.class,
     TrialBalanceService.class,
@@ -135,7 +136,7 @@ class ReconciliationGateIT {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.target", () -> "35");
+        registry.add("spring.flyway.target", () -> "43");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 

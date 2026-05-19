@@ -233,6 +233,7 @@ public class JournalEntryService {
             mirror.setPortfolioId(originalLine.getPortfolioId());
             mirror.setContractGroupId(originalLine.getContractGroupId());
             mirror.setHoldingId(originalLine.getHoldingId());
+            mirror.setClassOfBusinessId(originalLine.getClassOfBusinessId());
             mirror.setDimensionTags(new HashMap<>(originalLine.getDimensionTags()));
             reversal.addLine(mirror);
         }
@@ -294,6 +295,7 @@ public class JournalEntryService {
         line.setPortfolioId(req.portfolioId());
         line.setContractGroupId(req.contractGroupId());
         line.setHoldingId(req.holdingId());
+        line.setClassOfBusinessId(req.classOfBusinessId());
         if (req.dimensionTags() != null) {
             line.setDimensionTags(new HashMap<>(req.dimensionTags()));
         }

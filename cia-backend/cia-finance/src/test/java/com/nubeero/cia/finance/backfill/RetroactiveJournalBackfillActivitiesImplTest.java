@@ -253,7 +253,10 @@ class RetroactiveJournalBackfillActivitiesImplTest {
         int failFirstNCalls = Integer.MAX_VALUE;   // throw on every call by default if exception set
 
         RecordingSubledgerPostingService() {
-            super(null, null, null);
+            // 4 nulls: journalEntryService, postingRuleService, policyClassResolver, clock.
+            // Slice 1.10a added policyClassResolver — recording test overrides
+            // replayPolicyApproved so the resolver is never invoked.
+            super(null, null, null, null);
         }
 
         @Override
