@@ -64,6 +64,16 @@
       "Could not find a valid Docker environment".
     -->
     <docker-java.version>3.5.3</docker-java.version>
+    <!--
+      ByteBuddy 1.14.x (bundled by Mockito 5.11.0 via spring-boot-starter-test)
+      cannot redefine bytecode on JDK 25, throwing
+      "MockitoException: Could not modify all classes [..., class java.lang.Object]"
+      on every Mockito.mock(...). 1.15.x added JDK-25 support. CI runs on JDK 21
+      where 1.14.19 works fine; the override exists so local dev on JDK 25 doesn't
+      have to wait for CI just to see "test passes." Pinned ahead of Spring Boot's
+      managed version so first-declaration-wins ordering takes effect.
+    -->
+    <byte-buddy.version>1.15.11</byte-buddy.version>
   </properties>
 
   <dependencyManagement>
@@ -228,6 +238,20 @@
         <version>${bucket4j.version}</version>
       </dependency>
 
+      <!-- ── ByteBuddy override for JDK 25 (must come BEFORE Spring Boot BOM
+           via being declared in <dependencyManagement>). See properties
+           block above for the rationale. -->
+      <dependency>
+        <groupId>net.bytebuddy</groupId>
+        <artifactId>byte-buddy</artifactId>
+        <version>${byte-buddy.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>net.bytebuddy</groupId>
+        <artifactId>byte-buddy-agent</artifactId>
+        <version>${byte-buddy.version}</version>
+      </dependency>
+
       <!-- ── docker-java override (must come BEFORE testcontainers-bom) ─
            Docker 29.x requires API >= 1.40 (MinAPIVersion=1.40). docker-java
            3.4.x defaults to v1.30 and gets HTTP 400 on every probe. 3.5.x
@@ -308,6 +332,34 @@
                 <artifactId>lombok</artifactId>
               </exclude>
             </excludes>
+          </configuration>
+        </plugin>
+        <!--
+          Surefire + Failsafe: enable ByteBuddy experimental class-file reader.
+          Mockito's inline mock-maker uses ByteBuddy to redefine concrete classes
+          (interfaces use java.lang.reflect.Proxy and don't need this). ByteBuddy
+          1.15.x officially supports up to JDK 24 bytecode (class file v68); local
+          dev on JDK 25 (v69) needs the experimental flag. CI runs JDK 21 where
+          the flag is a no-op. Cheaper than a JDK constraint on the developer
+          environment and lets all Mockito tests with concrete-class mocks run
+          locally identically to CI.
+        -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <configuration>
+            <systemPropertyVariables>
+              <net.bytebuddy.experimental>true</net.bytebuddy.experimental>
+            </systemPropertyVariables>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <configuration>
+            <systemPropertyVariables>
+              <net.bytebuddy.experimental>true</net.bytebuddy.experimental>
+            </systemPropertyVariables>
           </configuration>
         </plugin>
       </plugins>
