@@ -6,317 +6,336 @@ sidebar_label: Period-End Closures (Implementation Plan)
 
 # Period-End Closures — Implementation Plan
 
-Plan date: 2026-05-09
+**Original draft:** 2026-05-09 (Status: Draft for review).
+**Reconciled to shipped reality:** 2026-05-19. Phase 1, Phase 2, and Phase 3 are complete and merged to `main` (tag `v0.12.0-period-end-closures`). Phase 4 is in progress on branch `slice-4-naicom-monthly-recap-submissions` (slices 4.1–4.3 shipped, 4.4–4.10 pending).
 
-Status: Draft for review
+**Phase numbering reconciled.** The original May-9 plan defined seven phases, with NAICOM submissions as "Phase 5" and a generic "Closure Orchestration" layer as "Phase 4." The team chose **per-domain orchestrators** (PaaPeriodCloseService for IFRS 17, a future SubmissionOrchestrator for NAICOM) over a generic activity registry, so the original Phase 4 was deferred and the remaining phases shifted down by one. Current numbering:
 
-Branch: `main`
+| Original plan | Current numbering | Status |
+|---|---|---|
+| §2 Phase 1 — GL Foundation | **Phase 1** | Shipped (12 slices) |
+| §3 Phase 2 — IFRS 17 PAA Measurement | **Phase 2** | Shipped (8 slices) |
+| §4 Phase 3 — cia-investments + IFRS 9 | **Phase 3** | Shipped (7 slices) — lives in `cia-finance/ifrs9/`, not a separate module |
+| §5 Phase 4 — Closure Orchestration + Activity Registry | **Deferred** (per-domain orchestration chosen instead) | Not built; see "Deferred work" section below |
+| §6 Phase 5 — NAICOM Submission Pack Generators | **Phase 4** | In progress (3 of 10 slices shipped) |
+| §7 Phase 6 — Frontend Admin UI + Investments UI | **Phase 5** | Not started |
+| §8 Phase 7 — Finality Transitions + Cross-Tenant Platform View | **Phase 6** | Partial — per-period finality absorbed into Slice 1.7c (PPA workflow + period reopen + tenant_holiday calendar); cross-tenant platform view still not built |
 
-This plan operationalises the design specified in `period-end-closures-design.md`. It breaks the build into seven phases, defines per-phase deliverables and exit criteria, and identifies the critical path. Phases are sized for a 2–3 engineer team working in parallel where possible.
+For slice-level detail on Phases 1–3 see `cia-log.md` sessions 60–72. For Phase 4 in-progress detail see the `slice-4-naicom-monthly-recap-submissions` branch and the upcoming Session 73 entry.
+
+---
 
 ## 1. Phasing Strategy
 
-The work splits naturally along three independent foundations and four orchestration layers:
+The work splits along three independent foundations and three orchestration layers:
 
 ```
-Foundations  │  Phase 1  GL foundation (chart of accounts, journal entries, period locks)
-             │  Phase 2  IFRS 17 PAA measurement service
-             │  Phase 3  cia-investments + IFRS 9 measurement
-             │
-Orchestration│  Phase 4  Closure activity registry + Temporal workflows
-             │  Phase 5  NAICOM submission pack generators
-             │  Phase 6  Frontend admin UI + investments UI
-             │  Phase 7  Soft → hard transitions + reopening + cross-tenant platform view
-             │
+Foundations  │  Phase 1  GL foundation (chart of accounts, journal entries, period locks)                    │  Phase 2  IFRS 17 PAA measurement service                                                      │  Phase 3  IFRS 9 measurement (in cia-finance, no separate module)                              │
+Orchestration│  Phase 4  NAICOM submission pack generators (formerly plan-§6 Phase 5)                        │  Phase 5  Frontend admin UI for Module 12                                                      │  Phase 6  Cross-tenant platform admin view + force-close                                       │
 Continuous   │  Tests, observability, documentation, performance, security review
 ```
 
-Phases 1–3 are independent and can run in parallel by separate engineers. Phase 4 requires Phase 1 (GL foundation) and at least the data-model side of Phase 2. Phases 5–7 require Phase 4. Detailed dependency graph in Section 9.
+Phases 1–3 ran in parallel and are complete. Phase 4 (NAICOM submissions) depends on Phase 1's `journal_entry_line` substrate, Phase 2's V38 movement-analysis view, and Phase 3's V40 movement-analysis view. Phase 5 (Frontend) depends on Phase 4's SubmissionOrchestrator surface stabilising. Phase 6 (Platform) depends on Phases 4–5.
+
+---
 
 ## 2. Phase 1 — GL Foundation
 
-**Duration: 4–6 weeks** (single engineer)
+**Status:** Shipped 2026-05-15 (Slice 1.7) through 2026-05-18 (Slice 1.9b). 12 slices total. Reconciled into `main` 2026-05-19 (merge commit `fe904f3`).
 
-**Goal:** add chart of accounts, journal entries, fiscal year configuration, and period locking to `cia-finance`. No business behaviour changes — purely additive infrastructure that future phases post into.
+**Goal achieved:** chart of accounts, journal entries, fiscal year configuration, period locking, and retroactive backfill — purely additive infrastructure that Phases 2 and 4 post into.
 
-**Deliverables:**
+**What shipped:**
 
-- Flyway migrations for `chart_of_account`, `journal_entry`, `journal_entry_line`, `fiscal_year`, `fiscal_period`, `posting_rule`, `period_lock`
-- Seed migration: default Nigerian insurance chart of accounts (assets, liabilities, equity, income, expense classes plus IFRS 17 / IFRS 9 role-tagged accounts)
-- `ChartOfAccountService`, `JournalEntryService`, `TrialBalanceService`, `FiscalYearService` with full unit + integration test coverage
-- `SubledgerPostingService` listening for `DebitNoteApprovedEvent`, `CreditNoteIssuedEvent`, `ReceiptPostedEvent`, `PaymentPostedEvent` → posts JEs against the COA
-- `PeriodLockService` Hibernate interceptor enforcing soft/hard period locks with the 5-business-day cutoff
-- Tenant fiscal year admin UI under Setup → Fiscal Year (single page, default Dec 31, configurable)
-- Backfill migration: retroactive JEs for in-force policies' premium recognition
+| Slice | Scope |
+|---|---|
+| 1.1 | V31 GL schema (`fiscal_year`, `fiscal_period`, `period_lock`, `journal_entry`, `journal_entry_line`, `posting_rule`, `chart_of_account`) |
+| 1.2 | V32 chart-of-account seed — 129 rows in a 3-level hierarchy, **including IFRS-17 and IFRS-9 role-tagged accounts upfront** (LRC/LIC, AmortisedCost/FVOCI/FVPL, ECL allowances). Engines look up by role enum, not hardcoded codes. |
+| 1.3 | `ChartOfAccountService` (read-only) |
+| 1.4 | `JournalEntryService` + `TrialBalanceService` — the **JE-posting gateway**. Every engine posts through this service. Idempotency triple: `(source_module, source_event_type, source_reference)` |
+| 1.5 | `SubledgerPostingService` event listeners — `PolicyApprovedEvent`, `EndorsementApprovedEvent`, `ClaimApprovedEvent`, `ClaimSettledEvent`, `FacPremiumCededEvent`, `ClaimExpenseApprovedEvent` → JE post |
+| 1.6 | `FiscalYearService` + period generation + lazy DAY resolver |
+| 1.7 | `PeriodLockService` + Hibernate `PeriodLockInterceptor`. 5-business-day grace window. Opt-in via the `LockableByPeriod` marker interface (NOT a config table — the marker IS the opt-in mechanism). HTTP 423 LOCKED with structured `meta`. `period_lock` table is a Type-2 SCD; the row sequence IS the audit history. |
+| 1.7a/b | Period-lock entity opt-in sweep — `Receipt`, `Payment`, `ClaimExpense`, `Endorsement`, `DebitNote`, `CreditNote`, `RiAllocation`, `RiFacCover` all implement `LockableByPeriod`. `getLockDate()` returns the **booking date**, not the business-effective date. |
+| 1.7c | V35 IAS-8 PPA workflow (prior-period adjustment for accepted-late-correction scenarios) + `tenant_reopen_recipient` config (CSV fallback) + `tenant_holiday` calendar (makes `addBusinessDays` NAICOM-aware) |
+| 1.8a/b | `RetroactiveJournalBackfillWorkflow` (Temporal) — per-tenant admin endpoint, status polling, Spring Boot CLI, idempotent activities, 10k-event wall-clock benchmark, abort-and-resume durability test, operational runbook |
+| 1.9a/b | Reconciliation Gate Harness — 200-event fixture in CI (`module-12-reconciliation.yml`), per-JE evidence snapshot, mutation-guard test that detects silent posting-rule regressions |
 
-**Exit criteria:**
+**Plus T1 follow-up** (Slice T1, merged separately at `8797c59`): 6 upstream contract tests asserting each of the consumed events publishes with the correct payload — protects the producer side of the JE-gateway contract.
 
-- All sub-ledger events (DN/CN/Receipt/Payment) post correctly to the GL
-- Trial balance produces the expected sum-of-zero across debits and credits
-- Backdated transactions outside the 5-day cutoff are rejected
-- Backfill produces a clean trial balance for an existing tenant
-- No regression in existing finance flows (verified by full backend regression)
+**Plus 1.10 scoped follow-up** (queued in cia-log.md): promote `class_of_business` into `journal_entry_line.dimension_tags` so Phase 4's N01 engine can read class-broken-down totals from the GL instead of source tables. Recommended execution: after Phase 4 merges.
 
-**Engineering watch-outs:**
+**Design decisions captured (lessons from the original watch-outs):**
 
-- The Hibernate interceptor for period locking must use `EmptyInterceptor` or `Hibernate6Interceptor` semantics — touching every persistent entity. Test under load to ensure no throughput cliff.
-- The retro-active JE backfill is a one-time per-tenant migration. Make it idempotent and rerunnable in case of partial failure.
-- COA seeds must include IFRS 17 disclosure-roll-forward accounts upfront (LRC opening / movements / closing; LIC opening / movements / closing) — easier to seed once than to migrate later.
+- **Period-lock Hibernate interceptor performance** — concern from the original plan. Resolved by the `LockableByPeriod` marker-interface pattern: the interceptor checks `instanceof LockableByPeriod` per save, which is a single bytecode test, not a per-entity introspection. No measurable throughput cliff. Two distinct override roles (`FINANCE_OVERRIDE_LOCK` for soft-close grace bypass; `FINANCE_REOPEN_PERIOD` for HARD release) prevent the segregation-of-duties audit finding that would result from bundling.
+- **Retroactive JE backfill** — implemented as a Temporal workflow per the original guidance. Idempotent via the JE-gateway uniqueness triple. Resumable from any abort point. CLI plus admin-endpoint plus status-poll endpoint per the operational runbook.
+- **COA seeding upfront for IFRS 17 / IFRS 9 disclosure-roll-forward accounts** — done in Slice 1.2. Phases 2 and 3 didn't add a single new account; everything was already there. Justified the upfront seeding cost.
+- **`SubledgerPostingService` event surface differs from the original plan** — the plan listed `DebitNoteApprovedEvent`, `CreditNoteIssuedEvent`, `ReceiptPostedEvent`, `PaymentPostedEvent`. In practice the upstream events were policy-/endorsement-/claim-level (the financial-document events sit downstream of those). The actual surface is the six events listed in slice 1.5. Slice T1 contract-tests that surface.
+- **`FiscalPeriodLookupCache` scope evolved** — originally `@RequestScope`. Refactored in Slice 1.7-fix into a scope-aware singleton (HTTP requests store the cache map as a `SCOPE_REQUEST` attribute; non-HTTP callers fall back to a ThreadLocal cleared at activity boundaries). This was the blocker for Slice 1.8 retroactive backfill running off the HTTP path.
+
+**Test coverage at phase-end:** 31 ITs (~7 in cia-api/finance/gl + retroactive backfill IT + 200-event reconciliation gate) plus unit tests for math/routing helpers.
+
+---
 
 ## 3. Phase 2 — IFRS 17 PAA Measurement
 
-**Duration: 4–6 weeks** (single engineer; can run parallel to Phase 1 if data-model work decoupled)
+**Status:** Shipped 2026-05-19 (Slices 2.1–2.8). 8 slices total. Reconciled into `main` 2026-05-19.
 
-**Goal:** implement IFRS 17 PAA measurement under `cia-finance/ifrs17/`. Produces LRC, LIC, risk adjustment, onerous test results, and IFRS 17-tagged journal entries.
+**Goal achieved:** IFRS 17 Premium Allocation Approach measurement under `cia-finance/paa/`. LRC, LIC, discount unwind, onerous-test results, and IFRS 17-tagged journal entries. §103 movement-analysis disclosure view.
 
-**Deliverables:**
+**What shipped:**
 
-- Flyway migration: `insurance_portfolio`, `contract_group`, `lrc_balance`, `lic_balance`, `onerous_test_result`
-- Seeded portfolios mapped 1:1 from `products` (one portfolio per product family initially)
-- `PaaMeasurementService`, `LrcCalculationService`, `LicCalculationService`, `RiskAdjustmentService` (75th-percentile confidence-level), `OnerousContractTestService`
-- Bootstrap historical claims development triangles per portfolio for risk adjustment seeding
-- `ReinsuranceContractsHeldService` mirroring PAA measurement to the ceded side
-- Per-policy contract-group assignment logic (cohort_year = policy.start_date.year; portfolio = product.portfolio_id; onerousness = current test result)
-- LRC and LIC roll-forward report generators (used by EOM disclosure pack)
-- IFRS 17 journal entries: insurance revenue, insurance service expense, reserve movements, risk adjustment unwinding, onerous deficit recognition
+| Slice | Scope |
+|---|---|
+| 2.1 | V36 PAA foundation — `portfolio`, `group_of_contracts`, `paa_lrc`, `paa_lic`, `paa_config`. 5 entities, 4 enums, 5 repos. FK promotion on `journal_entry_line.portfolio_id` and `.contract_group_id` from V31 placeholders. |
+| 2.2 | V37 `policy_group_assignment` — **full UNIQUE(policy_id)** for IFRS 17 §22 permanent grouping. `ContractGroupingService` event listener (`@EventListener(PolicyApprovedEvent)`); lazy portfolio creation by COB; group assignment at policy approval. |
+| 2.3 | `LrcEngine` — straight-line daily premium recognition. Posts `Dr 2110 / Cr 4110` via the JE gateway. Stateless period computation; idempotent re-runs. |
+| 2.4 | `LicEngine` — claim roll-forward via SQL conditional-sum. v1 posts NO JE because the underlying GL is already correct via `SubledgerPostingService` (1.5). |
+| 2.5 | `PaaPeriodCloseService` orchestrator + IFRS 17 §83/§84 `InsuranceServiceResult`. **First production-code surface of the `entityManager.flush()` architectural rule** — service writes via JPA then reads via JdbcTemplate within the same `@Transactional` boundary; explicit flush required between writes and reads. |
+| 2.6 | `DiscountUnwindEngine` — §87-92 P&L vs OCI routing per `paa_config.oci_election` (§88(b) election). Posts `Dr 5520 / Cr 2140` (P&L) or `Dr 3430 / Cr 2140` (OCI). |
+| 2.7 | `OnerousContractTestEngine` — §47-49 loss component. Cumulative-state target reconciliation; delta-based JE. Posts `Dr 5150 / Cr 2130` (recognise) or reverse. |
+| 2.8 | V38 `paa_movement_analysis` SQL view + `MovementAnalysisService` for §103 disclosure. Read-rarely view (not materialised); Phase 4's Ifrs17DisclosureEngine reads this directly. |
 
-**Exit criteria:**
+**Design decisions captured:**
 
-- LRC closing balance matches: opening LRC − insurance revenue + new business written + acquisition cost amortisation
-- LIC closing balance matches: opening LIC + new claims notified − claims paid + risk adjustment unwind
-- Onerous test produces zero false positives on a known-profitable portfolio sample
-- Reinsurance ceded LRC/LIC mirrors gross movements at the cession percentage
+- **§22 permanence via FULL UNIQUE.** The plan suggested "per-policy contract-group assignment logic"; the schema enforces it. `policy_group_assignment.policy_id` has a full UNIQUE (not partial) — group reassignment is a §22 violation by design. Audit corrections must UPDATE in place.
+- **Risk adjustment + IBNR deferred to v2** — the original watch-out flagged the need for actuarial review. Decision: ship the `paa_lic` columns (`ibnr_estimate`, `ibnr_change`, `risk_adjustment`, `risk_adjustment_change`) ready, but engines fill them with zero in v1. Slice 2.7b is the placeholder for actuarial-method swaps.
+- **Stateless period computation beats opening = previous-closing chaining.** Every Phase 2 engine computes target state from policy/claim data + period boundaries, never reads prior `paa_*` rows. Idempotency is natural; out-of-order processing is harmless; re-runs are bit-identical.
+- **`paa_lrc.closing_balance` is point-in-time, not arithmetic-derived.** Surprised by this during Slice 2.7 — closing IS NOT `opening + received − earned`; it's computed by a separate `closingAmount()` function. Roll-forward components are independent point-in-time snapshots, not arithmetic-related.
 
-**Engineering watch-outs:**
+**Test coverage at phase-end:** 53 PAA-related ITs across the 8 slices.
 
-- Initial risk adjustment estimates from claims triangles will be rough. Production calibration may need an actuarial review later — flag in code as `// TODO: actuarial calibration`.
-- Cohort assignment for contracts spanning a year-end (rare for general business) needs special handling — a Q4 policy with effective date Dec 28 of year N issuing late could land in cohort N or N+1 depending on initial recognition date. Default to start-date year; flag edge cases.
+---
 
-## 4. Phase 3 — cia-investments + IFRS 9 Measurement
+## 4. Phase 3 — IFRS 9 Measurement
 
-**Duration: 4–5 weeks** (single engineer; fully independent of Phases 1 and 2 until integration)
+**Status:** Shipped 2026-05-19 (Slices 3.1–3.7). 7 slices total. Reconciled into `main` 2026-05-19.
 
-**Goal:** new `cia-investments` Maven module covering instrument master data, holdings, IFRS 9 classification, valuation, ECL, and income accrual.
+**Goal achieved:** IFRS 9 financial-instrument classification, measurement, ECL, and disclosure for investment holdings AND premium-receivable simplified-approach ECL. §B5.5.39 / IFRS 7 §35M disclosure view.
 
-**Deliverables:**
+**Significant divergence from the original plan: NO separate `cia-investments` Maven module.** The IFRS 9 work lives in `cia-finance/ifrs9/`. The "investments module should be deployable independently" hypothesis from the original plan turned out to be unnecessary — investments are tightly coupled to the GL substrate and the period-close workflow, so a separate module would have added Maven plumbing without architectural benefit. Tenant-scoped enable/disable of IFRS 9 is still achievable via the `ifrs9_config` singleton.
 
-- New Maven module with full domain / service / controller layers
-- Flyway migrations: `instrument`, `holding`, `valuation`, `income_accrual`, `ecl_provision`
-- `Ifrs9ClassificationService` with SPPI test logic + classification routing
-- `EclService` with 12-month / lifetime / credit-impaired stages
-- `ValuationService` for monthly mark-to-market (manual entry initially; market-data integration is a future phase)
-- `InvestmentIncomeService` for interest accrual (per-instrument coupon schedule) and dividend accrual
-- IFRS 9 journal entries: investment income, fair value gains/losses, ECL expense, FVOCI OCI movements
-- Frontend pages under Setup or as a top-level Investments module
-- Activity registration: `RUN_MTM_VALUATION` (EOM), `ACCRUE_INVESTMENT_INCOME` (EOM), `RECALCULATE_ECL` (EOM)
+**What shipped:**
 
-**Exit criteria:**
+| Slice | Scope |
+|---|---|
+| 3.1 | V39 IFRS 9 foundation — `investment_holding`, `investment_carrying_value`, `investment_classification_history` (Type-2 SCD for §B4.1.26 reclassifications), `ifrs9_config` (singleton via partial unique index on `singleton_marker`). FK promotion on `journal_entry_line.holding_id`. |
+| 3.2 | `InvestmentClassificationService` — pure §4.1 `classify()` + `register()` + `reclassify()`. SPPI test + business-model criteria. Reclassifications produce Type-2 audit-history rows. |
+| 3.3 | `AmortisedCostEngine` — §5.4.1 effective interest method. Posts `Dr 1250 / Cr 4210` (interest accrual) and `Dr 1230 / Cr 1250` (coupon receipt). |
+| 3.4 | `FairValueEngine` — §5.7 remeasurement with classification-driven routing. FVPL → P&L (4250 gain / 5330 loss); FVOCI_DEBT → OCI reserve 3410; FVOCI_EQUITY → OCI reserve 3420; AC refuses remeasurement. **`closing_fair_value IS NULL` is the idempotency sentinel** — re-runs skip silently. |
+| 3.5 | `InvestmentEclEngine` — §5.5 + §5.7.10A. AC ECL reduces asset directly (`Dr 5310 / Cr 1140`). FVOCI_DEBT ECL routes to OCI reserve (`Dr 5310 / Cr 3410`) while carrying value stays at fair value — the §5.7.10A "ECL in OCI" rule. FVPL: no ECL (impairment IS the fair-value movement). |
+| 3.6 | `PremiumReceivableEclEngine` — §5.5.15 simplified approach. Admin supplies aging-bucket provision matrix; engine computes `lifetime ECL = Σ(outstanding × rate)` and posts the delta vs cumulative prior allowance. **Provision matrix embedded verbatim in the JE narrative** — the JE table doubles as the §B5.5.36 disclosure substrate (no separate `premium_provision_matrix` history table in v1). |
+| 3.7 | V40 `ifrs9_investment_movement_analysis` SQL view + `Ifrs9MovementAnalysisService`. Composes two sections: investments (from V40 view) + premium-receivable ECL (from JE aggregate on account 1340 by `business_date`). |
 
-- Instrument master data CRUD works
-- A new holding correctly auto-classifies under IFRS 9 based on its business model + SPPI test result
-- A monthly MTM run produces valuations for all active holdings
-- ECL computation for a sample portfolio produces sensible 12-month vs lifetime ECL values
-- All IFRS 9 JEs post correctly to the GL
+**Design decisions captured:**
 
-**Engineering watch-outs:**
+- **`closing_fair_value IS NULL` sentinel pattern** — when a column's nullability already encodes the operation's idempotency state, no helper flag is needed. Generalisable rule from Slice 3.4.
+- **§5.7.10A OCI-routing for FVOCI_DEBT ECL** — the subtlest IFRS 9 rule. ECL routes to OCI reserve, NOT to the asset's carrying value (which stays at fair value). Routing matrix in `InvestmentEclEngine.routeJe` mirrors the standard structurally.
+- **JE narrative as disclosure substrate** — Slice 3.6. The provision-matrix-in-narrative pattern is reusable for any small disclosure history we don't want to schema-evolve.
+- **Disclosure views (V38, V40) feed Phase 4 directly** — Phase 4's IFRS-17 and IFRS-9 disclosure engines read these views, not the underlying tables. Read-rarely, write-once-per-period semantics; not materialised. The view re-evaluation cost is well below the auditor-acceptable threshold.
 
-- Market-data integration is **out of scope** for phase 1 — manual valuation entry only. Don't accidentally build a market-data adapter without explicit scope expansion.
-- ECL methodology for this phase uses simple credit-rating bands. Sophisticated PD/LGD modelling is a future phase.
-- The investments module should be deployable independently — a new tenant could in principle skip the investments module entirely if they don't hold investments. Build with tenant-scoped enable/disable.
+**Test coverage at phase-end:** 60+ IFRS 9-related ITs across the 7 slices (including migration tests for V39 and V40).
 
-## 5. Phase 4 — Closure Orchestration + Activity Registry
+**Market-data integration remains out of scope.** Same as the original plan — manual valuation entry only. Live market-data adapters are a future phase.
 
-**Duration: 3–4 weeks** (single engineer; depends on Phase 1 complete + Phase 2 data model done)
+---
 
-**Goal:** new `cia-closure` Maven module containing the activity registry, closure state machine, and Temporal workflows for all five closure types.
+## 5. Deferred — Closure Orchestration + Activity Registry
 
-**Deliverables:**
+**Status:** Deliberately not built. The original Phase 4 (§5 of the May-9 plan) proposed a new `cia-closure` Maven module with a generic `ClosureActivity` interface, an activity registry, and five `Eod/Eom/Eoq/HalfYear/Eoy` Temporal workflows. The team chose **per-domain orchestrators** instead:
 
-- New Maven module with domain / service / workflow / controller layers
-- Flyway migrations: `closure_activity`, `tenant_closure_activity_override` (public schema); `closure_period`, `closure_run`, `closure_activity_execution`, `period_lock` extensions, `closure_approval` (tenant schema)
-- Seed migration: register all built-in activities (one row per activity in the design's Q6 menu)
-- `ClosureActivity` interface that business modules implement
-- `ClosureOrchestrationService.startClosure(...)` entry point
-- Temporal workflows: `EodWorkflow`, `EomWorkflow`, `EoqWorkflow`, `HalfYearWorkflow`, `EoyWorkflow`
-- Real-time progress streaming via `ClosureProgressService` (Server-Sent Events or WebSockets — choice deferred to UI implementation)
-- Approval workflow integration (single-level Finance Manager for soft close; reuses existing `cia-workflow` patterns)
-- Refactoring task: each business module's existing batch operations become `ClosureActivity` implementations registered in the registry
+- `PaaPeriodCloseService` (Slice 2.5) orchestrates the IFRS 17 close (LRC → LIC → flush → DiscountUnwind → flush → OnerousContractTest → flush → InsuranceServiceResult).
+- `RetroactiveJournalBackfillWorkflow` (Slice 1.8a/b) handles the per-tenant backfill use-case originally bundled into the closure workflows.
+- `PeriodLockService` (Slice 1.7) owns the soft-close / hard-close / reopen transitions for any individual period.
+- The upcoming Phase 4 `SubmissionOrchestrator` (Slice 4.9) will orchestrate NAICOM submission generation.
 
-**Exit criteria:**
+**Why deferred:** the generic activity-registry pattern adds significant plumbing (`ClosureActivity` interface, registration framework, per-tenant override table, real-time progress streaming infrastructure) without clear payoff at current scale. Per-domain orchestrators are simpler, more testable, and align with each phase's natural transaction boundaries. The trade-off: there is **no single period-level orchestrator** that chains "hard-close → run IFRS 17 close → run IFRS 9 close → run NAICOM submissions → transition state." The admin runs these as separate steps, or a Phase 5 UI ties them together client-side.
 
-- Admin can click "Run EOD" from the back-office UI and see real-time progress
-- All EOD activities listed in the design execute and write to `closure_activity_execution`
-- A failed activity triggers Temporal retry behaviour without re-running the successful activities
-- EOM transitions the period to SOFT_CLOSED with all financial activities posting their journal entries
-- Period lock interceptor blocks backdated entries beyond the 5-day cutoff after soft close
+**When to revisit:** if the per-domain pattern starts producing scheduling bugs (forgotten steps, wrong ordering, missing audit trail across domains), the generic orchestrator becomes worth the plumbing. Until then it's correctly classified as YAGNI.
 
-**Engineering watch-outs:**
+---
 
-- The Temporal worker manager pattern from `production-readiness-tracker.md` Phase 7 must be respected — `cia-closure` registers its workers via `@PostConstruct` beans, not by calling `factory.start()` directly.
-- Activity idempotency is critical. A failed closure run should be safely retryable. Design `ClosureActivity.execute(...)` so that running it twice with the same context produces the same outcome.
-- The activity registry must support tenant-level disable. A tenant that doesn't hold investments should be able to disable the IFRS 9 activities without affecting other tenants.
+## 6. Phase 4 — NAICOM Submission Pack Generators
 
-## 6. Phase 5 — NAICOM Submission Pack Generators
+**Status:** In progress on branch `slice-4-naicom-monthly-recap-submissions`. Slices 4.1–4.3 shipped; 4.4–4.10 pending. **Scope expanded from the original plan** — the May-9 plan listed 4 submission types (monthly recap, quarterly management account, quarterly ALM, annual returns); the current scope covers all 8 NAICOM N-reports (N01–N08) plus 2 IFRS disclosure packs (IFRS-17 §103, IFRS-9 §B5.5.39). Decision recorded in the slice plan; user-approved.
 
-**Duration: 4–6 weeks** (single engineer; depends on Phases 1, 2, 4)
+**Goal:** generate every NAICOM submission as a durable, period-bound, regulator-grade artifact tied to a fiscal period. Track each submission's state machine (DRAFT → SUBMITTED → ACKNOWLEDGED → ARCHIVED with RETRACTED branch). Render to PDF (auditor canonical) + CSV (NAICOM e-portal ingest). Upload via the existing `NaicomService` stub/REST adapter pattern.
 
-**Goal:** generate the four NAICOM submission packs as part of EOM and EOQ closures.
+**Slice plan:**
 
-**Deliverables:**
+| Slice | Scope | Status |
+|---|---|---|
+| 4.1 | V41 schema (`naicom_submission` + `naicom_submission_artifact` + `naicom_submission_event` Type-2 SCD) + 3 entities + 3 enums + 3 repositories | Shipped |
+| 4.2 | `PremiumBordereauxEngine` (N05) + `ClaimsBordereauxEngine` (N06) — register-style engines reading `policies` + `claims` | Shipped |
+| 4.3 | `AnnualRevenueAccountEngine` (N01, underwriting view) + `BalanceSheetEngine` (N02, GL-driven via TrialBalanceService) | Shipped |
+| 4.4 | `PrudentialReturnEngine` (N03) — solvency margin from balance-sheet aggregates | Pending |
+| 4.5 | `RiQuarterlyReturnEngine` (N04) — ceded premium + claims per treaty + reinsurer | Pending |
+| 4.6 | `Ifrs17DisclosureEngine` — reads V38 paa_movement_analysis | Pending |
+| 4.7 | `Ifrs9DisclosureEngine` + `InvestmentStatementEngine` (N08) — read V40 | Pending |
+| 4.8 | `NiidStatusSnapshotEngine` (N07) — period-end NIID upload status freeze (NIID, not NAICOM, but shares submission infrastructure) | Pending |
+| 4.9 | `SubmissionOrchestrator` + REST controllers + state machine + `FINANCE_REGULATORY_SUBMIT` RBAC | Pending |
+| 4.10 | Artifact rendering (PDF via Apache PDFBox + CSV via RFC 4180 streaming) + `NaicomSubmissionService` stub/REST split + `NaicomSubmissionWorkflow` Temporal | Pending |
 
-- `MonthlyRecapitalisationGenerator` (EOM activity)
-- `QuarterlyManagementAccountGenerator` (EOQ activity)
-- `QuarterlyAlmGenerator` (EOQ activity)
-- `AnnualReturnsGenerator` (EOY activity, called from `EoyWorkflow`)
-- Document templates per NAICOM filing format (PDF + Excel where applicable)
-- `naicom_submission` table tracking generation, submission, acceptance lifecycle
-- Frontend page under Reports → NAICOM Submissions: list of generated packs, download, mark-as-submitted, mark-as-accepted (acceptance triggers the soft → hard close transition)
+**Architecture invariants this phase establishes:**
 
-**Exit criteria:**
+- **Submissions never post JEs.** Read-side aggregates over already-posted ledger state. JE gateway uninvolved.
+- **Idempotency triple = `(submission_type, period_id, tenant_id)`.** Partial UNIQUE under `deleted_at IS NULL`. Re-running an engine for an existing DRAFT updates the payload in place; once SUBMITTED, payload is frozen.
+- **Period-lock precondition: HARD_CLOSED required.** Enforced in `NaicomSubmissionService` (Slice 4.9), not by DB constraint. The regulator's expectation is that submitted figures don't change post-submission.
+- **State history via Type-2 SCD.** `naicom_submission_event` records every transition. Auditors traverse the row sequence to reconstruct the path.
+- **N01 reads source tables, N02 reads the GL.** Surfaced in Slice 4.3 — `journal_entry_line` doesn't carry `class_of_business`, so N01's per-class breakdown comes from `policies` + `claims`. Documented divergence; Slice 1.10 (queued in cia-log.md backlog) addresses by promoting class into `dimension_tags`.
 
-- All four submission types generate correctly from sample tenant data
-- The submitted file shape matches NAICOM's expected format (verified against actual templates if available, or stubbed for review)
-- Marking a submission as ACCEPTED triggers the related soft-closed period to transition to HARD_CLOSED
+**Exit criteria (Phase 4 complete):**
 
-**Engineering watch-outs:**
+- All 10 submission types generate from sample tenant data with deterministic, replayable payloads.
+- HARD_CLOSED period precondition correctly rejects DRAFT generation on non-hard-closed periods.
+- State-machine transitions are atomic and auditable; the event chain reproduces every transition with `from_state`, `to_state`, `actor`, `reason`, `occurred_at`.
+- Marking a submission as ACKNOWLEDGED populates `naicom_uid` and triggers any downstream effects (TBD in Slice 4.9 design — likely a `SubmissionAcknowledgedEvent` that Phase 6's hard-close confirmation listens to).
+- `mvn verify` green; the existing `module-12-reconciliation.yml` 200-event gate continues to pass; a new IT gate covers the submission lifecycle end-to-end.
 
-- The actual NAICOM filing formats are a known-unknown. The design assumes XBRL-or-Excel for monthly/quarterly and PDF for annual. Confirm with the regulatory authority before locking format.
-- Auto-submit to NAICOM via API is **out of scope for Phase 5** — generate-and-download only. API integration is a future phase pending NAICOM provider work (per Phase 6 of the production-readiness tracker).
+**Engineering watch-outs (still active):**
 
-## 7. Phase 6 — Frontend Admin UI + Investments UI
+- **Real NAICOM API format is a known-unknown.** Slice 4.10 ships against `StubNaicomSubmissionService`. Live `NaicomRestService` swap when credentials + spec arrive — same pattern as the existing per-policy `NaicomService`.
+- **PrudentialReturnEngine solvency-margin formula** — Nigerian NAICOM's exact formula (admitted-assets calculation) is in NAICOM Operational Guidelines, not the code. Slice 4.4 implements a reasonable model with the formula documented in the engine's javadoc; auditor sign-off on the formula is a separate ops step.
+- **Backfilled JEs vs Phase 4 historical accuracy** — Phase 4 reads JEs (for N02 via trial balance) and source tables (for N01/N05/N06). Policies approved before Phase 1 launched lack a JE backing unless Slice 1.8 backfill ran. Phase 4 should assume backfill has been run for any period it generates a submission for.
 
-**Duration: 4–5 weeks** (one frontend engineer; can start when Phase 4 controllers are stable)
+---
 
-**Goal:** ship the admin-facing UI for closures and investments.
+## 7. Phase 5 — Frontend Admin UI for Module 12
 
-**Deliverables:**
+**Status:** Not started. Will start when Phase 4's `SubmissionOrchestrator` REST surface (Slice 4.9) is stable.
 
-- New back-office module `apps/back-office/src/modules/closures/`:
-  - `ClosuresHomePage` with period summary cards
-  - `RunClosurePage` with confirmation + real-time progress UI
-  - `ClosureDetailPage` showing executed activities, JEs posted, regulatory submissions
-  - `ClosureApprovalsPage` for pending approvals
-  - `ClosureConfigurationPage` for tenant configuration (fiscal year, schedule, activity overrides)
-- New back-office module `apps/back-office/src/modules/investments/`:
-  - `InvestmentsHomePage` with holdings dashboard
-  - `InstrumentsPage` for instrument master CRUD
-  - `HoldingDetailPage` with valuation history, accrual history, ECL stage timeline
-- Sidebar navigation: Closures + Investments as new top-level entries
-- React Query hooks following the project's `useGet` / `useList` / `useCreate` / `useUpdate` patterns
-- Real-time progress UI: subscribe to `ClosureProgressService` SSE stream, show per-activity status with rolling progress bar
-- Server-side rendering of CSV/PDF exports for trial balance, IFRS 17 disclosures, IFRS 9 disclosures
+**Goal:** ship the back-office UI that lets a finance / CFO user actually drive Module 12 — period close, period browse, submission generation + review + submit, IFRS-17/9 disclosure rendering, CFO reopen flow. Without this UI, Phases 1–4 are admin-only / API-only.
 
-**Exit criteria:**
+**Scope (revised from the original Phase 6 plan):**
 
-- Frontend typecheck passes for both back-office and partner workspaces
-- All pages load, render real backend data, and have proper loading/empty/error states
-- Playwright smoke tests cover the critical paths (Run EOD, Run EOM, View Closure Detail, Investments Dashboard)
-- The `bash cia-frontend/scripts/check-api-wiring.sh` CI guard passes — no `console.log`, no top-level mock data, no leftover `// TODO: useMutation` comments
-
-**Engineering watch-outs:**
-
-- Real-time progress streaming requires authentication on the SSE endpoint — Keycloak JWT must be carried through the connection setup. WebSocket may be a simpler implementation if SSE auth proves messy.
-- The investments UI is genuinely new territory; lean on the design system patterns from existing modules (DataTable + Sheet form) rather than inventing.
-
-## 8. Phase 7 — Finality Transitions + Cross-Tenant Platform View
-
-**Duration: 2–3 weeks** (single engineer; depends on Phases 4, 5, 6)
-
-**Goal:** complete the soft → hard close transition logic, the reopen flow, and the cross-tenant platform admin view.
+The original plan bundled "Investments UI" into this phase. That work is now smaller because Phase 3 stayed inside `cia-finance` rather than spinning out as `cia-investments`. Module 12's investment-related UI is just the IFRS-9 disclosure viewer that surfaces V40 data — not a full instrument-master / valuation / accrual UI.
 
 **Deliverables:**
 
-- `SoftToHardTransitionWorkflow` Temporal workflow
-- Reopen flow: CFO authorises with reason → period transitions to REOPENED → audit trail entry → period_lock released
-- `PlatformClosureViewService` cross-tenant query path (read-only iteration over `public.tenants` plus per-tenant aggregation)
-- Platform admin frontend page `apps/back-office/src/modules/platform/closures/PlatformClosureOverviewPage` (or a separate platform admin app — consult with team)
-- Force-close from platform admin → calls `ClosureOrchestrationService.startClosure(...)` with `trigger_source = FORCE_PLATFORM`
-- NAICOM deadline countdown banners on the platform admin page (10 working days post-EOM, 30 days post-EOQ, etc.)
+- New back-office module `apps/back-office/src/modules/period-end/`:
+  - `PeriodsHomePage` — list of fiscal periods with status badges (OPEN / SOFT_CLOSED / HARD_CLOSED / REOPENED), grace-window countdown, drilldown.
+  - `PeriodDetailPage` — per-period: trial balance, IFRS-17 movement analysis, IFRS-9 movement analysis, submissions list, lock-state history.
+  - `RunCloseSheet` — confirmation + progress for the period close (PaaPeriodCloseService trigger).
+  - `SubmissionsPage` — list of NAICOM submissions per period; generate / review / submit / acknowledge actions.
+  - `SubmissionDetailPage` — submission payload preview, artifact download (PDF + CSV), state history.
+  - `ReopenPeriodSheet` — CFO-authorised reopen with reason; triggers the IAS-8 PPA workflow.
+- React Query hooks following the project's `useGet` / `useList` / `useCreate` / `useUpdate` patterns.
+- Sidebar entry: "Period End" under Finance (or top-level — TBD with UX).
+- Server-rendered PDF + CSV exports already exist from Phase 4 Slice 4.10 — frontend triggers via mutation, browser downloads via Blob.
 
 **Exit criteria:**
 
-- A soft-closed period transitions to hard-closed automatically after the grace window expires (test with shortened windows)
-- A soft-closed period transitions to hard-closed immediately when its corresponding NAICOM submission is marked ACCEPTED
-- A reopened period blocks further transitions until reclosed
-- Platform admin can see all tenants' closure state at a glance; force-close emits the correct audit trail
+- Finance / CFO user can drive an end-to-end period close from the UI: hard-close → run IFRS 17 close → review disclosures → generate NAICOM submissions → submit → acknowledge → period transitions to closed.
+- `bash cia-frontend/scripts/check-api-wiring.sh` green — no mocks, no leftover TODOs, all forms wired via `useMutation`.
+- Playwright smoke tests cover: open a period, run a close, generate a submission, submit, acknowledge.
 
 **Engineering watch-outs:**
 
-- The cross-tenant query path is the only place the codebase intentionally crosses tenant schemas. Treat it as a privileged operation with extensive logging.
-- Force-close should never run silently. Both the originating tenant and the platform admin should receive notifications.
+- **No real-time progress streaming required in v1.** Polling against the period status endpoint is sufficient. SSE / WebSocket can be a Phase 5b enhancement if user feedback demands it.
+- **The reopen flow is high-stakes UX.** Treat the confirmation step with care — irreversible-after-reopen workflows deserve a typed-confirmation pattern, not just an "Are you sure?" dialog.
+
+---
+
+## 8. Phase 6 — Cross-Tenant Platform Admin View
+
+**Status:** Not started. Original Phase 7 scope (per-period finality transitions, reopen flow) was largely absorbed into Slice 1.7c (PPA workflow, period reopen, tenant_holiday calendar). What remains is the **cross-tenant platform admin view**.
+
+**Goal:** read-only platform-admin view of every tenant's closure state, plus a force-close capability from the platform side for tenants that haven't closed by the NAICOM deadline.
+
+**Scope (significantly reduced from the original Phase 7 plan):**
+
+- `PlatformClosureViewService` — cross-tenant query path (read-only iteration over `public.tenants` plus per-tenant aggregation of fiscal-period status). The ONLY place in the codebase that intentionally crosses tenant schemas; treat as a privileged operation with extensive logging.
+- Platform admin frontend page `apps/back-office/src/modules/platform/closures/PlatformClosureOverviewPage` (or a separate platform admin app — coordinate with team).
+- Force-close from platform admin → calls the per-tenant `PaaPeriodCloseService.closePeriod(...)` + period-lock transition through a privileged endpoint with `PLATFORM_FORCE_CLOSE` RBAC.
+- NAICOM deadline countdown banners on the platform admin page (10 working days post-EOM, 30 days post-EOQ, 90 days post-EOY per NAICOM regulation).
+- Notifications: both the originating tenant and the platform admin receive force-close notifications.
+
+**Out of scope here** (originally Phase 7, now done in Phase 1 / will be done in Phase 4):
+
+- ~~Soft → hard close transition logic~~ — already in Slice 1.7 PeriodLockService.
+- ~~Reopen flow~~ — already in Slice 1.7c with the PPA workflow.
+- ~~NAICOM-acknowledgement-triggers-hard-close logic~~ — Slice 4.9 (`SubmissionAcknowledgedEvent` listener triggers the existing PeriodLockService.hardClose).
+
+**Exit criteria:**
+
+- Platform admin can see every tenant's closure state at a glance.
+- Force-close from platform admin emits the correct audit trail in both tenant `audit_log` and platform-level logs.
+- A reopened period blocks further force-closes until the tenant reclosees.
+
+**Engineering watch-outs:**
+
+- **Cross-tenant queries are the only privileged data path in the codebase.** Treat with care: extensive logging, no PII surfaced (aggregate counts only), separate authentication path (platform-admin RBAC distinct from tenant-admin RBAC).
+- **Force-close should never run silently.** Per the original plan, this remains true.
+
+---
 
 ## 9. Critical Path And Dependencies
 
 ```
-[ Phase 1 ─── GL ─────────────────┐
-[ Phase 2 ─── IFRS 17 ────────────┤  ┌─ Phase 4 ─── Orchestration ─┐
-[ Phase 3 ─── Investments ──┘     │  │                             │
-                                  │  ├─ Phase 5 ─── NAICOM packs ──┤
-                                  │  │                             ├─ Phase 7 ─── Finality + Platform
-                                  └──┤                             │
-                                     ├─ Phase 6 ─── Frontend ──────┘
-                                     │
+[ Phase 1 — GL ] ────┐
+                     │
+[ Phase 2 — IFRS 17 ]┼──── [ Phase 4 — NAICOM (in progress) ] ────┐
+                     │                                            │
+[ Phase 3 — IFRS 9 ] ┘                                            ├──── [ Phase 5 — Frontend ] ────┐
+                                                                  │                                │
+                                                                  └────────────────────────────────┴──── [ Phase 6 — Platform ]
 ```
 
-**Critical path: Phase 1 → Phase 4 → Phase 5 → Phase 7.** All other paths flow into this trunk.
+**Critical path:** Phase 1 → Phase 4 → Phase 5 → Phase 6. All other paths flow into this trunk. Phases 1, 2, 3 are merged on `main`; the trunk is now waiting on Phase 4.
 
-**Maximum parallelism:**
-- Engineer A: Phase 1 (GL)
-- Engineer B: Phase 2 (IFRS 17 PAA measurement) — can begin once Phase 1 schema is finalised
-- Engineer C: Phase 3 (Investments + IFRS 9) — fully independent
-
-When Phase 1 + 2 are done:
-- Engineer A: Phase 4 (Orchestration)
-- Engineer B: Phase 5 (NAICOM packs) — starts when Phase 4 has stable activity-registration plumbing
-- Engineer C: Phase 6 (Frontend) — starts when Phase 4 has stable controllers
-
-When Phases 4, 5, 6 are done:
-- All engineers: Phase 7 (Finality + Platform view) — small enough to be a coordinated sprint
-
-**Calendar-time estimate with 3 engineers parallelised: 16–20 weeks** (4–5 months).
-
-**Calendar-time estimate with 1 engineer sequential: 30–40 weeks** (7–10 months).
+---
 
 ## 10. Risks And Mitigations
 
-| Risk | Impact | Likelihood | Mitigation |
-| --- | --- | --- | --- |
-| NAICOM submission templates are unavailable | High — Phase 5 cannot complete | High | Identify regulatory authority owner early in project; in parallel, develop a generalised template engine that can be reconfigured when actual templates arrive |
-| Period lock Hibernate interceptor causes throughput regression | High — slows every transactional write | Medium | Benchmark before phase 1 lands; if regression detected, switch to advisory locks or delegate to a service-layer check |
-| IFRS 17 risk adjustment computation requires actuarial signoff | Medium — Phase 2 may not be production-ready without external review | Medium | Build with bootstrap calibration; flag explicitly that production rollout requires actuarial review; treat as a "phase 1 acceptable, phase 2 must refine" gate |
-| Backfill of retroactive JEs takes many hours per tenant | Medium — disruptive deploy window | Medium | Make backfill idempotent and incremental; run as a Temporal workflow with progress reporting |
-| Activity idempotency violations on retried failures | Medium — duplicate JEs or duplicate notifications | Medium | Each `ClosureActivity` implementation must declare `isIdempotent()`; non-idempotent activities skip retry; document the contract clearly |
-| Tenant fiscal year discovery is wrong on backfill | Low — admin has to manually correct after deployment | Medium | Backfill applies a default of Dec 31 with a clear notification to tenant admin to confirm |
-| Investment classification logic produces unexpected FVPL defaults | Low — minor accounting noise until corrected | Low | Provide bulk reclassification UI in Phase 6; treat initial classification as advisory |
-| Cross-tenant queries leak data between tenants | High — regulatory issue | Low | Phase 7 cross-tenant query is read-only and aggregates only counts; data values stay tenant-scoped |
-| Real-time progress streaming requires extra infrastructure | Low — frontend complexity | Low | Phase 6 can ship with polling-based progress UI initially; SSE/WebSocket is an enhancement |
+| Risk | Original assessment | Reconciled status |
+|---|---|---|
+| NAICOM submission templates unavailable | High impact / High likelihood | **Still open.** Phase 4 ships against `StubNaicomSubmissionService` per the original mitigation. Spec-arrival-then-swap pattern preserved. |
+| Period-lock Hibernate interceptor causes throughput regression | High impact / Medium likelihood | **Mitigated.** The `LockableByPeriod` marker pattern from Slice 1.7 makes the interceptor's per-flush cost a single `instanceof` test. No measurable cliff observed. |
+| IFRS 17 risk adjustment requires actuarial signoff | Medium impact / Medium likelihood | **Deferred to v2.** Phase 2 ships with RA + IBNR columns ready but engines fill zero. Slice 2.7b is the placeholder for actuarial-method swap. Production rollout still requires the originally-flagged review. |
+| Backfill of retroactive JEs takes many hours per tenant | Medium impact / Medium likelihood | **Mitigated.** Slice 1.8a/b ships an idempotent Temporal workflow with abort-and-resume; the 10k-event benchmark documents the wall-clock budget; the operational runbook covers deploy-window planning. |
+| Activity idempotency violations | Medium impact / Medium likelihood | **Mitigated.** The JE-gateway idempotency triple (Slice 1.4) makes this DB-level. The original "ClosureActivity.isIdempotent()" annotation pattern from the deferred orchestration phase is moot — every engine posts through the gateway. |
+| Tenant fiscal year discovery wrong on backfill | Low impact / Medium likelihood | **Resolved.** Slice 1.6 made fiscal year explicit per-tenant config; no defaults applied silently. |
+| Investment classification produces unexpected FVPL defaults | Low impact / Low likelihood | **Mitigated.** Slice 3.2's `InvestmentClassificationService` pure-function `classify()` is fully unit-tested across the SPPI × business-model matrix. Bulk reclassification UI deferred to Phase 5. |
+| Cross-tenant queries leak data | High impact / Low likelihood | **Still open until Phase 6.** No cross-tenant code exists yet; the risk surface won't materialise until Phase 6 ships. |
+| Real-time progress streaming infrastructure | Low impact / Low likelihood | **Avoided.** Phase 5 plans polling; SSE/WebSocket deferred indefinitely unless user feedback demands. |
+| Period-level orchestrator missing | (Not in original plan) | **Open by design.** Per-domain orchestrators chosen instead of generic activity registry. If scheduling bugs surface (forgotten steps, wrong ordering), the orchestrator becomes worth building. |
+
+---
 
 ## 11. Continuous Concerns Across All Phases
 
-These are not phase-bound but apply throughout:
+Unchanged from the original plan; reaffirmed by actual practice:
 
-- **Testing:** integration tests with Testcontainers PostgreSQL; minimum 80% line coverage on `cia-finance/ifrs17`, `cia-investments`, `cia-closure`. End-to-end smoke tests in Playwright.
-- **Audit trail:** every closure run, every period lock change, every reopen, every force-close gets logged via `cia-audit`. PII fields must be redacted per Phase 8 standards from the production-readiness tracker.
-- **Observability:** all closure activities emit OpenTelemetry spans; Prometheus metrics for closure duration, activity count, failure rate per tenant; Grafana dashboard updated in `ops/observability/`.
-- **Documentation:** every endpoint added must update `docs-site/static/internal-api.json`; every new module must update `docs-site/docs/architecture/modules.md`; phase completion gets a section in `cia-log.md`.
-- **CI gates:** `bash cia-frontend/scripts/check-api-wiring.sh` must pass on every frontend PR; `mvn verify` must pass on every backend PR.
+- **Testing:** Testcontainers PostgreSQL ITs; minimum 80% line coverage on Module 12 code. Reconciliation gate (Slice 1.9) catches silent posting-rule regressions on a 200-event fixture. The `mvn verify` failsafe binding is canonical since Slice 1.7-fix.
+- **Audit trail:** every JE post, every period-lock transition, every submission state change emits an audit-log entry. PII fields encrypted at rest per V24.
+- **Observability:** every engine logs at INFO with structured fields (period, counts, totals). Module 12 doesn't yet emit OpenTelemetry spans — Phase 5/6 will wire that.
+- **Documentation:** every internal endpoint added updates `docs-site/static/internal-api.json`; every new module updates `docs-site/docs/architecture/modules.md`; every phase / slice gets a session entry in `cia-log.md`.
+- **CI gates:** `bash cia-frontend/scripts/check-api-wiring.sh` on every frontend PR; `mvn verify` (now binding failsafe) on every backend PR; `module-12-reconciliation.yml` 200-event gate on Phase-1-touching PRs.
 
-## 12. Sequencing Recommendation
+---
 
-For maximum parallel team utilisation:
+## 12. Sequencing Recommendation (revised)
 
-1. **Sprint 0 (1 week):** finalise data model details across phases 1–3, make Phase 1's schema canonical so Phases 2 + 3 can plan against it.
-2. **Sprints 1–6 (6 weeks):** Phases 1, 2, 3 in parallel.
-3. **Sprints 7–10 (4 weeks):** Phase 4 (Engineer A) + Phase 5 starts when Phase 4 plumbing stable (Engineer B).
-4. **Sprints 11–14 (4 weeks):** Phase 6 (Engineer C) + Phase 5 completes (Engineer B).
-5. **Sprints 15–16 (2 weeks):** Phase 7 (all engineers).
-6. **Sprint 17 (1 week):** acceptance, regression, deployment readiness.
+Original plan estimated 17 sprints / 17 weeks for the full Module 12 build with three engineers parallelised. Actual sequencing:
 
-**Total: ~17 sprints / 17 weeks calendar** with three engineers fully parallelised. Add 4–6 weeks for inevitable scope discovery, dependency surprises, and review iterations. **Realistic shipping window: 5 months.**
+| Sprint | Calendar | What shipped |
+|---|---|---|
+| Sprints 1–6 | 2026-03 → 2026-05-15 | Phase 1 (12 slices) shipped iteratively. Pace much faster than the original estimate (4–6 weeks for Phase 1 became ~10 weeks across both Phase 1 work and supporting infrastructure like Testcontainers / docker-java overrides). |
+| Sprint 7 | 2026-05-19 (single session) | Phase 2 (8 slices) shipped in one extended session. The pure-function math + Spring service wrapper pattern, plus the V32 COA foresight payoff (zero new accounts needed), enabled this pace. |
+| Sprint 8 | 2026-05-19 (continued) | Phase 3 (7 slices) shipped same session. Same pattern. |
+| Sprint 9 | 2026-05-19 | Slice T1 (focused upstream contract tests for the 6 events Module 12 consumes). |
+| Sprint 10 | 2026-05-19 (in progress) | Phase 4 slices 4.1–4.3 shipped. 4.4–4.10 pending. |
+
+**Calendar-time reality:** Phases 1–3 + T1 took ~10 weeks of calendar time with one developer plus AI-assisted slice execution. The original estimate of 16–20 weeks with 3 engineers turned out to be wildly conservative for this pace; the original estimate of 30–40 weeks for one engineer sequential is what you'd get without the slice discipline and the JE-gateway architecture.
+
+**Remaining estimate:** Phase 4 ships in 1–2 weeks (7 slices remaining; bordereaux pattern proven). Phase 5 frontend is ~3 weeks (existing frontend-build patterns). Phase 6 is ~1 week (small scope after Phase 1 absorbed most of Phase 7's original work).
+
+---
 
 ## Related Documents
 
-- `period-end-closures-design.md` — full technical design that this plan implements
-- `period-end-closures-foundations-plan.md` — PR-slice expansion of Phases 1, 2, and 3
-- `production-readiness-tracker.md` — adjacent gates (Phase 7 Temporal workers, Phase 8 PII handling, Phase 10 deployment) that this plan inherits
-- `database-migration-runbook.md` — established procedure for Flyway migrations during deployment
+- `period-end-closures-design.md` — full technical design that this plan implements.
+- `period-end-closures-foundations-plan.md` — earlier PR-slice expansion of Phases 1–3; superseded by the slice-level detail in `cia-log.md` sessions 60–72.
+- `production-readiness-tracker.md` — adjacent gates (Temporal worker management, PII handling, deployment) that this plan inherits.
+- `database-migration-runbook.md` — established procedure for Flyway migrations during deployment.
+- `cia-log.md` — session-level shipping log (sessions 60–72 cover Phases 1–3 + T1; session 73 will cover Phase 4 in progress).
