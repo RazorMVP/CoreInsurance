@@ -22,36 +22,55 @@ import java.util.UUID;
 /**
  * NAICOM N01 — Annual Revenue Account.
  *
- * <p>Module 12 Phase 4 Slice 4.3. Per-class underwriting view of premium
- * written, claims incurred, and loss ratio for the period. Matches the
- * shape of the existing Module-11 N01 SYSTEM report.
+ * <p>Module 12 Phase 4 Slice 4.3, re-implemented over the GL in Slice
+ * 1.10b. Per-class view of premium written, claims incurred, and loss
+ * ratio for the period.
  *
- * <h2>Underwriting view, not GL view</h2>
- * <p>This engine reads {@code policies} (for premium) and {@code claims}
- * (for claims incurred) directly — NOT {@code journal_entry_line}. The
- * reason: Slice-1.5 {@code SubledgerPostingService} doesn't tag JE lines
- * with {@code class_of_business}, so a class-broken-down GL view is not
- * available at the JE-aggregate level. N01's regulator-required
- * presentation is per-class, so the engine sources from the underwriting
- * tables that DO carry class. Headline totals from this engine will tie
- * to the GL only to the extent that {@code SubledgerPostingService}
- * posted JEs for every policy / claim event in the period; in practice
- * the two should agree but a true reconciliation requires either
- * promoting class into {@code dimension_tags} (v2) or running the engine
- * alongside the GL-driven {@link BalanceSheetEngine} and asserting
- * totals match.
+ * <h2>Substrate: GL-driven (Slice 1.10b)</h2>
+ * <p>This engine reads aggregates over {@code journal_entry_line}
+ * filtered to {@code POLICY_APPROVED} (premium) and {@code CLAIM_APPROVED}
+ * (claims). Class-of-business comes from the
+ * {@code journal_entry_line.class_of_business_id} column that Slice
+ * 1.10a promoted out of {@code dimension_tags}; the class label
+ * ({@code code}, {@code name}) is joined from {@code classes_of_business}
+ * for display. Auditor-canonical by construction — every figure has a
+ * JE provenance.
+ *
+ * <p>This replaces the Slice 4.3 source-table read over {@code policies}
+ * + {@code claims}. The change is invisible at the payload-shape level
+ * (downstream PDF / CSV renderers and the NAICOM e-portal integration
+ * see the same JSON); the semantic shift is on the period-filter anchor:
  *
  * <h2>Period filter convention</h2>
- * <p>Same as the bordereau engines:
  * <ul>
- *   <li>Premium side: policies with {@code approved_at::date BETWEEN
- *       period_start AND period_end} (booking discipline).</li>
- *   <li>Claims side: claims with {@code reported_date BETWEEN
- *       period_start AND period_end}.</li>
+ *   <li>Premium side: JEs with
+ *       {@code source_event_type = 'POLICY_APPROVED'} AND
+ *       {@code business_date BETWEEN period_start AND period_end}.
+ *       {@code business_date} on a POLICY_APPROVED JE is the policy's
+ *       {@code policy_start_date} (see Slice 1.5
+ *       {@code SubledgerPostingService}). A policy approved Feb 2026
+ *       with inception Jan 2026 lands in the JANUARY period under this
+ *       view, not the FEBRUARY one. This is the cover-inception model
+ *       — IFRS-consistent and what the Phase 4 BalanceSheetEngine /
+ *       PrudentialReturnEngine also see.</li>
+ *   <li>Claims side: JEs with
+ *       {@code source_event_type = 'CLAIM_APPROVED'} AND
+ *       {@code business_date BETWEEN period_start AND period_end}. The
+ *       business_date on a CLAIM_APPROVED JE is today() at posting time
+ *       (or the supplied historical date when backfilling).</li>
  * </ul>
- * <p>The period is typically YEAR-type for an N01 submission but the
- * engine accepts any period; the orchestrator (Slice 4.9) gates
- * appropriate period_type per submission_type.
+ *
+ * <p>Both source events are filtered to POSTED (REVERSED JEs excluded
+ * and reversal-of-reversal JEs are not double-counted because they have
+ * status REVERSED on the original, POSTED on the new line). Soft-deleted
+ * JEs and lines are skipped via the usual {@code deleted_at IS NULL}
+ * filter.
+ *
+ * <p>Lines without {@code class_of_business_id} (Phase 2 / Phase 3 JEs,
+ * or historical pre-V42 rows that the V43 backfill didn't reach) are
+ * silently excluded from per-class aggregation. The orchestrator (Slice
+ * 4.9) gates the period_type; an N01 caller typically passes a
+ * YEAR-type period.
  *
  * <h2>Loss ratio</h2>
  * <p>Per-class {@code loss_ratio = total_claims_incurred / gross_premium × 100}.
@@ -156,17 +175,36 @@ public class AnnualRevenueAccountEngine implements NaicomSubmissionEngine {
         return payload;
     }
 
+    /**
+     * Premium = SUM(credit_amount) on the credit-side line of every
+     * POSTED POLICY_APPROVED JE in the period. Counts each JE once
+     * (one JE per policy) via the credit-side line filter.
+     *
+     * <p>Joins {@code classes_of_business} for the display {@code code}
+     * / {@code name}. The JOIN is read-only against the same tenant
+     * schema; it doesn't break the cia-finance ↔ cia-setup module
+     * boundary (cia-finance has no entity-level dependency on cia-setup,
+     * only a SQL JOIN at projection time — equivalent to how the
+     * BalanceSheet engine joins to {@code chart_of_account}).
+     */
     private void accumulatePremium(Map<String, ClassAggregate> byClass, LocalDate start, LocalDate end) {
         jdbcTemplate.query(
-            "SELECT class_of_business_code, class_of_business_name, " +
+            "SELECT cob.code AS class_of_business_code, " +
+            "       cob.name AS class_of_business_name, " +
             "       COUNT(*) AS policy_count, " +
-            "       COALESCE(SUM(total_premium), 0) AS gross_premium " +
-            "FROM policies " +
-            "WHERE deleted_at IS NULL " +
-            "  AND status NOT IN ('DRAFT', 'PENDING_APPROVAL', 'REJECTED') " +
-            "  AND approved_at IS NOT NULL " +
-            "  AND approved_at::date BETWEEN ? AND ? " +
-            "GROUP BY class_of_business_code, class_of_business_name",
+            "       COALESCE(SUM(jel.credit_amount), 0) AS gross_premium " +
+            "FROM journal_entry je " +
+            "JOIN journal_entry_line jel ON jel.journal_entry_id = je.id " +
+            "JOIN classes_of_business cob ON cob.id = jel.class_of_business_id " +
+            "WHERE je.source_event_type = 'POLICY_APPROVED' " +
+            "  AND je.status = 'POSTED' " +
+            "  AND je.business_date BETWEEN ? AND ? " +
+            "  AND jel.credit_amount > 0 " +
+            "  AND jel.class_of_business_id IS NOT NULL " +
+            "  AND je.deleted_at IS NULL " +
+            "  AND jel.deleted_at IS NULL " +
+            "  AND cob.deleted_at IS NULL " +
+            "GROUP BY cob.code, cob.name",
             (rs, i) -> {
                 String code = rs.getString("class_of_business_code");
                 String name = rs.getString("class_of_business_name");
@@ -178,23 +216,36 @@ public class AnnualRevenueAccountEngine implements NaicomSubmissionEngine {
             java.sql.Date.valueOf(start), java.sql.Date.valueOf(end));
     }
 
+    /**
+     * Claims incurred = SUM(credit_amount) on the credit-side line of
+     * every POSTED CLAIM_APPROVED JE in the period (the credit lands on
+     * the LIC OCR liability account, equal in magnitude to the debit on
+     * the incurred-claims expense account). Counts each JE once via the
+     * credit-side line filter.
+     *
+     * <p>Note: this captures the initial loss recognition at claim
+     * approval. Subsequent reserve adjustments / IBNR layers / discount
+     * unwind are Phase 2 PAA engine territory and are reported via the
+     * IFRS-17 disclosure pack (Slice 4.6), not N01.
+     */
     private void accumulateClaims(Map<String, ClassAggregate> byClass, LocalDate start, LocalDate end) {
-        // class_of_business_code from joined policies (claims schema has only
-        // _id and _name) — same rationale as ClaimsBordereauxEngine.
-        // claims_incurred = reserve_amount (case reserve currently held;
-        // when settled, this remains the figure originally reserved). v2
-        // may add IBNR and other liability layers.
         jdbcTemplate.query(
-            "SELECT p.class_of_business_code AS class_of_business_code, " +
-            "       c.class_of_business_name AS class_of_business_name, " +
+            "SELECT cob.code AS class_of_business_code, " +
+            "       cob.name AS class_of_business_name, " +
             "       COUNT(*) AS claim_count, " +
-            "       COALESCE(SUM(c.reserve_amount), 0) AS claims_incurred " +
-            "FROM claims c " +
-            "JOIN policies p ON p.id = c.policy_id " +
-            "WHERE c.deleted_at IS NULL " +
-            "  AND c.status NOT IN ('WITHDRAWN', 'REJECTED') " +
-            "  AND c.reported_date BETWEEN ? AND ? " +
-            "GROUP BY p.class_of_business_code, c.class_of_business_name",
+            "       COALESCE(SUM(jel.credit_amount), 0) AS claims_incurred " +
+            "FROM journal_entry je " +
+            "JOIN journal_entry_line jel ON jel.journal_entry_id = je.id " +
+            "JOIN classes_of_business cob ON cob.id = jel.class_of_business_id " +
+            "WHERE je.source_event_type = 'CLAIM_APPROVED' " +
+            "  AND je.status = 'POSTED' " +
+            "  AND je.business_date BETWEEN ? AND ? " +
+            "  AND jel.credit_amount > 0 " +
+            "  AND jel.class_of_business_id IS NOT NULL " +
+            "  AND je.deleted_at IS NULL " +
+            "  AND jel.deleted_at IS NULL " +
+            "  AND cob.deleted_at IS NULL " +
+            "GROUP BY cob.code, cob.name",
             (rs, i) -> {
                 String code = rs.getString("class_of_business_code");
                 String name = rs.getString("class_of_business_name");

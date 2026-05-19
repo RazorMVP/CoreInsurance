@@ -19,6 +19,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Bridges sub-ledger business events into the general ledger.
@@ -79,6 +80,7 @@ public class SubledgerPostingService {
 
     private final JournalEntryService journalEntryService;
     private final PostingRuleService postingRuleService;
+    private final PolicyClassResolver policyClassResolver;
     private final Clock clock;
 
     // ── Event listeners (delegate to public replay methods) ───────────────────
@@ -117,6 +119,8 @@ public class SubledgerPostingService {
             log.debug("Skipping JE for PolicyApproved {} — net premium is zero", event.policyNumber());
             return;
         }
+        // PolicyApprovedEvent is the only event that already carries
+        // classOfBusinessId on the payload — no resolver lookup needed.
         postTwoLine(
             MODULE_POLICY,
             EVENT_POLICY_APPROVED,
@@ -124,6 +128,7 @@ public class SubledgerPostingService {
             event.netPremium(),
             event.policyStartDate(),
             event.currencyCode(),
+            event.classOfBusinessId(),
             event.policyNumber());
     }
 
@@ -150,6 +155,7 @@ public class SubledgerPostingService {
             event.approvedAmount(),
             businessDate,
             event.currencyCode(),
+            policyClassResolver.findClassByClaimId(event.claimId()),
             event.claimNumber(),
             event.policyNumber());
     }
@@ -167,6 +173,7 @@ public class SubledgerPostingService {
             event.settledAmount(),
             LocalDate.ofInstant(event.settledAt(), ZoneOffset.UTC),
             event.currencyCode(),
+            policyClassResolver.findClassByClaimId(event.claimId()),
             event.claimNumber());
     }
 
@@ -191,6 +198,7 @@ public class SubledgerPostingService {
             event.amount(),
             businessDate,
             event.currencyCode(),
+            policyClassResolver.findClassByClaimId(event.claimId()),
             event.expenseReference(),
             event.claimNumber());
     }
@@ -227,6 +235,7 @@ public class SubledgerPostingService {
             event.premiumAdjustment().abs(),
             businessDate,
             event.currencyCode(),
+            policyClassResolver.findClassByPolicyId(event.policyId()),
             event.endorsementNumber(),
             event.policyNumber());
     }
@@ -265,6 +274,8 @@ public class SubledgerPostingService {
             "Outward FAC %s ceded to %s",
             event.facReference(), event.reinsuranceCompanyName());
 
+        UUID classOfBusinessId = policyClassResolver.findClassByPolicyId(event.policyId());
+
         PostJournalEntryRequest request = new PostJournalEntryRequest(
             businessDate,
             MODULE_REINSURANCE,
@@ -272,9 +283,9 @@ public class SubledgerPostingService {
             event.facCoverId().toString(),
             narrative,
             List.of(
-                line(COA_RI_PREMIUM_EXPENSE,    event.premiumCeded(),    BigDecimal.ZERO,         event.currencyCode()),
-                line(COA_RI_COMMISSION_INCOME,  BigDecimal.ZERO,         event.commissionAmount(), event.currencyCode()),
-                line(COA_RI_PREMIUM_PAYABLE,    BigDecimal.ZERO,         event.netPremiumCeded(),  event.currencyCode())));
+                line(COA_RI_PREMIUM_EXPENSE,    event.premiumCeded(),    BigDecimal.ZERO,         event.currencyCode(), classOfBusinessId),
+                line(COA_RI_COMMISSION_INCOME,  BigDecimal.ZERO,         event.commissionAmount(), event.currencyCode(), classOfBusinessId),
+                line(COA_RI_PREMIUM_PAYABLE,    BigDecimal.ZERO,         event.netPremiumCeded(),  event.currencyCode(), classOfBusinessId)));
         journalEntryService.post(request);
     }
 
@@ -285,6 +296,10 @@ public class SubledgerPostingService {
      * {@link PostingRule} for {@code eventType} and binding {@code amount}
      * to the rule's Dr / Cr account codes. Throws
      * {@link PostingRuleNotFoundException} (422) if no active rule exists.
+     *
+     * <p>Both lines carry {@code classOfBusinessId} (Slice 1.10a) — the
+     * class-of-business dimension is per-event, not per-line. Null is
+     * acceptable; the V42 column is nullable.
      */
     private void postTwoLine(
         String module,
@@ -293,6 +308,7 @@ public class SubledgerPostingService {
         BigDecimal amount,
         LocalDate businessDate,
         String currencyCode,
+        UUID classOfBusinessId,
         Object... narrativeArgs) {
 
         PostingRule rule = postingRuleService.findByEventType(eventType);
@@ -307,18 +323,20 @@ public class SubledgerPostingService {
             reference,
             narrative,
             List.of(
-                line(rule.getDebitAccountCode(),  amount,           BigDecimal.ZERO, currencyCode),
-                line(rule.getCreditAccountCode(), BigDecimal.ZERO,  amount,          currencyCode)));
+                line(rule.getDebitAccountCode(),  amount,           BigDecimal.ZERO, currencyCode, classOfBusinessId),
+                line(rule.getCreditAccountCode(), BigDecimal.ZERO,  amount,          currencyCode, classOfBusinessId)));
         journalEntryService.post(request);
     }
 
-    private static JournalEntryLineRequest line(String code, BigDecimal debit, BigDecimal credit, String currencyCode) {
+    private static JournalEntryLineRequest line(String code, BigDecimal debit, BigDecimal credit,
+                                                 String currencyCode, UUID classOfBusinessId) {
         return new JournalEntryLineRequest(
             code,
             debit != null ? debit : BigDecimal.ZERO,
             credit != null ? credit : BigDecimal.ZERO,
             currencyCode,
-            null, null, null, null, null);
+            null, null, null, null, null,
+            classOfBusinessId);
     }
 
     private LocalDate today() {

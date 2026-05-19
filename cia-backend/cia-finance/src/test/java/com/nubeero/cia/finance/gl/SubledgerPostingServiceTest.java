@@ -66,7 +66,13 @@ class SubledgerPostingServiceTest {
         JournalEntryService journalEntryService = new JournalEntryService(
             journalEntryRepository, coaService, resolver, FIXED_CLOCK);
         PostingRuleService postingRuleService = new PostingRuleService(postingRuleRepository);
-        service = new SubledgerPostingService(journalEntryService, postingRuleService, FIXED_CLOCK);
+        // Slice 1.10a — PolicyClassResolver dispatch is exercised by
+        // SubledgerPostingCoverageContractTest under cia-api, not this
+        // unit test. Passing a Mockito-backed resolver lets the existing
+        // assertions stay focused on the rule-dispatch contract.
+        PolicyClassResolver policyClassResolver = org.mockito.Mockito.mock(PolicyClassResolver.class);
+        service = new SubledgerPostingService(journalEntryService, postingRuleService,
+            policyClassResolver, FIXED_CLOCK);
 
         periodId = UUID.randomUUID();
         monthPeriod = new FiscalPeriod();

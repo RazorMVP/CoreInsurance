@@ -77,6 +77,17 @@ public class JournalEntryLine extends BaseEntity {
     private UUID holdingId;
 
     /**
+     * IFRS-17 / NAICOM class-of-business dimension. Populated by
+     * {@code SubledgerPostingService} from the originating policy's
+     * {@code class_of_business_id} at posting time (Slice 1.10a). Null for
+     * Phase 3 IFRS-9 investment JEs and pre-V42 historical rows (until
+     * the V42b backfill runs). Promoted out of {@link #dimensionTags} for
+     * a real partial index (V42).
+     */
+    @Column(name = "class_of_business_id")
+    private UUID classOfBusinessId;
+
+    /**
      * JSONB column. Hibernate 6 maps a {@code Map} via
      * {@link JdbcTypeCode}({@link SqlTypes#JSON}) — round-trips through the
      * Jackson mapper Spring Boot registers by default. Default

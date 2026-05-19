@@ -46,5 +46,44 @@ public record JournalEntryLineRequest(
 
     UUID holdingId,
 
-    Map<String, Object> dimensionTags
-) {}
+    Map<String, Object> dimensionTags,
+
+    /**
+     * IFRS-17 / NAICOM class-of-business dimension (Slice 1.10a).
+     * SubledgerPostingService populates this from the originating
+     * policy's class. Null when the JE has no class semantics
+     * (Phase 3 IFRS-9 investments) or when the caller is a Phase 2
+     * PAA engine that hasn't yet been refactored to resolve class
+     * from its contract group.
+     *
+     * <p>Added at the end of the record signature so the 9-arg
+     * back-compat constructor below stays positional-compatible with
+     * every pre-Slice-1.10 caller.
+     */
+    UUID classOfBusinessId
+) {
+
+    /**
+     * Back-compat 9-arg constructor for callers that don't yet
+     * populate {@link #classOfBusinessId}. Equivalent to passing
+     * {@code null} for the new dimension; the JE line will simply have
+     * a null {@code class_of_business_id} column. Phase 2 PAA engines,
+     * Phase 3 IFRS-9 engines, and the entire Slice 1.4 test suite use
+     * this overload unchanged.
+     */
+    public JournalEntryLineRequest(
+        String accountCode,
+        BigDecimal debitAmount,
+        BigDecimal creditAmount,
+        String currencyCode,
+        Integer cohortYear,
+        UUID portfolioId,
+        UUID contractGroupId,
+        UUID holdingId,
+        Map<String, Object> dimensionTags
+    ) {
+        this(accountCode, debitAmount, creditAmount, currencyCode,
+             cohortYear, portfolioId, contractGroupId, holdingId,
+             dimensionTags, null);
+    }
+}
