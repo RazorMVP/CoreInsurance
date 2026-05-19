@@ -8,39 +8,139 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-### Slice 1.10 (Phase 1 GL substrate follow-up) — promote `class_of_business` into `journal_entry_line.dimension_tags`
+No open items as of 2026-05-20. Slice 1.10 (GL substrate enrichment) was the only outstanding backlog item; it shipped via Session 73 below.
 
-**Status:** Scoped 2026-05-19 (during Phase 4 Slice 4.3). Not started. **Recommended execution: after Phase 4 merges to `main`.**
+---
 
-**Rationale.** Slice 4.3 (`AnnualRevenueAccountEngine` / N01) needs per-class breakdown of premium written and claims incurred. The GL is the auditor-canonical source for that data, but `journal_entry_line` doesn't carry `class_of_business` — `SubledgerPostingService` (Slice 1.5), the Phase 2 PAA engines, and the Phase 3 IFRS-9 engines all post JEs without tagging class. So N01 currently reads from `policies` and `claims` directly (an "underwriting view"), not from the GL (the "auditor view"). Both data sources are independently audited, so the divergence is bounded — but the two substrates *can* drift if `SubledgerPostingService` ever misses a posting. The clean future state is: GL is the single source of truth for both N01 and N02, with class as a dimension on every JE line.
+## 2026-05-20 — Session 73 (`main`): Phase 4 NAICOM submissions complete (slices 4.4–4.10) + Slice 1.10 GL substrate enrichment
 
-**Why deferred (not done now).** Only N01 in Phase 4 needs class-broken-down GL data. Phase 4 slices 4.4–4.10 (Prudential, RI Quarterly, IFRS-17 disclosure, IFRS-9 disclosure, Investment Statement, NIID Status, orchestrator, rendering) either don't need class breakdown at all, or already have a clean read path (V38/V40 views, source tables for per-policy/per-claim registers). Pausing Phase 4 to refactor stable Phase-1/2/3 code for the sake of one engine is a worse trade than shipping Phase 4 with the documented divergence and addressing the substrate as a single-purpose follow-up after Phase 4 merges.
+### Context
 
-**Scope.**
+Picking up where Session 72 left off: Phases 1–3 of Module 12 had shipped (12 + 8 + 7 + T1 slices), Phase 4 (NAICOM monthly recap submissions) had three slices shipped (4.1 schema, 4.2 bordereaux, 4.3 revenue account + balance sheet). The remaining Phase 4 slices (4.4–4.10) and the only outstanding backlog item (Slice 1.10 GL substrate enrichment) were all open.
 
-| Item | Detail |
+This session shipped every remaining Module 12 slice end-to-end. Branch `slice-4-naicom-monthly-recap-submissions` (Phase 4 slices 4.4–4.10) merged to `main` via `50e5b11`; branch `slice-1.10-class-of-business-in-je` (Slice 1.10a + 1.10b) merged to `main` via `fd795f6`. Both feature branches were deleted local + remote post-merge.
+
+At session end: Phases 1–4 are complete on `main`. Module 12 frontend (Phase 5) and the cross-tenant platform admin view (Phase 6) are the remaining workstreams.
+
+### What shipped
+
+**Phase 4 — NAICOM submissions (slices 4.4–4.10):**
+
+| Commit | Slice | Summary |
+|---|---|---|
+| `32fa3d9` | 4.4 | `PrudentialReturnEngine` (N03) — solvency margin from a 15% required-capital-of-premium-written baseline, balance-sheet aggregates from `TrialBalanceService`, period-bounded income-statement aggregates from `journal_entry_line`. Auditor-canonical (GL-driven). 6 ITs. |
+| `517925e` | 4.5 | `RiQuarterlyReturnEngine` (N04) — ceded premium per treaty + per reinsurer rollup. Reads `ri_treaties` + `ri_allocations` + `ri_allocation_lines` (treaty cessions) and `ri_fac_covers` (FAC cessions). 8 ITs. |
+| `6da6c7d` | 4.6 | `Ifrs17DisclosureEngine` — service-relay over Slice 2.8's `MovementAnalysisService` (V38 view). Adapter pattern; no SQL duplication. 7 ITs. |
+| `8b48bda` | 4.7 | `Ifrs9DisclosureEngine` (relay over `Ifrs9MovementAnalysisService` / V40) + `InvestmentStatementEngine` (N08) — distinct substrates: disclosure is movement-analysis relay, statement is direct-source point-in-time snapshot (V40 excludes unmeasured-this-period active holdings that N08 must list). 16 ITs total. |
+| `202f298` | 4.8 | `NiidStatusSnapshotEngine` (N07) — direct read over `policies.niid_required` + `policies.niid_ref`; in-force-at-period_end semantics; pending list sorted by `daysSinceApproval DESC`. 10 ITs. |
+| `c913c92` | 4.9 | `NaicomSubmissionService` orchestrator + REST controllers (`/api/v1/finance/naicom/submissions`) + state machine (DRAFT → SUBMITTED → ACKNOWLEDGED → ARCHIVED + RETRACTED branch) + RBAC + 4 exceptions w/ `@ResponseStatus` + retrofit of all 10 engines to implement a new `NaicomSubmissionEngine` interface for `@PostConstruct`-driven dispatch. 17 ITs. |
+| `b5184ed` | 4.10 | Artifact rendering — `JsonArtifactRenderer` + `CsvArtifactRenderer` + `PdfArtifactRenderer` (Apache PDFBox 3.x) + `SubmissionArtifactService` + storage via `DocumentStorageService` + 3 REST endpoints (render / list / download). 13 ITs. |
+| `50e5b11` | (merge) | Phase 4 merged to `main` via `--no-ff` so the slice history is preserved under one merge anchor (mirrors the Phase 1–3 merge `fe904f3`). |
+
+**Slice 1.10 — GL substrate enrichment (closed the Phase 1 ↔ Phase 4 N01 gap):**
+
+| Commit | Slice | Summary |
+|---|---|---|
+| `e324367` | 1.10a | V42 migration (`class_of_business_id UUID` column + partial index on `journal_entry_line`) + V43 backfill across five event-type code paths (POLICY_APPROVED, CLAIM_APPROVED, CLAIM_SETTLED, CLAIM_EXPENSE_APPROVED, ENDORSEMENT_PREMIUM_*, FAC_PREMIUM_CEDED) + `PolicyClassResolver` (lightweight JdbcTemplate reads against `policies` / `claims`) + `SubledgerPostingService` refactor (resolves class per event, threads through the line() / postTwoLine() helpers) + 9-arg back-compat constructor on `JournalEntryLineRequest` (preserves all 18 existing positional callers) + 34 IT flyway-target bumps to "43". 13 new migration ITs. |
+| `7b8c5ad` | 1.10b | `AnnualRevenueAccountEngine` re-implemented over GL (SUM(credit_amount) on POLICY_APPROVED / CLAIM_APPROVED JEs filtered by `je.business_date`, JOIN `classes_of_business` for display code/name) + IT rewrite seeding JEs directly + new reconciliation assertion comparing engine totals against an independent JE aggregate (auditor-grade guarantee that the engine ties to the GL). 8 ITs. |
+| `fd795f6` | (merge) | Slice 1.10 merged to `main` via `--no-ff`. Closes the documented Phase 4 N01-reads-source-tables divergence flagged in Slice 4.3's javadoc. |
+
+### Test growth
+
+| Metric | Session 72 end | Session 73 end | Δ |
+|---|---|---|---|
+| Total failsafe ITs (cia-api, full reactor) | 160 | **275** | +115 |
+| Failures / errors | 0 / 0 | **0 / 0** | flat |
+| Skipped (intentional benchmark) | 1 | 1 | flat |
+| NAICOM-specific ITs (cia-api/.../finance/naicom/) | — | **113** | new |
+| New Flyway migrations | V40 | V41, V42, V43 | +3 |
+| Engines retrofitted to NaicomSubmissionEngine interface | — | 10 / 10 | full coverage |
+
+`mvn verify -pl cia-api -am` exit 0 across the full reactor (20 modules).
+
+### Architecture invariants this session established
+
+**Module 12 Phase 4 invariants (now load-bearing on `main`):**
+
+1. **Submissions never post JEs.** Every Phase 4 engine is pure read; the JE gateway is not invoked. Phase 4 has zero write-side ledger impact, which is the entire point of running submissions against HARD_CLOSED periods.
+
+2. **Idempotency triple `(submission_type, period_id, tenant_id)`** under V41 partial UNIQUE `WHERE deleted_at IS NULL`. Re-running generate for an existing DRAFT updates the payload in place; once SUBMITTED, payload is frozen and re-generation throws `PayloadFrozenException` (409).
+
+3. **Period-lock precondition: HARD_CLOSED required.** Enforced at the service layer (`NaicomSubmissionService`), not the DB. The regulator's expectation is that submitted figures don't change post-submission; the period's HARD_CLOSED state freezes the underlying ledger.
+
+4. **State-transition events are append-only Type-2 SCD.** `naicom_submission_event` row sequence per submission IS the audit history. No separate history table. The V41 CHECK `ck_naicom_submission_event_no_op_only_draft` permits only DRAFT → DRAFT same-state events (re-generation while still drafting).
+
+5. **Retract / archive soft-delete to vacate the partial UNIQUE slot.** A SUBMITTED row that's retracted gets `deleted_at` set; the same `(submission_type, period_id)` key is now available for a fresh corrected submission. The retracted row survives as soft-deleted audit evidence.
+
+6. **`saveAndFlush` is required when a partial UNIQUE makes UPDATE-ordering load-bearing.** Found in Slice 4.10 — `uq_naicom_submission_artifact_format` only excludes `deleted_at IS NOT NULL` rows; without an explicit flush the soft-delete UPDATE and the fresh INSERT operate on the same UNIQUE slot in batched order and the INSERT loses. Same principle previously documented for PAA close in CLAUDE.md.
+
+7. **N01 over GL with reconciliation assertion.** Slice 1.10b's IT seeds a multi-class fixture, runs the engine, then runs two independent JdbcTemplate aggregates (SUM straight across, no grouping) and asserts engine.totals.grossPremium == jeSumPremium and engine.totals.claimsIncurred == jeSumClaims. Different aggregation paths arriving at the same total — the auditor's source-of-truth guarantee.
+
+**Slice 1.10 design patterns worth remembering:**
+
+1. **9-arg back-compat constructor on records is the right tool when you can't move fields.** Adding `classOfBusinessId` at the end of `JournalEntryLineRequest` + a 9-arg overload that defaults it to null kept the slice's blast radius scoped to just the GL + posting layer (4 files in cia-finance). Without it, every PAA + IFRS-9 engine call site (18 across production + test) would have needed a one-line `null` insertion. The back-compat path stays in place until PAA + IFRS-9 engines are ready to populate class.
+
+2. **Hibernate-vs-Flyway-target collision.** Adding a field to a JPA entity makes Hibernate include the column in every INSERT, regardless of `spring.jpa.hibernate.ddl-auto=none`. Every IT that pins `spring.flyway.target` to a pre-V42 version fails "column does not exist" at first JE insert. Mechanical fix: `sed` pass across 34 IT files bumping the target to "43". Future schema-adding slices that pin entity columns need the same lockstep bump.
+
+3. **Direct-source-table reads alongside GL-driven engines is a tractable trade-off.** Slice 4.3 originally shipped N01 reading from source tables because the GL had no `class_of_business_id`. The divergence was documented in the engine's javadoc; Slice 1.10 was scoped explicitly to close it. Shipping with a documented gap and a queued follow-up beat blocking Phase 4 on a substrate refactor.
+
+**Phase 4 deferred-by-design items (all documented in javadoc + commit bodies):**
+
+1. **Live NAICOM API swap.** Slice 4.10 ships against `StubNaicomService`. Live `NaicomRestService` swap when credentials + API spec arrive; same Spring-profile pattern as the existing per-policy `NaicomService`.
+
+2. **Per-submission-type prescribed CSV / PDF templates.** v1 ships generic layouts (flattened scalars + section-per-list for CSV; cover page + paginated JSON body for PDF). NAICOM-prescribed forms can be implemented per submission type when the regulator publishes them.
+
+3. **PDF Naira-sign + em-dash glyph coverage.** `PdfArtifactRenderer.stripUnencodable()` substitutes `?` for any character outside WinAnsi (the standard14 fonts cover Latin-1 only). v2 should embed a TTF with Latin Extended + currency-symbol coverage.
+
+4. **Phase 2 PAA engine class_of_business resolution.** PAA engines (`LrcEngine`, `LicEngine`, `DiscountUnwindEngine`, `OnerousContractTestEngine`) post JEs with the back-compat constructor defaulting `class_of_business_id` to null. Resolving class from the policies in the contract group is a future slice. PAA JEs don't feed N01 (they're LRC/LIC roll-forward, not premium-written / claims-incurred), so N01 reconciliation isn't affected.
+
+5. **`PrudentialReturnEngine` admitted-assets refinement.** N03's solvency-margin formula uses a conservative 15% minimum-capital-of-premium-written calculation. NAICOM Operational Guideline's full admitted-assets exclusions + statutory floor + Tier-1/Tier-2 logic are deferred to v2; engine documents this explicitly in the payload's `notes` field for auditor visibility.
+
+### Files modified (high-level)
+
+- **Flyway (3 new):** V41 (NAICOM submission foundation), V42 (class_of_business_id on journal_entry_line), V43 (backfill).
+- **`cia-finance/naicom/`:** 10 engines + 1 dispatch interface + 1 orchestrator service + 1 controller + 4 exceptions + 3 response DTOs + 3 renderer classes + 1 artifact storage service. ~3700 LOC.
+- **`cia-finance/gl/`:** `PolicyClassResolver` (new) + `SubledgerPostingService` refactor + `JournalEntryLine` entity field + `JournalEntryService` line-builder passthrough + `JournalEntryLineRequest` DTO back-compat constructor.
+- **`cia-finance/dto/`:** `JournalEntryLineRequest` — added `classOfBusinessId` field at end + 9-arg back-compat constructor.
+- **`cia-finance/pom.xml`:** added `cia-storage` + `pdfbox` deps for artifact rendering.
+- **`cia-api/test/finance/naicom/`:** 11 IT classes (10 engines + 2 service-level for orchestrator + artifact).
+- **`cia-api/test/migration/`:** 3 migration tests (V41, V42, V43).
+- **`cia-api/test/**`:** 34 IT files bumped `spring.flyway.target` to "43" (Slice 1.10a sed pass).
+- **Diff summary across both branches:** ~13,500 LOC added (production + tests + migrations).
+
+### Internal API surface added (Module 12 Phase 4)
+
+All under `/api/v1/finance/naicom/`. RBAC: `FINANCE_VIEW` for reads, `FINANCE_APPROVE` for writes.
+
+| Method | Path |
 |---|---|
-| V42 migration | Add `class_of_business_id UUID` column to `journal_entry_line` + index `(class_of_business_id) WHERE deleted_at IS NULL AND class_of_business_id IS NOT NULL`. Nullable — historical rows backfill is a separate step. No FK constraint to a class table in v1 (master data is in `cia-setup`; cross-module FK would entangle cia-finance to cia-setup). |
-| Refactor `SubledgerPostingService` | Tag JEs from `PolicyApprovedEvent` / `EndorsementApprovedEvent` / `ClaimApprovedEvent` / `ClaimSettledEvent` / `ClaimExpenseApprovedEvent` with the class_of_business_id carried on the event. Slice T1 already asserts these events publish with `classOfBusinessId` (PolicyApprovedEvent, others). |
-| Refactor `FacPremiumCededEvent` posting | This event currently has no `classOfBusinessId` field. Either add it to the event (breaking change — Slice T1 contract test must update), or look it up from the policy in the posting service. Slice 1.10 chooses the lookup path to keep the event lean. |
-| Phase 2 PAA engines | LrcEngine, LicEngine, DiscountUnwindEngine, OnerousContractTestEngine all post JEs but inherit class from the group_of_contracts (which is portfolio-keyed, not class-keyed). Decision: class is the COB of the policies in the group. PaaPeriodCloseService resolves class per group and passes it down. |
-| Phase 3 IFRS-9 engines | Investments don't have class_of_business semantics. These engines pass `null` for class_of_business_id. Documented in the V42 migration comment. |
-| Backfill | One-time migration (V42b or admin endpoint, TBD at execution time) that populates class_of_business_id on existing journal_entry_line rows by joining source_reference back to policies/claims. Idempotent. Rerunnable. |
-| Re-implement N01 over GL | Replace AnnualRevenueAccountEngine's source-table reads with `journal_entry_line` aggregates grouped by class_of_business_id. Existing AnnualRevenueAccountEngineIT scenarios remain valid (the inputs change from policies/claims rows to JE postings; the assertions on the payload remain the same). |
-| Update engine javadocs | Drop the "underwriting view, not GL view" caveats from N01's class doc; both engines are now GL-driven. |
-| Migration test | V42 `class_of_business_id` column present, indexed, nullable. Backfill IT covers: existing JEs gain the column populated correctly per source-record join. |
+| POST | `/submissions/generate` |
+| GET | `/submissions?periodId=...&state=...` |
+| GET | `/submissions/{id}` |
+| GET | `/submissions/{id}/events` |
+| POST | `/submissions/{id}/submit` |
+| POST | `/submissions/{id}/acknowledge` |
+| POST | `/submissions/{id}/retract` |
+| POST | `/submissions/{id}/archive` |
+| POST | `/submissions/{id}/artifacts/{format}` |
+| GET | `/submissions/{id}/artifacts` |
+| GET | `/submissions/{id}/artifacts/{format}/download` |
 
-**Acceptance criteria.**
+**Partner API impact:** none. No `cia-partner-api` files were touched; no Postman collection regeneration required.
 
-1. `journal_entry_line.class_of_business_id` populated on every JE posted by `SubledgerPostingService`, the Phase 2 PAA engines, and any future engine that takes a class-bearing event as input.
-2. AnnualRevenueAccountEngine reads exclusively from `journal_entry_line` for both totals and per-class breakdown.
-3. AnnualRevenueAccountEngine totals match `TrialBalanceService.trialBalanceAsOf(period.endDate)` for income-account totals — explicit reconciliation assertion in a new IT.
-4. Backfill completes idempotently on a 200-event reconciliation-gate fixture (reuse Slice 1.9 harness) with class_of_business_id correctly populated.
-5. `mvn verify` green across the full reactor (no regression in Phase 1/2/3 ITs).
+### Open / deferred items at session end
 
-**Estimated effort.** 2 slices (1.10a substrate + posting refactor + backfill; 1.10b N01 re-implementation + reconciliation assertion). ~1 week.
+- **Module 12 frontend (Phase 5)** — not started. Phase 4 REST surface is stable; safe to begin. ~3 weeks estimated (existing frontend-build patterns).
+- **Cross-tenant platform admin view (Phase 6)** — not started. Small scope (~1 week) after Phase 1 absorbed most of the original Phase 7 work.
+- **Phase 4 v2 follow-ups** — listed above under deferred-by-design items.
+- **Open CLAUDE.md questions** — NAICOM/NIID sandbox credentials, multi-currency at launch, BI tool vs in-app reports. None block Phase 5 frontend work; the NAICOM credentials block the live-API swap (still using the stub).
+- **`production-readiness-phase-0` branch** — 33 commits ahead of `main`, separate workstream (CVE remediation, image scans, tenant isolation hardening, Playwright smoke). Untouched in this session; should be merged or explicitly deferred with a freeze-window note before its rebase delta grows further against finance-module changes.
 
-**Risk.** Backfill correctness — the join from `journal_entry_line.source_reference` back to the originating policy/claim must be unambiguous. v1 plan: assume source_reference is the UUID of the originating entity; for compound references (e.g. claim_expense JEs reference `claim_id|expense_id`), the backfill needs explicit handling per source_event_type.
+### Final state
+
+- Branch `main`: 3 first-parent merge anchors for Module 12 — `fe904f3` (Phases 1–3), `50e5b11` (Phase 4), `fd795f6` (Slice 1.10). Pushed to `origin/main`.
+- `mvn verify`: **BUILD SUCCESS** — 275 cia-api failsafe ITs, 0 failures, 0 errors, 1 intentional benchmark skip.
+- **Module 12 status: Phases 1–4 COMPLETE on `main`.** Frontend (Phase 5) and platform admin (Phase 6) are the remaining workstreams.
 
 ---
 
