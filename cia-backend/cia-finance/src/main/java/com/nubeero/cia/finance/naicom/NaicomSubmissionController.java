@@ -5,6 +5,10 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,6 +47,7 @@ import java.util.UUID;
 public class NaicomSubmissionController {
 
     private final NaicomSubmissionService submissionService;
+    private final SubmissionArtifactService artifactService;
 
     // ── Generation + read ──────────────────────────────────────────────
 
@@ -137,6 +142,53 @@ public class NaicomSubmissionController {
             Authentication authentication) {
         return ApiResponse.success(NaicomSubmissionResponse.withPayload(
             submissionService.archive(id, actor(authentication))));
+    }
+
+    // ── Artifacts (Slice 4.10) ─────────────────────────────────────────
+
+    /**
+     * Render an artifact in the requested {@link ArtifactFormat}.
+     * Replaces any existing live artifact for the same (submission,
+     * format) — the prior row is soft-deleted (V41
+     * uq_naicom_submission_artifact_format).
+     */
+    @PostMapping("/{id}/artifacts/{format}")
+    @PreAuthorize("hasRole('FINANCE_APPROVE')")
+    public ApiResponse<SubmissionArtifactResponse> renderArtifact(
+            @PathVariable UUID id,
+            @PathVariable ArtifactFormat format,
+            Authentication authentication) {
+        return ApiResponse.success(SubmissionArtifactResponse.from(
+            artifactService.render(id, format, actor(authentication))));
+    }
+
+    /** Metadata listing — does not stream artifact bytes. */
+    @GetMapping("/{id}/artifacts")
+    @PreAuthorize("hasRole('FINANCE_VIEW')")
+    public ApiResponse<List<SubmissionArtifactResponse>> listArtifacts(@PathVariable UUID id) {
+        return ApiResponse.success(artifactService.findBySubmission(id).stream()
+            .map(SubmissionArtifactResponse::from)
+            .toList());
+    }
+
+    /**
+     * Stream the live artifact bytes. Returns 404 if no live artifact
+     * exists for the (submission, format) pair (via
+     * {@code ArtifactNotFoundException}'s @ResponseStatus).
+     */
+    @GetMapping("/{id}/artifacts/{format}/download")
+    @PreAuthorize("hasRole('FINANCE_VIEW')")
+    public ResponseEntity<InputStreamResource> downloadArtifact(
+            @PathVariable UUID id,
+            @PathVariable ArtifactFormat format) {
+        SubmissionArtifactService.ArtifactDownload download =
+            artifactService.openDownload(id, format);
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType(download.mimeType()))
+            .contentLength(download.sizeBytes())
+            .header(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=\"" + download.filename() + "\"")
+            .body(new InputStreamResource(download.stream()));
     }
 
     private static String actor(Authentication authentication) {
