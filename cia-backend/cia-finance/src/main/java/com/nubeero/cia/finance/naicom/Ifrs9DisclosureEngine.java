@@ -94,11 +94,17 @@ import java.util.UUID;
 @Slf4j
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
-public class Ifrs9DisclosureEngine {
+public class Ifrs9DisclosureEngine implements NaicomSubmissionEngine {
 
     private final FiscalPeriodRepository fiscalPeriodRepository;
     private final Ifrs9MovementAnalysisService movementAnalysisService;
 
+    @Override
+    public NaicomSubmissionType type() {
+        return NaicomSubmissionType.IFRS9_DISCLOSURE;
+    }
+
+    @Override
     public Map<String, Object> computePayload(UUID periodId) {
         FiscalPeriod period = fiscalPeriodRepository.findById(periodId)
             .filter(p -> p.getDeletedAt() == null)

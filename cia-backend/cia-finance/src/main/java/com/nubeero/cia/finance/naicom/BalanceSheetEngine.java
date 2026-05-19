@@ -70,11 +70,17 @@ import java.util.UUID;
 @Slf4j
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
-public class BalanceSheetEngine {
+public class BalanceSheetEngine implements NaicomSubmissionEngine {
 
     private final FiscalPeriodRepository fiscalPeriodRepository;
     private final TrialBalanceService trialBalanceService;
 
+    @Override
+    public NaicomSubmissionType type() {
+        return NaicomSubmissionType.BALANCE_SHEET;
+    }
+
+    @Override
     public Map<String, Object> computePayload(UUID periodId) {
         FiscalPeriod period = fiscalPeriodRepository.findById(periodId)
             .filter(p -> p.getDeletedAt() == null)

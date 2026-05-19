@@ -79,10 +79,15 @@ import java.util.UUID;
 @Slf4j
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
-public class ClaimsBordereauxEngine {
+public class ClaimsBordereauxEngine implements NaicomSubmissionEngine {
 
     private final FiscalPeriodRepository fiscalPeriodRepository;
     private final JdbcTemplate jdbcTemplate;
+
+    @Override
+    public NaicomSubmissionType type() {
+        return NaicomSubmissionType.CLAIMS_BORDEREAUX;
+    }
 
     /**
      * Composes the N06 Claims Bordereaux payload for one fiscal period.
@@ -92,6 +97,7 @@ public class ClaimsBordereauxEngine {
      * @throws FiscalPeriodNotFoundException if the period does not exist
      *         or has been soft-deleted
      */
+    @Override
     public Map<String, Object> computePayload(UUID periodId) {
         FiscalPeriod period = fiscalPeriodRepository.findById(periodId)
             .filter(p -> p.getDeletedAt() == null)

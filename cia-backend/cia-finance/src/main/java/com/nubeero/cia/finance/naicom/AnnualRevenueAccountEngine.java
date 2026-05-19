@@ -85,13 +85,19 @@ import java.util.UUID;
 @Slf4j
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
-public class AnnualRevenueAccountEngine {
+public class AnnualRevenueAccountEngine implements NaicomSubmissionEngine {
 
     private static final int LOSS_RATIO_SCALE = 2;
 
     private final FiscalPeriodRepository fiscalPeriodRepository;
     private final JdbcTemplate jdbcTemplate;
 
+    @Override
+    public NaicomSubmissionType type() {
+        return NaicomSubmissionType.ANNUAL_REVENUE_ACCOUNT;
+    }
+
+    @Override
     public Map<String, Object> computePayload(UUID periodId) {
         FiscalPeriod period = fiscalPeriodRepository.findById(periodId)
             .filter(p -> p.getDeletedAt() == null)

@@ -101,7 +101,13 @@ import java.util.UUID;
 @Slf4j
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
-public class PrudentialReturnEngine {
+public class PrudentialReturnEngine implements NaicomSubmissionEngine {
+
+    @Override
+    public NaicomSubmissionType type() {
+        return NaicomSubmissionType.PRUDENTIAL_RETURN;
+    }
+
 
     /**
      * Required-capital percentage of net premium written. NAICOM's historical
@@ -117,6 +123,7 @@ public class PrudentialReturnEngine {
     private final TrialBalanceService trialBalanceService;
     private final JdbcTemplate jdbcTemplate;
 
+    @Override
     public Map<String, Object> computePayload(UUID periodId) {
         FiscalPeriod period = fiscalPeriodRepository.findById(periodId)
             .filter(p -> p.getDeletedAt() == null)
