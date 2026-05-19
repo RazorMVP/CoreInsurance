@@ -15,6 +15,7 @@ const sidebars: SidebarsConfig = {
         "architecture/integrations",
         "architecture/period-end-closures-design",
         "architecture/period-end-closures-implementation-plan",
+        "architecture/period-end-closures-foundations-plan",
       ],
     },
     {
@@ -33,6 +34,13 @@ const sidebars: SidebarsConfig = {
       items: [
         "audit/overview",
         "audit/api-reference",
+      ],
+    },
+    {
+      type: "category",
+      label: "Operations",
+      items: [
+        "operations/period-end-closures-backfill",
       ],
     },
     {

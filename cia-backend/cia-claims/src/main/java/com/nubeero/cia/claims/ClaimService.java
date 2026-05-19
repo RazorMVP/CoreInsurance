@@ -357,6 +357,7 @@ public class ClaimService {
                 saved.getId(), saved.getClaimNumber(),
                 saved.getPolicyId(), saved.getPolicyNumber(),
                 saved.getCustomerId(), saved.getCustomerName(),
+                saved.getDvAmount(), saved.getCurrencyCode(),
                 settledAt));
         return saved;
     }

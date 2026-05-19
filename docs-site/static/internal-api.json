@@ -289,6 +289,312 @@
           }
         }
       },
+      "ChartOfAccountNode": {
+        "type": "object",
+        "description": "Chart-of-accounts node returned by GET /finance/chart-of-accounts. Recursive — leaves carry an empty children array.",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "2110",
+            "description": "Seeded account code (4-digit hierarchical: class.group.leaf)."
+          },
+          "name": {
+            "type": "string",
+            "example": "LRC - Best estimate of liabilities"
+          },
+          "accountType": {
+            "type": "string",
+            "enum": ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"],
+            "example": "LIABILITY"
+          },
+          "ifrs17Role": {
+            "type": "string",
+            "nullable": true,
+            "example": "LRC_BEL",
+            "description": "IFRS 17 measurement role tag (null on non-measurement leaves)."
+          },
+          "ifrs9Role": {
+            "type": "string",
+            "nullable": true,
+            "example": "FVPL",
+            "description": "IFRS 9 classification role tag (null on non-investment leaves)."
+          },
+          "active": {
+            "type": "boolean",
+            "example": true
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartOfAccountNode"
+            }
+          }
+        }
+      },
+      "JournalEntryLineRequest": {
+        "type": "object",
+        "description": "One leg of a POST /finance/journal-entries request. Exactly one of debitAmount / creditAmount must be > 0; the other must be 0.",
+        "required": ["accountCode", "debitAmount", "creditAmount"],
+        "properties": {
+          "accountCode": {
+            "type": "string",
+            "example": "1110",
+            "description": "COA leaf code; resolved server-side to the account id."
+          },
+          "debitAmount": {
+            "type": "number",
+            "format": "double",
+            "example": 100.00,
+            "minimum": 0
+          },
+          "creditAmount": {
+            "type": "number",
+            "format": "double",
+            "example": 0.00,
+            "minimum": 0
+          },
+          "currencyCode": {
+            "type": "string",
+            "example": "NGN",
+            "default": "NGN"
+          },
+          "cohortYear": {
+            "type": "integer",
+            "nullable": true,
+            "description": "IFRS 17 cohort year (Slice 2.x). Null in Slice 1.4."
+          },
+          "portfolioId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "contractGroupId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "holdingId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "IFRS 9 per-instrument tag (Slice 3.x)."
+          },
+          "dimensionTags": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Free-form analytic tags persisted as JSONB."
+          }
+        }
+      },
+      "PostJournalEntryRequest": {
+        "type": "object",
+        "description": "Wire contract for POST /finance/journal-entries. The service stamps postingDate=today (D5 default); callers cannot override it.",
+        "required": ["businessDate", "sourceModule", "sourceEventType", "sourceReference", "lines"],
+        "properties": {
+          "businessDate": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-05-14",
+            "description": "Economic event date. Drives period assignment via FiscalPeriodResolver and the 5-business-day late-posting cut-off (Slice 1.7)."
+          },
+          "sourceModule": {
+            "type": "string",
+            "maxLength": 40,
+            "example": "finance"
+          },
+          "sourceEventType": {
+            "type": "string",
+            "maxLength": 60,
+            "example": "MANUAL"
+          },
+          "sourceReference": {
+            "type": "string",
+            "maxLength": 100,
+            "example": "ref-2026-05-14-001",
+            "description": "Idempotency key (forms UNIQUE triple with sourceModule + sourceEventType). For manual postings, use a fresh UUID-derived value (D8)."
+          },
+          "narrative": {
+            "type": "string",
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "$ref": "#/components/schemas/JournalEntryLineRequest"
+            }
+          }
+        }
+      },
+      "ReverseJournalEntryRequest": {
+        "type": "object",
+        "description": "Wire contract for POST /finance/journal-entries/{id}/reverse. The reason is appended to the auto-built reversal narrative.",
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "example": "Misposting cleanup — wrong COA",
+            "description": "Audit trail justification. Appears in the reversal entry narrative as 'REVERSAL of JE {originalId}: {reason}'."
+          }
+        }
+      },
+      "JournalEntryLineResponse": {
+        "type": "object",
+        "description": "Read model for one journal entry line, with COA fields surfaced alongside the id.",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "lineNo": {"type": "integer", "example": 1},
+          "accountId": {"type": "string", "format": "uuid"},
+          "accountCode": {"type": "string", "example": "1110"},
+          "accountName": {"type": "string", "example": "Cash on hand"},
+          "debitAmount": {"type": "number", "format": "double", "example": 100.00},
+          "creditAmount": {"type": "number", "format": "double", "example": 0.00},
+          "currencyCode": {"type": "string", "example": "NGN"},
+          "cohortYear": {"type": "integer", "nullable": true},
+          "portfolioId": {"type": "string", "format": "uuid", "nullable": true},
+          "contractGroupId": {"type": "string", "format": "uuid", "nullable": true},
+          "holdingId": {"type": "string", "format": "uuid", "nullable": true},
+          "dimensionTags": {"type": "object", "additionalProperties": true}
+        }
+      },
+      "JournalEntryResponse": {
+        "type": "object",
+        "description": "Posted journal entry with all of its lines. Returned by POST /finance/journal-entries, GET /finance/journal-entries/{id}, and POST /finance/journal-entries/{id}/reverse.",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "postingDate": {"type": "string", "format": "date", "description": "Server-stamped record date (today)."},
+          "businessDate": {"type": "string", "format": "date", "description": "Economic event date supplied by caller."},
+          "periodId": {"type": "string", "format": "uuid", "description": "Resolved fiscal_period.id (MONTH period covering businessDate)."},
+          "sourceModule": {"type": "string"},
+          "sourceEventType": {"type": "string", "description": "On reversal entries this is the literal 'REVERSAL'."},
+          "sourceReference": {"type": "string", "description": "On reversal entries this is the original JE id."},
+          "narrative": {"type": "string", "nullable": true},
+          "postedBy": {"type": "string"},
+          "status": {
+            "type": "string",
+            "enum": ["DRAFT", "POSTED", "REVERSED"],
+            "example": "POSTED"
+          },
+          "reversalOf": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Non-null only on entries that themselves reverse an earlier JE."
+          },
+          "createdAt": {"type": "string", "format": "date-time"},
+          "lines": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/JournalEntryLineResponse"}
+          }
+        }
+      },
+      "TrialBalanceLine": {
+        "type": "object",
+        "description": "One row of a trial balance. debitBalance / creditBalance are mutually exclusive (exactly one > 0; the other is 0).",
+        "properties": {
+          "accountId": {"type": "string", "format": "uuid"},
+          "accountCode": {"type": "string", "example": "1110"},
+          "accountName": {"type": "string", "example": "Cash on hand"},
+          "accountType": {
+            "type": "string",
+            "enum": ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"]
+          },
+          "debitBalance": {"type": "number", "format": "double", "example": 400.00},
+          "creditBalance": {"type": "number", "format": "double", "example": 0.00}
+        }
+      },
+      "TrialBalanceFooter": {
+        "type": "object",
+        "description": "Aggregate footer attached to every TrialBalanceResponse (D3=A flat-list-plus-footer shape).",
+        "properties": {
+          "totalDebits": {"type": "number", "format": "double", "example": 505263.29},
+          "totalCredits": {"type": "number", "format": "double", "example": 505263.29},
+          "balanced": {"type": "boolean", "example": true, "description": "Pre-computed: totalDebits.compareTo(totalCredits) == 0."},
+          "lineCount": {"type": "integer", "format": "int64", "example": 200, "description": "Count of journal_entry_lines that contributed (not accounts)."}
+        }
+      },
+      "TrialBalanceResponse": {
+        "type": "object",
+        "description": "GET /finance/trial-balance?asOf= response. asOf is interpreted on business_date (D4=A) — cumulative since inception.",
+        "properties": {
+          "asOf": {"type": "string", "format": "date", "example": "2026-05-14"},
+          "generatedAt": {"type": "string", "format": "date-time"},
+          "lines": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/TrialBalanceLine"}
+          },
+          "footer": {"$ref": "#/components/schemas/TrialBalanceFooter"}
+        }
+      },
+      "CreateFiscalYearRequest": {
+        "type": "object",
+        "description": "Wire contract for POST /finance/fiscal-years. All three fields are optional (D1=A): omitting all yields the current-calendar-year FY. If supplied, startDate must be the first day of a month and endDate must be exactly 12 months minus one day later. Name defaults to FY{year} (d9).",
+        "properties": {
+          "name": {"type": "string", "maxLength": 50, "nullable": true, "example": "FY2026"},
+          "startDate": {"type": "string", "format": "date", "nullable": true, "example": "2026-01-01"},
+          "endDate": {"type": "string", "format": "date", "nullable": true, "example": "2026-12-31"}
+        }
+      },
+      "FiscalPeriodResponse": {
+        "type": "object",
+        "description": "One fiscal period — child of a FiscalYear, generated at FY create time (D2=A). MONTH/QUARTER/HALF_YEAR boundaries are FY-relative (d8). softClosedAt/hardClosedAt arrive via Slice 1.7 (PeriodLockService).",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "fiscalYearId": {"type": "string", "format": "uuid"},
+          "periodType": {"type": "string", "enum": ["DAY", "MONTH", "QUARTER", "HALF_YEAR", "YEAR"]},
+          "startDate": {"type": "string", "format": "date"},
+          "endDate": {"type": "string", "format": "date"},
+          "status": {"type": "string", "enum": ["OPEN", "SOFT_CLOSED", "HARD_CLOSED", "REOPENED"]},
+          "softClosedAt": {"type": "string", "format": "date-time", "nullable": true},
+          "hardClosedAt": {"type": "string", "format": "date-time", "nullable": true}
+        }
+      },
+      "FiscalYearResponse": {
+        "type": "object",
+        "description": "Fiscal year with optional embedded periods. periods is non-null only when ?includePeriods=true on GET or on POST (create returns the freshly-generated set).",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "name": {"type": "string", "example": "FY2026"},
+          "startDate": {"type": "string", "format": "date"},
+          "endDate": {"type": "string", "format": "date"},
+          "status": {"type": "string", "enum": ["PLANNING", "ACTIVE", "CLOSED"], "example": "ACTIVE"},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "periods": {
+            "type": "array",
+            "nullable": true,
+            "items": {"$ref": "#/components/schemas/FiscalPeriodResponse"}
+          }
+        }
+      },
+      "PeriodLockResponse": {
+        "type": "object",
+        "description": "Row from the V31 period_lock table. Type-2 SCD — released_at IS NULL = active lock; the full sequence of soft/hard/release rows IS the audit history.",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "fiscalPeriodId": {"type": "string", "format": "uuid"},
+          "lockType": {"type": "string", "enum": ["SOFT", "HARD"]},
+          "lockedAt": {"type": "string", "format": "date-time"},
+          "lockedBy": {"type": "string"},
+          "graceWindowUntil": {"type": "string", "format": "date-time", "nullable": true, "description": "SOFT locks: 5 business days past lockedAt; HARD locks: null"},
+          "releasedAt": {"type": "string", "format": "date-time", "nullable": true},
+          "releasedBy": {"type": "string", "nullable": true},
+          "releaseReason": {"type": "string", "nullable": true}
+        }
+      },
+      "LockReportEntry": {
+        "type": "object",
+        "description": "One day's row in a /finance/period-locks/preview report. Bulk-operation callers use this to pre-check a date range.",
+        "properties": {
+          "date": {"type": "string", "format": "date"},
+          "periodId": {"type": "string", "format": "uuid", "nullable": true},
+          "periodLabel": {"type": "string", "example": "May 2026"},
+          "status": {"type": "string", "enum": ["OPEN", "SOFT_CLOSED", "HARD_CLOSED", "REOPENED"], "nullable": true},
+          "graceWindowUntil": {"type": "string", "format": "date-time", "nullable": true},
+          "requiresOverride": {"type": "boolean"},
+          "rejected": {"type": "boolean"}
+        }
+      },
       "DashboardStats": {
         "type": "object",
         "properties": {
@@ -6056,6 +6362,666 @@
           "401": {
             "description": "Unauthorized \u2014 missing or expired JWT"
           }
+        }
+      }
+    },
+    "/finance/chart-of-accounts": {
+      "get": {
+        "summary": "Get Chart of Accounts tree",
+        "description": "Returns the seeded chart of accounts as a nested tree rooted at the five top-level account-type classes (Asset / Liability / Equity / Income / Expense). Children are sorted ascending by code; soft-deleted rows are omitted. Read-only \u2014 CRUD on the COA is deferred until tenant customisation (post-Phase-7). Introduced by Module 12 Slice 1.3.",
+        "operationId": "getChartOfAccountsTree",
+        "tags": [
+          "Finance \u2014 General Ledger"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ChartOfAccountNode"
+                      }
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 missing or expired JWT"
+          },
+          "403": {
+            "description": "Forbidden \u2014 missing FINANCE_VIEW role"
+          }
+        }
+      }
+    },
+    "/finance/journal-entries": {
+      "post": {
+        "summary": "Post a journal entry",
+        "description": "Single authoritative path for inserting journal entries. Validates \u03a3 debits == \u03a3 credits, idempotency on (sourceModule, sourceEventType, sourceReference), fiscal period existence, and that every target COA account is active. Returns 201 with the saved JE + lines. Introduced by Module 12 Slice 1.4 (GATEWAY).",
+        "operationId": "postJournalEntry",
+        "tags": ["Finance \u2014 General Ledger"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/PostJournalEntryRequest"}
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/JournalEntryResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized \u2014 missing or expired JWT"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_CREATE role"},
+          "409": {"description": "Conflict \u2014 idempotency triple already in use (JOURNAL_ENTRY_DUPLICATE)"},
+          "422": {"description": "Unprocessable Entity \u2014 unbalanced / inactive account / invalid line / fiscal period missing"}
+        }
+      }
+    },
+    "/finance/journal-entries/{id}": {
+      "get": {
+        "summary": "Read a journal entry by id",
+        "operationId": "getJournalEntry",
+        "tags": ["Finance \u2014 General Ledger"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/JournalEntryResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"},
+          "404": {"description": "Not found"}
+        }
+      }
+    },
+    "/finance/journal-entries/{id}/reverse": {
+      "post": {
+        "summary": "Reverse a journal entry",
+        "description": "Records a mirror posting (debit \u2194 credit) and transitions the original to REVERSED. The reversal itself is POSTED (D2=A). The single-reversal rule (d11) rejects reversing an already-reversed entry or a reversal entry. Active-account check is skipped on this path (d7) so a cleanup is always possible.",
+        "operationId": "reverseJournalEntry",
+        "tags": ["Finance \u2014 General Ledger"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/ReverseJournalEntryRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/JournalEntryResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_APPROVE role"},
+          "404": {"description": "Not found"},
+          "422": {"description": "Unprocessable Entity \u2014 already reversed or not POSTED"}
+        }
+      }
+    },
+    "/finance/trial-balance": {
+      "get": {
+        "summary": "Trial balance as of a business date",
+        "description": "Cumulative-since-inception trial balance with asOf interpreted on journal_entry.business_date (D4=A). Returns a flat list per chart-of-account plus a footer summary (D3=A). Each row carries a balance on exactly one side (the netted side). Introduced by Module 12 Slice 1.4 (GATEWAY).",
+        "operationId": "getTrialBalance",
+        "tags": ["Finance \u2014 General Ledger"],
+        "parameters": [
+          {
+            "name": "asOf",
+            "in": "query",
+            "required": true,
+            "schema": {"type": "string", "format": "date"},
+            "example": "2026-05-14"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/TrialBalanceResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"}
+        }
+      }
+    },
+    "/finance/fiscal-years": {
+      "get": {
+        "summary": "List fiscal years",
+        "description": "Returns every non-deleted fiscal year, newest first. Periods are not embedded; use GET /{id}?includePeriods=true or GET /{id}/periods. Introduced by Module 12 Slice 1.6.",
+        "operationId": "listFiscalYears",
+        "tags": ["Finance \u2014 General Ledger"],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {"$ref": "#/components/schemas/FiscalYearResponse"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"}
+        }
+      },
+      "post": {
+        "summary": "Create a fiscal year",
+        "description": "Creates a fiscal year and immediately generates its 19 child periods (12 MONTH + 4 QUARTER + 2 HALF_YEAR + 1 YEAR, D2=A). All request fields are optional \u2014 omitting all yields the current-calendar-year FY (D1=A). Quarters and halves are FY-relative (d8). The new FY starts in PLANNING; activate it separately (D3=B).",
+        "operationId": "createFiscalYear",
+        "tags": ["Finance \u2014 General Ledger"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/CreateFiscalYearRequest"}
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/FiscalYearResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_APPROVE role"},
+          "409": {"description": "Conflict \u2014 fiscal year name already exists"},
+          "422": {"description": "Unprocessable Entity \u2014 bounds violation (not month-aligned or not 12-month span)"}
+        }
+      }
+    },
+    "/finance/fiscal-years/active": {
+      "get": {
+        "summary": "Get the active fiscal year",
+        "description": "Returns the single FiscalYear with status=ACTIVE. Throws 404 (FISCAL_YEAR_NO_ACTIVE) when no FY is currently active \u2014 e.g. before the tenant bootstrap has been called.",
+        "operationId": "getActiveFiscalYear",
+        "tags": ["Finance \u2014 General Ledger"],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/FiscalYearResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"},
+          "404": {"description": "Not found \u2014 no fiscal year is currently ACTIVE"}
+        }
+      }
+    },
+    "/finance/fiscal-years/{id}": {
+      "get": {
+        "summary": "Get a fiscal year by id",
+        "operationId": "getFiscalYear",
+        "tags": ["Finance \u2014 General Ledger"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          },
+          {
+            "name": "includePeriods",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "boolean", "default": false},
+            "description": "When true, embeds the 19 child periods in the response."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/FiscalYearResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"},
+          "404": {"description": "Fiscal year not found"}
+        }
+      },
+      "delete": {
+        "summary": "Soft-delete a fiscal year",
+        "description": "Soft-deletes the fiscal year. Refused with 422 if any journal_entry rows reference its child periods \u2014 the GL is immutable history. Close the fiscal year via /close instead when it has financial activity.",
+        "operationId": "deleteFiscalYear",
+        "tags": ["Finance \u2014 General Ledger"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          }
+        ],
+        "responses": {
+          "204": {"description": "Deleted"},
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_APPROVE role"},
+          "404": {"description": "Fiscal year not found"},
+          "422": {"description": "Unprocessable Entity \u2014 fiscal year has journal entries"}
+        }
+      }
+    },
+    "/finance/fiscal-years/{id}/periods": {
+      "get": {
+        "summary": "List child periods of a fiscal year",
+        "operationId": "listFiscalYearPeriods",
+        "tags": ["Finance \u2014 General Ledger"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {"$ref": "#/components/schemas/FiscalPeriodResponse"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"},
+          "404": {"description": "Fiscal year not found"}
+        }
+      }
+    },
+    "/finance/fiscal-years/{id}/activate": {
+      "post": {
+        "summary": "Activate a fiscal year",
+        "description": "Flips a PLANNING fiscal year to ACTIVE. D3=B: refused with 422 (FISCAL_YEAR_ACTIVATION_CONFLICT) if any other FY is already ACTIVE \u2014 admin must explicitly close the prior FY first. Idempotent on an already-ACTIVE row; refused on CLOSED.",
+        "operationId": "activateFiscalYear",
+        "tags": ["Finance \u2014 General Ledger"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/FiscalYearResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_APPROVE role"},
+          "404": {"description": "Fiscal year not found"},
+          "422": {"description": "Unprocessable Entity \u2014 another FY is ACTIVE or this FY is CLOSED"}
+        }
+      }
+    },
+    "/finance/fiscal-years/{id}/close": {
+      "post": {
+        "summary": "Close a fiscal year",
+        "description": "Flips an ACTIVE fiscal year to CLOSED. Period-level postings are governed independently by Slice 1.7 period_lock; closing the FY just retires the 'current year' badge so a successor can be activated.",
+        "operationId": "closeFiscalYear",
+        "tags": ["Finance \u2014 General Ledger"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/FiscalYearResponse"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_APPROVE role"},
+          "404": {"description": "Fiscal year not found"},
+          "422": {"description": "Unprocessable Entity \u2014 fiscal year is not ACTIVE"}
+        }
+      }
+    },
+    "/finance/period-locks/{periodId}/soft-close": {
+      "post": {
+        "summary": "Soft-close a fiscal period",
+        "description": "Flips a fiscal period from OPEN to SOFT_CLOSED and opens the 5-business-day grace window. Idempotent. Module 12 Slice 1.7.",
+        "operationId": "softClosePeriod",
+        "tags": ["Finance \u2014 Period Locks"],
+        "parameters": [{"name": "periodId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["reason"], "properties": {"reason": {"type": "string", "maxLength": 500}}}}}},
+        "responses": {
+          "200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object", "properties": {"data": {"$ref": "#/components/schemas/PeriodLockResponse"}}}}}},
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_APPROVE role"},
+          "422": {"description": "Unprocessable Entity \u2014 period already HARD-closed"}
+        }
+      }
+    },
+    "/finance/period-locks/{periodId}/hard-close": {
+      "post": {
+        "summary": "Hard-close a fiscal period",
+        "description": "Flips a fiscal period to HARD_CLOSED. Auto-soft-closes first to honour the ck_fiscal_period_close_chronology invariant. Idempotent. Module 12 Slice 1.7.",
+        "operationId": "hardClosePeriod",
+        "tags": ["Finance \u2014 Period Locks"],
+        "parameters": [{"name": "periodId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["reason"], "properties": {"reason": {"type": "string", "maxLength": 500}}}}}},
+        "responses": {
+          "200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object", "properties": {"data": {"$ref": "#/components/schemas/PeriodLockResponse"}}}}}},
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_APPROVE role"}
+        }
+      }
+    },
+    "/finance/period-locks/{periodId}/reopen": {
+      "post": {
+        "summary": "Reopen a HARD-closed fiscal period",
+        "description": "Releases the active HARD lock and flips status to REOPENED. Publishes PeriodReopenedEvent \u2192 CFO + compliance email. NAICOM-grade audit trail in period_lock + audit_log. Module 12 Slice 1.7.",
+        "operationId": "reopenPeriod",
+        "tags": ["Finance \u2014 Period Locks"],
+        "parameters": [{"name": "periodId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["reason"], "properties": {"reason": {"type": "string", "maxLength": 500}}}}}},
+        "responses": {
+          "200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object", "properties": {"data": {"$ref": "#/components/schemas/PeriodLockResponse"}}}}}},
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_REOPEN_PERIOD role"},
+          "422": {"description": "Unprocessable Entity \u2014 period is not HARD-closed"}
+        }
+      }
+    },
+    "/finance/period-locks/{periodId}/history": {
+      "get": {
+        "summary": "Full lock history for a fiscal period",
+        "description": "Returns every soft/hard/release row for the period in reverse chronological order. Auditor-facing evidence chain. Module 12 Slice 1.7.",
+        "operationId": "periodLockHistory",
+        "tags": ["Finance \u2014 Period Locks"],
+        "parameters": [{"name": "periodId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "responses": {
+          "200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object", "properties": {"data": {"type": "array", "items": {"$ref": "#/components/schemas/PeriodLockResponse"}}}}}}},
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"}
+        }
+      }
+    },
+    "/finance/period-locks/preview": {
+      "get": {
+        "summary": "Preview lock status across a date range",
+        "description": "Returns one LockReportEntry per business date so bulk operations (Module 8 bulk receipts, Slice 1.8 backfill, bordereaux) can pre-check before kicking off the workflow. Module 12 Slice 1.7.",
+        "operationId": "previewPeriodLock",
+        "tags": ["Finance \u2014 Period Locks"],
+        "parameters": [
+          {"name": "from", "in": "query", "required": true, "schema": {"type": "string", "format": "date"}},
+          {"name": "to", "in": "query", "required": true, "schema": {"type": "string", "format": "date"}}
+        ],
+        "responses": {
+          "200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object", "properties": {"data": {"type": "array", "items": {"$ref": "#/components/schemas/LockReportEntry"}}}}}}},
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing FINANCE_VIEW role"},
+          "422": {"description": "Invalid date range"}
+        }
+      }
+    },
+    "/admin/finance/backfill-journal-entries": {
+      "post": {
+        "summary": "Start retroactive journal-entry backfill",
+        "description": "Kicks off a per-tenant Temporal workflow that replays the six sub-ledger events (POLICY_APPROVED, CLAIM_APPROVED, CLAIM_SETTLED, CLAIM_EXPENSE_APPROVED, ENDORSEMENT_APPROVED, FAC_PREMIUM_CEDED) as JEs over the requested date range. Idempotent: re-running the same range posts zero new JEs (DB UNIQUE on idempotency triple). Pre-flight check refuses ranges that cross HARD-closed or SOFT-past-grace periods. Module 12 Slice 1.8a.",
+        "operationId": "startBackfillJournalEntries",
+        "tags": ["Finance \u2014 Admin"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["fromDate", "toDate"],
+                "properties": {
+                  "fromDate": {"type": "string", "format": "date", "description": "Inclusive lower bound on business date"},
+                  "toDate": {"type": "string", "format": "date", "description": "Inclusive upper bound on business date"},
+                  "eventTypes": {
+                    "type": "array",
+                    "description": "Narrowed event-type list. Empty or omitted means all six.",
+                    "items": {
+                      "type": "string",
+                      "enum": ["POLICY_APPROVED", "CLAIM_APPROVED", "CLAIM_SETTLED", "CLAIM_EXPENSE_APPROVED", "ENDORSEMENT_APPROVED", "FAC_PREMIUM_CEDED"]
+                    }
+                  },
+                  "dryRun": {"type": "boolean", "description": "When true, counts what would be posted but does not write any JEs"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Workflow started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "workflowId": {"type": "string", "description": "Temporal workflow id for status polling"},
+                        "tenantId": {"type": "string"},
+                        "dryRun": {"type": "boolean"},
+                        "startedAt": {"type": "string", "format": "date-time"}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing PLATFORM_ADMIN role"},
+          "422": {"description": "Invalid request body"}
+        }
+      }
+    },
+    "/admin/finance/backfill-journal-entries/{workflowId}": {
+      "get": {
+        "summary": "Get backfill workflow status",
+        "description": "Returns the current Temporal execution status of a previously started backfill workflow, plus the materialised BackfillResult when the workflow has completed. Never blocks. Returns executionStatus=NOT_FOUND when Temporal has no execution with the supplied id (e.g. id was never started, started in a different namespace, or aged out of the visibility retention window). Module 12 Slice 1.8b.",
+        "operationId": "getBackfillJournalEntriesStatus",
+        "tags": ["Finance \u2014 Admin"],
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"},
+            "description": "Temporal workflow id returned from the POST start call (format: backfill-{tenantId}-{epochMillis})"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status snapshot \u2014 always returned (NOT_FOUND surfaces inside executionStatus, not as HTTP 404)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "workflowId": {"type": "string"},
+                        "executionStatus": {
+                          "type": "string",
+                          "enum": ["RUNNING", "COMPLETED", "FAILED", "CANCELED", "TERMINATED", "TIMED_OUT", "CONTINUED_AS_NEW", "UNSPECIFIED", "NOT_FOUND"],
+                          "description": "Temporal's view of the workflow"
+                        },
+                        "result": {
+                          "type": "object",
+                          "nullable": true,
+                          "description": "Materialised only when executionStatus=COMPLETED",
+                          "properties": {
+                            "tenantId": {"type": "string"},
+                            "requestId": {"type": "string"},
+                            "status": {
+                              "type": "string",
+                              "enum": ["SUCCESS", "PARTIAL_FAILURE", "REFUSED"],
+                              "description": "Workflow's own verdict; distinct from executionStatus"
+                            },
+                            "dryRun": {"type": "boolean"},
+                            "startedAt": {"type": "string", "format": "date-time"},
+                            "completedAt": {"type": "string", "format": "date-time"},
+                            "totalAttempted": {"type": "integer", "format": "int64"},
+                            "totalPosted": {"type": "integer", "format": "int64"},
+                            "totalAlreadyExists": {"type": "integer", "format": "int64"},
+                            "totalFailed": {"type": "integer", "format": "int64"},
+                            "byEventType": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "eventType": {
+                                    "type": "string",
+                                    "enum": ["POLICY_APPROVED", "CLAIM_APPROVED", "CLAIM_SETTLED", "CLAIM_EXPENSE_APPROVED", "ENDORSEMENT_APPROVED", "FAC_PREMIUM_CEDED"]
+                                  },
+                                  "attempted": {"type": "integer", "format": "int64"},
+                                  "posted": {"type": "integer", "format": "int64"},
+                                  "alreadyExists": {"type": "integer", "format": "int64"},
+                                  "failed": {"type": "integer", "format": "int64"}
+                                }
+                              }
+                            },
+                            "refusalReason": {"type": "string", "nullable": true}
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Unauthorized"},
+          "403": {"description": "Forbidden \u2014 missing PLATFORM_ADMIN role"}
         }
       }
     },

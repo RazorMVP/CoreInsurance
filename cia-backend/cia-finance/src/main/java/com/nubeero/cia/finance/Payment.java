@@ -1,6 +1,7 @@
 package com.nubeero.cia.finance;
 
 import com.nubeero.cia.common.entity.BaseEntity;
+import com.nubeero.cia.common.entity.LockableByPeriod;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -17,7 +18,17 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "payments")
-public class Payment extends BaseEntity {
+public class Payment extends BaseEntity implements LockableByPeriod {
+
+    // ── Slice 1.7a — period-lock opt-in ──────────────────────────────────────
+    // Payment's lock date is paymentDate (when we paid the counterparty);
+    // that's the booking date for GL purposes.
+    @Override public LocalDate getLockDate() { return paymentDate; }
+
+    // Reversal carve-out: marking an existing Payment reversed (UPDATE setting
+    // reversedAt) must remain possible after the original period closes —
+    // otherwise reversals become operationally impossible after close.
+    @Override public boolean isReversal() { return reversedAt != null; }
 
     @Column(name = "payment_number", nullable = false, unique = true, length = 30)
     private String paymentNumber;

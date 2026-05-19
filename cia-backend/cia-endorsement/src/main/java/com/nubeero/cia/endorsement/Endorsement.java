@@ -1,12 +1,14 @@
 package com.nubeero.cia.endorsement;
 
 import com.nubeero.cia.common.entity.BaseEntity;
+import com.nubeero.cia.common.entity.LockableByPeriod;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -18,7 +20,21 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Endorsement extends BaseEntity {
+public class Endorsement extends BaseEntity implements LockableByPeriod {
+
+    // ── Slice 1.7a — period-lock opt-in ──────────────────────────────────────
+    // CRITICAL: lockDate is the BOOKING date (approvedAt → LocalDate), NOT
+    // the business-effective date (effectiveDate). An endorsement effective
+    // 2026-01-01 but approved 2026-03-15 books into March, not January. The
+    // LockableByPeriod javadoc spells this distinction out explicitly.
+    // Draft/un-approved endorsements return null → checkWrite ALLOWs.
+    @Override public LocalDate getLockDate() {
+        return approvedAt == null ? null : approvedAt.atOffset(ZoneOffset.UTC).toLocalDate();
+    }
+
+    // Cancellation is the closest reversal-style action — must remain
+    // operationally possible after the booking period closes.
+    @Override public boolean isReversal() { return cancelledAt != null; }
 
     @Column(name = "endorsement_number", nullable = false, unique = true, length = 30)
     private String endorsementNumber;

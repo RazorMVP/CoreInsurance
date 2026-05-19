@@ -135,6 +135,29 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
       </plugin>
+
+      <!--
+        Activate failsafe to run *IT.java tests during the integration-test
+        phase. Spring Boot's parent has failsafe in pluginManagement only,
+        so without this explicit activation `mvn verify` skipped every IT
+        in cia-api silently — including ReconciliationGateIT (Slice 1.9's
+        gateway). The scoped module-12-reconciliation.yml workflow runs
+        ReconciliationGateIT via `mvn test -Dtest=...` which bypasses
+        surefire's *IT exclusion; the main ci.yml's `mvn verify` did not.
+        This binding makes both workflows actually run the ITs.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
 

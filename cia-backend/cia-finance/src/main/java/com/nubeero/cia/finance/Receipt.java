@@ -1,6 +1,7 @@
 package com.nubeero.cia.finance;
 
 import com.nubeero.cia.common.entity.BaseEntity;
+import com.nubeero.cia.common.entity.LockableByPeriod;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -17,7 +18,20 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "receipts")
-public class Receipt extends BaseEntity {
+public class Receipt extends BaseEntity implements LockableByPeriod {
+
+    // ── Slice 1.7a — period-lock opt-in ──────────────────────────────────────
+    // Receipt's lock date is paymentDate (when the customer's money was
+    // received); that's the booking date for GL purposes, distinct from any
+    // effective-date semantics that don't apply to cash receipts.
+    @Override public LocalDate getLockDate() { return paymentDate; }
+
+    // Reversal carve-out: a Receipt being marked reversed (UPDATE setting
+    // reversedAt) must be permitted even if its original paymentDate sits in
+    // a now-closed period — otherwise reversal becomes operationally
+    // impossible once a period closes.
+    @Override public boolean isReversal() { return reversedAt != null; }
+
 
     @Column(name = "receipt_number", nullable = false, unique = true, length = 30)
     private String receiptNumber;

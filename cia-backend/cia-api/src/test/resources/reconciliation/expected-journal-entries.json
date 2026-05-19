@@ -1,0 +1,3086 @@
+{
+  "_description" : "Slice 1.9b — expected journal-entry shape after playing the 200-event canonical fixture. Each entry is keyed by the (source_module, source_event_type, source_reference) DB UNIQUE triple; lines preserve the posting-rule's original order. Regenerate with -Dsnapshot.update=true.",
+  "entryCount" : 200,
+  "lineCount" : 420,
+  "entries" : [ {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000001",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-001 on policy REC-POL-001",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000002",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-002 on policy REC-POL-002",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000003",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-003 on policy REC-POL-003",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000004",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-004 on policy REC-POL-004",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000005",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-005 on policy REC-POL-005",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000006",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-006 on policy REC-POL-006",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000007",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-007 on policy REC-POL-007",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000008",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-008 on policy REC-POL-008",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000009",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-009 on policy REC-POL-009",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000000a",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-010 on policy REC-POL-010",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000000b",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-011 on policy REC-POL-011",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000000c",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-012 on policy REC-POL-012",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000000d",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-013 on policy REC-POL-013",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000000e",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-014 on policy REC-POL-014",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000000f",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-015 on policy REC-POL-015",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000010",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-016 on policy REC-POL-016",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000011",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-017 on policy REC-POL-017",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000012",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-018 on policy REC-POL-018",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000013",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-019 on policy REC-POL-019",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000014",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-020 on policy REC-POL-020",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000015",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-021 on policy REC-POL-021",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000016",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-022 on policy REC-POL-022",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000017",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-023 on policy REC-POL-023",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000018",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-024 on policy REC-POL-024",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000019",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-025 on policy REC-POL-025",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000001a",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-026 on policy REC-POL-026",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000001b",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-027 on policy REC-POL-027",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000001c",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-028 on policy REC-POL-028",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000001d",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-029 on policy REC-POL-029",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000001e",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-030 on policy REC-POL-030",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000001f",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-031 on policy REC-POL-031",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000020",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-032 on policy REC-POL-032",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000021",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-033 on policy REC-POL-033",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000022",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-034 on policy REC-POL-034",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000023",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-035 on policy REC-POL-035",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000024",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-036 on policy REC-POL-036",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000025",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-037 on policy REC-POL-037",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000026",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-038 on policy REC-POL-038",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000027",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-039 on policy REC-POL-039",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_APPROVED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000028",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim approval for REC-CLM-040 on policy REC-POL-040",
+    "lines" : [ {
+      "accountCode" : "5110",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2140",
+      "debit" : "0.00",
+      "credit" : "50000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-000000000001",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-001 on claim REC-CLM-001",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-000000000002",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-002 on claim REC-CLM-002",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-000000000003",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-003 on claim REC-CLM-003",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-000000000004",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-004 on claim REC-CLM-004",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-000000000005",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-005 on claim REC-CLM-005",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-000000000006",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-006 on claim REC-CLM-006",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-000000000007",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-007 on claim REC-CLM-007",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-000000000008",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-008 on claim REC-CLM-008",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-000000000009",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-009 on claim REC-CLM-009",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-00000000000a",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-010 on claim REC-CLM-010",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-00000000000b",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-011 on claim REC-CLM-011",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-00000000000c",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-012 on claim REC-CLM-012",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-00000000000d",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-013 on claim REC-CLM-013",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-00000000000e",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-014 on claim REC-CLM-014",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-00000000000f",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-015 on claim REC-CLM-015",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-000000000010",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-016 on claim REC-CLM-016",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-000000000011",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-017 on claim REC-CLM-017",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-000000000012",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-018 on claim REC-CLM-018",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-000000000013",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-019 on claim REC-CLM-019",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_EXPENSE_APPROVED",
+    "sourceReference" : "00000a05-0000-0000-0000-000000000014",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Claim expense REC-EXP-020 on claim REC-CLM-020",
+    "lines" : [ {
+      "accountCode" : "5140",
+      "debit" : "10000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2350",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000001",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-001",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000002",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-002",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000003",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-003",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000004",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-004",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000005",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-005",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000006",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-006",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000007",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-007",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000008",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-008",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000009",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-009",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000000a",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-010",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000000b",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-011",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000000c",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-012",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000000d",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-013",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000000e",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-014",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-00000000000f",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-015",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000010",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-016",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000011",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-017",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000012",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-018",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000013",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-019",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a02-0000-0000-0000-000000000014",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-020",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-000000000015",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-021",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-000000000016",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-022",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-000000000017",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-023",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-000000000018",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-024",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-000000000019",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-025",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-00000000001a",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-026",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-00000000001b",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-027",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-00000000001c",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-028",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-00000000001d",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-029",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-00000000001e",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-030",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-00000000001f",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-031",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-000000000020",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-032",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-000000000021",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-033",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-000000000022",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-034",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-000000000023",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-035",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-000000000024",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-036",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-000000000025",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-037",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-000000000026",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-038",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-000000000027",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-039",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "claim",
+    "sourceEventType" : "CLAIM_SETTLED",
+    "sourceReference" : "00000a03-0000-0000-0000-000000000028",
+    "businessDate" : "2026-05-10",
+    "narrative" : "Settlement of claim REC-CLM-STA-040",
+    "lines" : [ {
+      "accountCode" : "2140",
+      "debit" : "40000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1120",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_ADDITIONAL",
+    "sourceReference" : "00000a04-0000-0000-0000-000000000001",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-PAIR-001A additional premium for policy REC-POL-001",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "20000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "20000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_ADDITIONAL",
+    "sourceReference" : "00000a04-0000-0000-0000-000000000002",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-PAIR-002A additional premium for policy REC-POL-002",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "20000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "20000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_ADDITIONAL",
+    "sourceReference" : "00000a04-0000-0000-0000-000000000003",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-PAIR-003A additional premium for policy REC-POL-003",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "20000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "20000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_ADDITIONAL",
+    "sourceReference" : "00000a04-0000-0000-0000-000000000004",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-PAIR-004A additional premium for policy REC-POL-004",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "20000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "20000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_ADDITIONAL",
+    "sourceReference" : "00000a04-0000-0000-0000-000000000005",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-PAIR-005A additional premium for policy REC-POL-005",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "20000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "20000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_ADDITIONAL",
+    "sourceReference" : "00000a04-0000-0000-0000-0000000000c9",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-201 additional premium for policy REC-POL-006",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "20000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "20000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_ADDITIONAL",
+    "sourceReference" : "00000a04-0000-0000-0000-0000000000ca",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-202 additional premium for policy REC-POL-007",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "20000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "20000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_ADDITIONAL",
+    "sourceReference" : "00000a04-0000-0000-0000-0000000000cb",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-203 additional premium for policy REC-POL-008",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "20000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "20000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_ADDITIONAL",
+    "sourceReference" : "00000a04-0000-0000-0000-0000000000cc",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-204 additional premium for policy REC-POL-009",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "20000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "20000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_ADDITIONAL",
+    "sourceReference" : "00000a04-0000-0000-0000-0000000000cd",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-205 additional premium for policy REC-POL-010",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "20000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "20000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_REFUND",
+    "sourceReference" : "00000a04-0000-0000-0000-000000000065",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-PAIR-001R premium refund for policy REC-POL-001",
+    "lines" : [ {
+      "accountCode" : "2110",
+      "debit" : "20000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1310",
+      "debit" : "0.00",
+      "credit" : "20000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_REFUND",
+    "sourceReference" : "00000a04-0000-0000-0000-000000000066",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-PAIR-002R premium refund for policy REC-POL-002",
+    "lines" : [ {
+      "accountCode" : "2110",
+      "debit" : "20000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1310",
+      "debit" : "0.00",
+      "credit" : "20000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_REFUND",
+    "sourceReference" : "00000a04-0000-0000-0000-000000000067",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-PAIR-003R premium refund for policy REC-POL-003",
+    "lines" : [ {
+      "accountCode" : "2110",
+      "debit" : "20000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1310",
+      "debit" : "0.00",
+      "credit" : "20000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_REFUND",
+    "sourceReference" : "00000a04-0000-0000-0000-000000000068",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-PAIR-004R premium refund for policy REC-POL-004",
+    "lines" : [ {
+      "accountCode" : "2110",
+      "debit" : "20000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1310",
+      "debit" : "0.00",
+      "credit" : "20000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_REFUND",
+    "sourceReference" : "00000a04-0000-0000-0000-000000000069",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-PAIR-005R premium refund for policy REC-POL-005",
+    "lines" : [ {
+      "accountCode" : "2110",
+      "debit" : "20000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1310",
+      "debit" : "0.00",
+      "credit" : "20000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_REFUND",
+    "sourceReference" : "00000a04-0000-0000-0000-00000000012d",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-301 premium refund for policy REC-POL-006",
+    "lines" : [ {
+      "accountCode" : "2110",
+      "debit" : "15000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1310",
+      "debit" : "0.00",
+      "credit" : "15000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_REFUND",
+    "sourceReference" : "00000a04-0000-0000-0000-00000000012e",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-302 premium refund for policy REC-POL-007",
+    "lines" : [ {
+      "accountCode" : "2110",
+      "debit" : "15000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1310",
+      "debit" : "0.00",
+      "credit" : "15000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_REFUND",
+    "sourceReference" : "00000a04-0000-0000-0000-00000000012f",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-303 premium refund for policy REC-POL-008",
+    "lines" : [ {
+      "accountCode" : "2110",
+      "debit" : "15000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1310",
+      "debit" : "0.00",
+      "credit" : "15000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_REFUND",
+    "sourceReference" : "00000a04-0000-0000-0000-000000000130",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-304 premium refund for policy REC-POL-009",
+    "lines" : [ {
+      "accountCode" : "2110",
+      "debit" : "15000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1310",
+      "debit" : "0.00",
+      "credit" : "15000.00"
+    } ]
+  }, {
+    "sourceModule" : "endorsement",
+    "sourceEventType" : "ENDORSEMENT_PREMIUM_REFUND",
+    "sourceReference" : "00000a04-0000-0000-0000-000000000131",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Endorsement REC-END-305 premium refund for policy REC-POL-010",
+    "lines" : [ {
+      "accountCode" : "2110",
+      "debit" : "15000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "1310",
+      "debit" : "0.00",
+      "credit" : "15000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000001",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-001",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000002",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-002",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000003",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-003",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000004",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-004",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000005",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-005",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000006",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-006",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000007",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-007",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000008",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-008",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000009",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-009",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000000a",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-010",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000000b",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-011",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000000c",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-012",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000000d",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-013",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000000e",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-014",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000000f",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-015",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000010",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-016",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000011",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-017",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000012",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-018",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000013",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-019",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000014",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-020",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000015",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-021",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000016",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-022",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000017",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-023",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000018",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-024",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000019",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-025",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000001a",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-026",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000001b",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-027",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000001c",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-028",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000001d",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-029",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000001e",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-030",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000001f",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-031",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000020",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-032",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000021",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-033",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000022",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-034",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000023",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-035",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000024",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-036",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000025",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-037",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000026",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-038",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000027",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-039",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000028",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-040",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000029",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-041",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000002a",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-042",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000002b",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-043",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000002c",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-044",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000002d",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-045",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000002e",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-046",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000002f",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-047",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000030",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-048",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000031",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-049",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000032",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-050",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000033",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-051",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000034",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-052",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000035",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-053",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000036",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-054",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000037",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-055",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000038",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-056",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-000000000039",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-057",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000003a",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-058",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000003b",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-059",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "policy",
+    "sourceEventType" : "POLICY_APPROVED",
+    "sourceReference" : "00000a01-0000-0000-0000-00000000003c",
+    "businessDate" : "2026-05-01",
+    "narrative" : "Premium booking for policy REC-POL-060",
+    "lines" : [ {
+      "accountCode" : "1310",
+      "debit" : "100000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "2110",
+      "debit" : "0.00",
+      "credit" : "100000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-000000000001",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-001 ceded to Recon Reinsurer 001",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-000000000002",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-002 ceded to Recon Reinsurer 002",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-000000000003",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-003 ceded to Recon Reinsurer 003",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-000000000004",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-004 ceded to Recon Reinsurer 004",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-000000000005",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-005 ceded to Recon Reinsurer 005",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-000000000006",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-006 ceded to Recon Reinsurer 006",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-000000000007",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-007 ceded to Recon Reinsurer 007",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-000000000008",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-008 ceded to Recon Reinsurer 008",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-000000000009",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-009 ceded to Recon Reinsurer 009",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-00000000000a",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-010 ceded to Recon Reinsurer 010",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-00000000000b",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-011 ceded to Recon Reinsurer 011",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-00000000000c",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-012 ceded to Recon Reinsurer 012",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-00000000000d",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-013 ceded to Recon Reinsurer 013",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-00000000000e",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-014 ceded to Recon Reinsurer 014",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-00000000000f",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-015 ceded to Recon Reinsurer 015",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-000000000010",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-016 ceded to Recon Reinsurer 016",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-000000000011",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-017 ceded to Recon Reinsurer 017",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-000000000012",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-018 ceded to Recon Reinsurer 018",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-000000000013",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-019 ceded to Recon Reinsurer 019",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  }, {
+    "sourceModule" : "reinsurance",
+    "sourceEventType" : "FAC_PREMIUM_CEDED",
+    "sourceReference" : "00000a07-0000-0000-0000-000000000014",
+    "businessDate" : "2026-05-31",
+    "narrative" : "Outward FAC REC-FAC-020 ceded to Recon Reinsurer 020",
+    "lines" : [ {
+      "accountCode" : "5210",
+      "debit" : "50000.00",
+      "credit" : "0.00"
+    }, {
+      "accountCode" : "4300",
+      "debit" : "0.00",
+      "credit" : "10000.00"
+    }, {
+      "accountCode" : "2310",
+      "debit" : "0.00",
+      "credit" : "40000.00"
+    } ]
+  } ]
+}

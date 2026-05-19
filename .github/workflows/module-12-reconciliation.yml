@@ -1,0 +1,74 @@
+name: Module 12 — Reconciliation Gate
+
+# Slice 1.9a — scoped CI workflow that runs only the reconciliation gate IT
+# (faster feedback than waiting for the full backend `mvn verify`). The full
+# ci.yml still runs the same test as part of `mvn verify` — this workflow is
+# the early signal for finance/closure-only PRs, not a replacement.
+#
+# Triggers on any change that could plausibly shift the trial balance: the
+# finance module itself, the GL Flyway migrations, the canonical fixture or
+# snapshot files, the IT class itself, and any change to this workflow file.
+#
+# Security note: this workflow does not interpolate any untrusted GitHub
+# Actions context (no github.event.*.title, *.body, *.message, head_ref,
+# etc.). All `run:` commands use static strings only — no command-injection
+# surface area.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cia-backend/cia-finance/**'
+      - 'cia-backend/cia-api/src/main/resources/db/migration/V3*.sql'
+      - 'cia-backend/cia-api/src/test/resources/reconciliation/**'
+      - 'cia-backend/cia-api/src/test/java/com/nubeero/cia/api/finance/reconciliation/**'
+      - '.github/workflows/module-12-reconciliation.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cia-backend/cia-finance/**'
+      - 'cia-backend/cia-api/src/main/resources/db/migration/V3*.sql'
+      - 'cia-backend/cia-api/src/test/resources/reconciliation/**'
+      - 'cia-backend/cia-api/src/test/java/com/nubeero/cia/api/finance/reconciliation/**'
+      - '.github/workflows/module-12-reconciliation.yml'
+
+jobs:
+  reconciliation-gate:
+    name: Trial-balance reconciliation gate (Testcontainers + Postgres)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+          cache-dependency-path: cia-backend/pom.xml
+
+      # The reactor build is needed first so cia-finance's compiled classes
+      # (referenced by the IT in cia-api) are on the classpath. -am builds
+      # dependencies; -DskipTests because we only want to run the gate test.
+      - name: Build reactor (no tests)
+        working-directory: cia-backend
+        run: mvn install -pl cia-api -am -DskipTests --batch-mode --no-transfer-progress
+
+      - name: Run reconciliation gate
+        working-directory: cia-backend
+        run: mvn test -pl cia-api -Dtest=ReconciliationGateIT --batch-mode --no-transfer-progress
+
+      - name: Upload Surefire reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reconciliation-gate-surefire
+          path: cia-backend/cia-api/target/surefire-reports/
+
+      - name: Snapshot regeneration hint on failure
+        if: failure()
+        run: |
+          echo "::warning title=Reconciliation gate failed::If the snapshot drift is intentional, regenerate with:"
+          echo "::warning::  mvn test -pl cia-api -Dtest=ReconciliationGateIT -Dsnapshot.update=true"
+          echo "::warning::Then commit the updated expected-trial-balance.json and explain in the PR description."

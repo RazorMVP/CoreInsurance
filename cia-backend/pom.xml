@@ -54,7 +54,16 @@
     <aws-sdk.version>2.25.60</aws-sdk.version>
     <bucket4j-starter.version>0.12.7</bucket4j-starter.version>
     <bucket4j.version>8.10.1</bucket4j.version>
-    <testcontainers.version>1.20.1</testcontainers.version>
+    <testcontainers.version>1.21.4</testcontainers.version>
+    <!--
+      docker-java 3.4.x defaults to Docker API v1.30, which Docker Engine 29.x
+      rejects with HTTP 400 (MinAPIVersion is 1.40). Testcontainers 1.21.4's BOM
+      still pins docker-java 3.4.2, so we explicitly override to 3.5.3 (first
+      release that raised the negotiated baseline). Without this override every
+      Testcontainers IT fails on Docker Desktop 29+ with
+      "Could not find a valid Docker environment".
+    -->
+    <docker-java.version>3.5.3</docker-java.version>
   </properties>
 
   <dependencyManagement>
@@ -217,6 +226,27 @@
         <groupId>com.bucket4j</groupId>
         <artifactId>bucket4j-redis</artifactId>
         <version>${bucket4j.version}</version>
+      </dependency>
+
+      <!-- ── docker-java override (must come BEFORE testcontainers-bom) ─
+           Docker 29.x requires API >= 1.40 (MinAPIVersion=1.40). docker-java
+           3.4.x defaults to v1.30 and gets HTTP 400 on every probe. 3.5.x
+           raises the baseline. First-declaration-wins ordering means we must
+           pin docker-java explicitly above the Testcontainers BOM import. -->
+      <dependency>
+        <groupId>com.github.docker-java</groupId>
+        <artifactId>docker-java-api</artifactId>
+        <version>${docker-java.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.github.docker-java</groupId>
+        <artifactId>docker-java-transport</artifactId>
+        <version>${docker-java.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.github.docker-java</groupId>
+        <artifactId>docker-java-transport-zerodep</artifactId>
+        <version>${docker-java.version}</version>
       </dependency>
 
       <!-- ── Testcontainers BOM ────────────────────────────────────── -->

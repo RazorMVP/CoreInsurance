@@ -1,12 +1,14 @@
 package com.nubeero.cia.reinsurance;
 
 import com.nubeero.cia.common.entity.BaseEntity;
+import com.nubeero.cia.common.entity.LockableByPeriod;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Entity
@@ -16,7 +18,15 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class RiFacCover extends BaseEntity {
+public class RiFacCover extends BaseEntity implements LockableByPeriod {
+
+    // ── Slice 1.7b — period-lock opt-in (same shape as Endorsement) ──────────
+    // approvedAt is the booking date; cancelledAt enables the reversal carve-out.
+    @Override public LocalDate getLockDate() {
+        return approvedAt == null ? null : approvedAt.atOffset(ZoneOffset.UTC).toLocalDate();
+    }
+
+    @Override public boolean isReversal() { return cancelledAt != null; }
 
     @Column(name = "fac_reference", unique = true, nullable = false, length = 50)
     private String facReference;
