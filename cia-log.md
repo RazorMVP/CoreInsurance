@@ -4,6 +4,107 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-19 — Session 71 (`module-12-period-end-closures`): Phase 2 IFRS 17 PAA complete (8 slices) + Phase 3 IFRS 9 opened (2 slices)
+
+### Context
+
+After yesterday's Module-12 IT debt cleanup (Session 70), the user kicked off a build audit and chose Phase 2 (IFRS 17 PAA measurement) as the next workstream. Over the course of this conversation we shipped **the entire Phase 2 — 8 slices** end-to-end, then opened Phase 3 (IFRS 9) with 2 slices. Plus a determinism fix to `TrialBalanceServiceIT` discovered during Slice 2.1.
+
+Branch went from 30 commits ahead of `main` to **40 commits ahead**.
+
+### What shipped
+
+**Phase 2 — IFRS 17 PAA measurement engine (8 slices, all on `module-12-period-end-closures`)**
+
+| Commit | Slice | Summary |
+|---|---|---|
+| `bd60c3b` | (fix) | `TrialBalanceServiceIT` determinism — Map.of → LinkedHashMap + drop ephemeral UUID from evidence snapshot. Two consecutive runs now produce zero git-diff on `reconciliation-evidence.json` |
+| `09264b0` | 2.1 | V36 PAA foundation — `portfolio`, `group_of_contracts`, `paa_lrc`, `paa_lic`, `paa_config` + FK promotion on `journal_entry_line.portfolio_id` / `contract_group_id`. 5 entities, 4 enums, 5 repos, 38 migration tests |
+| `dbb704e` | 2.2 | `ContractGroupingService` — `@EventListener(PolicyApprovedEvent)`; lazy portfolio creation by COB; group assignment with §22 permanence. New `policy_group_assignment` table (V37) with **full** UNIQUE (not partial) on `policy_id` to encode §22 permanence at schema level. 7 ITs |
+| `3d2e64d` | 2.3 | `LrcEngine` — stateless straight-line premium recognition. Posts `Dr 2110 / Cr 4110` via gateway. 18 unit tests + 7 ITs |
+| `5dbd18c` | 2.4 | `LicEngine` — claim roll-forward via SQL conditional-sum. v1 posts NO JE (underlying GL already correct via `SubledgerPostingService`). 9 ITs |
+| `0904e1a` | 2.5 | `PaaPeriodCloseService` orchestrator + `InsuranceServiceResult` (§83/§84 view). 6 ITs |
+| `cacee17` | 2.6 | `DiscountUnwindEngine` (§87-92) — P&L vs OCI routing per `paa_config.oci_election`. Posts `Dr 5520 / Cr 2140` (P&L) or `Dr 3430 / Cr 2140` (OCI). 8 unit tests + 5 ITs |
+| `eb69640` | 2.7 | `OnerousContractTestEngine` (§47-49) — cumulative-state target reconciliation; delta-based JE. Posts `Dr 5150 / Cr 2130` (recognise) or reverse. 7 ITs |
+| `7e1c3cc` | 2.8 | V38 `paa_movement_analysis` SQL view + `MovementAnalysisService` for §103 disclosure. 3 migration tests + 7 ITs |
+
+**Phase 3 — IFRS 9 financial instruments (2 slices opened)**
+
+| Commit | Slice | Summary |
+|---|---|---|
+| `daae91e` | 3.1 | V39 IFRS 9 foundation — `investment_holding`, `investment_carrying_value`, `investment_classification_history` (Type-2 SCD), `ifrs9_config` (singleton) + FK promotion on `journal_entry_line.holding_id`. 4 entities, 4 enums, 4 repos, 27 migration tests |
+| `40b594a` | 3.2 | `InvestmentClassificationService` — pure §4.1 classify() + register() + reclassify() with §B4.1.26 audit history. `Ifrs9HoldingController` (POST/POST-reclassify/GET/GET-by-id). 12 unit tests + 10 ITs |
+
+### Test growth
+
+| Metric | Session 70 (start) | Session 71 (end) | Δ |
+|---|---|---|---|
+| Failsafe ITs | 61 | **119** | +58 |
+| New unit-test classes | — | 3 (`LrcEngineMathTest`, `DiscountUnwindEngineMathTest`, `InvestmentClassificationServiceMathTest`) | — |
+| New IT classes | — | 9 (Phase 2: 6, Phase 3: 1, plus 2 migration tests) | — |
+| Migration tests added | — | V36 (38) + V37 (6) + V38 (3) + V39 (27) = 74 | — |
+| Maven module structure | — | New `cia-finance/paa` + `cia-finance/ifrs9` packages | — |
+
+`mvn verify` was green at every commit boundary.
+
+### Design patterns that emerged across the conversation
+
+**1. The `entityManager.flush()` rule — promoted from per-test fix to architectural rule.** It surfaced *six times* this session:
+- `ContractGroupingServiceIT` (Slice 2.2): test-side flush after service call before JdbcTemplate read
+- `LrcEngineIT` (Slice 2.3): same
+- `PaaPeriodCloseServiceIT` (Slice 2.5): same
+- **`PaaPeriodCloseService` itself (Slice 2.5)**: flush between engine writes and `InsuranceServiceResultService` JdbcTemplate read — first time it surfaced in PRODUCTION code, not test wiring
+- `PaaPeriodCloseService` (Slice 2.6): added a second flush between unwind engine and service result for the same reason
+- `PaaPeriodCloseService` (Slice 2.7): third flush slot added when onerous test was inserted into the pipeline
+
+The pattern: **any service that writes JPA entities and then reads them back via JdbcTemplate within the same transaction must flush in between.** Documented in commit messages for now; a future polish slice may codify as a `@PaaTransactional` annotation or template method.
+
+**2. Pure-function math helpers + Spring-managed service wrappers.** Every measurement decision is a static pure function (unit-testable, swappable):
+- `LrcEngine.earnedAmount` / `closingAmount` / etc. (Slice 2.3)
+- `OnerousContractTestEngine.targetLossComponent` (Slice 2.7)
+- `DiscountUnwindEngine.computeUnwind` (Slice 2.6)
+- `InvestmentClassificationService.classify` (Slice 3.2)
+
+Each tested standalone with 8–18 cases covering the decision matrix. The Spring service wraps DB writes around the pure function. Makes v2 actuarial-method swaps a one-line change at the pure-function call site.
+
+**3. Schema asymmetry encoding standard-permanence semantics.**
+- **IFRS 17 §22 onerousness assignment is permanent** → `group_of_contracts.onerousness` is a fixed column; `policy_group_assignment.policy_id` has a **full** UNIQUE (not partial) so soft-delete + re-insert is rejected. Audit corrections must UPDATE in place.
+- **IFRS 17 §47-49 loss component is mutable** → `paa_lrc.loss_component` is a routine column that the onerous-test engine reconciles every period.
+- **IFRS 9 §B4.1.26 reclassification is rare and audited** → `investment_classification_history` is a true Type-2 SCD; `previous_classification != new_classification` CHECK prevents no-op rows. `ifrs9_config` uses a **partial** unique index (singleton; replaceable via soft-delete) because accounting policy changes are legitimate.
+- **PaaConfig accounting policy is mutable** → partial unique index on `singleton_marker`, allows replacement via soft-delete (same pattern).
+
+Two layers of protection on every audit invariant: service-level guard + DB CHECK. Auditors will sample exactly these constraints.
+
+**4. The V32 COA foresight payoff.** Phase 2 + Phase 3 needed zero new COA accounts. Every IFRS 17 (`LRC_BEL`, `LIC_OCR`, `LC_CHANGE`, `INSURANCE_FINANCE_EXPENSE`, `INSURANCE_FINANCE_OCI`) and IFRS 9 (`AMORTISED_COST`, `FVOCI_DEBT`, `FVOCI_EQUITY`, `FVPL`, `ECL_EXPENSE`, `INTEREST_AC`, `OCI_DEBT_RESERVE`, etc.) role tag was already seeded by V32 (Slice 1.2). Engines look up accounts by role enum, never hardcoded codes inside business logic. The `Ifrs9Role` and `Ifrs17Role` enums are the stable contract; the COA codes are an implementation detail. Phase 4 (NAICOM submissions) will inherit the same property.
+
+**5. Stateless period computation beats opening = previous-closing chaining.** Every Phase 2 engine computes target state from policy/claim data + period boundaries, never reads prior `paa_*` rows. Idempotency is natural; out-of-order processing is harmless; re-runs are bit-identical. Cost: full per-policy/per-claim scan per period. v2 incremental engines can specialise this with the stateless engine as a verification spec.
+
+**6. `paa_lrc.closing_balance` semantic discovery (Slice 2.7).** The IT test I wrote assumed `closing = opening + received − earned` by arithmetic; actual closing is computed point-in-time via `closingAmount()`. For an inception-period policy: opening = ₦365k (full premium "remaining" at period.start by the math), received = ₦365k, earned = ₦31k, closing = ₦334k (not ₦699k). The roll-forward components are **independent point-in-time snapshots**, not arithmetic-related. Documented in the slice 2.7 commit; lesson for future engines.
+
+### Files modified
+
+Too many to list individually. Summary by area:
+
+- **Flyway migrations (4 new)**: V36 (PAA foundation), V37 (policy_group_assignment), V38 (movement_analysis view), V39 (IFRS 9 foundation)
+- **New packages**: `com.nubeero.cia.finance.paa` (33 files), `com.nubeero.cia.finance.ifrs9` (12 files)
+- **Touched existing files**: `FiscalPeriodNotFoundException` (added by-id constructor for 404 semantics), `TrialBalanceServiceIT` (Map.of → LinkedHashMap)
+
+### Open / deferred items
+
+- **Slice 2.7b (future)** — Risk Adjustment + IBNR engines. Slice 2.7 documented this as deferred until actuarial models (confidence-level VaR, chain ladder, Bornhuetter-Ferguson) are scoped. The `paa_lic` columns (`ibnr_estimate`, `ibnr_change`, `risk_adjustment`, `risk_adjustment_change`) are ready; engines fill them with zero in v1.
+- **Phase 3 slices 3.3–3.7** — AmortisedCostEngine, FairValueEngine, InvestmentEclEngine, PremiumReceivableEclEngine, IFRS 9 movement analysis disclosure view. Outline + slice plan documented in commit messages.
+- **Phase 4 — NAICOM submissions** — 4-6 weeks. Phase 2's movement-analysis view + Phase 3's investment-roll-forward feed the regulatory packs. Not started.
+- **Module 12 frontend** — Period browser, lock controls, close workflow, reconciliation dashboard. Backend is now ready to drive a UI through `PaaPeriodCloseService.closePeriod()` and the disclosure GETs. Not started.
+
+### Final state
+
+- Branch `module-12-period-end-closures`: **40 commits ahead of `main`**, fully pushed to origin
+- `mvn verify`: **BUILD SUCCESS** — 119 failsafe ITs, 0 failures, 0 errors, 1 skipped (benchmark)
+- Phase 1 complete (12 slices); Phase 2 complete (8 slices); Phase 3 in progress (2 of 7 slices done)
+- IFRS 17 PAA fully wired end-to-end from `PolicyApprovedEvent` → `ContractGroupingService` → period-close engines → §83/§84 service result + §103 movement analysis disclosure
+
+---
+
 ## 2026-05-18 — Session 70 (`module-12-period-end-closures`): Cleared the 4-layer Module-12 IT debt queue + wired failsafe so CI actually runs ITs
 
 ### Context
