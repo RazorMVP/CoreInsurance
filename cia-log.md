@@ -4,6 +4,46 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## Tracked follow-up items
+
+Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
+
+### Slice 1.10 (Phase 1 GL substrate follow-up) — promote `class_of_business` into `journal_entry_line.dimension_tags`
+
+**Status:** Scoped 2026-05-19 (during Phase 4 Slice 4.3). Not started. **Recommended execution: after Phase 4 merges to `main`.**
+
+**Rationale.** Slice 4.3 (`AnnualRevenueAccountEngine` / N01) needs per-class breakdown of premium written and claims incurred. The GL is the auditor-canonical source for that data, but `journal_entry_line` doesn't carry `class_of_business` — `SubledgerPostingService` (Slice 1.5), the Phase 2 PAA engines, and the Phase 3 IFRS-9 engines all post JEs without tagging class. So N01 currently reads from `policies` and `claims` directly (an "underwriting view"), not from the GL (the "auditor view"). Both data sources are independently audited, so the divergence is bounded — but the two substrates *can* drift if `SubledgerPostingService` ever misses a posting. The clean future state is: GL is the single source of truth for both N01 and N02, with class as a dimension on every JE line.
+
+**Why deferred (not done now).** Only N01 in Phase 4 needs class-broken-down GL data. Phase 4 slices 4.4–4.10 (Prudential, RI Quarterly, IFRS-17 disclosure, IFRS-9 disclosure, Investment Statement, NIID Status, orchestrator, rendering) either don't need class breakdown at all, or already have a clean read path (V38/V40 views, source tables for per-policy/per-claim registers). Pausing Phase 4 to refactor stable Phase-1/2/3 code for the sake of one engine is a worse trade than shipping Phase 4 with the documented divergence and addressing the substrate as a single-purpose follow-up after Phase 4 merges.
+
+**Scope.**
+
+| Item | Detail |
+|---|---|
+| V42 migration | Add `class_of_business_id UUID` column to `journal_entry_line` + index `(class_of_business_id) WHERE deleted_at IS NULL AND class_of_business_id IS NOT NULL`. Nullable — historical rows backfill is a separate step. No FK constraint to a class table in v1 (master data is in `cia-setup`; cross-module FK would entangle cia-finance to cia-setup). |
+| Refactor `SubledgerPostingService` | Tag JEs from `PolicyApprovedEvent` / `EndorsementApprovedEvent` / `ClaimApprovedEvent` / `ClaimSettledEvent` / `ClaimExpenseApprovedEvent` with the class_of_business_id carried on the event. Slice T1 already asserts these events publish with `classOfBusinessId` (PolicyApprovedEvent, others). |
+| Refactor `FacPremiumCededEvent` posting | This event currently has no `classOfBusinessId` field. Either add it to the event (breaking change — Slice T1 contract test must update), or look it up from the policy in the posting service. Slice 1.10 chooses the lookup path to keep the event lean. |
+| Phase 2 PAA engines | LrcEngine, LicEngine, DiscountUnwindEngine, OnerousContractTestEngine all post JEs but inherit class from the group_of_contracts (which is portfolio-keyed, not class-keyed). Decision: class is the COB of the policies in the group. PaaPeriodCloseService resolves class per group and passes it down. |
+| Phase 3 IFRS-9 engines | Investments don't have class_of_business semantics. These engines pass `null` for class_of_business_id. Documented in the V42 migration comment. |
+| Backfill | One-time migration (V42b or admin endpoint, TBD at execution time) that populates class_of_business_id on existing journal_entry_line rows by joining source_reference back to policies/claims. Idempotent. Rerunnable. |
+| Re-implement N01 over GL | Replace AnnualRevenueAccountEngine's source-table reads with `journal_entry_line` aggregates grouped by class_of_business_id. Existing AnnualRevenueAccountEngineIT scenarios remain valid (the inputs change from policies/claims rows to JE postings; the assertions on the payload remain the same). |
+| Update engine javadocs | Drop the "underwriting view, not GL view" caveats from N01's class doc; both engines are now GL-driven. |
+| Migration test | V42 `class_of_business_id` column present, indexed, nullable. Backfill IT covers: existing JEs gain the column populated correctly per source-record join. |
+
+**Acceptance criteria.**
+
+1. `journal_entry_line.class_of_business_id` populated on every JE posted by `SubledgerPostingService`, the Phase 2 PAA engines, and any future engine that takes a class-bearing event as input.
+2. AnnualRevenueAccountEngine reads exclusively from `journal_entry_line` for both totals and per-class breakdown.
+3. AnnualRevenueAccountEngine totals match `TrialBalanceService.trialBalanceAsOf(period.endDate)` for income-account totals — explicit reconciliation assertion in a new IT.
+4. Backfill completes idempotently on a 200-event reconciliation-gate fixture (reuse Slice 1.9 harness) with class_of_business_id correctly populated.
+5. `mvn verify` green across the full reactor (no regression in Phase 1/2/3 ITs).
+
+**Estimated effort.** 2 slices (1.10a substrate + posting refactor + backfill; 1.10b N01 re-implementation + reconciliation assertion). ~1 week.
+
+**Risk.** Backfill correctness — the join from `journal_entry_line.source_reference` back to the originating policy/claim must be unambiguous. v1 plan: assume source_reference is the UUID of the originating entity; for compound references (e.g. claim_expense JEs reference `claim_id|expense_id`), the backfill needs explicit handling per source_event_type.
+
+---
+
 ## 2026-05-19 — Session 72 (`module-12-period-end-closures`): Phase 3 IFRS 9 complete (slices 3.3–3.7) — measurement engines + disclosure view
 
 ### Context
