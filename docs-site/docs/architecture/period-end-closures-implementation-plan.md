@@ -7,21 +7,21 @@ sidebar_label: Period-End Closures (Implementation Plan)
 # Period-End Closures — Implementation Plan
 
 **Original draft:** 2026-05-09 (Status: Draft for review).
-**Reconciled to shipped reality:** 2026-05-19. Phase 1, Phase 2, and Phase 3 are complete and merged to `main` (tag `v0.12.0-period-end-closures`). Phase 4 is in progress on branch `slice-4-naicom-monthly-recap-submissions` (slices 4.1–4.3 shipped, 4.4–4.10 pending).
+**Reconciled to shipped reality:** 2026-05-20. **Phases 1–4 are complete and merged to `main`.** Phase 1 + Phase 2 + Phase 3 merged via `fe904f3`; Phase 4 (all 10 slices) merged via `50e5b11`; Slice 1.10 (GL-substrate enrichment — `class_of_business_id` promoted onto `journal_entry_line` + N01 over GL with reconciliation assertion) merged via `fd795f6`. Phase 5 (frontend) and Phase 6 (cross-tenant platform admin view) remain.
 
-**Phase numbering reconciled.** The original May-9 plan defined seven phases, with NAICOM submissions as "Phase 5" and a generic "Closure Orchestration" layer as "Phase 4." The team chose **per-domain orchestrators** (PaaPeriodCloseService for IFRS 17, a future SubmissionOrchestrator for NAICOM) over a generic activity registry, so the original Phase 4 was deferred and the remaining phases shifted down by one. Current numbering:
+**Phase numbering reconciled.** The original May-9 plan defined seven phases, with NAICOM submissions as "Phase 5" and a generic "Closure Orchestration" layer as "Phase 4." The team chose **per-domain orchestrators** (PaaPeriodCloseService for IFRS 17, NaicomSubmissionService for NAICOM) over a generic activity registry, so the original Phase 4 was deferred and the remaining phases shifted down by one. Current numbering:
 
 | Original plan | Current numbering | Status |
 |---|---|---|
-| §2 Phase 1 — GL Foundation | **Phase 1** | Shipped (12 slices) |
+| §2 Phase 1 — GL Foundation | **Phase 1** | Shipped (12 slices + Slice 1.10a/b GL-substrate enrichment) |
 | §3 Phase 2 — IFRS 17 PAA Measurement | **Phase 2** | Shipped (8 slices) |
 | §4 Phase 3 — cia-investments + IFRS 9 | **Phase 3** | Shipped (7 slices) — lives in `cia-finance/ifrs9/`, not a separate module |
 | §5 Phase 4 — Closure Orchestration + Activity Registry | **Deferred** (per-domain orchestration chosen instead) | Not built; see "Deferred work" section below |
-| §6 Phase 5 — NAICOM Submission Pack Generators | **Phase 4** | In progress (3 of 10 slices shipped) |
+| §6 Phase 5 — NAICOM Submission Pack Generators | **Phase 4** | **Shipped (all 10 slices)** |
 | §7 Phase 6 — Frontend Admin UI + Investments UI | **Phase 5** | Not started |
 | §8 Phase 7 — Finality Transitions + Cross-Tenant Platform View | **Phase 6** | Partial — per-period finality absorbed into Slice 1.7c (PPA workflow + period reopen + tenant_holiday calendar); cross-tenant platform view still not built |
 
-For slice-level detail on Phases 1–3 see `cia-log.md` sessions 60–72. For Phase 4 in-progress detail see the `slice-4-naicom-monthly-recap-submissions` branch and the upcoming Session 73 entry.
+For slice-level detail on Phases 1–3 see `cia-log.md` sessions 60–72. For Phase 4 + Slice 1.10 see the Phase 4 + Slice 1.10 session entries in `cia-log.md`.
 
 ---
 
@@ -35,7 +35,7 @@ Orchestration│  Phase 4  NAICOM submission pack generators (formerly plan-§6 
 Continuous   │  Tests, observability, documentation, performance, security review
 ```
 
-Phases 1–3 ran in parallel and are complete. Phase 4 (NAICOM submissions) depends on Phase 1's `journal_entry_line` substrate, Phase 2's V38 movement-analysis view, and Phase 3's V40 movement-analysis view. Phase 5 (Frontend) depends on Phase 4's SubmissionOrchestrator surface stabilising. Phase 6 (Platform) depends on Phases 4–5.
+Phases 1–4 are complete. Slice 1.10 closed the original Phase 1 ↔ Phase 4 substrate gap (`class_of_business_id` on JE lines, enabling N01 to read directly from GL with reconciliation against `TrialBalanceService`). Phase 5 (Frontend) depends on Phase 4's `NaicomSubmissionService` REST surface — now stable. Phase 6 (Platform) depends on Phases 4–5.
 
 ---
 
@@ -157,46 +157,56 @@ Phases 1–3 ran in parallel and are complete. Phase 4 (NAICOM submissions) depe
 
 ## 6. Phase 4 — NAICOM Submission Pack Generators
 
-**Status:** In progress on branch `slice-4-naicom-monthly-recap-submissions`. Slices 4.1–4.3 shipped; 4.4–4.10 pending. **Scope expanded from the original plan** — the May-9 plan listed 4 submission types (monthly recap, quarterly management account, quarterly ALM, annual returns); the current scope covers all 8 NAICOM N-reports (N01–N08) plus 2 IFRS disclosure packs (IFRS-17 §103, IFRS-9 §B5.5.39). Decision recorded in the slice plan; user-approved.
+**Status:** **Shipped 2026-05-19.** All 10 slices merged to `main` via merge commit `50e5b11`. 113 NAICOM ITs green on the merge tip; 275 cia-api failsafe ITs green across the full reactor. **Scope expanded from the original plan** — the May-9 plan listed 4 submission types (monthly recap, quarterly management account, quarterly ALM, annual returns); the actual scope covers all 8 NAICOM N-reports (N01–N08) plus 2 IFRS disclosure packs (IFRS-17 §103, IFRS-9 §B5.5.39).
 
-**Goal:** generate every NAICOM submission as a durable, period-bound, regulator-grade artifact tied to a fiscal period. Track each submission's state machine (DRAFT → SUBMITTED → ACKNOWLEDGED → ARCHIVED with RETRACTED branch). Render to PDF (auditor canonical) + CSV (NAICOM e-portal ingest). Upload via the existing `NaicomService` stub/REST adapter pattern.
+**Goal achieved:** generate every NAICOM submission as a durable, period-bound, regulator-grade artifact tied to a fiscal period. State machine (DRAFT → SUBMITTED → ACKNOWLEDGED → ARCHIVED with RETRACTED branch) enforced by `NaicomSubmissionService`. Render to PDF (auditor canonical, via Apache PDFBox) + CSV (RFC 4180 streaming for NAICOM e-portal ingest) + JSON (canonical machine-readable). Upload pipeline reuses the existing `NaicomService` stub/REST adapter pattern; live API swap deferred to when credentials land.
 
-**Slice plan:**
+**Slice ledger (all shipped):**
 
-| Slice | Scope | Status |
+| Slice | Scope | Commit |
 |---|---|---|
-| 4.1 | V41 schema (`naicom_submission` + `naicom_submission_artifact` + `naicom_submission_event` Type-2 SCD) + 3 entities + 3 enums + 3 repositories | Shipped |
-| 4.2 | `PremiumBordereauxEngine` (N05) + `ClaimsBordereauxEngine` (N06) — register-style engines reading `policies` + `claims` | Shipped |
-| 4.3 | `AnnualRevenueAccountEngine` (N01, underwriting view) + `BalanceSheetEngine` (N02, GL-driven via TrialBalanceService) | Shipped |
-| 4.4 | `PrudentialReturnEngine` (N03) — solvency margin from balance-sheet aggregates | Pending |
-| 4.5 | `RiQuarterlyReturnEngine` (N04) — ceded premium + claims per treaty + reinsurer | Pending |
-| 4.6 | `Ifrs17DisclosureEngine` — reads V38 paa_movement_analysis | Pending |
-| 4.7 | `Ifrs9DisclosureEngine` + `InvestmentStatementEngine` (N08) — read V40 | Pending |
-| 4.8 | `NiidStatusSnapshotEngine` (N07) — period-end NIID upload status freeze (NIID, not NAICOM, but shares submission infrastructure) | Pending |
-| 4.9 | `SubmissionOrchestrator` + REST controllers + state machine + `FINANCE_REGULATORY_SUBMIT` RBAC | Pending |
-| 4.10 | Artifact rendering (PDF via Apache PDFBox + CSV via RFC 4180 streaming) + `NaicomSubmissionService` stub/REST split + `NaicomSubmissionWorkflow` Temporal | Pending |
+| 4.1 | V41 schema (`naicom_submission` + `naicom_submission_artifact` + `naicom_submission_event` Type-2 SCD) + 3 entities + 3 enums + 3 repositories | `b8179b7` |
+| 4.2 | `PremiumBordereauxEngine` (N05) + `ClaimsBordereauxEngine` (N06) — register-style engines reading `policies` + `claims` | `f2d5104` |
+| 4.3 | `AnnualRevenueAccountEngine` (N01, originally underwriting view; rewritten over GL in Slice 1.10b) + `BalanceSheetEngine` (N02, GL-driven via `TrialBalanceService`) | `f34d6b4` |
+| 4.4 | `PrudentialReturnEngine` (N03) — solvency margin from balance-sheet aggregates + period-bounded income | `32fa3d9` |
+| 4.5 | `RiQuarterlyReturnEngine` (N04) — ceded premium per treaty + per reinsurer rollup | `517925e` |
+| 4.6 | `Ifrs17DisclosureEngine` — service-relay over `MovementAnalysisService` (V38) | `6da6c7d` |
+| 4.7 | `Ifrs9DisclosureEngine` (relay over `Ifrs9MovementAnalysisService` / V40) + `InvestmentStatementEngine` (N08, direct-source point-in-time snapshot) | `8b48bda` |
+| 4.8 | `NiidStatusSnapshotEngine` (N07) — period-end NIID upload status freeze (NIID, not NAICOM, but shares submission infrastructure) | `202f298` |
+| 4.9 | `NaicomSubmissionService` orchestrator + REST controllers (`/api/v1/finance/naicom/submissions`) + state machine + 4 exceptions w/ `@ResponseStatus` + `FINANCE_VIEW`/`FINANCE_APPROVE` RBAC + retrofit of all 10 engines to `NaicomSubmissionEngine` interface | `c913c92` |
+| 4.10 | Artifact rendering (JSON via Jackson + CSV via RFC 4180 + PDF via Apache PDFBox) + `SubmissionArtifactService` + storage via `DocumentStorageService` + 3 REST endpoints for render / list / download | `b5184ed` |
 
-**Architecture invariants this phase establishes:**
+**Slice 1.10a/b — GL-substrate enrichment (shipped 2026-05-20, merge `fd795f6`):**
+
+| Slice | Scope | Commit |
+|---|---|---|
+| 1.10a | V42 (`class_of_business_id` column + partial index on `journal_entry_line`) + V43 backfill across 5 event-type code paths + `PolicyClassResolver` + `SubledgerPostingService` refactor (resolves class per event) + 9-arg back-compat constructor on `JournalEntryLineRequest` + 34 IT flyway-target bumps | `e324367` |
+| 1.10b | `AnnualRevenueAccountEngine` re-implementation over GL (SUM(credit_amount) on POLICY_APPROVED / CLAIM_APPROVED JEs, JOIN `classes_of_business` for display) + IT rewrite seeding JEs directly + reconciliation assertion against independent JE aggregate | `7b8c5ad` |
+
+**Architecture invariants this phase established:**
 
 - **Submissions never post JEs.** Read-side aggregates over already-posted ledger state. JE gateway uninvolved.
 - **Idempotency triple = `(submission_type, period_id, tenant_id)`.** Partial UNIQUE under `deleted_at IS NULL`. Re-running an engine for an existing DRAFT updates the payload in place; once SUBMITTED, payload is frozen.
 - **Period-lock precondition: HARD_CLOSED required.** Enforced in `NaicomSubmissionService` (Slice 4.9), not by DB constraint. The regulator's expectation is that submitted figures don't change post-submission.
 - **State history via Type-2 SCD.** `naicom_submission_event` records every transition. Auditors traverse the row sequence to reconstruct the path.
-- **N01 reads source tables, N02 reads the GL.** Surfaced in Slice 4.3 — `journal_entry_line` doesn't carry `class_of_business`, so N01's per-class breakdown comes from `policies` + `claims`. Documented divergence; Slice 1.10 (queued in cia-log.md backlog) addresses by promoting class into `dimension_tags`.
+- **Retract / archive soft-delete to vacate the UNIQUE slot.** A retracted submission frees the `(submission_type, period_id)` key for a fresh corrected submission; the original row survives via `deleted_at` for audit.
+- **N01 over GL.** Originally Slice 4.3 read source tables because `journal_entry_line` had no `class_of_business_id`. Slice 1.10a + 1.10b closed that gap — N01 now reads class-broken-down totals from `journal_entry_line` aggregates with an explicit reconciliation assertion against an independent JE aggregate.
 
-**Exit criteria (Phase 4 complete):**
+**Exit criteria — all met:**
 
-- All 10 submission types generate from sample tenant data with deterministic, replayable payloads.
-- HARD_CLOSED period precondition correctly rejects DRAFT generation on non-hard-closed periods.
-- State-machine transitions are atomic and auditable; the event chain reproduces every transition with `from_state`, `to_state`, `actor`, `reason`, `occurred_at`.
-- Marking a submission as ACKNOWLEDGED populates `naicom_uid` and triggers any downstream effects (TBD in Slice 4.9 design — likely a `SubmissionAcknowledgedEvent` that Phase 6's hard-close confirmation listens to).
-- `mvn verify` green; the existing `module-12-reconciliation.yml` 200-event gate continues to pass; a new IT gate covers the submission lifecycle end-to-end.
+- ✓ All 10 submission types generate from sample tenant data with deterministic, replayable payloads (113 ITs cover the engines + orchestrator end-to-end).
+- ✓ HARD_CLOSED period precondition correctly rejects DRAFT generation on non-hard-closed periods (`PeriodNotHardClosedException` → HTTP 422).
+- ✓ State-machine transitions are atomic and auditable; the event chain reproduces every transition with `from_state`, `to_state`, `actor`, `reason`, `occurred_at`.
+- ✓ Marking a submission as ACKNOWLEDGED populates `naicom_uid` (V41 CHECK constraint enforces it NOT NULL once ACKNOWLEDGED).
+- ✓ `mvn verify` green: 275 cia-api failsafe ITs, 0 failures, 0 errors, 1 intentional benchmark skip.
 
-**Engineering watch-outs (still active):**
+**Deferred to v2 (documented in each engine's javadoc and in the Slice 4.10 commit body):**
 
-- **Real NAICOM API format is a known-unknown.** Slice 4.10 ships against `StubNaicomSubmissionService`. Live `NaicomRestService` swap when credentials + spec arrive — same pattern as the existing per-policy `NaicomService`.
-- **PrudentialReturnEngine solvency-margin formula** — Nigerian NAICOM's exact formula (admitted-assets calculation) is in NAICOM Operational Guidelines, not the code. Slice 4.4 implements a reasonable model with the formula documented in the engine's javadoc; auditor sign-off on the formula is a separate ops step.
-- **Backfilled JEs vs Phase 4 historical accuracy** — Phase 4 reads JEs (for N02 via trial balance) and source tables (for N01/N05/N06). Policies approved before Phase 1 launched lack a JE backing unless Slice 1.8 backfill ran. Phase 4 should assume backfill has been run for any period it generates a submission for.
+- **Live NAICOM API swap** — Slice 4.10 ships against `StubNaicomSubmissionService`. Live `NaicomRestService` swap when credentials + API spec arrive. Same Spring-profile pattern as the existing per-policy `NaicomService`.
+- **Per-submission-type purpose-built CSV / PDF templates** — v1 ships generic layouts (flattened scalars + section-per-list for CSV; cover page + paginated JSON body for PDF). NAICOM-prescribed forms can be implemented per submission type when the regulator publishes them.
+- **PDF Naira-sign + em-dash glyph coverage** — `PdfArtifactRenderer` strips chars outside WinAnsi (the standard14 fonts cover Latin-1 only). v2 should embed a TTF that covers Latin Extended + currency-symbol ranges.
+- **Phase 2 PAA engine `class_of_business_id` resolution** — PAA engines (`LrcEngine`, `LicEngine`, `DiscountUnwindEngine`, `OnerousContractTestEngine`) post JEs with the back-compat constructor that defaults `class_of_business_id` to null. Resolving class from the policies in the contract group is a future slice; doesn't block N01 (PAA JEs don't feed the revenue account).
+- **`PrudentialReturnEngine` admitted-assets refinement** — N03's solvency-margin formula uses the conservative-defensible 15% minimum-capital-of-premium-written calculation. NAICOM Operational Guideline's full admitted-assets exclusions + statutory floor + Tier-1/Tier-2 logic are deferred to v2; engine documents this explicitly in the payload's `notes` field.
 
 ---
 
@@ -324,11 +334,12 @@ Original plan estimated 17 sprints / 17 weeks for the full Module 12 build with 
 | Sprint 7 | 2026-05-19 (single session) | Phase 2 (8 slices) shipped in one extended session. The pure-function math + Spring service wrapper pattern, plus the V32 COA foresight payoff (zero new accounts needed), enabled this pace. |
 | Sprint 8 | 2026-05-19 (continued) | Phase 3 (7 slices) shipped same session. Same pattern. |
 | Sprint 9 | 2026-05-19 | Slice T1 (focused upstream contract tests for the 6 events Module 12 consumes). |
-| Sprint 10 | 2026-05-19 (in progress) | Phase 4 slices 4.1–4.3 shipped. 4.4–4.10 pending. |
+| Sprint 10 | 2026-05-19 | Phase 4 slices 4.1–4.10 shipped end-to-end. Merge to `main` via `50e5b11`. |
+| Sprint 11 | 2026-05-20 | Slice 1.10a + 1.10b — GL-substrate enrichment (`class_of_business_id` on JE lines) + N01 over GL with reconciliation assertion. Merge to `main` via `fd795f6`. |
 
-**Calendar-time reality:** Phases 1–3 + T1 took ~10 weeks of calendar time with one developer plus AI-assisted slice execution. The original estimate of 16–20 weeks with 3 engineers turned out to be wildly conservative for this pace; the original estimate of 30–40 weeks for one engineer sequential is what you'd get without the slice discipline and the JE-gateway architecture.
+**Calendar-time reality:** Phases 1–4 + T1 + Slice 1.10 took ~10 weeks of calendar time with one developer plus AI-assisted slice execution. The original estimate of 16–20 weeks with 3 engineers turned out to be wildly conservative for this pace; the original estimate of 30–40 weeks for one engineer sequential is what you'd get without the slice discipline and the JE-gateway architecture.
 
-**Remaining estimate:** Phase 4 ships in 1–2 weeks (7 slices remaining; bordereaux pattern proven). Phase 5 frontend is ~3 weeks (existing frontend-build patterns). Phase 6 is ~1 week (small scope after Phase 1 absorbed most of Phase 7's original work).
+**Remaining estimate:** Phase 5 frontend is ~3 weeks (existing frontend-build patterns; Phase 4 REST surface stable). Phase 6 is ~1 week (small scope after Phase 1 absorbed most of Phase 7's original work).
 
 ---
 
@@ -338,4 +349,4 @@ Original plan estimated 17 sprints / 17 weeks for the full Module 12 build with 
 - `period-end-closures-foundations-plan.md` — earlier PR-slice expansion of Phases 1–3; superseded by the slice-level detail in `cia-log.md` sessions 60–72.
 - `production-readiness-tracker.md` — adjacent gates (Temporal worker management, PII handling, deployment) that this plan inherits.
 - `database-migration-runbook.md` — established procedure for Flyway migrations during deployment.
-- `cia-log.md` — session-level shipping log (sessions 60–72 cover Phases 1–3 + T1; session 73 will cover Phase 4 in progress).
+- `cia-log.md` — session-level shipping log (sessions 60–72 cover Phases 1–3 + T1; the Phase 4 + Slice 1.10 session entry covers the Module 12 finishing work that landed 2026-05-19/20).
