@@ -4,6 +4,92 @@ All changes, decisions, and configurations made during the development of the Co
 
 ---
 
+## 2026-05-19 — Session 72 (`module-12-period-end-closures`): Phase 3 IFRS 9 complete (slices 3.3–3.7) — measurement engines + disclosure view
+
+### Context
+
+Session 71 left Phase 3 IFRS 9 opened with slices 3.1 (V39 foundation) and 3.2 (`InvestmentClassificationService`). This session shipped the remaining **five Phase 3 slices end-to-end** — every IFRS 9 measurement engine (amortised cost, fair value, ECL for both investments and premium receivables) plus the §B5.5.39 disclosure view that Phase 4 NAICOM submissions will consume.
+
+Branch went from 40 commits ahead of `main` (end of Session 71, commit `6e0cc0d`) to **46 commits ahead** (`afb7623`), fully pushed to origin.
+
+### What shipped
+
+| Commit | Slice | Summary |
+|---|---|---|
+| `8975101` | 3.3 | `AmortisedCostEngine` (§5.4.1 effective interest method) — posts `Dr 1250 INVESTMENT_AT_AMORTISED_COST` / `Cr 4210 INTEREST_INCOME_AC` for accruals, additional `Dr 1230 / Cr 1250` net-down lines on coupon receipts. New `Ifrs9AmortisedCostController` (`POST /api/v1/finance/ifrs9/amortised-cost/recognise`). 1 unit-test class (`AmortisedCostEngineMathTest`), 1 IT class (`AmortisedCostEngineIT`, 23 @Test methods). Idempotency via JE-gateway triple `(IFRS9_AMORTISED_COST, INTEREST_ACCRUAL, holdingId+periodId)`; second-run dedupe asserted in IT. |
+| `7f2b0af` | 3.4 | `FairValueEngine` (§5.7 — remeasurement with classification-driven routing). FVPL → P&L (`Dr 4250` gain / `Cr 5330` loss); FVOCI_DEBT → OCI reserve (`Dr/Cr 3410`); FVOCI_EQUITY → OCI reserve (`Dr/Cr 3420`); AC holdings refuse remeasurement (`UnsupportedFairValueOperationException`). `closing_fair_value IS NULL` on the period's `investment_carrying_value` row is the natural idempotency sentinel — re-runs that find it already set skip the holding silently. New `Ifrs9FairValueController` + `RecogniseFairValuesRequest`. 1 unit-test class (`FairValueEngineRoutingTest`), 1 IT class (`FairValueEngineIT`, 19 @Test methods). **Caught during Slice 3.4:** `routeJe` bare call threw for FVPL — fixed by routing through `routeJeFor(assetType, classification)` which delegates to the asset-type lookup for FVPL. |
+| `301f67c` | 3.5 | `InvestmentEclEngine` (§5.5 + §5.7.10A — three-stage ECL routing). AC holdings: ECL reduces asset directly (`Dr 5310 ECL_EXPENSE_AC` / `Cr 1140 ECL_AC_ALLOWANCE`). FVOCI_DEBT holdings: ECL routes to OCI reserve while carrying value stays at fair value (`Dr 5310` / `Cr 3410`) — the §5.7.10A "ECL in OCI" rule, not the FVPL pattern. FVPL holdings: no ECL (impairment IS the fair-value movement). New `Ifrs9EclController` + `RecogniseEclRequest`. 1 unit-test class (`InvestmentEclEngineRoutingTest`), 1 IT class (`InvestmentEclEngineIT`, 21 @Test methods). |
+| `b7ed414` | 3.6 | `PremiumReceivableEclEngine` (§5.5.15 simplified approach) — admin supplies aging-bucket provision matrix `[(label, outstandingAmount, defaultRate)]`; engine computes `lifetime ECL = Σ(outstanding × rate)` and posts the **delta** vs cumulative prior allowance. Posts `Dr 5350 PREMIUM_ECL_EXPENSE` / `Cr 1340 PREMIUM_ECL_ALLOWANCE` (increase) or reverse (release). **Provision matrix is embedded verbatim in the JE narrative** — Slice 3.7's premium-receivable section reads it back via JE aggregate, so the JE table doubles as the §B5.5.36 disclosure substrate (no separate `premium_provision_matrix` history table in v1). New `Ifrs9PremiumReceivableEclController` + `RecognisePremiumReceivableEclRequest`. 1 unit-test class (`PremiumReceivableEclEngineMathTest`), 1 IT class (`PremiumReceivableEclEngineIT`, 17 @Test methods). |
+| `afb7623` | 3.7 | V40 `ifrs9_investment_movement_analysis` SQL view + `Ifrs9MovementAnalysisService` (read-only DTO composition for §B5.5.39 disclosure). View joins `investment_holding × investment_carrying_value × fiscal_period` with 25 disclosure columns + computed `total_pnl_income` and `total_oci_movement`. Service composes two sections: **investments** (from V40 view, aggregated by holding + classification totals) and **premium receivable ECL** (derived from JE aggregate on account 1340 by `business_date` — opening = sum prior periods, closing = sum through period-end, movement = closing − opening). New `Ifrs9MovementAnalysisController` (`GET /api/v1/finance/ifrs9/movement-analysis/{periodId}`, `FINANCE_VIEW` RBAC). 1 migration-test class (`V40Ifrs9MovementAnalysisViewMigrationTest`, 3 tests), 1 IT class (`Ifrs9MovementAnalysisServiceIT`, 17 @Test methods). |
+
+### Files modified
+
+- **Flyway migration (1 new):** `V40__create_ifrs9_movement_analysis_view.sql`
+- **`cia-finance/ifrs9` package (5 new engines/services + 5 new controllers + 5 new request DTOs + 4 new result DTOs + 1 new exception):**
+  - `AmortisedCostEngine.java`, `AmortisedCostResult.java`, `AmortisedCostAlreadyDoneException.java`, `Ifrs9AmortisedCostController.java`
+  - `FairValueEngine.java`, `FairValueResult.java`, `Ifrs9FairValueController.java`, `RecogniseFairValuesRequest.java`
+  - `InvestmentEclEngine.java`, `EclRecognitionResult.java`, `Ifrs9EclController.java`, `RecogniseEclRequest.java`
+  - `PremiumReceivableEclEngine.java`, `PremiumReceivableEclResult.java`, `Ifrs9PremiumReceivableEclController.java`, `RecognisePremiumReceivableEclRequest.java`
+  - `Ifrs9MovementAnalysis.java` (DTO record nest), `Ifrs9MovementAnalysisService.java`, `Ifrs9MovementAnalysisController.java`
+- **`cia-finance/test/ifrs9`:** 4 unit-test classes (math/routing) — `AmortisedCostEngineMathTest`, `FairValueEngineRoutingTest`, `InvestmentEclEngineRoutingTest`, `PremiumReceivableEclEngineMathTest`
+- **`cia-api/test/finance/ifrs9`:** 5 new IT classes — `AmortisedCostEngineIT`, `FairValueEngineIT`, `InvestmentEclEngineIT`, `PremiumReceivableEclEngineIT`, `Ifrs9MovementAnalysisServiceIT`
+- **`cia-api/test/migration`:** `V40Ifrs9MovementAnalysisViewMigrationTest`
+- **Diff summary:** 30 files / 4,580 insertions / 0 deletions since `6e0cc0d`
+
+### Internal API surface added (Module 12 / IFRS 9)
+
+All under `FINANCE_APPROVE` (writes) or `FINANCE_VIEW` (reads); none are partner-facing.
+
+| Method | Path | RBAC | Slice |
+|---|---|---|---|
+| POST | `/api/v1/finance/ifrs9/amortised-cost/recognise` | `FINANCE_APPROVE` | 3.3 |
+| POST | `/api/v1/finance/ifrs9/fair-value/recognise` | `FINANCE_APPROVE` | 3.4 |
+| POST | `/api/v1/finance/ifrs9/ecl/recognise` | `FINANCE_APPROVE` | 3.5 |
+| POST | `/api/v1/finance/ifrs9/premium-receivable-ecl/recognise` | `FINANCE_APPROVE` | 3.6 |
+| GET | `/api/v1/finance/ifrs9/movement-analysis/{periodId}` | `FINANCE_VIEW` | 3.7 |
+
+**Partner API impact:** none. No `cia-partner-api` files were touched; **no Postman collection regeneration required** for this session.
+
+### Test growth
+
+| Metric | Session 71 end | Session 72 end | Δ |
+|---|---|---|---|
+| Total failsafe ITs (project-wide) | 119 | **160** | +41 |
+| Finance @Test methods across ITs | n/a | **199** across 21 ITs | — |
+| Finance IT classes in `cia-api` | 16 | **21** | +5 |
+| Unit-test classes added | — | 4 | — |
+| Flyway migrations added | — | 1 (V40) | — |
+
+`mvn verify` was green at every commit boundary; 0 failures across all 160 ITs.
+
+### Design observations from this session
+
+**1. The `closing_fair_value IS NULL` sentinel pattern (Slice 3.4).** The FairValueEngine doesn't keep an explicit "fair value recognised" flag on `investment_carrying_value`; it asks "is `closing_fair_value` set for this (holding, period) row?" That single column already records the recognition state, so re-runs that find it set skip the holding without needing a separate `paa_*` style audit row. Generalisable rule: when a column's nullability already encodes the operation's idempotency state, no helper flag is needed.
+
+**2. The §5.7.10A OCI-routing rule for FVOCI_DEBT ECL (Slice 3.5).** This was the subtlest IFRS 9 rule to encode. For FVOCI_DEBT, ECL movements do NOT touch the asset's carrying value (which stays at fair value) — they route to the OCI reserve. AC ECL movements DO reduce the asset (via contra-allowance account 1140). Conceptually: FVPL has no ECL because impairment IS the fair-value loss; AC's only "fair value adjustment" IS the ECL allowance; FVOCI_DEBT splits these — fair value moves freely to OCI, ECL also moves to OCI separately. The routing matrix in `InvestmentEclEngine.routeJe` mirrors the §5.7 standard structurally.
+
+**3. JE narrative as disclosure substrate (Slice 3.6).** Premium-receivable provision matrix lives in the JE narrative — `Lifetime ECL: ₦12,500 (Current ₦5,000@1%, 1-30d ₦4,000@2.5%, ...)` — so Slice 3.7's premium-receivable section reads it back via JE aggregate on account 1340 with no separate matrix-history table. Cuts schema by one table and keeps the JE table as the single source of truth for §B5.5.36 evidence. The trade-off: querying historical matrices requires JE narrative parsing. v2 may extract this into `premium_provision_matrix` if reporting demand makes parsing painful.
+
+**4. Disclosure-view-as-engine-output-aggregator pattern (Slice 3.7).** V40 is the IFRS 9 analogue of V38 (Phase 2 §103). Both join their measurement tables onto `fiscal_period` and surface roll-forward columns the disclosure standard requires (opening / period movements / closing). The Phase 4 NAICOM submission engine reads these views directly without touching the service layer — `Ifrs9MovementAnalysisService` and `MovementAnalysisService` are conveniences for in-app browsing, not gating layers.
+
+**5. `routeJe` → `routeJeFor` lesson (Slice 3.4 fix).** The FairValueEngine initially called a bare `routeJe(classification)` that threw for FVPL. The fix re-routed through `routeJeFor(assetType, classification)` — for FVPL the routing depends on asset type, not classification alone. Caught by IDE warning during slice 3.4 review, verified by the user. Documented here so future engines that route by `(assetType, classification)` follow the same naming convention (`routeJeFor`, not `routeJe`).
+
+### Open / deferred items
+
+- **Phase 4 — NAICOM monthly recap submissions** — outline in PRD. Phase 2's `paa_movement_analysis` (V38) and Phase 3's `ifrs9_investment_movement_analysis` (V40) views are the read-side substrate. 4–6 weeks estimated.
+- **Module 12 frontend** — period browser, lock controls, close workflow, reconciliation dashboard, IFRS-17/IFRS-9 movement-analysis disclosures. Backend is fully ready; no UI started.
+- **v2 actuarial-method swaps** — RA and IBNR engines (Phase 2 Slice 2.7b deferred); incremental-EIM amortisation (Phase 3 follow-up to stateless engines); per-tenant aging-bucket auto-derivation for premium receivables (Slice 3.6 v2).
+- **Partner API exposure for read-side disclosures** — `GET /partner/v1/finance/disclosures/...` is a candidate when an Insurtech aggregator needs end-of-period evidence. Out of scope for this session.
+
+### Final state
+
+- Branch `module-12-period-end-closures`: **46 commits ahead of `main`**, fully pushed to `origin`
+- Latest commit: `afb7623 feat(finance): slice 3.7 — IFRS 9 §B5.5.39 movement analysis disclosure view`
+- `mvn verify`: **BUILD SUCCESS** — 160 failsafe ITs, 0 failures, 0 errors
+- **Module 12 status: Phases 1–3 COMPLETE.** Phase 4 (NAICOM) and Module 12 frontend are the next workstreams. All IFRS 17 PAA + IFRS 9 measurement engines wired through the Slice 1.4 JE gateway; all idempotency, period-lock, and reconciliation contracts honoured.
+
+---
+
 ## 2026-05-19 — Session 71 (`module-12-period-end-closures`): Phase 2 IFRS 17 PAA complete (8 slices) + Phase 3 IFRS 9 opened (2 slices)
 
 ### Context
