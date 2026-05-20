@@ -8,11 +8,24 @@ sidebar_label: Period-End Closures (Foundations Plan)
 
 Plan date: 2026-05-09
 
-Status: Draft for review
+Status: **Historical** — Phases 1, 2, 3 all shipped (see [`period-end-closures-implementation-plan.md`](./period-end-closures-implementation-plan.md) for shipped slice anchors).
 
-Branch (intended integration target): `module-12-period-end-closures`
+Branch (integration target — now merged): `module-12-period-end-closures`
 
-Scope: This document expands `period-end-closures-implementation-plan.md` Phases 1, 2, and 3 to PR-slice granularity. Phases 4–7 remain at the granularity of the parent plan and are revisited at the Week 13 replan checkpoint.
+Scope: This document expands [`period-end-closures-implementation-plan.md`](./period-end-closures-implementation-plan.md) Phases 1, 2, and 3 to PR-slice granularity. **All three phases shipped end-to-end** between 2026-05-12 and 2026-05-19 across 27 slices. Phase 4 (NAICOM monthly recap submissions) was subsequently scoped at the parent-plan granularity and shipped 2026-05-19/20 across 10 slices (see commit `50e5b11`); Phase 5 (frontend) and Phase 6 (cross-tenant platform admin) remain on backlog.
+
+## 0. Implementation Note — Module Layout As Shipped
+
+The plan below referenced two new modules — `cia-investments` (Phase 3) and `cia-closure` (Phase 4–7 orchestration) — that were never created. The shipped layout co-locates all Module 12 code as subpackages of `cia-finance`:
+
+| Planned module | As shipped |
+| --- | --- |
+| `cia-investments` (IFRS 9 measurement) | `cia-finance/ifrs9/` |
+| `cia-closure` (period-close orchestration) | `cia-finance/paa/PaaPeriodCloseService` + `cia-finance/naicom/NaicomSubmissionService` (per-domain orchestrators, not unified) |
+
+Rationale: IFRS 9 measurement posts journal entries the GL gateway in `cia-finance` immediately consumes — splitting it out would create a circular dependency. The same argument that kept IFRS 17 inside `cia-finance/ifrs17/` (since renamed to `cia-finance/paa/`) applies to IFRS 9. The unified `ClosureWorkflow` covering EOD/EOM/EOQ/HY/EOY was deferred in favour of per-domain orchestrators with distinct state machines (see [`period-end-closures-design.md`](./period-end-closures-design.md) §0 for full rationale). The 85% coverage target for these subpackages still applies — measured as part of `cia-finance` rather than separately.
+
+Read the slice-by-slice plan below as the contract we delivered against. The commit-anchored slice tables in [`period-end-closures-implementation-plan.md`](./period-end-closures-implementation-plan.md) §2–§6 are the source of truth for what landed.
 
 ## 1. Why A Foundations Plan
 

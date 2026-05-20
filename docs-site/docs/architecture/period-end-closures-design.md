@@ -8,11 +8,65 @@ sidebar_label: Period-End Closures (Design)
 
 Design date: 2026-05-09
 
-Status: Draft for review
+Status: **Historical** — Phases 1–4 shipped (see implementation note below).
 
 Branch: `main`
 
-This document specifies the design for end-of-day, end-of-month, end-of-quarter, half-year, and end-of-year business closures in CIAGB. It is the technical companion to the locked-in scope decisions captured in Session 55 of the project log (`cia-log.md`, dated 2026-05-09). The corresponding phasing and rollout plan lives in `period-end-closures-implementation-plan.md`.
+This document specifies the original design for end-of-day, end-of-month, end-of-quarter, half-year, and end-of-year business closures in CIAGB. It is the technical companion to the locked-in scope decisions captured in Session 55 of the project log (`cia-log.md`, dated 2026-05-09). The corresponding phasing and rollout plan lives in [`period-end-closures-implementation-plan.md`](./period-end-closures-implementation-plan.md).
+
+## 0. Implementation Reality — As Shipped 2026-05-20
+
+The design below is preserved for historical reference. The implementation diverged in two ways:
+
+| Designed | Shipped | Reason |
+| --- | --- | --- |
+| New module `cia-investments` for IFRS 9 (§2.1) | `cia-finance/ifrs9/` subpackage | IFRS 9 measurement produces journal entries the GL layer (also in `cia-finance`) immediately consumes — splitting creates a circular dependency. The §2.3 rationale for keeping IFRS 17 inside `cia-finance/ifrs17/` applies equally to IFRS 9. |
+| New module `cia-closure` with unified `ClosureWorkflow` covering EOD/EOM/EOQ/Half-Year/EOY (§2.2, §5.1) | Per-domain orchestrators: `cia-finance/paa/PaaPeriodCloseService` (IFRS 17 measurement close) + `cia-finance/naicom/NaicomSubmissionService` (regulatory submissions state machine) | A unified workflow conflates orthogonal concerns — IFRS 17 measurement (always per-period), IFRS 9 measurement (always per-period), and NAICOM submissions (per-submission-type, retract-and-resubmit semantics). Per-domain orchestrators let each have its own state machine, idempotency triple, and lock semantics. |
+
+As-shipped module layout for Module 12:
+
+```
+cia-finance/
+├── gl/                              # Phase 1 — GL Foundation
+│   ├── ChartOfAccountService
+│   ├── JournalEntryService          # The Slice 1.4 gateway — every engine posts through here
+│   ├── TrialBalanceService
+│   ├── FiscalYearService
+│   ├── PeriodLockService            # 5-business-day grace, Hibernate Interceptor, 423 LOCKED
+│   ├── SubledgerPostingService      # @EventListener fanout: DN/CN/Receipt/Payment events → JEs
+│   └── PolicyClassResolver          # Slice 1.10 — resolves class_of_business per event
+├── paa/                             # Phase 2 — IFRS 17 PAA measurement
+│   ├── ContractGroupingService      # §22 permanent group assignment
+│   ├── LrcEngine                    # Liability for Remaining Coverage
+│   ├── LicEngine                    # Liability for Incurred Claims
+│   ├── DiscountUnwindEngine         # §87-92, P&L vs OCI routing
+│   ├── OnerousContractTestEngine    # §47-49, loss component
+│   ├── PaaPeriodCloseService        # Orchestrator + §83/§84 InsuranceServiceResult
+│   └── MovementAnalysisService      # §103 disclosure relay over V38 view
+├── ifrs9/                           # Phase 3 — IFRS 9 measurement
+│   ├── InvestmentClassificationService  # §4.1 + §B4.1.26 SCD
+│   ├── AmortisedCostEngine          # §5.4.1 effective interest method
+│   ├── FairValueEngine              # §5.7 — FVPL → P&L, FVOCI_DEBT → OCI, FVOCI_EQUITY → OCI
+│   ├── InvestmentEclEngine          # §5.5 + §5.7.10A
+│   ├── PremiumReceivableEclEngine   # §5.5.15 simplified approach
+│   └── Ifrs9MovementAnalysisService # §B5.5.39 disclosure relay over V40 view
+├── naicom/                          # Phase 4 — NAICOM monthly recap submissions
+│   ├── PremiumBordereauxEngine (N05) + ClaimsBordereauxEngine (N06)
+│   ├── AnnualRevenueAccountEngine (N01) + BalanceSheetEngine (N02)
+│   ├── PrudentialReturnEngine (N03) + RiQuarterlyReturnEngine (N04)
+│   ├── Ifrs17DisclosureEngine + Ifrs9DisclosureEngine + InvestmentStatementEngine (N08)
+│   ├── NiidStatusSnapshotEngine (N07)
+│   ├── NaicomSubmissionService      # Orchestrator + DRAFT → SUBMITTED → ACKNOWLEDGED → ARCHIVED + RETRACTED
+│   ├── SubmissionArtifactService    # JSON / CSV / PDF rendering + DocumentStorageService
+│   └── (10 engines × NaicomSubmissionEngine interface for @PostConstruct dispatch)
+└── backfill/                        # Slice 1.8 — retroactive JE backfill (Temporal workflow)
+```
+
+What's NOT shipped (still on backlog): the EOD/EOM/EOQ/HY/EOY unified closure orchestration (§2.2, §3.1, §3.2, §5) — the per-domain orchestrators above cover the financial close paths that have shipped. A unified admin closure UI is Phase 5 frontend scope.
+
+The sections below preserve the original design as written 2026-05-09 — read them as historical context, not as the current implementation map.
+
+---
 
 ## 1. Scope Summary
 
