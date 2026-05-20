@@ -8,11 +8,24 @@ sidebar_label: Period-End Closures (Foundations Plan)
 
 Plan date: 2026-05-09
 
-Status: Draft for review
+Status: **Historical** — Phases 1, 2, 3 all shipped (see [`period-end-closures-implementation-plan.md`](./period-end-closures-implementation-plan.md) for shipped slice anchors).
 
-Branch (intended integration target): `module-12-period-end-closures`
+Branch (integration target — now merged): `module-12-period-end-closures`
 
-Scope: This document expands `period-end-closures-implementation-plan.md` Phases 1, 2, and 3 to PR-slice granularity. Phases 4–7 remain at the granularity of the parent plan and are revisited at the Week 13 replan checkpoint.
+Scope: This document expands [`period-end-closures-implementation-plan.md`](./period-end-closures-implementation-plan.md) Phases 1, 2, and 3 to PR-slice granularity. **All three phases shipped end-to-end** between 2026-05-12 and 2026-05-19 across 27 slices. Phase 4 (NAICOM monthly recap submissions) was subsequently scoped at the parent-plan granularity and shipped 2026-05-19/20 across 10 slices (see commit `50e5b11`); Phase 5 (frontend) and Phase 6 (cross-tenant platform admin) remain on backlog.
+
+## 0. Implementation Note — Module Layout As Shipped
+
+The plan below referenced two new modules — `cia-investments` (Phase 3) and `cia-closure` (Phase 4–7 orchestration) — that were never created. The shipped layout co-locates all Module 12 code as subpackages of `cia-finance`:
+
+| Planned module | As shipped |
+| --- | --- |
+| `cia-investments` (IFRS 9 measurement) | `cia-finance/ifrs9/` |
+| `cia-closure` (period-close orchestration) | `cia-finance/paa/PaaPeriodCloseService` + `cia-finance/naicom/NaicomSubmissionService` (per-domain orchestrators, not unified) |
+
+Rationale: IFRS 9 measurement posts journal entries the GL gateway in `cia-finance` immediately consumes — splitting it out would create a circular dependency. The same argument that kept IFRS 17 inside `cia-finance/ifrs17/` (since renamed to `cia-finance/paa/`) applies to IFRS 9. The unified `ClosureWorkflow` covering EOD/EOM/EOQ/HY/EOY was deferred in favour of per-domain orchestrators with distinct state machines (see [`period-end-closures-design.md`](./period-end-closures-design.md) §0 for full rationale). The 85% coverage target for these subpackages still applies — measured as part of `cia-finance` rather than separately.
+
+Read the slice-by-slice plan below as the contract we delivered against. The commit-anchored slice tables in [`period-end-closures-implementation-plan.md`](./period-end-closures-implementation-plan.md) §2–§6 are the source of truth for what landed.
 
 ## 1. Why A Foundations Plan
 
@@ -220,7 +233,7 @@ Total slices: 9. Estimated calendar time: 4–6 weeks single engineer; 3–4 wee
 - **Structured error contract** — `PeriodLockedException` extends `CiaException` and a dedicated `PeriodLockExceptionHandler` renders `{ code, periodLabel, status, graceEndsAt, overrideRoles }` as the response meta. Frontend toast reads fields by name; no string parsing.
 - **Bulk preview API in this slice** — `GET /api/v1/finance/period-locks/preview?from&to` returns one `LockReportEntry` per business date so Slice 1.8 backfill and Module 8 bulk receipts pre-check before kicking off the workflow, not discover the lock on row 4,837.
 - **Scope-aware fiscal-period lookup cache** — `FiscalPeriodLookupCache` originally shipped as `@RequestScope`; refactored in Slice 1.7-fix to a singleton with two storage backends: `SCOPE_REQUEST` attribute when an HTTP request is bound (production HTTP path, auto-cleaned by Spring) + per-thread `HashMap` fallback (Temporal activities, scheduled jobs). Cache key is `(tenantId, lockDate)` to prevent cross-tenant hits on pooled worker threads. Non-HTTP callers invoke `clearThreadCache()` at activity boundaries; Slice 1.8's Temporal `WorkerInterceptor` owns that lifecycle.
-- **Benchmark target tightened to <2 % p99** — 5 % on a 100M-write/year tenant is 5M wasted writes. Anything between 1 % and 2 % requires a flame-graph in the PR description.
+- **Benchmark target tightened to `<2%` p99** — 5% on a 100M-write/year tenant is 5M wasted writes. Anything between 1% and 2% requires a flame-graph in the PR description.
 - **CFO + compliance email notification on every reopen** — `PeriodReopenedEvent` published from `cia-finance`, consumed by `PeriodReopenedNotificationListener` in `cia-api` (bridges to `NotificationService`). Recipients via Spring property `cia.finance.period-reopen-recipients` (CSV) for v1; per-tenant config table is a Slice 1.7c follow-up.
 
 **Deliverables (shipped):**

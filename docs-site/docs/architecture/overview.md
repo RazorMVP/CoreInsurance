@@ -38,6 +38,7 @@ CIA (Core Insurance Application) is a **multi-tenant SaaS platform** for end-to-
 | Auth | Keycloak | RBAC, SSO, MFA, self-hostable |
 | Workflows | Temporal | Durable, crash-safe approval chains |
 | Storage | S3-compatible (MinIO for on-prem) | Cloud-agnostic |
+| Documents | Apache PDFBox 3.x | Policy PDFs, claim DVs, custom reports, NAICOM submission artifacts |
 | AI | Claude API (Anthropic) | Optional per-tenant feature flag |
 | Testing | Vitest + JUnit 5 + Testcontainers + Playwright | Full test pyramid |
 
@@ -73,3 +74,5 @@ ApiResponse<T> { data, meta, errors }
 | 8 | Finance | Receipts, payments, reconciliation |
 | 9 | Partner Open API | OAuth2 clients, REST API, webhooks |
 | 10 | Audit & Compliance | Full audit trail, login logs, 6 reports, CSV export, real-time alerts |
+| 11 | Reports & Analytics | 55 pre-built reports (Underwriting / Claims / Finance / Reinsurance / Customer / Regulatory), custom report builder, CSV + PDF export |
+| 12 | Period-End Closures | GL foundation + IFRS 17 PAA measurement + IFRS 9 measurement + NAICOM monthly recap submissions (N01–N08). Lives inside `cia-finance` — see [Module 12 implementation plan](./period-end-closures-implementation-plan.md). |
