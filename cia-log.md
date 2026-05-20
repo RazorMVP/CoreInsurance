@@ -12,9 +12,40 @@ No open items as of 2026-05-20. Slice 1.10 (GL substrate enrichment) was the onl
 
 ---
 
-## 2026-05-20 — Session 74 (`main`): Slices F5.1 + F5.2 + F5.3 — Period Lock console + Fiscal Year admin + Chart of Accounts viewer
+## 2026-05-20 — Session 74 (`main`): Slices F5.1 → F5.4 — Period Lock + FY admin + COA viewer + JE browser
 
-Phase 5 (Module 12 frontend) opened; first three slices shipped in the same session.
+Phase 5 (Module 12 frontend) opened; first four slices shipped in the same session.
+
+### Slice F5.4 — Journal Entry browser
+
+First slice of Phase 5 that adds a **backend endpoint** alongside the frontend work, because `JournalEntryController` previously exposed no list/search route — only GET by id, manual POST, reverse, and PPA. The repository similarly had no list method.
+
+**Backend (cia-finance):**
+
+- `JournalEntrySummaryResponse.java` (new DTO) — lightweight: header + `lineCount` + `totalDebit` pre-aggregated by the service so the browser DataTable renders summary columns without a follow-up call. Lines excluded; drill into `GET /{id}` for them.
+- `JournalEntryRepository.search(...)` — new JPQL multi-predicate query with `LEFT JOIN je.lines line` + `DISTINCT`. All 7 filter params are optional: `businessFrom`, `businessTo`, `periodId`, `sourceModule`, `status`, `accountCode`, `classOfBusinessId` (Slice 1.10 substrate). `DISTINCT` is required because a JE with N matching lines would otherwise dupe.
+- `JournalEntryService.list(...)` — wraps the repo, projects each entity through `toSummary()` (sums debit amounts per JE for the table's "Total debit" column).
+- `JournalEntryController.list(...)` — `GET /api/v1/finance/journal-entries` with `@PageableDefault(size = 20, sort = "businessDate", direction = DESC)`. `FINANCE_VIEW` gated. Standard `ApiResponse<Page<...>>` envelope.
+- `JournalEntryLineResponse` — added `UUID classOfBusinessId` so the detail sheet can render the Slice 1.10 substrate. Single call-site updated in `JournalEntryService.toResponse()`.
+
+**Frontend (back-office + api-client):**
+
+- `@cia/api-client/finance-closures.ts` — added `JournalEntryStatusSchema` (3 states), `JournalEntrySummaryDtoSchema`, `JournalEntryLineDtoSchema`, `JournalEntryDtoSchema`, and a reusable `SpringPageSchema<T>` factory for any future `Page<T>` endpoint.
+- `JournalEntryBrowserPage.tsx` (new) — filter bar with 6 controls (Status / Source module / Account code / Business from / Business to / Reset), 3 StatCards (Entries filtered, Page, Per page), pageable table (← Previous / Next →), row-click opens detail sheet. Builds the query string via `URLSearchParams`, scoped by React Query's queryKey for automatic cache + invalidation.
+- `JournalEntryDetailSheet.tsx` (new) — right-side `Sheet` with status badge, reversal-of badge (when applicable), metadata block, dedicated "Idempotency triple" card (the Slice 1.4 gateway guarantee), lines table with debit / credit columns and class-of-business UUID chip.
+- `modules/closures/index.tsx` — added third tab "Journal Entries" + new `/closures/journal-entries` route.
+
+**Smoke test (live `:8090`):**
+1. `curl POST` of 3 manual JEs (premium booking ₦150k, claim payment ₦80k, broker commission ₦12k) seeded via the existing manual endpoint.
+2. Browser shows all 3 entries sorted DESC by business date, StatCard "Entries (filtered)" = 3, total debit per row matches the JE sum.
+3. Click into SMK-002 → detail sheet: POSTED badge, idempotency triple (MANUAL, CLAIM_PAYMENT, SMK-002), 2 lines (5110 debit ₦80k, 1120 credit ₦80k) — balances ✓.
+4. Account-code filter `1120` → list re-queries, drops to 2 entries (SMK-001 + SMK-002 both touch 1120, SMK-003 doesn't) — confirms the line-JOIN + DISTINCT works.
+
+### Slice F5.3 — Chart of Accounts viewer (recap)
+
+Commit `7d5cc0d`. Read-only tree of the 129 V32-seeded COA rows with IFRS-17 + IFRS-9 role chips, account-type filter, substring search with `<mark>` highlights, expand/collapse-all controls.
+
+Backend hotfix bundled in the same commit: added `condition` to all 4 `@Cacheable` annotations in `ChartOfAccountService` to skip caching when `TenantContext.getTenantId()` is null (the dev `TenantContextFilter` only sets tenant from JWT claims; dev has no auth).
 
 ### Slice F5.3 — Chart of Accounts viewer
 

@@ -4,6 +4,7 @@ import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.finance.dto.JournalEntryLineRequest;
 import com.nubeero.cia.finance.dto.JournalEntryLineResponse;
 import com.nubeero.cia.finance.dto.JournalEntryResponse;
+import com.nubeero.cia.finance.dto.JournalEntrySummaryResponse;
 import com.nubeero.cia.finance.dto.PostJournalEntryRequest;
 import com.nubeero.cia.finance.dto.PriorPeriodAdjustmentRequest;
 import lombok.RequiredArgsConstructor;
@@ -65,6 +66,53 @@ public class JournalEntryService {
         JournalEntry je = repository.findByIdAndDeletedAtIsNull(id)
             .orElseThrow(() -> new JournalEntryNotFoundException(id));
         return toResponse(je);
+    }
+
+    /**
+     * Multi-predicate JE list for the Phase 5 frontend browser (slice F5.4).
+     * All filters are optional — pass {@code null} to skip the predicate.
+     * Returns a lightweight {@link JournalEntrySummaryResponse} (no lines)
+     * with pre-aggregated {@code lineCount} and {@code totalDebit} so the
+     * browser DataTable can render summary columns without a follow-up call.
+     */
+    public org.springframework.data.domain.Page<JournalEntrySummaryResponse> list(
+        java.time.LocalDate businessFrom,
+        java.time.LocalDate businessTo,
+        UUID periodId,
+        String sourceModule,
+        JournalEntryStatus status,
+        String accountCode,
+        UUID classOfBusinessId,
+        org.springframework.data.domain.Pageable pageable
+    ) {
+        return repository.search(
+            businessFrom, businessTo, periodId, sourceModule, status,
+            accountCode, classOfBusinessId, pageable
+        ).map(this::toSummary);
+    }
+
+    private JournalEntrySummaryResponse toSummary(JournalEntry je) {
+        java.math.BigDecimal totalDebit = je.getLines().stream()
+            .map(JournalEntryLine::getDebitAmount)
+            .filter(java.util.Objects::nonNull)
+            .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+        return new JournalEntrySummaryResponse(
+            je.getId(),
+            je.getPostingDate(),
+            je.getBusinessDate(),
+            je.getPeriodId(),
+            je.getSourceModule(),
+            je.getSourceEventType(),
+            je.getSourceReference(),
+            je.getNarrative(),
+            je.getPostedBy(),
+            je.getStatus(),
+            je.getReversalOf(),
+            je.isPriorPeriodAdjustment(),
+            je.getCreatedAt(),
+            je.getLines().size(),
+            totalDebit
+        );
     }
 
     /**
@@ -324,6 +372,7 @@ public class JournalEntryService {
                 line.getPortfolioId(),
                 line.getContractGroupId(),
                 line.getHoldingId(),
+                line.getClassOfBusinessId(),
                 line.getDimensionTags()
             ));
         }

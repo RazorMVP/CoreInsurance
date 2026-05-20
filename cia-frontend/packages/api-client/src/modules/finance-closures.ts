@@ -46,6 +46,79 @@ export type AccountType        = z.infer<typeof AccountTypeSchema>;
 export type Ifrs17Role         = z.infer<typeof Ifrs17RoleSchema>;
 export type Ifrs9Role          = z.infer<typeof Ifrs9RoleSchema>;
 
+// ── Journal Entries ───────────────────────────────────────────────────────
+
+export const JournalEntryStatusSchema = z.enum(['DRAFT', 'POSTED', 'REVERSED']);
+export type  JournalEntryStatus = z.infer<typeof JournalEntryStatusSchema>;
+
+export const JournalEntrySummaryDtoSchema = z.object({
+  id:                     z.string(),
+  postingDate:            z.string(),
+  businessDate:           z.string(),
+  periodId:               z.string(),
+  sourceModule:           z.string(),
+  sourceEventType:        z.string(),
+  sourceReference:        z.string(),
+  narrative:              z.string().nullable().optional(),
+  postedBy:               z.string(),
+  status:                 JournalEntryStatusSchema,
+  reversalOf:             z.string().nullable().optional(),
+  priorPeriodAdjustment:  z.boolean(),
+  createdAt:              z.string(),
+  lineCount:              z.number(),
+  totalDebit:             z.number(),
+});
+export type JournalEntrySummaryDto = z.infer<typeof JournalEntrySummaryDtoSchema>;
+
+export const JournalEntryLineDtoSchema = z.object({
+  id:                 z.string(),
+  lineNo:             z.number(),
+  accountId:          z.string(),
+  accountCode:        z.string(),
+  accountName:        z.string(),
+  debitAmount:        z.number(),
+  creditAmount:       z.number(),
+  currencyCode:       z.string(),
+  cohortYear:         z.number().nullable().optional(),
+  portfolioId:        z.string().nullable().optional(),
+  contractGroupId:    z.string().nullable().optional(),
+  holdingId:          z.string().nullable().optional(),
+  classOfBusinessId:  z.string().nullable().optional(),
+  dimensionTags:      z.record(z.unknown()).nullable().optional(),
+});
+export type JournalEntryLineDto = z.infer<typeof JournalEntryLineDtoSchema>;
+
+export const JournalEntryDtoSchema = z.object({
+  id:               z.string(),
+  postingDate:      z.string(),
+  businessDate:     z.string(),
+  periodId:         z.string(),
+  sourceModule:     z.string(),
+  sourceEventType:  z.string(),
+  sourceReference:  z.string(),
+  narrative:        z.string().nullable().optional(),
+  postedBy:         z.string(),
+  status:           JournalEntryStatusSchema,
+  reversalOf:       z.string().nullable().optional(),
+  createdAt:        z.string(),
+  lines:            z.array(JournalEntryLineDtoSchema),
+});
+export type JournalEntryDto = z.infer<typeof JournalEntryDtoSchema>;
+
+// Spring Page<T> envelope on the data field — totalElements + content[] are
+// the fields the browser table reads.
+export const SpringPageSchema = <T extends z.ZodTypeAny>(item: T) => z.object({
+  content:          z.array(item),
+  totalElements:    z.number(),
+  totalPages:       z.number(),
+  number:           z.number(),
+  size:             z.number(),
+  first:            z.boolean(),
+  last:             z.boolean(),
+  empty:            z.boolean(),
+  numberOfElements: z.number(),
+});
+
 // ── Chart of Accounts (recursive) ─────────────────────────────────────────
 
 export type ChartOfAccountNodeDto = {

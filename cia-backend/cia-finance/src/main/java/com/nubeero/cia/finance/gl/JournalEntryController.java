@@ -1,7 +1,9 @@
 package com.nubeero.cia.finance.gl;
 
+import com.nubeero.cia.common.api.ApiMeta;
 import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.finance.dto.JournalEntryResponse;
+import com.nubeero.cia.finance.dto.JournalEntrySummaryResponse;
 import com.nubeero.cia.finance.dto.PostJournalEntryRequest;
 import com.nubeero.cia.finance.dto.PriorPeriodAdjustmentRequest;
 import com.nubeero.cia.finance.dto.ReverseJournalEntryRequest;
@@ -13,6 +15,11 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,9 +27,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -50,6 +59,38 @@ import java.util.UUID;
 public class JournalEntryController {
 
     private final JournalEntryService service;
+
+    @GetMapping
+    @PreAuthorize("hasRole('FINANCE_VIEW')")
+    @Operation(summary = "Search / list journal entries (paginated)",
+               description = "All filters optional. Filtering by accountCode or classOfBusinessId joins to journal_entry_line — a JE with N matching lines still appears once in the result (DISTINCT). Lines are NOT included in the summary; drill into GET /{id} for the line array. The Slice 1.10 classOfBusinessId substrate is filterable here.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Journal entries page",
+            content = @Content(schema = @Schema(implementation = JournalEntrySummaryResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_VIEW", content = @Content)
+    })
+    public ApiResponse<Page<JournalEntrySummaryResponse>> list(
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate businessFrom,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate businessTo,
+        @RequestParam(required = false) UUID periodId,
+        @RequestParam(required = false) String sourceModule,
+        @RequestParam(required = false) JournalEntryStatus status,
+        @RequestParam(required = false) String accountCode,
+        @RequestParam(required = false) UUID classOfBusinessId,
+        @PageableDefault(size = 20, sort = "businessDate", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        Page<JournalEntrySummaryResponse> page = service.list(
+            businessFrom, businessTo, periodId, sourceModule, status,
+            accountCode, classOfBusinessId, pageable
+        );
+        ApiMeta meta = ApiMeta.builder()
+            .total(page.getTotalElements())
+            .page(page.getNumber())
+            .size(page.getSize())
+            .build();
+        return ApiResponse.success(page, meta);
+    }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('FINANCE_VIEW')")

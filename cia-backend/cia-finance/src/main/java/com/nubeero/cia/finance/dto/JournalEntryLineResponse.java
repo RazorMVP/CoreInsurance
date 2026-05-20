@@ -22,5 +22,6 @@ public record JournalEntryLineResponse(
     UUID portfolioId,
     UUID contractGroupId,
     UUID holdingId,
+    UUID classOfBusinessId,
     Map<String, Object> dimensionTags
 ) {}

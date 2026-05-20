@@ -2,12 +2,14 @@ import { lazy, Suspense } from 'react';
 import { Navigate, NavLink, Route, Routes } from 'react-router-dom';
 import { cn, Skeleton } from '@cia/ui';
 
-const PeriodLockListPage   = lazy(() => import('./pages/PeriodLockListPage'));
-const ChartOfAccountsPage  = lazy(() => import('./pages/ChartOfAccountsPage'));
+const PeriodLockListPage       = lazy(() => import('./pages/PeriodLockListPage'));
+const ChartOfAccountsPage      = lazy(() => import('./pages/ChartOfAccountsPage'));
+const JournalEntryBrowserPage  = lazy(() => import('./pages/JournalEntryBrowserPage'));
 
 const tabs: { label: string; path: string }[] = [
   { label: 'Periods',           path: '/closures/periods' },
   { label: 'Chart of Accounts', path: '/closures/chart-of-accounts' },
+  { label: 'Journal Entries',   path: '/closures/journal-entries' },
 ];
 
 function Loading() {
@@ -47,6 +49,7 @@ export default function ClosuresModule() {
             <Route index element={<Navigate to="periods" replace />} />
             <Route path="periods"          element={<PeriodLockListPage />} />
             <Route path="chart-of-accounts" element={<ChartOfAccountsPage />} />
+            <Route path="journal-entries"  element={<JournalEntryBrowserPage />} />
           </Routes>
         </Suspense>
       </div>
