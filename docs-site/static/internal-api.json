@@ -49,8 +49,16 @@
       "description": "Six pre-built compliance reports — user activity, module actions, approvals, data changes, login security, and ranked user summary"
     },
     {
+      "name": "Claim Expenses",
+      "description": "Per-claim expenses (surveyor fees, repair costs, legal fees, etc). State machine: PENDING → APPROVED → (cascade to a CreditNote via CLAIM_EXPENSE_APPROVED event) or CANCELLED. The approval is what triggers GL impact via SubledgerPostingService."
+    },
+    {
       "name": "PAA — Period Close Orchestrator",
       "description": "IFRS 17 PAA Slice 2.5 orchestrator. Runs LRC + LIC engines for a period and returns the IFRS 17 §83/§84 Insurance Service Result alongside the engine outputs. Companion read endpoint recomputes §83/§84 from the current paa_lrc + paa_lic state without invoking engines."
+    },
+    {
+      "name": "Claim Comments",
+      "description": "Append-only comment feed on a claim. Comments are an aggregate of the parent Claim; deletion is not supported (audit-grade history)."
     },
     {
       "name": "IFRS 9 — §B5.5.39 Movement Analysis",
@@ -79,6 +87,10 @@
     {
       "name": "Payments (Module 8)",
       "description": "Outbound payments against a credit note (claim DV, FAC outward, commission, etc.). Posting a payment subtracts from CN outstanding_amount; full settlement flips the CN to SETTLED. Reversal undoes the payment and posts a contra JE via SubledgerPostingService."
+    },
+    {
+      "name": "Claims (Module 5)",
+      "description": "Full claims lifecycle — registration → processing (reserves + surveyor + inspection) → submission → approval / rejection / withdrawal → DV generation → DV execution → settlement. CLAIM_APPROVED and CLAIM_SETTLED events drive SubledgerPostingService cascades (CreditNote + JE)."
     },
     {
       "name": "NAICOM Submissions",
@@ -115,6 +127,10 @@
     {
       "name": "IFRS 9 — Investment ECL (§5.5)",
       "description": "Slice 3.5 Expected Credit Loss with three-stage routing. AC holdings: ECL reduces asset directly (Dr 5310 ECL_EXPENSE_AC / Cr 1140 ECL_AC_ALLOWANCE). FVOCI_DEBT: ECL routes to OCI reserve (Dr 5310 / Cr 3410) while carrying value stays at fair value — §5.7.10A rule. FVPL: no ECL."
+    },
+    {
+      "name": "Claim Documents",
+      "description": "Document attachments on a claim. Files are uploaded multipart, streamed via DocumentStorageService, and tagged with ClaimDocumentType (e.g. INCIDENT_REPORT, POLICE_REPORT, REPAIR_QUOTE). Used by the required-documents tracker on the claim summary."
     },
     {
       "name": "IFRS 9 — Amortised Cost (§5.4.1)",
@@ -6838,14 +6854,8 @@
           "400": {
             "description": "Reason missing"
           },
-          "404": {
-            "description": "Period not found"
-          },
           "403": {
             "description": "Forbidden — caller lacks FINANCE_APPROVE"
-          },
-          "401": {
-            "description": "Unauthorized"
           },
           "200": {
             "description": "Period soft-closed",
@@ -6856,6 +6866,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Period not found"
           }
         },
         "security": [
@@ -6958,11 +6974,11 @@
           "400": {
             "description": "Reason missing"
           },
-          "404": {
-            "description": "Period not found"
-          },
           "403": {
             "description": "Forbidden — caller lacks FINANCE_APPROVE"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "200": {
             "description": "Period hard-closed",
@@ -6974,8 +6990,8 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized"
+          "404": {
+            "description": "Period not found"
           }
         },
         "security": [
@@ -7005,9 +7021,6 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "Period not found"
-          },
           "403": {
             "description": "Forbidden — caller lacks FINANCE_APPROVE"
           },
@@ -7026,6 +7039,9 @@
           },
           "401": {
             "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Period not found"
           }
         },
         "security": [
@@ -7054,17 +7070,14 @@
           "required": true
         },
         "responses": {
-          "404": {
-            "description": "Period not found"
-          },
           "403": {
             "description": "Forbidden — caller lacks FINANCE_APPROVE"
           },
-          "423": {
-            "description": "Period is closed"
-          },
           "400": {
             "description": "periodId missing"
+          },
+          "423": {
+            "description": "Period is closed"
           },
           "401": {
             "description": "Unauthorized"
@@ -7078,6 +7091,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Period not found"
           }
         },
         "security": [
@@ -7116,20 +7132,20 @@
               }
             }
           },
-          "404": {
-            "description": "Period not found"
-          },
           "403": {
             "description": "Forbidden — caller lacks FINANCE_APPROVE"
-          },
-          "423": {
-            "description": "Period is closed"
           },
           "400": {
             "description": "periodId missing"
           },
+          "423": {
+            "description": "Period is closed"
+          },
           "401": {
             "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Period not found"
           },
           "409": {
             "description": "LrcRecognitionAlreadyDoneException — at least one group already recognised"
@@ -7161,9 +7177,6 @@
           "required": true
         },
         "responses": {
-          "404": {
-            "description": "Period not found"
-          },
           "403": {
             "description": "Forbidden — caller lacks FINANCE_APPROVE"
           },
@@ -7185,6 +7198,9 @@
           },
           "409": {
             "description": "LicRecognitionAlreadyDoneException"
+          },
+          "404": {
+            "description": "Period not found"
           }
         },
         "security": [
@@ -7213,15 +7229,6 @@
           "required": true
         },
         "responses": {
-          "404": {
-            "description": "Period not found"
-          },
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_APPROVE"
-          },
-          "423": {
-            "description": "Period is closed"
-          },
           "200": {
             "description": "Discount unwind recognised",
             "content": {
@@ -7232,11 +7239,20 @@
               }
             }
           },
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_APPROVE"
+          },
           "400": {
             "description": "periodId missing"
           },
+          "423": {
+            "description": "Period is closed"
+          },
           "401": {
             "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Period not found"
           }
         },
         "security": [
@@ -7275,6 +7291,9 @@
           }
         },
         "responses": {
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_APPROVE"
+          },
           "200": {
             "description": "State transitioned to SUBMITTED",
             "content": {
@@ -7285,14 +7304,11 @@
               }
             }
           },
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_APPROVE"
+          "409": {
+            "description": "IllegalSubmissionStateException — only DRAFT can transition to SUBMITTED"
           },
           "404": {
             "description": "Submission not found"
-          },
-          "409": {
-            "description": "IllegalSubmissionStateException — only DRAFT can transition to SUBMITTED"
           },
           "401": {
             "description": "Unauthorized"
@@ -7338,14 +7354,11 @@
           "403": {
             "description": "Forbidden — caller lacks FINANCE_APPROVE"
           },
-          "404": {
-            "description": "Submission not found"
-          },
           "409": {
             "description": "IllegalSubmissionStateException — only SUBMITTED can transition to RETRACTED"
           },
-          "401": {
-            "description": "Unauthorized"
+          "404": {
+            "description": "Submission not found"
           },
           "200": {
             "description": "State transitioned to RETRACTED",
@@ -7356,6 +7369,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "400": {
             "description": "reason missing"
@@ -7406,9 +7422,6 @@
           "403": {
             "description": "Forbidden — caller lacks FINANCE_APPROVE"
           },
-          "404": {
-            "description": "Submission not found"
-          },
           "200": {
             "description": "Artifact rendered and stored",
             "content": {
@@ -7418,6 +7431,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Submission not found"
           },
           "401": {
             "description": "Unauthorized"
@@ -7450,6 +7466,16 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "State transitioned to ARCHIVED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NaicomSubmissionResponse"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden — caller lacks FINANCE_APPROVE"
           },
@@ -7461,16 +7487,6 @@
           },
           "401": {
             "description": "Unauthorized"
-          },
-          "200": {
-            "description": "State transitioned to ARCHIVED",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NaicomSubmissionResponse"
-                }
-              }
-            }
           }
         },
         "security": [
@@ -7513,12 +7529,6 @@
           "403": {
             "description": "Forbidden — caller lacks FINANCE_APPROVE"
           },
-          "404": {
-            "description": "Submission not found"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
           "200": {
             "description": "State transitioned to ACKNOWLEDGED",
             "content": {
@@ -7529,11 +7539,17 @@
               }
             }
           },
-          "400": {
-            "description": "naicomUid missing"
+          "404": {
+            "description": "Submission not found"
           },
           "409": {
             "description": "IllegalSubmissionStateException — only SUBMITTED can transition to ACKNOWLEDGED"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "400": {
+            "description": "naicomUid missing"
           }
         },
         "security": [
@@ -7562,11 +7578,14 @@
           "required": true
         },
         "responses": {
+          "400": {
+            "description": "Validation error (missing submissionType or periodId)"
+          },
           "401": {
             "description": "Unauthorized — JWT missing or invalid"
           },
-          "400": {
-            "description": "Validation error (missing submissionType or periodId)"
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_APPROVE"
           },
           "200": {
             "description": "Submission generated (DRAFT) — payload returned",
@@ -7578,14 +7597,11 @@
               }
             }
           },
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_APPROVE"
+          "409": {
+            "description": "PayloadFrozenException — SUBMITTED row cannot be re-generated"
           },
           "422": {
             "description": "PeriodNotHardClosedException — generation requires HARD_CLOSED period"
-          },
-          "409": {
-            "description": "PayloadFrozenException — SUBMITTED row cannot be re-generated"
           }
         },
         "security": [
@@ -7630,14 +7646,14 @@
               }
             }
           },
+          "423": {
+            "description": "PeriodLockedException — target period is closed"
+          },
           "401": {
             "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden — caller lacks FINANCE_CREATE"
-          },
-          "423": {
-            "description": "PeriodLockedException — target period is closed"
           }
         },
         "security": [
@@ -7680,14 +7696,11 @@
           "400": {
             "description": "Reason missing"
           },
-          "409": {
-            "description": "Already reversed, or status not POSTED"
-          },
           "403": {
             "description": "Forbidden — caller lacks FINANCE_APPROVE"
           },
-          "401": {
-            "description": "Unauthorized"
+          "409": {
+            "description": "Already reversed, or status not POSTED"
           },
           "200": {
             "description": "Reversal entry created",
@@ -7698,6 +7711,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "404": {
             "description": "Journal entry not found"
@@ -7735,6 +7751,12 @@
           "403": {
             "description": "Forbidden — caller lacks FINANCE_APPROVE_PPA"
           },
+          "400": {
+            "description": "Validation error (unbalanced, missing reason, etc.)"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
           "201": {
             "description": "PPA posted",
             "content": {
@@ -7744,12 +7766,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "400": {
-            "description": "Validation error (unbalanced, missing reason, etc.)"
           }
         },
         "security": [
@@ -7778,11 +7794,17 @@
           "required": true
         },
         "responses": {
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_APPROVE"
+          },
+          "423": {
+            "description": "Period is closed"
+          },
           "400": {
             "description": "Validation error (matrix shape, missing fields)"
           },
-          "404": {
-            "description": "Period not found"
+          "401": {
+            "description": "Unauthorized"
           },
           "200": {
             "description": "Premium-receivable ECL recognised",
@@ -7794,14 +7816,8 @@
               }
             }
           },
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_APPROVE"
-          },
-          "423": {
-            "description": "Period is closed"
-          },
-          "401": {
-            "description": "Unauthorized"
+          "404": {
+            "description": "Period not found"
           }
         },
         "security": [
@@ -7820,8 +7836,8 @@
         "description": "Returns every non-soft-deleted holding, ordered by security name.",
         "operationId": "list_29",
         "responses": {
-          "401": {
-            "description": "Unauthorized"
+          "403": {
+            "description": "Forbidden"
           },
           "200": {
             "description": "Holdings list",
@@ -7833,8 +7849,8 @@
               }
             }
           },
-          "403": {
-            "description": "Forbidden"
+          "401": {
+            "description": "Unauthorized"
           }
         },
         "security": [
@@ -7867,9 +7883,6 @@
           "400": {
             "description": "Validation error"
           },
-          "401": {
-            "description": "Unauthorized"
-          },
           "200": {
             "description": "Holding registered",
             "content": {
@@ -7879,6 +7892,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         },
         "security": [
@@ -7918,15 +7934,6 @@
           "required": true
         },
         "responses": {
-          "404": {
-            "description": "Holding not found"
-          },
-          "400": {
-            "description": "Validation error or attempted no-op reclassification"
-          },
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_APPROVE"
-          },
           "200": {
             "description": "Reclassification applied",
             "content": {
@@ -7936,6 +7943,15 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Validation error or attempted no-op reclassification"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_APPROVE"
+          },
+          "404": {
+            "description": "Holding not found"
           },
           "401": {
             "description": "Unauthorized"
@@ -7973,9 +7989,6 @@
           "423": {
             "description": "Period is closed"
           },
-          "400": {
-            "description": "Validation error"
-          },
           "200": {
             "description": "Fair-value recognised",
             "content": {
@@ -7986,14 +7999,17 @@
               }
             }
           },
+          "400": {
+            "description": "Validation error"
+          },
           "404": {
             "description": "Period or holding not found"
           },
-          "401": {
-            "description": "Unauthorized"
-          },
           "409": {
             "description": "UnsupportedFairValueOperationException — AC holding cannot be remeasured to fair value"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         },
         "security": [
@@ -8031,15 +8047,6 @@
           "400": {
             "description": "Validation error"
           },
-          "404": {
-            "description": "Period or holding not found"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "409": {
-            "description": "Unsupported ECL on FVPL holding (FVPL has no ECL — impairment IS the fair-value movement)"
-          },
           "200": {
             "description": "ECL recognised",
             "content": {
@@ -8049,6 +8056,15 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Period or holding not found"
+          },
+          "409": {
+            "description": "Unsupported ECL on FVPL holding (FVPL has no ECL — impairment IS the fair-value movement)"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         },
         "security": [
@@ -8077,20 +8093,17 @@
           "required": true
         },
         "responses": {
-          "404": {
-            "description": "Period not found"
-          },
           "403": {
             "description": "Forbidden — caller lacks FINANCE_APPROVE"
+          },
+          "400": {
+            "description": "periodId missing"
           },
           "423": {
             "description": "Period is closed"
           },
           "409": {
             "description": "AmortisedCostAlreadyDoneException"
-          },
-          "400": {
-            "description": "periodId missing"
           },
           "200": {
             "description": "Interest accrual recognised",
@@ -8104,6 +8117,9 @@
           },
           "401": {
             "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Period not found"
           }
         },
         "security": [
@@ -8124,9 +8140,6 @@
           "403": {
             "description": "Forbidden — caller lacks FINANCE_VIEW"
           },
-          "401": {
-            "description": "Unauthorized"
-          },
           "200": {
             "description": "Fiscal years (ordered by start date)",
             "content": {
@@ -8136,6 +8149,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         },
         "security": [
@@ -8162,6 +8178,15 @@
           "required": true
         },
         "responses": {
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_APPROVE"
+          },
+          "409": {
+            "description": "Fiscal year with overlapping start/end dates already exists"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
           "201": {
             "description": "Fiscal year + periods created",
             "content": {
@@ -8172,17 +8197,8 @@
               }
             }
           },
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_APPROVE"
-          },
-          "409": {
-            "description": "Fiscal year with overlapping start/end dates already exists"
-          },
           "400": {
             "description": "Validation error (overlapping dates, invalid name, etc.)"
-          },
-          "401": {
-            "description": "Unauthorized"
           }
         },
         "security": [
@@ -8215,6 +8231,9 @@
           "403": {
             "description": "Forbidden — caller lacks FINANCE_APPROVE"
           },
+          "404": {
+            "description": "Fiscal year not found"
+          },
           "200": {
             "description": "Fiscal year closed",
             "content": {
@@ -8224,9 +8243,6 @@
                 }
               }
             }
-          },
-          "404": {
-            "description": "Fiscal year not found"
           },
           "401": {
             "description": "Unauthorized"
@@ -8265,6 +8281,9 @@
           "403": {
             "description": "Forbidden — caller lacks FINANCE_APPROVE"
           },
+          "404": {
+            "description": "Fiscal year not found"
+          },
           "409": {
             "description": "Cannot activate a CLOSED year"
           },
@@ -8277,9 +8296,6 @@
                 }
               }
             }
-          },
-          "404": {
-            "description": "Fiscal year not found"
           },
           "401": {
             "description": "Unauthorized"
@@ -8667,11 +8683,11 @@
           "403": {
             "description": "Forbidden — caller lacks FINANCE_UPDATE"
           },
-          "401": {
-            "description": "Unauthorized"
-          },
           "404": {
             "description": "Debit note not found"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "409": {
             "description": "Already VOID/CANCELLED"
@@ -8727,11 +8743,11 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized"
-          },
           "404": {
             "description": "Debit note not found"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "409": {
             "description": "Cannot cancel — receipts exist or DN already in terminal state"
@@ -8774,6 +8790,9 @@
           "403": {
             "description": "Forbidden — caller lacks FINANCE_VIEW"
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "200": {
             "description": "Receipt page",
             "content": {
@@ -8783,9 +8802,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Unauthorized"
           }
         },
         "security": [
@@ -8833,17 +8849,17 @@
               }
             }
           },
+          "400": {
+            "description": "Validation error or amount exceeds outstanding"
+          },
+          "404": {
+            "description": "Debit note not found"
+          },
           "401": {
             "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden — caller lacks FINANCE_CREATE"
-          },
-          "404": {
-            "description": "Debit note not found"
-          },
-          "400": {
-            "description": "Validation error or amount exceeds outstanding"
           },
           "423": {
             "description": "Target period is closed"
@@ -8895,15 +8911,6 @@
           "required": true
         },
         "responses": {
-          "400": {
-            "description": "Reason missing"
-          },
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_UPDATE"
-          },
-          "409": {
-            "description": "Receipt already reversed"
-          },
           "200": {
             "description": "Receipt reversed",
             "content": {
@@ -8914,11 +8921,20 @@
               }
             }
           },
+          "400": {
+            "description": "Reason missing"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_UPDATE"
+          },
           "404": {
             "description": "Receipt not found"
           },
           "401": {
             "description": "Unauthorized"
+          },
+          "409": {
+            "description": "Receipt already reversed"
           }
         },
         "security": [
@@ -9222,9 +9238,6 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_UPDATE"
-          },
           "200": {
             "description": "Credit note cancelled",
             "content": {
@@ -9235,11 +9248,14 @@
               }
             }
           },
-          "409": {
-            "description": "Cannot cancel — payments exist or CN already in terminal state"
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_UPDATE"
           },
           "404": {
             "description": "Credit note not found"
+          },
+          "409": {
+            "description": "Cannot cancel — payments exist or CN already in terminal state"
           },
           "401": {
             "description": "Unauthorized"
@@ -9282,6 +9298,9 @@
           "403": {
             "description": "Forbidden — caller lacks FINANCE_VIEW"
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "200": {
             "description": "Payment page",
             "content": {
@@ -9291,9 +9310,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Unauthorized"
           }
         },
         "security": [
@@ -9331,15 +9347,6 @@
           "required": true
         },
         "responses": {
-          "404": {
-            "description": "Credit note not found"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_CREATE"
-          },
           "201": {
             "description": "Payment posted",
             "content": {
@@ -9352,6 +9359,15 @@
           },
           "400": {
             "description": "Validation error or amount exceeds outstanding"
+          },
+          "404": {
+            "description": "Credit note not found"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_CREATE"
           },
           "423": {
             "description": "Target period is closed"
@@ -9412,11 +9428,11 @@
           "409": {
             "description": "Payment already reversed"
           },
-          "401": {
-            "description": "Unauthorized"
-          },
           "404": {
             "description": "Payment not found"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "200": {
             "description": "Payment reversed",
@@ -9439,8 +9455,10 @@
     "/api/v1/claims": {
       "get": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "List claims (paginated, filterable)",
+        "description": "Filter by any combination of policyId, status, customerId. Returns claim summaries (no nested reserves/expenses/documents).",
         "operationId": "list_39",
         "parameters": [
           {
@@ -9489,22 +9507,35 @@
           }
         ],
         "responses": {
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_VIEW"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
           "200": {
-            "description": "OK",
+            "description": "Claim page",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponsePageClaimResponse"
+                  "$ref": "#/components/schemas/ClaimResponse"
                 }
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       },
       "post": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Register a new claim",
+        "description": "Creates a claim against a policy in REGISTERED state. Validates: policy is ACTIVE, incident date falls within cover period, nature/cause of loss are valid for the product. Initial reserveAmount may be set later via /reserve.",
         "operationId": "register_1",
         "requestBody": {
           "content": {
@@ -9517,24 +9548,43 @@
           "required": true
         },
         "responses": {
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_CREATE"
+          },
+          "404": {
+            "description": "Policy not found"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "400": {
+            "description": "Validation error (policy inactive, date outside cover, etc.)"
+          },
           "201": {
-            "description": "Created",
+            "description": "Claim registered",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimResponse"
+                  "$ref": "#/components/schemas/ClaimResponse"
                 }
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/withdraw": {
       "post": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Withdraw a claim (customer-initiated)",
+        "description": "Marks the claim WITHDRAWN with a reason — used when the policyholder decides not to pursue the claim. Allowed in pre-approval states only.",
         "operationId": "withdraw",
         "parameters": [
           {
@@ -9558,24 +9608,46 @@
           "required": true
         },
         "responses": {
+          "400": {
+            "description": "Reason missing"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_UPDATE"
+          },
+          "404": {
+            "description": "Claim not found"
+          },
           "200": {
-            "description": "OK",
+            "description": "Withdrawn",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimResponse"
+                  "$ref": "#/components/schemas/ClaimResponse"
                 }
               }
             }
+          },
+          "409": {
+            "description": "Claim already approved or rejected"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/submit": {
       "post": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Submit claim for approval",
+        "description": "Transitions REGISTERED/PROCESSING → PENDING_APPROVAL. Validates required documents are uploaded (per product's claim_document_requirements). Starts the ClaimApprovalWorkflow Temporal workflow.",
         "operationId": "submit_4",
         "parameters": [
           {
@@ -9598,24 +9670,46 @@
           }
         },
         "responses": {
+          "400": {
+            "description": "Missing required documents"
+          },
+          "404": {
+            "description": "Claim not found"
+          },
+          "409": {
+            "description": "Claim not in a submittable state"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_CREATE"
+          },
           "200": {
-            "description": "OK",
+            "description": "Submitted for approval",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimResponse"
+                  "$ref": "#/components/schemas/ClaimResponse"
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/settle": {
       "post": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Mark claim settled",
+        "description": "Final state. Fires CLAIM_SETTLED event → final GL reconciliation. Typically called after the cascaded payment has cleared in Finance.",
         "operationId": "settle",
         "parameters": [
           {
@@ -9629,24 +9723,46 @@
           }
         ],
         "responses": {
+          "404": {
+            "description": "Claim not found"
+          },
           "200": {
-            "description": "OK",
+            "description": "Settled",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimResponse"
+                  "$ref": "#/components/schemas/ClaimResponse"
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_APPROVE"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "423": {
+            "description": "Target period is closed"
+          },
+          "409": {
+            "description": "Claim not APPROVED or DV not executed"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/reserve": {
       "post": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Update the claim reserve",
+        "description": "Sets a new reserve amount. The previous amount is preserved as a ClaimReserve history row (audit-grade), with a mandatory reason. Used by IFRS 17 PAA LIC engine to roll forward LIC totals.",
         "operationId": "setReserve",
         "parameters": [
           {
@@ -9670,24 +9786,46 @@
           "required": true
         },
         "responses": {
+          "409": {
+            "description": "Cannot adjust reserve on SETTLED claim"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_UPDATE"
+          },
+          "404": {
+            "description": "Claim not found"
+          },
+          "400": {
+            "description": "Validation error (negative reserve, reason missing)"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
           "200": {
-            "description": "OK",
+            "description": "Reserve updated",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimResponse"
+                  "$ref": "#/components/schemas/ClaimResponse"
                 }
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/reject": {
       "post": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Reject a claim",
+        "description": "Transitions PENDING_APPROVAL → REJECTED with a mandatory reason. Reason surfaces on the claim detail and in customer notifications. No GL impact.",
         "operationId": "reject_3",
         "parameters": [
           {
@@ -9711,24 +9849,46 @@
           "required": true
         },
         "responses": {
+          "400": {
+            "description": "Reason missing"
+          },
+          "404": {
+            "description": "Claim not found"
+          },
           "200": {
-            "description": "OK",
+            "description": "Rejected",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimResponse"
+                  "$ref": "#/components/schemas/ClaimResponse"
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_APPROVE"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "409": {
+            "description": "Claim not in a rejectable state"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/inspection/report": {
       "post": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Submit the inspection report",
+        "description": "Transitions ASSIGNED → REPORT_SUBMITTED. Captures the inspector's findings, recommended loss amount, and signature. The next steps are approval/decline/override.",
         "operationId": "submitInspectionReport",
         "parameters": [
           {
@@ -9752,24 +9912,46 @@
           "required": true
         },
         "responses": {
+          "409": {
+            "description": "Inspection not in ASSIGNED state"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_UPDATE"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Inspection not found"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
           "200": {
-            "description": "OK",
+            "description": "Report submitted",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimInspectionResponse"
+                  "$ref": "#/components/schemas/ClaimInspectionResponse"
                 }
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/inspection/override": {
       "post": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Override the inspection outcome",
+        "description": "Manager-level override (CLAIMS_APPROVE) that bypasses normal approve/decline flow. Records overrideReason for audit. Allowed from any non-terminal inspection state.",
         "operationId": "overrideInspection",
         "parameters": [
           {
@@ -9793,24 +9975,43 @@
           "required": true
         },
         "responses": {
+          "400": {
+            "description": "Reason missing"
+          },
+          "404": {
+            "description": "Inspection not found"
+          },
           "200": {
-            "description": "OK",
+            "description": "Inspection overridden",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimInspectionResponse"
+                  "$ref": "#/components/schemas/ClaimInspectionResponse"
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_APPROVE"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/inspection/decline": {
       "post": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Decline the inspection report",
+        "description": "Transitions REPORT_SUBMITTED → DECLINED with a mandatory reason. Sends the inspection back for re-work; new report can be submitted.",
         "operationId": "declineInspection",
         "parameters": [
           {
@@ -9834,24 +10035,46 @@
           "required": true
         },
         "responses": {
+          "400": {
+            "description": "Reason missing"
+          },
+          "404": {
+            "description": "Inspection not found"
+          },
+          "409": {
+            "description": "Inspection not in REPORT_SUBMITTED state"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_APPROVE"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
           "200": {
-            "description": "OK",
+            "description": "Inspection declined",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimInspectionResponse"
+                  "$ref": "#/components/schemas/ClaimInspectionResponse"
                 }
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/inspection/assign": {
       "post": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Assign inspector + initiate inspection",
+        "description": "Creates the inspection record (state: ASSIGNED) and assigns an internal or external inspector. Triggers an email notification to the inspector. Idempotent re-assignment supported.",
         "operationId": "assignInspector",
         "parameters": [
           {
@@ -9875,24 +10098,43 @@
           "required": true
         },
         "responses": {
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_UPDATE"
+          },
+          "404": {
+            "description": "Claim not found"
+          },
           "200": {
-            "description": "OK",
+            "description": "Inspector assigned",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimInspectionResponse"
+                  "$ref": "#/components/schemas/ClaimInspectionResponse"
                 }
               }
             }
+          },
+          "400": {
+            "description": "Inspector inactive or unknown"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/inspection/approve": {
       "post": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Approve the inspection report",
+        "description": "Transitions REPORT_SUBMITTED → APPROVED. Optionally records reviewer notes. Required before claim approval if the product configures inspection-mandatory.",
         "operationId": "approveInspection",
         "parameters": [
           {
@@ -9915,24 +10157,43 @@
           }
         },
         "responses": {
+          "404": {
+            "description": "Inspection not found"
+          },
+          "409": {
+            "description": "Inspection not in REPORT_SUBMITTED state"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_APPROVE"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
           "200": {
-            "description": "OK",
+            "description": "Inspection approved",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimInspectionResponse"
+                  "$ref": "#/components/schemas/ClaimInspectionResponse"
                 }
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/dv/generate": {
       "post": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Generate a Discharge Voucher (DV)",
+        "description": "Renders the DV PDF (own-damage / third-party / ex-gratia type) using the configured template and the approved amount. Stores the artifact via DocumentStorageService and updates dvType + dvDocumentPath on the claim. Allowed after APPROVED.",
         "operationId": "generateDv",
         "parameters": [
           {
@@ -9956,24 +10217,46 @@
           "required": true
         },
         "responses": {
+          "404": {
+            "description": "Claim not found"
+          },
           "200": {
-            "description": "OK",
+            "description": "DV generated",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimResponse"
+                  "$ref": "#/components/schemas/ClaimResponse"
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_APPROVE"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "400": {
+            "description": "DV type missing or invalid amount"
+          },
+          "409": {
+            "description": "Claim not APPROVED — DV cannot be generated"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/dv/execute": {
       "post": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Execute the DV (customer accepted)",
+        "description": "Records that the customer has signed/accepted the DV (sets dvExecutedAt). Settlement (/settle) is allowed after this; the cascaded payment can then be processed in Finance.",
         "operationId": "executeDv",
         "parameters": [
           {
@@ -9987,24 +10270,43 @@
           }
         ],
         "responses": {
+          "404": {
+            "description": "Claim not found"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_APPROVE"
+          },
+          "409": {
+            "description": "DV not yet generated, or already executed"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
           "200": {
-            "description": "OK",
+            "description": "DV executed",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimResponse"
+                  "$ref": "#/components/schemas/ClaimResponse"
                 }
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/assign-surveyor": {
       "post": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Assign a surveyor to the claim",
+        "description": "Surveyor must be active in setup → surveyors. Triggers an email notification to the surveyor. Independent of the inspection workflow under /inspection.",
         "operationId": "assignSurveyor_1",
         "parameters": [
           {
@@ -10029,23 +10331,42 @@
         },
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Surveyor assigned",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimResponse"
+                  "$ref": "#/components/schemas/ClaimResponse"
                 }
               }
             }
+          },
+          "404": {
+            "description": "Claim or surveyor not found"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_UPDATE"
+          },
+          "400": {
+            "description": "Surveyor inactive or unknown"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/approve": {
       "post": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Approve a claim",
+        "description": "Transitions PENDING_APPROVAL → APPROVED. Fires CLAIM_APPROVED event → SubledgerPostingService cascade (CreditNote + JE for the approved amount). Required before DV generation. Period-lock check applies.",
         "operationId": "approve_3",
         "parameters": [
           {
@@ -10059,24 +10380,45 @@
           }
         ],
         "responses": {
+          "404": {
+            "description": "Claim not found"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_APPROVE"
+          },
           "200": {
-            "description": "OK",
+            "description": "Approved",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimResponse"
+                  "$ref": "#/components/schemas/ClaimResponse"
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "409": {
+            "description": "Claim not in PENDING_APPROVAL state"
+          },
+          "423": {
+            "description": "Target period is closed"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{claimId}/expenses": {
       "get": {
         "tags": [
-          "claim-expense-controller"
+          "Claim Expenses"
         ],
+        "summary": "List expenses on a claim (paginated)",
         "operationId": "list_40",
         "parameters": [
           {
@@ -10098,22 +10440,38 @@
           }
         ],
         "responses": {
+          "404": {
+            "description": "Claim not found"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_VIEW"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
           "200": {
-            "description": "OK",
+            "description": "Expense page",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponsePageClaimExpenseResponse"
+                  "$ref": "#/components/schemas/ClaimExpenseResponse"
                 }
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       },
       "post": {
         "tags": [
-          "claim-expense-controller"
+          "Claim Expenses"
         ],
+        "summary": "Add a new expense (PENDING)",
+        "description": "Vendor info is mandatory. Status starts at PENDING; approval is a separate step.",
         "operationId": "add_1",
         "parameters": [
           {
@@ -10137,24 +10495,43 @@
           "required": true
         },
         "responses": {
+          "404": {
+            "description": "Claim not found"
+          },
+          "400": {
+            "description": "Validation error"
+          },
           "201": {
-            "description": "Created",
+            "description": "Expense added",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimExpenseResponse"
+                  "$ref": "#/components/schemas/ClaimExpenseResponse"
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_CREATE"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{claimId}/expenses/{id}/cancel": {
       "post": {
         "tags": [
-          "claim-expense-controller"
+          "Claim Expenses"
         ],
+        "summary": "Cancel an expense",
+        "description": "Allowed only on PENDING expenses (no GL impact yet). For approved expenses that need to be undone, reverse the cascaded payment first.",
         "operationId": "cancel_7",
         "parameters": [
           {
@@ -10187,24 +10564,46 @@
           "required": true
         },
         "responses": {
+          "400": {
+            "description": "Reason missing"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_UPDATE"
+          },
           "200": {
-            "description": "OK",
+            "description": "Expense cancelled",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimExpenseResponse"
+                  "$ref": "#/components/schemas/ClaimExpenseResponse"
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "409": {
+            "description": "Cannot cancel APPROVED expense — reverse the payment first"
+          },
+          "404": {
+            "description": "Expense not found"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{claimId}/expenses/{id}/approve": {
       "post": {
         "tags": [
-          "claim-expense-controller"
+          "Claim Expenses"
         ],
+        "summary": "Approve a PENDING expense",
+        "description": "Flips status to APPROVED and fires CLAIM_EXPENSE_APPROVED event → SubledgerPostingService cascades a CreditNote (payable) + posts the JE. Triggers period-lock check via the interceptor.",
         "operationId": "approve_4",
         "parameters": [
           {
@@ -10227,24 +10626,46 @@
           }
         ],
         "responses": {
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_APPROVE"
+          },
           "200": {
-            "description": "OK",
+            "description": "Expense approved",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimExpenseResponse"
+                  "$ref": "#/components/schemas/ClaimExpenseResponse"
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "409": {
+            "description": "Already approved or cancelled"
+          },
+          "423": {
+            "description": "Target period is closed"
+          },
+          "404": {
+            "description": "Expense not found"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{claimId}/documents": {
       "get": {
         "tags": [
-          "claim-document-controller"
+          "Claim Documents"
         ],
+        "summary": "List documents attached to a claim",
+        "description": "Optionally filter by documentType. Returns metadata only — use /{id}/content to stream bytes.",
         "operationId": "list_41",
         "parameters": [
           {
@@ -10284,22 +10705,38 @@
           }
         ],
         "responses": {
+          "404": {
+            "description": "Claim not found"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_VIEW"
+          },
           "200": {
-            "description": "OK",
+            "description": "Document page",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponsePageClaimDocumentResponse"
+                  "$ref": "#/components/schemas/ClaimDocumentResponse"
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       },
       "post": {
         "tags": [
-          "claim-document-controller"
+          "Claim Documents"
         ],
+        "summary": "Upload a new document",
+        "description": "Multipart upload. The file is persisted via DocumentStorageService; metadata is recorded with the supplied documentType. Required-documents checklist re-evaluates on each upload.",
         "operationId": "upload_1",
         "parameters": [
           {
@@ -10350,23 +10787,41 @@
         },
         "responses": {
           "201": {
-            "description": "Created",
+            "description": "Document uploaded",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimDocumentResponse"
+                  "$ref": "#/components/schemas/ClaimDocumentResponse"
                 }
               }
             }
+          },
+          "404": {
+            "description": "Claim not found"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_CREATE"
+          },
+          "400": {
+            "description": "File too large, MIME type not allowed, or documentType missing"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{claimId}/comments": {
       "get": {
         "tags": [
-          "claim-comment-controller"
+          "Claim Comments"
         ],
+        "summary": "List comments on a claim (paginated, chronological)",
         "operationId": "list_42",
         "parameters": [
           {
@@ -10389,21 +10844,37 @@
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Comment page",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponsePageClaimCommentResponse"
+                  "$ref": "#/components/schemas/ClaimCommentResponse"
                 }
               }
             }
+          },
+          "404": {
+            "description": "Claim not found"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_VIEW"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       },
       "post": {
         "tags": [
-          "claim-comment-controller"
+          "Claim Comments"
         ],
+        "summary": "Add a comment to a claim",
+        "description": "Append-only — author is resolved from Authentication.getName(); body captured verbatim. There is no edit/delete endpoint by design.",
         "operationId": "add_2",
         "parameters": [
           {
@@ -10428,16 +10899,33 @@
         },
         "responses": {
           "201": {
-            "description": "Created",
+            "description": "Comment added",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimCommentResponse"
+                  "$ref": "#/components/schemas/ClaimCommentResponse"
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_UPDATE"
+          },
+          "404": {
+            "description": "Claim not found"
+          },
+          "400": {
+            "description": "body missing or empty"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/auth/session/start": {
@@ -10587,6 +11075,9 @@
           "422": {
             "description": "Pre-flight rejected (target period is locked)"
           },
+          "401": {
+            "description": "Unauthorized"
+          },
           "200": {
             "description": "Workflow started",
             "content": {
@@ -10599,9 +11090,6 @@
           },
           "403": {
             "description": "Forbidden — caller lacks PLATFORM_ADMIN"
-          },
-          "401": {
-            "description": "Unauthorized"
           }
         },
         "security": [
@@ -10654,8 +11142,10 @@
     "/api/v1/claims/{id}": {
       "get": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Get claim detail",
+        "description": "Returns the full claim including current reserve, approved amount, DV state, surveyor assignment, and rejection/withdrawal context.",
         "operationId": "get_48",
         "parameters": [
           {
@@ -10670,21 +11160,37 @@
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Claim found",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimResponse"
+                  "$ref": "#/components/schemas/ClaimResponse"
                 }
               }
             }
+          },
+          "404": {
+            "description": "Claim not found"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_VIEW"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       },
       "patch": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Update editable claim fields",
+        "description": "Partial update of nature/cause of loss, contact details, description, estimated loss. Only allowed while status is REGISTERED or PROCESSING.",
         "operationId": "update_26",
         "parameters": [
           {
@@ -10708,17 +11214,34 @@
           "required": true
         },
         "responses": {
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_UPDATE"
+          },
+          "404": {
+            "description": "Claim not found"
+          },
           "200": {
-            "description": "OK",
+            "description": "Claim updated",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimResponse"
+                  "$ref": "#/components/schemas/ClaimResponse"
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "409": {
+            "description": "Claim in terminal state — cannot edit"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/setup/relationship-managers/by-branch/{branchId}": {
@@ -11284,14 +11807,11 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_VIEW"
-          },
           "400": {
             "description": "Date range invalid (from > to or missing)"
           },
-          "401": {
-            "description": "Unauthorized"
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_VIEW"
           },
           "200": {
             "description": "One entry per business date in range",
@@ -11302,6 +11822,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         },
         "security": [
@@ -11331,11 +11854,11 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "Period not found"
-          },
           "403": {
             "description": "Forbidden — caller lacks FINANCE_VIEW"
+          },
+          "401": {
+            "description": "Unauthorized"
           },
           "200": {
             "description": "Movement analysis",
@@ -11347,8 +11870,8 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized"
+          "404": {
+            "description": "Period not found"
           }
         },
         "security": [
@@ -11378,9 +11901,6 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "Period not found"
-          },
           "403": {
             "description": "Forbidden — caller lacks FINANCE_VIEW"
           },
@@ -11396,6 +11916,9 @@
           },
           "401": {
             "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Period not found"
           }
         },
         "security": [
@@ -11442,11 +11965,14 @@
           }
         ],
         "responses": {
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_VIEW"
+          },
           "400": {
             "description": "Both filters omitted"
           },
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_VIEW"
+          "401": {
+            "description": "Unauthorized"
           },
           "200": {
             "description": "Submissions matching the filter",
@@ -11457,9 +11983,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Unauthorized"
           }
         },
         "security": [
@@ -11495,9 +12018,6 @@
           "403": {
             "description": "Forbidden — caller lacks FINANCE_VIEW"
           },
-          "401": {
-            "description": "Unauthorized"
-          },
           "200": {
             "description": "Submission found",
             "content": {
@@ -11507,6 +12027,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         },
         "security": [
@@ -11542,9 +12065,6 @@
           "404": {
             "description": "Submission not found"
           },
-          "401": {
-            "description": "Unauthorized"
-          },
           "200": {
             "description": "Event list (chronological)",
             "content": {
@@ -11554,6 +12074,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         },
         "security": [
@@ -11583,6 +12106,12 @@
           }
         ],
         "responses": {
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_VIEW"
+          },
+          "404": {
+            "description": "Submission not found"
+          },
           "200": {
             "description": "Artifact metadata",
             "content": {
@@ -11592,12 +12121,6 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_VIEW"
-          },
-          "404": {
-            "description": "Submission not found"
           },
           "401": {
             "description": "Unauthorized"
@@ -11645,12 +12168,6 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "ArtifactNotFoundException — no live artifact for this (submission, format)"
-          },
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_VIEW"
-          },
           "200": {
             "description": "Artifact bytes streamed (Content-Type set per format)",
             "content": {
@@ -11661,6 +12178,12 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_VIEW"
+          },
+          "404": {
+            "description": "ArtifactNotFoundException — no live artifact for this (submission, format)"
           },
           "401": {
             "description": "Unauthorized"
@@ -11740,12 +12263,6 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "Period not found"
-          },
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_VIEW"
-          },
           "200": {
             "description": "Movement analysis",
             "content": {
@@ -11756,8 +12273,14 @@
               }
             }
           },
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_VIEW"
+          },
           "401": {
             "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Period not found"
           }
         },
         "security": [
@@ -11786,6 +12309,15 @@
           }
         ],
         "responses": {
+          "404": {
+            "description": "InvestmentHoldingNotFoundException"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
           "200": {
             "description": "Holding found",
             "content": {
@@ -11795,15 +12327,6 @@
                 }
               }
             }
-          },
-          "404": {
-            "description": "InvestmentHoldingNotFoundException"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "security": [
@@ -11842,6 +12365,12 @@
           }
         ],
         "responses": {
+          "404": {
+            "description": "Fiscal year not found"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
           "200": {
             "description": "Fiscal year found",
             "content": {
@@ -11852,14 +12381,8 @@
               }
             }
           },
-          "404": {
-            "description": "Fiscal year not found"
-          },
           "401": {
             "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         },
         "security": [
@@ -11890,14 +12413,14 @@
           "403": {
             "description": "Forbidden — caller lacks FINANCE_APPROVE"
           },
-          "409": {
-            "description": "Cannot delete — journal entries reference this year's periods"
+          "404": {
+            "description": "Fiscal year not found"
           },
           "204": {
             "description": "Fiscal year soft-deleted"
           },
-          "404": {
-            "description": "Fiscal year not found"
+          "409": {
+            "description": "Cannot delete — journal entries reference this year's periods"
           },
           "401": {
             "description": "Unauthorized"
@@ -11933,9 +12456,6 @@
           "404": {
             "description": "Fiscal year not found"
           },
-          "401": {
-            "description": "Unauthorized"
-          },
           "200": {
             "description": "Period list",
             "content": {
@@ -11948,6 +12468,9 @@
           },
           "403": {
             "description": "Forbidden"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         },
         "security": [
@@ -11976,14 +12499,14 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized"
-          },
           "404": {
             "description": "No fiscal year is currently ACTIVE"
           },
           "403": {
             "description": "Forbidden"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         },
         "security": [
@@ -12002,6 +12525,9 @@
         "description": "Returns the COA rooted at the five top-level account-type classes (ASSET / LIABILITY / EQUITY / INCOME / EXPENSE), with children sorted ascending by code. Soft-deleted rows are omitted.",
         "operationId": "getTree",
         "responses": {
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_VIEW"
+          },
           "200": {
             "description": "COA tree",
             "content": {
@@ -12011,9 +12537,6 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_VIEW"
           },
           "401": {
             "description": "Unauthorized"
@@ -12203,9 +12726,6 @@
           "403": {
             "description": "Forbidden — caller lacks FINANCE_VIEW"
           },
-          "401": {
-            "description": "Unauthorized"
-          },
           "200": {
             "description": "Debit note page",
             "content": {
@@ -12215,6 +12735,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         },
         "security": [
@@ -12246,9 +12769,6 @@
           "403": {
             "description": "Forbidden — caller lacks FINANCE_VIEW"
           },
-          "401": {
-            "description": "Unauthorized"
-          },
           "404": {
             "description": "Debit note not found"
           },
@@ -12261,6 +12781,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         },
         "security": [
@@ -12298,9 +12821,6 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_VIEW"
-          },
           "200": {
             "description": "Receipt found",
             "content": {
@@ -12310,6 +12830,9 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_VIEW"
           },
           "404": {
             "description": "Receipt not found"
@@ -12598,9 +13121,6 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_VIEW"
-          },
           "200": {
             "description": "Credit note page",
             "content": {
@@ -12610,6 +13130,9 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_VIEW"
           },
           "401": {
             "description": "Unauthorized"
@@ -12651,11 +13174,11 @@
               }
             }
           },
-          "403": {
-            "description": "Forbidden — caller lacks FINANCE_VIEW"
-          },
           "404": {
             "description": "Credit note not found"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks FINANCE_VIEW"
           },
           "401": {
             "description": "Unauthorized"
@@ -12709,11 +13232,11 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized"
-          },
           "404": {
             "description": "Payment not found"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         },
         "security": [
@@ -12726,8 +13249,10 @@
     "/api/v1/claims/{id}/reserves": {
       "get": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "List reserve history for the claim",
+        "description": "Returns every reserve adjustment with previous amount, new amount, reason, author, timestamp. The reserve table is append-only (history is the audit trail).",
         "operationId": "reserves",
         "parameters": [
           {
@@ -12749,24 +13274,40 @@
           }
         ],
         "responses": {
+          "404": {
+            "description": "Claim not found"
+          },
           "200": {
-            "description": "OK",
+            "description": "Reserve history",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponsePageClaimReserveResponse"
+                  "$ref": "#/components/schemas/ClaimReserveResponse"
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_VIEW"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/required-documents": {
       "get": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Get required-documents checklist for the claim",
+        "description": "Derives the checklist at request time from the product's claim_document_requirements setup joined with currently-uploaded claim_documents. Used by the UI's missing-docs badge and by /submit's pre-flight validation.",
         "operationId": "listRequiredDocuments",
         "parameters": [
           {
@@ -12780,24 +13321,40 @@
           }
         ],
         "responses": {
+          "404": {
+            "description": "Claim not found"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_VIEW"
+          },
           "200": {
-            "description": "OK",
+            "description": "Checklist with satisfied/missing flags",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseListClaimRequiredDocumentResponse"
+                  "$ref": "#/components/schemas/ClaimRequiredDocumentResponse"
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/inspection": {
       "get": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Get the claim's inspection record",
+        "description": "Returns the single inspection state for the claim — inspector assignment, submitted report, approve/decline/override outcome. Returns 404 if no inspection has been initiated.",
         "operationId": "getInspection",
         "parameters": [
           {
@@ -12811,24 +13368,40 @@
           }
         ],
         "responses": {
+          "404": {
+            "description": "No inspection exists for this claim"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_VIEW"
+          },
           "200": {
-            "description": "OK",
+            "description": "Inspection state",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimInspectionResponse"
+                  "$ref": "#/components/schemas/ClaimInspectionResponse"
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{id}/inspection/documents/bundle": {
       "get": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Download inspection-report documents as a zip",
+        "description": "Zips every SURVEY_REPORT document on the claim and streams the archive. Underlying docs live in DocumentStorageService; the zip is composed in memory (claim-doc volumes are small in practice).",
         "operationId": "downloadInspectionBundle",
         "parameters": [
           {
@@ -12842,8 +13415,17 @@
           }
         ],
         "responses": {
+          "404": {
+            "description": "Claim not found"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_VIEW"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
           "200": {
-            "description": "OK",
+            "description": "Zip stream",
             "content": {
               "application/json": {
                 "schema": {
@@ -12853,14 +13435,20 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{claimId}/expenses/{id}": {
       "get": {
         "tags": [
-          "claim-expense-controller"
+          "Claim Expenses"
         ],
+        "summary": "Get expense detail",
         "operationId": "get_49",
         "parameters": [
           {
@@ -12883,24 +13471,39 @@
           }
         ],
         "responses": {
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_VIEW"
+          },
           "200": {
-            "description": "OK",
+            "description": "Expense found",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimExpenseResponse"
+                  "$ref": "#/components/schemas/ClaimExpenseResponse"
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Expense not found"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{claimId}/documents/{id}": {
       "get": {
         "tags": [
-          "claim-document-controller"
+          "Claim Documents"
         ],
+        "summary": "Get document metadata",
         "operationId": "get_50",
         "parameters": [
           {
@@ -12923,22 +13526,38 @@
           }
         ],
         "responses": {
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_VIEW"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
           "200": {
-            "description": "OK",
+            "description": "Document found",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseClaimDocumentResponse"
+                  "$ref": "#/components/schemas/ClaimDocumentResponse"
                 }
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       },
       "delete": {
         "tags": [
-          "claim-document-controller"
+          "Claim Documents"
         ],
+        "summary": "Remove a document",
+        "description": "Soft-deletes the metadata row and removes the underlying object from storage. Required-documents checklist re-evaluates after deletion.",
         "operationId": "delete_26",
         "parameters": [
           {
@@ -12961,17 +13580,33 @@
           }
         ],
         "responses": {
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_UPDATE"
+          },
           "204": {
-            "description": "No Content"
+            "description": "Document removed"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/{claimId}/documents/{id}/content": {
       "get": {
         "tags": [
-          "claim-document-controller"
+          "Claim Documents"
         ],
+        "summary": "Stream the document bytes",
+        "description": "Returns the raw file (PDF / image / etc) with Content-Disposition: attachment so browsers offer a download.",
         "operationId": "downloadContent",
         "parameters": [
           {
@@ -12995,7 +13630,7 @@
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Document bytes streamed",
             "content": {
               "application/json": {
                 "schema": {
@@ -13004,15 +13639,31 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_VIEW"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/claims/search": {
       "get": {
         "tags": [
-          "claim-controller"
+          "Claims (Module 5)"
         ],
+        "summary": "Search claims by free text",
+        "description": "Matches against claim number, customer name, policy number, nature of loss. Case-insensitive substring search.",
         "operationId": "search_4",
         "parameters": [
           {
@@ -13034,16 +13685,27 @@
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Matching claims",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponsePageClaimResponse"
+                  "$ref": "#/components/schemas/ClaimResponse"
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden — caller lacks CLAIMS_VIEW"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
       }
     },
     "/api/v1/audit/reports/user-activity": {
@@ -13682,6 +14344,15 @@
           }
         ],
         "responses": {
+          "404": {
+            "description": "Workflow id not found"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden — caller lacks PLATFORM_ADMIN"
+          },
           "200": {
             "description": "Status snapshot",
             "content": {
@@ -13691,15 +14362,6 @@
                 }
               }
             }
-          },
-          "404": {
-            "description": "Workflow id not found"
-          },
-          "403": {
-            "description": "Forbidden — caller lacks PLATFORM_ADMIN"
-          },
-          "401": {
-            "description": "Unauthorized"
           }
         },
         "security": [
