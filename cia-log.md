@@ -12,6 +12,30 @@ No open items as of 2026-05-20. Slice 1.10 (GL substrate enrichment) was the onl
 
 ---
 
+## 2026-05-20 — Session 74 (`main`): Module 12 frontend opens — Slice F5.1 Period Lock console
+
+Phase 5 (Module 12 frontend) opened. Slice F5.1 shipped: a Period Lock console at `/closures` exposing Slice 1.7's `PeriodLockService` + Slice 1.6's `FiscalYearService` as a CFO workflow.
+
+**Commit `fc51e8d` → `origin/main`** (9 files, +737 lines):
+
+- `cia-frontend/packages/api-client/src/modules/finance-closures.ts` (new) — zod schemas for FY / FiscalPeriod / PeriodLock / LockReportEntry / Close + Reopen request bodies.
+- `cia-frontend/apps/back-office/src/modules/closures/` (new dir) — module entry + `PeriodLockListPage` (FY selector, granularity picker, 4 StatCards, status-gated row actions) + `ClosePeriodDialog` (SOFT/HARD mode discriminator, mandatory 500-char reason) + `ReopenPeriodDialog` + `LockHistorySheet` (Type-2 SCD timeline with ACTIVE marker).
+- `router.tsx` + `Sidebar.tsx` — `closures/*` route + `Closures` nav entry under FINANCE & RI with `LockedIcon`.
+
+**Smoke-tested end-to-end against live `:8090`:** created FY 2026 (19 periods), soft-closed Jan 2026, badge flipped to SOFT_CLOSED with `softClosedAt` populated, Reopen button appeared, history sheet showed the SOFT entry with grace-until 27 May 2026, 01:00 UTC — validating Slice 1.7c's NAICOM-aware `addBusinessDays`.
+
+**Schema drift caught at runtime by `validatedGet`:** initial `FiscalYearStatusSchema` had `['DRAFT', 'ACTIVE', 'CLOSED']`; backend actually returns `PLANNING`. Fixed inline — proof the May 2026 schema-mirror discipline earns its keep.
+
+**Decision — separate `/closures` module, not a Finance tab.** Module 12 will grow to ~6 screens; folding into Finance tabs would balloon the receipts/payments page.
+
+**Durable memory captured:** user prefers multi-option decisions presented as markdown tables (side-by-side comparison) rather than the `AskUserQuestion` modal. Saved as `feedback-present-options-as-table`.
+
+**Outstanding:** Module 12 frontend ~5% complete (1 of ~15 screens). Phase 5 build-queue not yet formalised in CLAUDE.md. Next-slice candidates: FY creation sheet, Journal Entry browser, Trial Balance + COA read screens.
+
+**Open questions:** None.
+
+---
+
 ## 2026-05-20 — Session 73 (`main`): Phase 4 NAICOM submissions complete (slices 4.4–4.10) + Slice 1.10 GL substrate enrichment
 
 ### Context
