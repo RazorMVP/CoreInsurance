@@ -4,6 +4,12 @@ import com.nubeero.cia.common.api.ApiMeta;
 import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.setup.org.dto.SbuRequest;
 import com.nubeero.cia.setup.org.dto.SbuResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -18,6 +24,8 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/setup/sbus")
+@Tag(name = "Setup — SBUs (Strategic Business Units)", description = "Internal SBU master data. Used for portfolio segmentation in reports and per-SBU approval tiers.")
+@SecurityRequirement(name = "bearer-jwt")
 @RequiredArgsConstructor
 public class SbuController {
 
@@ -25,6 +33,13 @@ public class SbuController {
 
     @GetMapping
     @PreAuthorize("hasRole('SETUP_VIEW')")
+    @Operation(summary = "List SBUs (paginated)")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "SBU page",
+            content = @Content(schema = @Schema(implementation = SbuResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content)
+    })
     public ResponseEntity<ApiResponse<Page<SbuResponse>>> list(
             @PageableDefault(size = 20) Pageable pageable) {
         Page<SbuResponse> page = service.list(pageable);
@@ -35,12 +50,28 @@ public class SbuController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('SETUP_VIEW')")
+    @Operation(summary = "Get SBU by id")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Found",
+            content = @Content(schema = @Schema(implementation = SbuResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found", content = @Content)
+    })
     public ResponseEntity<ApiResponse<SbuResponse>> get(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(service.get(id)));
     }
 
     @PostMapping
     @PreAuthorize("hasRole('SETUP_CREATE')")
+    @Operation(summary = "Create an SBU")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Created",
+            content = @Content(schema = @Schema(implementation = SbuResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content)
+    })
     public ResponseEntity<ApiResponse<SbuResponse>> create(@Valid @RequestBody SbuRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(service.create(request)));
@@ -48,6 +79,15 @@ public class SbuController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('SETUP_UPDATE')")
+    @Operation(summary = "Update SBU")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Updated",
+            content = @Content(schema = @Schema(implementation = SbuResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found", content = @Content)
+    })
     public ResponseEntity<ApiResponse<SbuResponse>> update(
             @PathVariable UUID id, @Valid @RequestBody SbuRequest request) {
         return ResponseEntity.ok(ApiResponse.success(service.update(id, request)));
@@ -55,6 +95,13 @@ public class SbuController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('SETUP_DELETE')")
+    @Operation(summary = "Soft-delete SBU")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Deleted"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found", content = @Content)
+    })
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         service.delete(id);
         return ResponseEntity.ok(ApiResponse.success(null));
