@@ -4,6 +4,12 @@ import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.finance.dto.PaymentResponse;
 import com.nubeero.cia.finance.dto.PostPaymentRequest;
 import com.nubeero.cia.finance.dto.ReverseRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -17,6 +23,9 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/credit-notes/{creditNoteId}/payments")
+@Tag(name = "Payments (Module 8)",
+     description = "Outbound payments against a credit note (claim DV, FAC outward, commission, etc.). Posting a payment subtracts from CN outstanding_amount; full settlement flips the CN to SETTLED. Reversal undoes the payment and posts a contra JE via SubledgerPostingService.")
+@SecurityRequirement(name = "bearer-jwt")
 @RequiredArgsConstructor
 public class PaymentController {
 
@@ -24,6 +33,13 @@ public class PaymentController {
 
     @GetMapping
     @PreAuthorize("hasRole('FINANCE_VIEW')")
+    @Operation(summary = "List payments for a credit note (paginated)")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Payment page",
+            content = @Content(schema = @Schema(implementation = PaymentResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_VIEW", content = @Content)
+    })
     public ApiResponse<Page<PaymentResponse>> list(
             @PathVariable UUID creditNoteId,
             @PageableDefault(size = 20) Pageable pageable) {
@@ -33,6 +49,14 @@ public class PaymentController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('FINANCE_VIEW')")
+    @Operation(summary = "Get payment detail")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Payment found",
+            content = @Content(schema = @Schema(implementation = PaymentResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_VIEW", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Payment not found", content = @Content)
+    })
     public ApiResponse<PaymentResponse> get(
             @PathVariable UUID creditNoteId,
             @PathVariable UUID id) {
@@ -42,6 +66,17 @@ public class PaymentController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('FINANCE_CREATE')")
+    @Operation(summary = "Post a new payment against the credit note",
+               description = "Generates a payment number, subtracts from CN outstanding, posts the JE via SubledgerPostingService (Payment event), and flips CN status to SETTLED when paidAmount == totalAmount.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Payment posted",
+            content = @Content(schema = @Schema(implementation = PaymentResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error or amount exceeds outstanding", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_CREATE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Credit note not found", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "423", description = "Target period is closed", content = @Content)
+    })
     public ApiResponse<PaymentResponse> post(
             @PathVariable UUID creditNoteId,
             @Valid @RequestBody PostPaymentRequest req) {
@@ -54,6 +89,16 @@ public class PaymentController {
 
     @PostMapping("/{id}/reverse")
     @PreAuthorize("hasRole('FINANCE_UPDATE')")
+    @Operation(summary = "Reverse a payment",
+               description = "Marks the payment REVERSED with a reason. Re-opens the parent CN's outstanding amount and posts a contra JE. Reversal carve-out applies — can cross a closed period.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Payment reversed"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Reason missing", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_UPDATE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Payment not found", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Payment already reversed", content = @Content)
+    })
     public ApiResponse<Void> reverse(
             @PathVariable UUID creditNoteId,
             @PathVariable UUID id,
