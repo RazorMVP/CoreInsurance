@@ -1,47 +1,68 @@
 ---
 sidebar_position: 1
+title: NubSure Documentation
+sidebar_label: Introduction
 ---
 
-# Tutorial Intro
+# NubSure Documentation
 
-Let's discover **Docusaurus in less than 5 minutes**.
+**NubSure** is the Core Insurance Application (General Business) by Nubeero — a multi-tenant SaaS platform for end-to-end general insurance operations. Nigeria-first, NAICOM / NIID / NDPR compliant. One codebase, one deployment, every insurance company tenant runs in isolation.
 
-## Getting Started
+These docs cover both the **internal architecture** (for the engineering team building NubSure) and the **partner API** (for Insurtechs integrating with NubSure-powered insurers).
 
-Get started by **creating a new site**.
+## Start Here
 
-Or **try Docusaurus immediately** with **[docusaurus.new](https://docusaurus.new)**.
+### For platform engineers
 
-### What you'll need
+| Read first | What it covers |
+| --- | --- |
+| [Architecture Overview](./architecture/overview.md) | System boundary, tech stack, request lifecycle, the twelve business modules |
+| [Module Reference](./architecture/modules.md) | Maven module inventory, dependencies, package conventions |
+| [Multi-Tenancy](./architecture/multi-tenancy.md) | Schema-per-tenant, JWT-driven tenant resolution, Keycloak realm isolation |
+| [Security](./architecture/security.md) | JWT authentication flow, RBAC, NDPR PII encryption |
+| [Local Setup](./guides/local-setup.md) | docker-compose stack, Spring Boot start, frontend dev server |
 
-- [Node.js](https://nodejs.org/en/download/) version 20.0 or above:
-  - When installing Node.js, you are recommended to check all checkboxes related to dependencies.
+### For integrators (Insurtechs)
 
-## Generate a new site
+| Read first | What it covers |
+| --- | --- |
+| [Partner API Overview](./partner/overview.md) | What the partner API exposes, who it's for |
+| [Authentication](./partner/authentication.md) | OAuth2 Client Credentials, scopes, token lifecycle |
+| [Webhooks](./partner/webhooks.md) | Event registration, HMAC signature verification, retry semantics |
+| [Sandbox](./partner/sandbox.md) | Isolated test environment that uses stub regulators / KYC |
+| [Interactive API Explorer](/partner/api-reference) | Live Scalar-rendered OpenAPI spec |
 
-Generate a new Docusaurus site using the **classic template**.
+### For operations on-call
 
-The classic template will automatically be added to your project after you run the command:
+| Runbook | When to use |
+| --- | --- |
+| [GL Backfill Runbook](./operations/period-end-closures-backfill.md) | Apply the GL substrate to a tenant with existing business history (post-V31 install or after a regression that disabled subledger posting) |
+| [Module 12 Implementation Plan](./architecture/period-end-closures-implementation-plan.md) | Per-slice shipping history for the GL + IFRS 17 PAA + IFRS 9 + NAICOM submission stack |
 
-```bash
-npm init docusaurus@latest my-website classic
-```
+## What's Shipped
 
-You can type this command into Command Prompt, Powershell, Terminal, or any other integrated terminal of your code editor.
+The 12-module estate as of 2026-05-20:
 
-The command also installs all necessary dependencies you need to run Docusaurus.
+| # | Module | Status |
+| --- | --- | --- |
+| 1 | Setup & Administration | Backend + frontend complete |
+| 2 | Quotation | Backend + frontend complete |
+| 3 | Policy | Backend + frontend complete |
+| 4 | Endorsements | Backend + frontend complete |
+| 5 | Claims | Backend + frontend complete |
+| 6 | Reinsurance | Backend + frontend complete |
+| 7 | Customer Onboarding | Backend + frontend complete |
+| 8 | Finance | Backend + frontend complete |
+| 9 | Partner Open API | Backend complete, partner portal frontend in design |
+| 10 | Audit & Compliance | Backend + frontend complete |
+| 11 | Reports & Analytics | Backend + frontend complete (55 pre-built reports, custom builder) |
+| 12 | Period-End Closures | Backend Phases 1–4 complete + Slice 1.10 (GL + IFRS 17 PAA + IFRS 9 + NAICOM N01–N08); frontend on backlog |
 
-## Start your site
+## Outside These Docs
 
-Run the development server:
+- **Source of truth for product scope**: the [PRD on Confluence](https://akinwalenubeero.atlassian.net/wiki/spaces/CIAGB/overview) (link is internal — needs Atlassian access).
+- **Engineering-only context**: the project log (`cia-log.md`) and `CLAUDE.md` at the repo root capture session-by-session decisions and load-bearing invariants that don't belong in customer-facing docs.
 
-```bash
-cd my-website
-npm run start
-```
+## Contributing
 
-The `cd` command changes the directory you're working with. In order to work with your newly created Docusaurus site, you'll need to navigate the terminal there.
-
-The `npm run start` command builds your website locally and serves it through a development server, ready for you to view at http://localhost:3000/.
-
-Open `docs/intro.md` (this page) and edit some lines: the site **reloads automatically** and displays your changes.
+When you ship code in any of these areas, update the matching doc here in the same PR. Drift between shipped code and the doc-site is treated as a bug.
