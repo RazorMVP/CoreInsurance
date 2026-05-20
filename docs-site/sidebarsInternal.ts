@@ -4,8 +4,13 @@ const sidebarsInternal: SidebarsConfig = {
   internalApiSidebar: [
     {
       type: "doc",
-      id: "api-reference",
-      label: "Internal API Reference",
+      id: "overview",
+      label: "Overview",
+    },
+    {
+      type: "link",
+      label: "API Reference (Scalar)",
+      href: "/internal/api-reference",
     },
   ],
 };
