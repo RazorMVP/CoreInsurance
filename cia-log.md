@@ -12,9 +12,37 @@ No open items as of 2026-05-20. Slice 1.10 (GL substrate enrichment) was the onl
 
 ---
 
-## 2026-05-20 — Session 74 (`main`): Slices F5.1 + F5.2 — Period Lock console + Fiscal Year admin
+## 2026-05-20 — Session 74 (`main`): Slices F5.1 + F5.2 + F5.3 — Period Lock console + Fiscal Year admin + Chart of Accounts viewer
 
-Phase 5 (Module 12 frontend) opened; first two slices shipped in the same session.
+Phase 5 (Module 12 frontend) opened; first three slices shipped in the same session.
+
+### Slice F5.3 — Chart of Accounts viewer
+
+- `ChartOfAccountsPage.tsx` (new) — tree view of the 129 V32-seeded COA rows. Recursive `TreeNode` component, ▾/▸ disclosure glyphs, depth-based indent, top-level `AccountType` badges, outline `IFRS-17 · {role}` / `IFRS-9 · {role}` chips on tagged accounts. Account-type filter (ALL + 5 buckets), substring search across code + name (auto-expands ancestors of matches, `<mark>` highlights), Expand-all / Collapse-all controls, 6 StatCards.
+- `modules/closures/index.tsx` — added horizontal tab strip across the module ("Periods" | "Chart of Accounts") + new route `/closures/chart-of-accounts`.
+- `@cia/api-client` — added `AccountTypeSchema`, `Ifrs17RoleSchema` (23 constants), `Ifrs9RoleSchema` (12 constants), `ChartOfAccountNodeSchema` as a recursive `z.lazy()` schema mirroring the Java DTO exactly.
+
+**Smoke test (live `:8090`):**
+- 129 nodes rendered (35 ASSET / 30 LIABILITY / 14 EQUITY / 19 INCOME / 31 EXPENSE) — matches `SELECT count(*) FROM chart_of_account`.
+- Expand-all reveals the 3-level hierarchy; IFRS-9 role tags on 1210/1220 (`FVPL`), 1230 (`FVOCI_DEBT`), 1240 (`FVOCI_EQUITY`) prove the Phase 3 substrate is end-to-end visible.
+- Search "reinsurance" → 15 `<mark>` highlights across Reinsurance contract held / LRC asset / LIC asset / recoveries receivable / ECL allowance.
+
+**Backend hotfix (in this commit, scoped to `ChartOfAccountService.java`):**
+The COA endpoint initially returned `500 INTERNAL_ERROR` in dev because `@Cacheable(coa-tree)` uses a SpEL key derived from `TenantContext.getTenantId()`, and the dev `TenantContextFilter` only sets tenant context from JWT claims — there's no auth in local dev. Spring's `CacheAspectSupport` throws `IllegalArgumentException("Null key returned for cache operation")` when the SpEL evaluates to null.
+
+Added `condition = "T(com.nubeero.cia.common.tenant.TenantContext).getTenantId() != null"` to all three `@Cacheable` annotations in `ChartOfAccountService` (`CACHE_BY_CODE`, `CACHE_BY_IFRS17`, `CACHE_BY_IFRS9`, `CACHE_TREE`). Now: tenant present → cache normally; tenant absent → skip cache, still serve correct data. No production behaviour change.
+
+This bug was latent — `FiscalYearService` isn't `@Cacheable`, so F5.1/F5.2 endpoints worked in dev without tenant context. F5.3 surfaced it because COA is the first Phase 1 service the frontend actually hit that caches per tenant. Worth a broader audit later (other Phase 2/3/4 services with the same SpEL pattern would fail identically).
+
+### Slice F5.2 — Fiscal Year creation + activation (recap)
+
+Commit `835a7d3`. Removes the only thing the F5.1 page couldn't do: create / activate / close fiscal years from the UI (previously required `curl`). Closes the Phase 1 GL admin loop end-to-end.
+
+- `CreateFiscalYearSheet.tsx` (new) — name + startDate + endDate inputs, live-derived `FY{YYYY}` placeholder when name blank, "After creation" info card explaining PLANNING → ACTIVE flow. `validatedPost` to `POST /api/v1/finance/fiscal-years`. Auto-selects the new FY on success via `onCreated` callback.
+- `PeriodLockListPage.tsx` — added FY status badge + contextual Activate/Close-year buttons in the filter row (only shown when status is PLANNING / ACTIVE respectively), `+ Create fiscal year` CTA right-aligned. Empty-state path now also shows the create CTA (no more "Create one in Finance → Fiscal Years" dead-end).
+- Two new mutations on the page: `activateMutation` → `POST /fiscal-years/{id}/activate`, `closeYearMutation` → `POST /fiscal-years/{id}/close`. Both `FINANCE_APPROVE` gated.
+
+**Smoke-tested end-to-end against live `:8090`:** clicked Activate on FY 2026 → badge PLANNING → ACTIVE, Activate button replaced by destructive Close-year button, selector showed `●` active marker. Opened sheet, created FY 2027 with explicit dates → 19 periods auto-generated, selector auto-switched, all 12 month rows OPEN.
 
 ### Slice F5.2 — Fiscal Year creation + activation (incremental on top of F5.1)
 

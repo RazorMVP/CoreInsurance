@@ -49,7 +49,8 @@ public class ChartOfAccountService {
      */
     @Cacheable(
         cacheNames = CACHE_BY_CODE,
-        key = "T(com.nubeero.cia.common.tenant.TenantContext).getTenantId() + ':' + #code"
+        key = "T(com.nubeero.cia.common.tenant.TenantContext).getTenantId() + ':' + #code",
+        condition = "T(com.nubeero.cia.common.tenant.TenantContext).getTenantId() != null"
     )
     public ChartOfAccount findByCode(String code) {
         return repository.findByCodeAndDeletedAtIsNull(code)
@@ -63,7 +64,8 @@ public class ChartOfAccountService {
      */
     @Cacheable(
         cacheNames = CACHE_BY_IFRS17,
-        key = "T(com.nubeero.cia.common.tenant.TenantContext).getTenantId() + ':' + #role.name()"
+        key = "T(com.nubeero.cia.common.tenant.TenantContext).getTenantId() + ':' + #role.name()",
+        condition = "T(com.nubeero.cia.common.tenant.TenantContext).getTenantId() != null"
     )
     public List<ChartOfAccount> findByIfrs17Role(Ifrs17Role role) {
         Objects.requireNonNull(role, "role must not be null");
@@ -76,7 +78,8 @@ public class ChartOfAccountService {
      */
     @Cacheable(
         cacheNames = CACHE_BY_IFRS9,
-        key = "T(com.nubeero.cia.common.tenant.TenantContext).getTenantId() + ':' + #role.name()"
+        key = "T(com.nubeero.cia.common.tenant.TenantContext).getTenantId() + ':' + #role.name()",
+        condition = "T(com.nubeero.cia.common.tenant.TenantContext).getTenantId() != null"
     )
     public List<ChartOfAccount> findByIfrs9Role(Ifrs9Role role) {
         Objects.requireNonNull(role, "role must not be null");
@@ -91,7 +94,8 @@ public class ChartOfAccountService {
      */
     @Cacheable(
         cacheNames = CACHE_TREE,
-        key = "T(com.nubeero.cia.common.tenant.TenantContext).getTenantId()"
+        key = "T(com.nubeero.cia.common.tenant.TenantContext).getTenantId()",
+        condition = "T(com.nubeero.cia.common.tenant.TenantContext).getTenantId() != null"
     )
     public List<ChartOfAccountNode> getTree() {
         List<ChartOfAccount> all = repository.findByDeletedAtIsNullOrderByCodeAsc();

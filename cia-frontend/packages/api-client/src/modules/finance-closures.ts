@@ -17,10 +17,58 @@ export const FiscalPeriodTypeSchema   = z.enum(['DAY', 'MONTH', 'QUARTER', 'HALF
 export const FiscalPeriodStatusSchema = z.enum(['OPEN', 'SOFT_CLOSED', 'HARD_CLOSED', 'REOPENED']);
 export const LockTypeSchema           = z.enum(['SOFT', 'HARD']);
 
+export const AccountTypeSchema = z.enum(['ASSET', 'LIABILITY', 'EQUITY', 'INCOME', 'EXPENSE']);
+
+export const Ifrs17RoleSchema = z.enum([
+  'LRC_BEL', 'LRC_RA', 'LRC_LC',
+  'LIC_OCR', 'LIC_IBNR', 'LIC_RA', 'LIC_CHE',
+  'LRC_REINSURANCE', 'LIC_REINSURANCE',
+  'REVENUE_LRC_RELEASE', 'REVENUE_ACQ_RECOVERY', 'REVENUE_RA_RELEASE', 'REVENUE_EXP_ADJ',
+  'REINSURANCE_RECOVERY',
+  'INCURRED_CLAIMS', 'LIC_CHANGE', 'ACQ_EXPENSE', 'OTHER_DIRECT_EXPENSE', 'LC_CHANGE',
+  'REINSURANCE_PREMIUM', 'REINSURANCE_LRC_CHANGE',
+  'INSURANCE_FINANCE_EXPENSE', 'INSURANCE_FINANCE_OCI',
+]);
+
+export const Ifrs9RoleSchema = z.enum([
+  'FVPL', 'FVOCI_DEBT', 'FVOCI_EQUITY', 'AMORTISED_COST',
+  'ECL_ALLOWANCE', 'ECL_EXPENSE',
+  'OCI_DEBT_RESERVE', 'OCI_EQUITY_RESERVE',
+  'INTEREST_AC', 'INTEREST_FVOCI',
+  'FVPL_GAINS', 'FVPL_LOSSES',
+]);
+
 export type FiscalYearStatus   = z.infer<typeof FiscalYearStatusSchema>;
 export type FiscalPeriodType   = z.infer<typeof FiscalPeriodTypeSchema>;
 export type FiscalPeriodStatus = z.infer<typeof FiscalPeriodStatusSchema>;
 export type LockType           = z.infer<typeof LockTypeSchema>;
+export type AccountType        = z.infer<typeof AccountTypeSchema>;
+export type Ifrs17Role         = z.infer<typeof Ifrs17RoleSchema>;
+export type Ifrs9Role          = z.infer<typeof Ifrs9RoleSchema>;
+
+// ── Chart of Accounts (recursive) ─────────────────────────────────────────
+
+export type ChartOfAccountNodeDto = {
+  code:        string;
+  name:        string;
+  accountType: AccountType;
+  ifrs17Role:  Ifrs17Role | null;
+  ifrs9Role:   Ifrs9Role  | null;
+  active:      boolean;
+  children:    ChartOfAccountNodeDto[];
+};
+
+export const ChartOfAccountNodeSchema: z.ZodType<ChartOfAccountNodeDto> = z.lazy(() =>
+  z.object({
+    code:        z.string(),
+    name:        z.string(),
+    accountType: AccountTypeSchema,
+    ifrs17Role:  Ifrs17RoleSchema.nullable(),
+    ifrs9Role:   Ifrs9RoleSchema.nullable(),
+    active:      z.boolean(),
+    children:    z.array(ChartOfAccountNodeSchema),
+  }),
+);
 
 // ── FiscalPeriod ──────────────────────────────────────────────────────────
 
