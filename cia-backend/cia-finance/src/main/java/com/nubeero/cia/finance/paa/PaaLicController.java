@@ -1,6 +1,12 @@
 package com.nubeero.cia.finance.paa;
 
 import com.nubeero.cia.common.api.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +33,9 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/v1/finance/paa/lic")
+@Tag(name = "PAA — Liability for Incurred Claims (LIC)",
+     description = "IFRS 17 PAA Slice 2.4 — claim roll-forward via SQL conditional-sum query. Posts paa_lic disclosure rows; v1 posts no JE (underlying GL already correct via SubledgerPostingService).")
+@SecurityRequirement(name = "bearer-jwt")
 @RequiredArgsConstructor
 public class PaaLicController {
 
@@ -34,6 +43,17 @@ public class PaaLicController {
 
     @PostMapping("/recognise")
     @PreAuthorize("hasRole('FINANCE_APPROVE')")
+    @Operation(summary = "Recognise LIC for a fiscal period",
+               description = "Runs the LIC engine across every IFRS 17 group for the period. Idempotent at (group, period) — fails with 409 LicRecognitionAlreadyDoneException if any group has already been recognised. Disclosure-only in v1 (no JE).")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "LIC recognised",
+            content = @Content(schema = @Schema(implementation = LicRecognitionResult.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "periodId missing", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_APPROVE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Period not found", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "LicRecognitionAlreadyDoneException", content = @Content)
+    })
     public ApiResponse<LicRecognitionResult> recognise(@Valid @RequestBody RecogniseLicRequest request) {
         return ApiResponse.success(engine.recognise(request.periodId()));
     }
