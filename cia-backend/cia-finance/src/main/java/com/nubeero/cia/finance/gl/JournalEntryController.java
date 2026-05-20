@@ -5,6 +5,12 @@ import com.nubeero.cia.finance.dto.JournalEntryResponse;
 import com.nubeero.cia.finance.dto.PostJournalEntryRequest;
 import com.nubeero.cia.finance.dto.PriorPeriodAdjustmentRequest;
 import com.nubeero.cia.finance.dto.ReverseJournalEntryRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -37,6 +43,9 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/v1/finance/journal-entries")
+@Tag(name = "Journal Entries",
+     description = "The Slice 1.4 GL gateway. Every JE in the system passes through JournalEntryService — subledger posting, IFRS 17 PAA engines, IFRS 9 measurement engines, NAICOM source data, manual posts. Idempotency triple: (source_module, source_event_type, source_reference).")
+@SecurityRequirement(name = "bearer-jwt")
 @RequiredArgsConstructor
 public class JournalEntryController {
 
@@ -44,6 +53,15 @@ public class JournalEntryController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('FINANCE_VIEW')")
+    @Operation(summary = "Get a journal entry by id",
+               description = "Returns the JE header plus its lines. JE narratives sometimes embed disclosure substrate (e.g. premium-receivable ECL provision matrix for §B5.5.36 evidence) — see /finance/ifrs9/premium-receivable-ecl docs.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Journal entry found",
+            content = @Content(schema = @Schema(implementation = JournalEntryResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_VIEW", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Journal entry not found", content = @Content)
+    })
     public ApiResponse<JournalEntryResponse> get(@PathVariable UUID id) {
         return ApiResponse.success(service.findById(id));
     }
@@ -51,28 +69,53 @@ public class JournalEntryController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('FINANCE_CREATE')")
+    @Operation(summary = "Post a manual journal entry",
+               description = "Manual JE post for adjustments that do not originate from a subledger event. Validates double-entry balance (sum debits == sum credits per currency), checks against period locks (HTTP 423 LOCKED if rejected), and applies the (source_module, source_event_type, source_reference) UNIQUE constraint for idempotency.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Journal entry posted",
+            content = @Content(schema = @Schema(implementation = JournalEntryResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Unbalanced lines, invalid account, or missing required fields", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_CREATE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "JournalEntryDuplicateException — idempotency triple already used", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "423", description = "PeriodLockedException — target period is closed", content = @Content)
+    })
     public ApiResponse<JournalEntryResponse> post(@Valid @RequestBody PostJournalEntryRequest request) {
         return ApiResponse.success(service.post(request));
     }
 
     @PostMapping("/{id}/reverse")
     @PreAuthorize("hasRole('FINANCE_APPROVE')")
+    @Operation(summary = "Reverse a previously posted JE",
+               description = "Posts a mirror JE (debits ↔ credits) and flips the original to REVERSED. The reversal carve-out in LockableByPeriod.isReversal() means reversals CAN cross a closed period — corrections to closed periods remain possible. Requires the elevated FINANCE_APPROVE role.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Reversal entry created",
+            content = @Content(schema = @Schema(implementation = JournalEntryResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Reason missing", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_APPROVE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Journal entry not found", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Already reversed, or status not POSTED", content = @Content)
+    })
     public ApiResponse<JournalEntryResponse> reverse(
         @PathVariable UUID id,
         @Valid @RequestBody ReverseJournalEntryRequest request) {
         return ApiResponse.success(service.reverse(id, request.reason()));
     }
 
-    /**
-     * Slice 1.7c — IAS-8 Prior-Period Adjustment endpoint. Gated by the
-     * elevated {@code FINANCE_APPROVE_PPA} role (distinct from
-     * {@code FINANCE_CREATE} used for normal posts) so segregation of duties
-     * is enforced: the officer who booked the original JE cannot approve its
-     * restatement.
-     */
     @PostMapping("/prior-period-adjustment")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('FINANCE_APPROVE_PPA')")
+    @Operation(summary = "Post an IAS-8 Prior-Period Adjustment",
+               description = "Slice 1.7c. Posts a restatement JE that legitimately crosses a closed period to correct an error or accounting policy change. Gated by FINANCE_APPROVE_PPA (distinct from FINANCE_CREATE) to enforce segregation of duties — the officer who booked the original cannot approve its restatement. Notifies recipients via PeriodReopenedEvent.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "PPA posted",
+            content = @Content(schema = @Schema(implementation = JournalEntryResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error (unbalanced, missing reason, etc.)", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_APPROVE_PPA", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "Target period not eligible for PPA", content = @Content)
+    })
     public ApiResponse<JournalEntryResponse> postPriorPeriodAdjustment(
         @Valid @RequestBody PriorPeriodAdjustmentRequest request) {
         return ApiResponse.success(service.postPriorPeriodAdjustment(request));
