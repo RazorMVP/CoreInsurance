@@ -4,6 +4,12 @@ import com.nubeero.cia.common.api.ApiMeta;
 import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.setup.vehicle.dto.VehicleModelRequest;
 import com.nubeero.cia.setup.vehicle.dto.VehicleModelResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -18,6 +24,8 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/setup/vehicle-makes/{makeId}/models")
+@Tag(name = "Setup — Vehicle Models", description = "Vehicle model master data, scoped under a make (e.g. Toyota → Camry / Corolla / RAV4). Nested resource under /vehicle-makes/{makeId}/models.")
+@SecurityRequirement(name = "bearer-jwt")
 @RequiredArgsConstructor
 public class VehicleModelController {
 
@@ -25,6 +33,14 @@ public class VehicleModelController {
 
     @GetMapping
     @PreAuthorize("hasRole('SETUP_VIEW')")
+    @Operation(summary = "List models under a make (paginated)")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Model page",
+            content = @Content(schema = @Schema(implementation = VehicleModelResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Make not found", content = @Content)
+    })
     public ResponseEntity<ApiResponse<Page<VehicleModelResponse>>> list(
             @PathVariable UUID makeId,
             @PageableDefault(size = 20) Pageable pageable) {
@@ -36,6 +52,14 @@ public class VehicleModelController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('SETUP_VIEW')")
+    @Operation(summary = "Get vehicle model by id (scoped to its make)")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Found",
+            content = @Content(schema = @Schema(implementation = VehicleModelResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Make or model not found", content = @Content)
+    })
     public ResponseEntity<ApiResponse<VehicleModelResponse>> get(
             @PathVariable UUID makeId, @PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(service.get(makeId, id)));
@@ -43,6 +67,15 @@ public class VehicleModelController {
 
     @PostMapping
     @PreAuthorize("hasRole('SETUP_CREATE')")
+    @Operation(summary = "Create a model under a make")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Created",
+            content = @Content(schema = @Schema(implementation = VehicleModelResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Make not found", content = @Content)
+    })
     public ResponseEntity<ApiResponse<VehicleModelResponse>> create(
             @PathVariable UUID makeId, @Valid @RequestBody VehicleModelRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -51,6 +84,15 @@ public class VehicleModelController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('SETUP_UPDATE')")
+    @Operation(summary = "Update vehicle model")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Updated",
+            content = @Content(schema = @Schema(implementation = VehicleModelResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Make or model not found", content = @Content)
+    })
     public ResponseEntity<ApiResponse<VehicleModelResponse>> update(
             @PathVariable UUID makeId, @PathVariable UUID id,
             @Valid @RequestBody VehicleModelRequest request) {
@@ -59,6 +101,13 @@ public class VehicleModelController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('SETUP_DELETE')")
+    @Operation(summary = "Soft-delete vehicle model")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Deleted"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Make or model not found", content = @Content)
+    })
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID makeId, @PathVariable UUID id) {
         service.delete(makeId, id);
