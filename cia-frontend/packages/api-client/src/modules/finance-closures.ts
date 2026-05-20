@@ -84,7 +84,7 @@ export const JournalEntryLineDtoSchema = z.object({
   contractGroupId:    z.string().nullable().optional(),
   holdingId:          z.string().nullable().optional(),
   classOfBusinessId:  z.string().nullable().optional(),
-  dimensionTags:      z.record(z.unknown()).nullable().optional(),
+  dimensionTags:      z.record(z.string(), z.unknown()).nullable().optional(),
 });
 export type JournalEntryLineDto = z.infer<typeof JournalEntryLineDtoSchema>;
 
@@ -118,6 +118,34 @@ export const SpringPageSchema = <T extends z.ZodTypeAny>(item: T) => z.object({
   empty:            z.boolean(),
   numberOfElements: z.number(),
 });
+
+// ── Trial Balance ─────────────────────────────────────────────────────────
+
+export const TrialBalanceLineDtoSchema = z.object({
+  accountId:      z.string(),
+  accountCode:    z.string(),
+  accountName:    z.string(),
+  accountType:    AccountTypeSchema,
+  debitBalance:   z.number(),
+  creditBalance:  z.number(),
+});
+export type TrialBalanceLineDto = z.infer<typeof TrialBalanceLineDtoSchema>;
+
+export const TrialBalanceFooterDtoSchema = z.object({
+  totalDebits:   z.number(),
+  totalCredits:  z.number(),
+  balanced:      z.boolean(),
+  lineCount:     z.number(),
+});
+export type TrialBalanceFooterDto = z.infer<typeof TrialBalanceFooterDtoSchema>;
+
+export const TrialBalanceDtoSchema = z.object({
+  asOf:         z.string(),
+  generatedAt:  z.string(),
+  lines:        z.array(TrialBalanceLineDtoSchema),
+  footer:       TrialBalanceFooterDtoSchema,
+});
+export type TrialBalanceDto = z.infer<typeof TrialBalanceDtoSchema>;
 
 // ── Chart of Accounts (recursive) ─────────────────────────────────────────
 

@@ -12,9 +12,27 @@ No open items as of 2026-05-20. Slice 1.10 (GL substrate enrichment) was the onl
 
 ---
 
-## 2026-05-20 — Session 74 (`main`): Slices F5.1 → F5.4 — Period Lock + FY admin + COA viewer + JE browser
+## 2026-05-20 — Session 74 (`main`): Slices F5.1 → F5.5 — Phase 1 GL frontend complete
 
-Phase 5 (Module 12 frontend) opened; first four slices shipped in the same session.
+Phase 5 (Module 12 frontend) opened; the entire Phase 1 GL frontend (5 screens) shipped in the same session.
+
+### Slice F5.5 — Trial Balance report
+
+Closes out the Phase 1 GL frontend. Pure read; backend `TrialBalanceController` + `TrialBalanceService` already existed and required no changes.
+
+- `@cia/api-client/finance-closures.ts` — added `TrialBalanceLineDtoSchema`, `TrialBalanceFooterDtoSchema`, `TrialBalanceDtoSchema` mirroring the Java records. Reused the existing `AccountTypeSchema` from F5.3.
+- `TrialBalanceReportPage.tsx` (new) — `as of` date picker with explicit "Run report" button (so users decide when to re-query), 4 StatCards (Total debits / Total credits / Accounts / Balance status), table grouped by account type (ASSET / LIABILITY / EQUITY / INCOME / EXPENSE) with per-group subtotals + a footer Total row.
+- `modules/closures/index.tsx` — fourth tab "Trial Balance" + new `/closures/trial-balance` route.
+
+**UX fix — gross vs netted totals.** Initial implementation surfaced the backend's `footer.totalDebits` / `totalCredits` (which are **gross line sums** — Σ debit_amount across every JE line, ₦242k for 6 lines). The visible column subtotals, however, show **netted per-account balances** (₦70k + ₦80k + ₦12k = ₦162k dr; ₦12k + ₦150k = ₦162k cr). Two different "balanced" checks; users would have read the headline (₦242k) and reconciled against the columns (₦162k) and lost faith in the report.
+
+Fixed by computing netted column totals client-side and using *those* in the StatCards + footer Total row. The backend's gross totals + lineCount were demoted to a small italic provenance line ("Backed by 6 JE lines · gross activity ₦242,000.00") — useful as an auditor sanity metric but no longer the headline.
+
+**Smoke test:** Total debits ₦162k = Total credits ₦162k, ✓ Balanced, columns sum exactly to ₦162k each (Assets ₦70k + Expenses ₦92k dr; Liabilities ₦12k + Income ₦150k cr). React fragment key warning caught at runtime and fixed.
+
+### Slice F5.4 — Journal Entry browser (recap)
+
+Commit `19a9f8f`. First Phase-5 slice that touched the backend. Added `GET /api/v1/finance/journal-entries` with 7 optional filters + pagination, new `JournalEntrySummaryResponse` DTO with pre-aggregated `lineCount` + `totalDebit`, JPQL `LEFT JOIN je.lines line + DISTINCT` for filtering by `accountCode` / `classOfBusinessId` without duping. Frontend: browser page with filter bar + pageable table + detail sheet with idempotency-triple card. Also extended `JournalEntryLineResponse` with `classOfBusinessId` (Slice 1.10 substrate visible in detail sheet).
 
 ### Slice F5.4 — Journal Entry browser
 
