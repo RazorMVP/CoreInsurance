@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import {
   Badge,
@@ -8,10 +8,12 @@ import {
   PageHeader, PageSection,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
   Skeleton, StatCard,
+  useToast,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import {
   validatedGet,
+  validatedPost,
   FiscalYearDtoSchema,
   FiscalPeriodDtoSchema,
   type FiscalYearDto,
@@ -23,6 +25,7 @@ import { useAuth } from '@cia/auth';
 import ClosePeriodDialog from './ClosePeriodDialog';
 import ReopenPeriodDialog from './ReopenPeriodDialog';
 import LockHistorySheet from './LockHistorySheet';
+import CreateFiscalYearSheet from './CreateFiscalYearSheet';
 
 const STATUS_VARIANT: Record<FiscalPeriodStatus, 'active' | 'pending' | 'rejected' | 'draft'> = {
   OPEN:        'active',
@@ -56,6 +59,10 @@ export default function PeriodLockListPage() {
   const [closeDialog, setCloseDialog] = useState<{ period: FiscalPeriodDto; mode: 'SOFT' | 'HARD' } | null>(null);
   const [reopenDialog, setReopenDialog] = useState<FiscalPeriodDto | null>(null);
   const [historyTarget, setHistoryTarget] = useState<FiscalPeriodDto | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const yearsQuery = useQuery<FiscalYearDto[]>({
     queryKey: ['closures', 'fiscal-years'],
@@ -68,6 +75,34 @@ export default function PeriodLockListPage() {
     [years],
   );
   const effectiveFyId = selectedFyId ?? activeFy?.id ?? null;
+
+  const selectedFy = useMemo(
+    () => years.find((y) => y.id === effectiveFyId) ?? null,
+    [years, effectiveFyId],
+  );
+
+  const activateMutation = useMutation({
+    mutationFn: (id: string) => validatedPost(`/api/v1/finance/fiscal-years/${id}/activate`, {}, FiscalYearDtoSchema),
+    onSuccess: (fy) => {
+      toast({ title: 'Fiscal year activated', description: `${fy.name} is now the tenant's ACTIVE fiscal year.` });
+      queryClient.invalidateQueries({ queryKey: ['closures', 'fiscal-years'] });
+    },
+    onError: (err: unknown) => {
+      toast({ title: 'Activate failed', description: err instanceof Error ? err.message : 'Request failed', variant: 'destructive' });
+    },
+  });
+
+  const closeYearMutation = useMutation({
+    mutationFn: (id: string) => validatedPost(`/api/v1/finance/fiscal-years/${id}/close`, {}, FiscalYearDtoSchema),
+    onSuccess: (fy) => {
+      toast({ title: 'Fiscal year closed', description: `${fy.name} closed. Any OPEN periods were hard-closed.` });
+      queryClient.invalidateQueries({ queryKey: ['closures', 'fiscal-years'] });
+      queryClient.invalidateQueries({ queryKey: ['closures', 'periods', fy.id] });
+    },
+    onError: (err: unknown) => {
+      toast({ title: 'Close failed', description: err instanceof Error ? err.message : 'Request failed', variant: 'destructive' });
+    },
+  });
 
   const periodsQuery = useQuery<FiscalPeriodDto[]>({
     queryKey: ['closures', 'periods', effectiveFyId],
@@ -192,12 +227,20 @@ export default function PeriodLockListPage() {
           description="Open / soft-close / hard-close / reopen the fiscal periods that drive every monetary entry."
         />
         <PageSection>
-          <div className="rounded-md border bg-muted/40 px-4 py-12 text-center">
+          <div className="rounded-md border bg-muted/40 px-4 py-12 text-center space-y-3">
             <p className="text-sm text-muted-foreground">
-              No fiscal years configured for this tenant yet. Create one in Finance → Fiscal Years.
+              No fiscal years configured for this tenant yet.
             </p>
+            {canApprove && (
+              <Button onClick={() => setCreateOpen(true)}>+ Create fiscal year</Button>
+            )}
           </div>
         </PageSection>
+        <CreateFiscalYearSheet
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          onCreated={(fy) => setSelectedFyId(fy.id)}
+        />
       </div>
     );
   }
@@ -238,6 +281,38 @@ export default function PeriodLockListPage() {
             </SelectContent>
           </Select>
         </div>
+        {selectedFy && (
+          <div className="flex items-center gap-1.5">
+            <Badge variant={selectedFy.status === 'ACTIVE' ? 'active' : selectedFy.status === 'CLOSED' ? 'rejected' : 'pending'}>
+              {selectedFy.status}
+            </Badge>
+            {canApprove && selectedFy.status === 'PLANNING' && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => activateMutation.mutate(selectedFy.id)}
+                disabled={activateMutation.isPending}
+              >
+                {activateMutation.isPending ? 'Activating…' : 'Activate'}
+              </Button>
+            )}
+            {canApprove && selectedFy.status === 'ACTIVE' && (
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => closeYearMutation.mutate(selectedFy.id)}
+                disabled={closeYearMutation.isPending}
+              >
+                {closeYearMutation.isPending ? 'Closing…' : 'Close year'}
+              </Button>
+            )}
+          </div>
+        )}
+        <div className="ml-auto">
+          {canApprove && (
+            <Button onClick={() => setCreateOpen(true)}>+ Create fiscal year</Button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
@@ -270,6 +345,11 @@ export default function PeriodLockListPage() {
         period={historyTarget}
         open={!!historyTarget}
         onOpenChange={(open) => !open && setHistoryTarget(null)}
+      />
+      <CreateFiscalYearSheet
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={(fy) => setSelectedFyId(fy.id)}
       />
     </div>
   );

@@ -12,25 +12,33 @@ No open items as of 2026-05-20. Slice 1.10 (GL substrate enrichment) was the onl
 
 ---
 
-## 2026-05-20 — Session 74 (`main`): Module 12 frontend opens — Slice F5.1 Period Lock console
+## 2026-05-20 — Session 74 (`main`): Slices F5.1 + F5.2 — Period Lock console + Fiscal Year admin
 
-Phase 5 (Module 12 frontend) opened. Slice F5.1 shipped: a Period Lock console at `/closures` exposing Slice 1.7's `PeriodLockService` + Slice 1.6's `FiscalYearService` as a CFO workflow.
+Phase 5 (Module 12 frontend) opened; first two slices shipped in the same session.
 
-**Commit `fc51e8d` → `origin/main`** (9 files, +737 lines):
+### Slice F5.2 — Fiscal Year creation + activation (incremental on top of F5.1)
 
-- `cia-frontend/packages/api-client/src/modules/finance-closures.ts` (new) — zod schemas for FY / FiscalPeriod / PeriodLock / LockReportEntry / Close + Reopen request bodies.
-- `cia-frontend/apps/back-office/src/modules/closures/` (new dir) — module entry + `PeriodLockListPage` (FY selector, granularity picker, 4 StatCards, status-gated row actions) + `ClosePeriodDialog` (SOFT/HARD mode discriminator, mandatory 500-char reason) + `ReopenPeriodDialog` + `LockHistorySheet` (Type-2 SCD timeline with ACTIVE marker).
-- `router.tsx` + `Sidebar.tsx` — `closures/*` route + `Closures` nav entry under FINANCE & RI with `LockedIcon`.
+Removes the only thing the F5.1 page couldn't do: create / activate / close fiscal years from the UI (previously required `curl`). Closes the Phase 1 GL admin loop end-to-end.
 
-**Smoke-tested end-to-end against live `:8090`:** created FY 2026 (19 periods), soft-closed Jan 2026, badge flipped to SOFT_CLOSED with `softClosedAt` populated, Reopen button appeared, history sheet showed the SOFT entry with grace-until 27 May 2026, 01:00 UTC — validating Slice 1.7c's NAICOM-aware `addBusinessDays`.
+- `CreateFiscalYearSheet.tsx` (new) — name + startDate + endDate inputs, live-derived `FY{YYYY}` placeholder when name blank, "After creation" info card explaining PLANNING → ACTIVE flow. `validatedPost` to `POST /api/v1/finance/fiscal-years`. Auto-selects the new FY on success via `onCreated` callback.
+- `PeriodLockListPage.tsx` — added FY status badge + contextual Activate/Close-year buttons in the filter row (only shown when status is PLANNING / ACTIVE respectively), `+ Create fiscal year` CTA right-aligned. Empty-state path now also shows the create CTA (no more "Create one in Finance → Fiscal Years" dead-end).
+- Two new mutations on the page: `activateMutation` → `POST /fiscal-years/{id}/activate`, `closeYearMutation` → `POST /fiscal-years/{id}/close`. Both `FINANCE_APPROVE` gated.
 
-**Schema drift caught at runtime by `validatedGet`:** initial `FiscalYearStatusSchema` had `['DRAFT', 'ACTIVE', 'CLOSED']`; backend actually returns `PLANNING`. Fixed inline — proof the May 2026 schema-mirror discipline earns its keep.
+**Smoke test:** clicked Activate on FY 2026 → badge PLANNING → ACTIVE, Activate button replaced by destructive Close-year button, selector showed `●` active marker. Opened sheet, created FY 2027 with explicit dates → 19 periods auto-generated, selector auto-switched, all 12 month rows OPEN.
+
+### Slice F5.1 — Period Lock console (recap)
+
+Earlier in this session. Commit `fc51e8d`. New `/closures` route + `PeriodLockListPage` + `ClosePeriodDialog` + `ReopenPeriodDialog` + `LockHistorySheet`. End-to-end soft-close round-trip verified against live `:8090`. Schema-drift caught by `validatedGet` (`DRAFT` → `PLANNING`).
+
+### Session-wide notes
 
 **Decision — separate `/closures` module, not a Finance tab.** Module 12 will grow to ~6 screens; folding into Finance tabs would balloon the receipts/payments page.
 
 **Durable memory captured:** user prefers multi-option decisions presented as markdown tables (side-by-side comparison) rather than the `AskUserQuestion` modal. Saved as `feedback-present-options-as-table`.
 
-**Outstanding:** Module 12 frontend ~5% complete (1 of ~15 screens). Phase 5 build-queue not yet formalised in CLAUDE.md. Next-slice candidates: FY creation sheet, Journal Entry browser, Trial Balance + COA read screens.
+**Proposed Phase 5 build queue** (not yet in CLAUDE.md): 16 sub-builds totalling ~30 days. F5.1 + F5.2 shipped, F5.3 (Chart of Accounts), F5.4 (Journal Entry browser), F5.5 (Trial Balance), F5.6 (Backfill admin) remain as the Phase 1 GL frontend candidates.
+
+**Outstanding:** Phase 5 build-queue formalisation in CLAUDE.md is pending. Module 12 frontend ~10% complete (2 of ~16 screens).
 
 **Open questions:** None.
 

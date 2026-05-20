@@ -88,3 +88,15 @@ export const ReopenPeriodRequestSchema = z.object({ reason: z.string().min(1).ma
 
 export type ClosePeriodRequest  = z.infer<typeof ClosePeriodRequestSchema>;
 export type ReopenPeriodRequest = z.infer<typeof ReopenPeriodRequestSchema>;
+
+// Note: backend treats all three fields as optional (defaults to current
+// calendar year with "FY{YYYY}" name). The frontend form makes name + dates
+// optional on the wire but presents them as required-feeling fields with
+// live defaults visible to the user.
+export const CreateFiscalYearRequestSchema = z.object({
+  name:       z.string().max(50).optional(),
+  startDate:  z.string().optional(),
+  endDate:    z.string().optional(),
+});
+
+export type CreateFiscalYearRequest = z.infer<typeof CreateFiscalYearRequestSchema>;
