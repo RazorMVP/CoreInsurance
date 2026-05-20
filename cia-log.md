@@ -142,6 +142,28 @@ All under `/api/v1/finance/naicom/`. RBAC: `FINANCE_VIEW` for reads, `FINANCE_AP
 - `mvn verify`: **BUILD SUCCESS** — 275 cia-api failsafe ITs, 0 failures, 0 errors, 1 intentional benchmark skip.
 - **Module 12 status: Phases 1–4 COMPLETE on `main`.** Frontend (Phase 5) and platform admin (Phase 6) are the remaining workstreams.
 
+### Post-merge documentation sync
+
+After Phase 4 + Slice 1.10 landed on `main`, the user asked for a build-audit pass starting with doc reconciliation. Three downstream doc-sync items shipped:
+
+1. **`docs/reconcile-phase-4-and-slice-1.10-shipped` branch (commits `1a2a36e` plan + `b8ee7a3` log scope + `1578fc2` four-file reconcile, merged to `main` via `d51aa8a` with `--no-ff`).** Brought the four owned-docs sources of truth into line with shipped reality:
+   - `docs-site/docs/architecture/period-end-closures-implementation-plan.md` — Phase 4 status flipped "In progress" → "Shipped (all 10 slices)"; commit-anchored slice tables for all 10 Phase 4 slices + Slice 1.10a/b; §1 phasing narrative rewritten; §12 Sprint 10/11 timeline updated; "Tracked follow-up items" closed out.
+   - `cia-log.md` — this Session 73 entry was created in that same commit (so it documents up to the doc-reconcile commit boundary; the entry you're now reading reaches further with this addendum).
+   - `CLAUDE.md` — Module 12 row updated `Phases 1–3 complete | 27 slices` → `Phases 1–4 complete + Slice 1.10 | 39 slices`; extended inventory paragraph rewritten to cover Phases 2/3/4 + Slice 1.10.
+   - `.claude/skills/cia/SKILL.md` — module heading + extended-inventory paragraph reconciled to match `CLAUDE.md`.
+   - Feature branch deleted local + remote post-merge.
+
+2. **Confluence PRD update** — external system, not in git. Two pages updated via the Atlassian MCP:
+   - Module 12 child page (id `354615297`) v2 → v3 (titled "Module 12 — Period-End Closures"). Preserved all 37 product-spec features and added (a) an "Engineering shipping status — 2026-05-20" section at the top with a 7-row phase table mapping each phase to commit anchors + IT counts, and (b) per-feature **Status:** tags (37/37) marking each as Shipped / Partial / Planned with slice references. Reframed provisional layers down to 3 active items: NAICOM template fidelity, IFRS 17 RA calibration, live NAICOM API swap.
+   - Overview page (id `344818104`) v8 → v9 (PRD v2.5). Added Module 12 bullet to Scope > In Scope; added Module 12 row to Module Index; added CFO / Compliance Officer / Platform Administrator personas; expanded Glossary with 22 new terms covering GL / JE / COA / Period Lock / IFRS 17 / PAA / LRC / LIC / §22 / IFRS 9 / SPPI / FVPL / FVOCI_DEBT / FVOCI_EQUITY / AMORTISED_COST / ECL / NAICOM N01–N08 / Submission Lifecycle / Reconciliation Gate; partially addressed Open Question #3 (KYC); added Open Questions #7–#9 (NAICOM credentials, multi-currency, BI tool); appended v2.5 entry to Revision History.
+
+3. **Audit triage discussion (no commit, decision point logged here).** The user asked for a build-audit pass; we agreed to start with doc reconciliation (above). Remaining triage items NOT yet picked up at session end:
+   - **`production-readiness-phase-0` branch** — 33 commits ahead of `main` (CVE remediation, image scans, tenant isolation hardening, Playwright smoke). Untouched this session; merge-or-defer decision pending.
+   - **Phase 5 — Module 12 frontend.** Backend stable; ~3 weeks estimated.
+   - **Phase 6 — Cross-tenant platform admin view.** ~1 week scope after Phase 1 absorbed most of the original Phase 7 work.
+
+**Partner API impact (full session, including this addendum):** none. No `cia-partner-api` files touched in any commit; **no Postman collection regeneration required**.
+
 ---
 
 ## 2026-05-19 — Session 72 (`module-12-period-end-closures`): Phase 3 IFRS 9 complete (slices 3.3–3.7) — measurement engines + disclosure view
