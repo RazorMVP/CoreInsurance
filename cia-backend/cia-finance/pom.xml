@@ -40,6 +40,13 @@
       <groupId>org.mapstruct</groupId>
       <artifactId>mapstruct</artifactId>
     </dependency>
+    <!-- swagger-annotations for @Operation + @ApiResponses on internal controllers
+         (Springdoc reads these to enrich the internal API docs). Annotations only —
+         no runtime impact; entity-side DTOs still must not carry @Schema. -->
+    <dependency>
+      <groupId>io.swagger.core.v3</groupId>
+      <artifactId>swagger-annotations</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>postgresql</artifactId>

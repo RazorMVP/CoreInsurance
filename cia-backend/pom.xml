@@ -202,6 +202,16 @@
         <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
         <version>${springdoc.version}</version>
       </dependency>
+      <!-- swagger-annotations standalone — used by business modules that
+           annotate internal controllers with @Operation / @ApiResponses /
+           @Tag but do not need the Swagger UI. Version matches what
+           springdoc-openapi-starter-webmvc-ui transitively brings to keep
+           the cia-api assembly consistent. -->
+      <dependency>
+        <groupId>io.swagger.core.v3</groupId>
+        <artifactId>swagger-annotations</artifactId>
+        <version>2.2.22</version>
+      </dependency>
 
       <!-- ── PDF generation ────────────────────────────────────────── -->
       <dependency>
