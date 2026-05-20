@@ -8,6 +8,7 @@ import {
   FileEditIcon,
   AlertCircleIcon,
   Money01Icon,
+  LockedIcon,
   RepeatIcon,
   Setting06Icon,
   Audit01Icon,
@@ -53,6 +54,7 @@ const navGroups: NavGroup[] = [
     label: 'Finance & RI',
     items: [
       { label: 'Finance',     path: '/finance',     icon: Money01Icon },
+      { label: 'Closures',    path: '/closures',    icon: LockedIcon },
       { label: 'Reinsurance', path: '/reinsurance', icon: RepeatIcon },
     ],
   },

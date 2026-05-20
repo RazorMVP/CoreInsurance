@@ -11,6 +11,7 @@ const EndorsementsModule= lazy(() => import('../modules/endorsements'));
 const ClaimsModule      = lazy(() => import('../modules/claims'));
 const ReinsuranceModule = lazy(() => import('../modules/reinsurance'));
 const FinanceModule     = lazy(() => import('../modules/finance'));
+const ClosuresModule    = lazy(() => import('../modules/closures'));
 const AuditModule       = lazy(() => import('../modules/audit'));
 const ReportsModule     = lazy(() => import('../modules/reports'));
 
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
       { path: 'claims/*',         element: <Deferred><ClaimsModule /></Deferred> },
       { path: 'reinsurance/*',    element: <Deferred><ReinsuranceModule /></Deferred> },
       { path: 'finance/*',        element: <Deferred><FinanceModule /></Deferred> },
+      { path: 'closures/*',       element: <Deferred><ClosuresModule /></Deferred> },
       { path: 'audit/*',          element: <Deferred><AuditModule /></Deferred> },
       { path: 'reports/*',        element: <Deferred><ReportsModule /></Deferred> },
     ],

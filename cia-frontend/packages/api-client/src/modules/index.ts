@@ -4,6 +4,7 @@ export * from './quotation';
 export * from './policy';
 export * from './claims';
 export * from './finance';
+export * from './finance-closures';
 export * from './endorsement';
 export * from './reinsurance';
 export * from './audit';
