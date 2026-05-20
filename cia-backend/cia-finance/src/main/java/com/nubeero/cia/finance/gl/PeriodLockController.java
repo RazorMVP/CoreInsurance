@@ -4,6 +4,12 @@ import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.finance.dto.ClosePeriodRequest;
 import com.nubeero.cia.finance.dto.PeriodLockResponse;
 import com.nubeero.cia.finance.dto.ReopenPeriodRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -50,6 +56,9 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/v1/finance/period-locks")
+@Tag(name = "Period Locks",
+     description = "Period-lock lifecycle: SOFT_CLOSED (with 5-business-day grace window) → HARD_CLOSED → REOPENED. Hibernate PeriodLockInterceptor enforces locks at every write to LockableByPeriod entities — see Slice 1.7. Locked-period writes throw HTTP 423 LOCKED with structured meta.")
+@SecurityRequirement(name = "bearer-jwt")
 @RequiredArgsConstructor
 public class PeriodLockController {
 
@@ -57,6 +66,17 @@ public class PeriodLockController {
 
     @PostMapping("/{periodId}/soft-close")
     @PreAuthorize("hasRole('FINANCE_APPROVE')")
+    @Operation(
+        summary = "Soft-close a period",
+        description = "Flips a period to SOFT_CLOSED and opens the 5-business-day grace window. Reads + reversals continue to flow; new writes require FINANCE_OVERRIDE_LOCK. Idempotent — repeated soft-close on an already SOFT_CLOSED period returns the existing active lock.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Period soft-closed",
+            content = @Content(schema = @Schema(implementation = PeriodLockResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Reason missing", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_APPROVE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Period not found", content = @Content)
+    })
     public ApiResponse<PeriodLockResponse> softClose(@PathVariable UUID periodId,
                                                      @Valid @RequestBody ClosePeriodRequest request) {
         return ApiResponse.success(PeriodLockResponse.from(service.softClose(periodId, request.reason())));
@@ -64,6 +84,17 @@ public class PeriodLockController {
 
     @PostMapping("/{periodId}/hard-close")
     @PreAuthorize("hasRole('FINANCE_APPROVE')")
+    @Operation(
+        summary = "Hard-close a period",
+        description = "Flips a period to HARD_CLOSED. If the period is still OPEN, auto-soft-closes first to satisfy the V31 ck_fiscal_period_close_chronology check constraint. After HARD close, ALL writes (including reversals) are blocked except via FINANCE_REOPEN_PERIOD reopen. Idempotent.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Period hard-closed",
+            content = @Content(schema = @Schema(implementation = PeriodLockResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Reason missing", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_APPROVE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Period not found", content = @Content)
+    })
     public ApiResponse<PeriodLockResponse> hardClose(@PathVariable UUID periodId,
                                                      @Valid @RequestBody ClosePeriodRequest request) {
         return ApiResponse.success(PeriodLockResponse.from(service.hardClose(periodId, request.reason())));
@@ -71,6 +102,17 @@ public class PeriodLockController {
 
     @PostMapping("/{periodId}/reopen")
     @PreAuthorize("hasRole('FINANCE_REOPEN_PERIOD')")
+    @Operation(
+        summary = "Reopen a closed period",
+        description = "Releases the active SOFT or HARD lock. Publishes PeriodReopenedEvent → CFO email notification (recipients from cia.finance.period-reopen-recipients property). Requires FINANCE_REOPEN_PERIOD role (segregation of duties — distinct from FINANCE_APPROVE that closes).")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Period reopened",
+            content = @Content(schema = @Schema(implementation = PeriodLockResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Reason missing", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_REOPEN_PERIOD", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Period not found, or no active lock", content = @Content)
+    })
     public ApiResponse<PeriodLockResponse> reopen(@PathVariable UUID periodId,
                                                   @Valid @RequestBody ReopenPeriodRequest request) {
         return ApiResponse.success(PeriodLockResponse.from(service.reopen(periodId, request.reason())));
@@ -78,12 +120,30 @@ public class PeriodLockController {
 
     @GetMapping("/{periodId}/history")
     @PreAuthorize("hasRole('FINANCE_VIEW')")
+    @Operation(
+        summary = "Get the full lock history of a period",
+        description = "Returns every soft/hard/release event for the period in chronological order. The period_lock table is a Type-2 SCD — released_at IS NULL identifies the current active lock; older rows are the audit trail.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Lock history (chronological)",
+            content = @Content(schema = @Schema(implementation = PeriodLockResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_VIEW", content = @Content)
+    })
     public ApiResponse<List<PeriodLockResponse>> history(@PathVariable UUID periodId) {
         return ApiResponse.success(service.history(periodId).stream().map(PeriodLockResponse::from).toList());
     }
 
     @GetMapping("/preview")
     @PreAuthorize("hasRole('FINANCE_VIEW')")
+    @Operation(
+        summary = "Bulk-preview lock state across a date range",
+        description = "Returns one LockReportEntry per business date in [from, to]. Used by Slice 1.8 backfill and Module 8 bulk receipts to pre-flight a range before kicking off the workflow — surfaces locks BEFORE the per-row write fails rather than discovering them on row 4,837.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "One entry per business date in range"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Date range invalid (from > to or missing)", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_VIEW", content = @Content)
+    })
     public ApiResponse<List<LockReportEntry>> preview(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {

@@ -4,6 +4,12 @@ import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.finance.backfill.dto.BackfillStatusResponse;
 import com.nubeero.cia.finance.backfill.dto.StartBackfillRequest;
 import com.nubeero.cia.finance.backfill.dto.StartBackfillResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,6 +38,9 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1/admin/finance")
+@Tag(name = "GL Backfill (Admin)",
+     description = "Retroactive journal-entry backfill (Slice 1.8). One-time mechanism for moving from \"no GL history\" to \"all GL history reconstructed\" — walks every relevant sub-ledger source table and posts the JEs SubledgerPostingService would have written. Idempotent via the JE-gateway triple. See operations/period-end-closures-backfill.md runbook.")
+@SecurityRequirement(name = "bearer-jwt")
 @RequiredArgsConstructor
 public class BackfillAdminController {
 
@@ -39,12 +48,31 @@ public class BackfillAdminController {
 
     @PostMapping("/backfill-journal-entries")
     @PreAuthorize("hasRole('PLATFORM_ADMIN')")
+    @Operation(summary = "Start a retroactive JE backfill workflow",
+               description = "Kicks off a Temporal workflow that sweeps source tables (policies / claims / claim_expenses / endorsements / ri_fac_covers) and posts the missing JEs. Pre-flight check rejects the run if any target period is HARD_CLOSED or past its SOFT grace. PLATFORM_ADMIN role only — intentionally out of reach of normal finance day-to-day work.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Workflow started",
+            content = @Content(schema = @Schema(implementation = StartBackfillResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid backfill scope (event types, date range, etc.)", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks PLATFORM_ADMIN", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "Pre-flight rejected (target period is locked)", content = @Content)
+    })
     public ApiResponse<StartBackfillResponse> startBackfill(@Valid @RequestBody StartBackfillRequest request) {
         return ApiResponse.success(service.startBackfill(request));
     }
 
     @GetMapping("/backfill-journal-entries/{workflowId}")
     @PreAuthorize("hasRole('PLATFORM_ADMIN')")
+    @Operation(summary = "Poll workflow status",
+               description = "Returns current state of the named workflow: RUNNING / COMPLETED / FAILED, per-event-type counters (posted / skipped-dup / failed), and the resulting JE-id manifest once complete.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Status snapshot",
+            content = @Content(schema = @Schema(implementation = BackfillStatusResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks PLATFORM_ADMIN", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Workflow id not found", content = @Content)
+    })
     public ApiResponse<BackfillStatusResponse> getStatus(@PathVariable String workflowId) {
         return ApiResponse.success(service.getStatus(workflowId));
     }

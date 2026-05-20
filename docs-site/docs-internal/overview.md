@@ -1,10 +1,12 @@
 ---
-id: api-reference
-title: Internal API Reference
-sidebar_label: API Reference
+id: overview
+title: Internal API Overview
+sidebar_label: Overview
 ---
 
-# Internal API Reference
+# Internal API Overview
+
+For an interactive explorer with every endpoint annotated, see the [API Reference (Scalar)](/internal/api-reference) — it renders the 100%-annotated `internal-api.json` spec. This page covers the live Swagger UI and developer-facing access patterns.
 
 All endpoints use the base path `https://api.cia.app/api/v1` in production. For local development use `http://localhost:8090/api/v1`.
 

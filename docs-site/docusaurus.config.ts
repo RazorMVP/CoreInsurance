@@ -26,10 +26,27 @@ const config: Config = {
     [
       "@scalar/docusaurus",
       {
+        id: "partnerApiScalar",
         label: "Partner API Reference",
         route: "/partner/api-reference",
         configuration: {
           spec: { url: "/openapi.json" },
+          darkMode: true,
+          defaultHttpClient: {
+            targetKey: "javascript",
+            clientKey: "fetch",
+          },
+        },
+      },
+    ],
+    [
+      "@scalar/docusaurus",
+      {
+        id: "internalApiScalar",
+        label: "Internal API Reference",
+        route: "/internal/api-reference",
+        configuration: {
+          spec: { url: "/internal-api.json" },
           darkMode: true,
           defaultHttpClient: {
             targetKey: "javascript",

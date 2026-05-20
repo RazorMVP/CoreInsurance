@@ -4,6 +4,12 @@ import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.finance.dto.CreateFiscalYearRequest;
 import com.nubeero.cia.finance.dto.FiscalPeriodResponse;
 import com.nubeero.cia.finance.dto.FiscalYearResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -42,6 +48,9 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/v1/finance/fiscal-years")
+@Tag(name = "Fiscal Years",
+     description = "Fiscal-year lifecycle and the period tree under each year. State machine: DRAFT → ACTIVE → CLOSED. Creating a fiscal year auto-generates DAY / MONTH / QUARTER / HALF_YEAR / YEAR periods via FiscalYearService — see Slice 1.6.")
+@SecurityRequirement(name = "bearer-jwt")
 @RequiredArgsConstructor
 public class FiscalYearController {
 
@@ -49,18 +58,43 @@ public class FiscalYearController {
 
     @GetMapping
     @PreAuthorize("hasRole('FINANCE_VIEW')")
+    @Operation(summary = "List all fiscal years (no period embedding)")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Fiscal years (ordered by start date)",
+            content = @Content(schema = @Schema(implementation = FiscalYearResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_VIEW", content = @Content)
+    })
     public ApiResponse<List<FiscalYearResponse>> list() {
         return ApiResponse.success(service.listAll());
     }
 
     @GetMapping("/active")
     @PreAuthorize("hasRole('FINANCE_VIEW')")
+    @Operation(summary = "Get the currently ACTIVE fiscal year",
+               description = "Exactly one fiscal year is ACTIVE per tenant. Returns 404 if no year has been activated yet (initial tenant setup).")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Active fiscal year",
+            content = @Content(schema = @Schema(implementation = FiscalYearResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "No fiscal year is currently ACTIVE", content = @Content)
+    })
     public ApiResponse<FiscalYearResponse> active() {
         return ApiResponse.success(service.findActive());
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('FINANCE_VIEW')")
+    @Operation(summary = "Get a fiscal year by id",
+               description = "Set includePeriods=true to embed the period tree (DAY → MONTH → QUARTER → HALF_YEAR → YEAR) inline.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Fiscal year found",
+            content = @Content(schema = @Schema(implementation = FiscalYearResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Fiscal year not found", content = @Content)
+    })
     public ApiResponse<FiscalYearResponse> get(
         @PathVariable UUID id,
         @RequestParam(name = "includePeriods", defaultValue = "false") boolean includePeriods) {
@@ -69,6 +103,15 @@ public class FiscalYearController {
 
     @GetMapping("/{id}/periods")
     @PreAuthorize("hasRole('FINANCE_VIEW')")
+    @Operation(summary = "List periods under a fiscal year",
+               description = "Returns every DAY / MONTH / QUARTER / HALF_YEAR / YEAR period that belongs to this fiscal year. DAY periods are lazy-resolved (created on first reference).")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Period list",
+            content = @Content(schema = @Schema(implementation = FiscalPeriodResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Fiscal year not found", content = @Content)
+    })
     public ApiResponse<List<FiscalPeriodResponse>> listPeriods(@PathVariable UUID id) {
         return ApiResponse.success(service.listPeriods(id));
     }
@@ -76,18 +119,48 @@ public class FiscalYearController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('FINANCE_APPROVE')")
+    @Operation(summary = "Create a fiscal year + auto-generate periods",
+               description = "Creates the fiscal year in DRAFT state and synchronously generates all MONTH / QUARTER / HALF_YEAR / YEAR periods. DAY periods are lazy (resolved on first use). Activation is a separate step.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Fiscal year + periods created",
+            content = @Content(schema = @Schema(implementation = FiscalYearResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error (overlapping dates, invalid name, etc.)", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_APPROVE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Fiscal year with overlapping start/end dates already exists", content = @Content)
+    })
     public ApiResponse<FiscalYearResponse> create(@Valid @RequestBody CreateFiscalYearRequest request) {
         return ApiResponse.success(service.create(request));
     }
 
     @PostMapping("/{id}/activate")
     @PreAuthorize("hasRole('FINANCE_APPROVE')")
+    @Operation(summary = "Transition DRAFT → ACTIVE",
+               description = "Demotes any currently ACTIVE fiscal year to CLOSED and activates this one. There is always exactly one ACTIVE fiscal year per tenant.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Fiscal year activated",
+            content = @Content(schema = @Schema(implementation = FiscalYearResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_APPROVE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Fiscal year not found", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Cannot activate a CLOSED year", content = @Content)
+    })
     public ApiResponse<FiscalYearResponse> activate(@PathVariable UUID id) {
         return ApiResponse.success(service.activate(id));
     }
 
     @PostMapping("/{id}/close")
     @PreAuthorize("hasRole('FINANCE_APPROVE')")
+    @Operation(summary = "Transition ACTIVE → CLOSED",
+               description = "Final state. Year-end close cascades hard-close to all child periods that are still OPEN.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Fiscal year closed",
+            content = @Content(schema = @Schema(implementation = FiscalYearResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_APPROVE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Fiscal year not found", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Year is already CLOSED, or not ACTIVE", content = @Content)
+    })
     public ApiResponse<FiscalYearResponse> close(@PathVariable UUID id) {
         return ApiResponse.success(service.close(id));
     }
@@ -95,6 +168,15 @@ public class FiscalYearController {
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasRole('FINANCE_APPROVE')")
+    @Operation(summary = "Soft-delete a fiscal year",
+               description = "Sets deleted_at. Rejected with 409 if any journal entry references one of this year's periods — historical GL data cannot be orphaned.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Fiscal year soft-deleted"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_APPROVE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Fiscal year not found", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Cannot delete — journal entries reference this year's periods", content = @Content)
+    })
     public void delete(@PathVariable UUID id) {
         service.delete(id);
     }
