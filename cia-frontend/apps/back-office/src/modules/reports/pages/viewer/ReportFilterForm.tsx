@@ -13,7 +13,9 @@ interface Props {
 
 export default function ReportFilterForm({ filters, onRun, loading }: Props) {
   const form = useForm<Record<string, string>>({
-    defaultValues: Object.fromEntries(filters.map((f) => [f.key, ''])),
+    // Pre-fill from each filter's stored defaultValue (Builder Step 2 sets these
+    // for DATE filters). Falls back to empty string for filters without a default.
+    defaultValues: Object.fromEntries(filters.map((f) => [f.key, f.defaultValue ?? ''])),
   });
 
   function onSubmit(values: Record<string, string>) {

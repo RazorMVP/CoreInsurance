@@ -8,7 +8,87 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-21. The MinIO bucket-bootstrap and `FiscalYearService.close()` cascade follow-ups (flagged during F5.16 / wrap-up smoke) both shipped via the Session 74 entry below. The 12 CLOSURES reports were added in Session 75 below.
+No open items as of 2026-05-21. The MinIO bucket-bootstrap and `FiscalYearService.close()` cascade follow-ups (flagged during F5.16 / wrap-up smoke) both shipped via the Session 74 entry below. The 12 CLOSURES reports were added in Session 75 below. The Builder date-picker UX + JSONB binding fix shipped in Session 76 below.
+
+---
+
+## 2026-05-21 — Session 76 (`main`): Custom report date pickers + pre-existing JSONB binding bug fix
+
+The user flagged that the Custom Report Builder's Step 2 ("Fields & Filters") shows the date filters only as bare checkboxes — no date pickers, no way to set default dates. Then asked the localhost backend to be restarted to reflect Session 75's changes (which it didn't, because the backend was started before the code edits — JVM doesn't hot-reload JARs, Flyway only scans on startup).
+
+### Two-part fix
+
+**Part 1 — Date picker UX in the Custom Report Builder.**
+
+- `cia-backend/cia-reports/.../domain/ReportFilter.java` gained an optional `String defaultValue` field. Jackson handles existing rows without it (deserialises as `null`).
+- Frontend `report.types.ts` mirrors the new optional `defaultValue?: string`.
+- `Step2FieldsFilters.tsx` reworked the "Date filters" block: the checkbox still toggles whether the filter is *part of the report config*; **when checked, an inline `<Input type="date">` now renders below the checkbox** so the creator can optionally set a default date. The default flows through the config JSONB into the saved report.
+- `ReportFilterForm.tsx` (the Viewer's filter form) now seeds `useForm({ defaultValues: filters.map(f => [f.key, f.defaultValue ?? '']) })` — when the user opens the report, the date picker is pre-filled with the creator's default, and they can override per-run.
+
+**Part 2 — Pre-existing JSONB binding bug surfaced by the smoke test.**
+
+A `curl -X POST /api/v1/reports/definitions` smoke test (to verify the `defaultValue` round-trip) returned **HTTP 500** with the Postgres error:
+
+```
+column "config" is of type jsonb but expression is of type character varying
+```
+
+Root cause: `ReportDefinition.config` was annotated `@Convert(converter = ReportConfigConverter.class)` where the converter implemented `AttributeConverter<ReportConfig, String>`. The converter serialised the config to a Java `String`, then the JDBC driver bound it as VARCHAR, and PostgreSQL refused the INSERT against the `jsonb` column. Without `?stringtype=unspecified` on the JDBC URL (which the project deliberately does not set, to keep the V24 NDPR pgcrypto pattern explicit), this path could **never** persist a custom report.
+
+This bug pre-existed — none of Session 75's code (DataSource enum / V44 / ReportQueryBuilder) touches the converter path. The 55 + 12 SYSTEM reports were seeded via raw Flyway SQL INSERTs which bypass JPA entirely, so the bug was latent. Custom-report creation via the API had been broken since the original V17 / Module 11 ship.
+
+**Fix:** replaced `@Convert(converter = ReportConfigConverter.class)` with `@JdbcTypeCode(SqlTypes.JSON)` on `ReportDefinition.config` — Hibernate 6's native JSON SQL-type binding. Jackson is auto-discovered from the classpath (Spring Boot already has it on); the type code tells Hibernate to bind the parameter as JSONB-typed rather than VARCHAR. Deleted `ReportConfigConverter.java` (zero remaining references).
+
+**Important: this is *not* the Hibernate Types library** (Vlad Mihalcea's third-party `com.vladmihalcea:hibernate-types-*` package). `@JdbcTypeCode(SqlTypes.JSON)` is core Hibernate 6 — annotation in `org.hibernate.annotations.*`, SQL type code in `org.hibernate.type.*`. CLAUDE.md's existing guidance ("Never use Hibernate Types for this") still stands; it referred to the third-party library, not Hibernate 6 native facilities.
+
+### Live verification
+
+Round-trip with the now-working JSONB binding:
+
+```bash
+$ curl -s -w "\nHTTP %{http_code}\n" -X POST .../api/v1/reports/definitions -d '{
+    "name":"Smoke Test ...",
+    "category":"CLOSURES","dataSource":"TRIAL_BALANCE",
+    "config":{ "filters":[
+        {"key":"date_from","label":"Date From","type":"DATE","required":false,"defaultValue":"2026-01-01"},
+        {"key":"date_to",  "label":"As Of",   "type":"DATE","required":true, "defaultValue":"2026-12-31"}
+    ], ... }
+  }'
+HTTP 201
+
+$ curl -s .../api/v1/reports/definitions/$ID | jq '.data.config.filters'
+  date_from: defaultValue='2026-01-01', required=False
+  date_to:   defaultValue='2026-12-31', required=True
+```
+
+Both `defaultValue` fields persisted and round-tripped intact. The 12 SYSTEM CLOSURES reports continued to load via the `@JdbcTypeCode` read path (no regression).
+
+### Doc updates
+
+- `CLAUDE.md` Reports-API design section — replaced the `ReportConfigConverter` note with the Hibernate 6 native pattern + an explanation of why the converter was deleted.
+- `CLAUDE.md` Build 11 row — added the `defaultValue` field to the `cia-reports` module description.
+- `SKILL.md` — same converter → `@JdbcTypeCode` swap in the architecture diagram.
+- `docs-site/docs/architecture/reports-module.md` — two file-tree edits removing the converter and noting the new binding.
+
+### Files touched
+
+| File | Change |
+|---|---|
+| `cia-reports/.../domain/ReportFilter.java` | +`defaultValue` field |
+| `cia-reports/.../domain/ReportDefinition.java` | `@Convert(...)` → `@JdbcTypeCode(SqlTypes.JSON)` |
+| `cia-reports/.../domain/ReportConfigConverter.java` | **Deleted** (zero refs) |
+| `cia-frontend/.../reports/types/report.types.ts` | `ReportFilter.defaultValue?: string` |
+| `cia-frontend/.../reports/pages/builder/steps/Step2FieldsFilters.tsx` | Inline date picker per checked filter + new `setFilterDefault` handler + helper hint copy |
+| `cia-frontend/.../reports/pages/viewer/ReportFilterForm.tsx` | Pre-fill `useForm.defaultValues` from `filter.defaultValue` |
+| `CLAUDE.md` | JSONB-binding note rewrite; Build 11 row updated |
+| `.claude/skills/cia/SKILL.md` | Same architecture-diagram update |
+| `docs-site/docs/architecture/reports-module.md` | File-tree mentions of converter removed |
+| `cia-log.md` | This entry |
+
+### Notes for future work
+
+- Other business modules that pass JSON-shaped state through JPA may have the same latent bug — they'd only show up the moment someone tries to write via the API. A focused audit (`grep -rn "@Convert(converter" cia-backend | xargs ...`) is worth scheduling.
+- The Builder still doesn't let creators ADD non-date filters with default values (e.g. a default class_of_business). If that becomes a need, the `defaultValue` field generalises — no schema change required, just UI work.
 
 ---
 

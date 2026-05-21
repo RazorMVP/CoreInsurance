@@ -125,7 +125,7 @@ ReportAccessService (permission resolution)
   → deny if neither exists
 
 Domain (tenant schema)
-  ├── report_definition   (JSONB config via ReportConfigConverter)
+  ├── report_definition   (JSONB config via @JdbcTypeCode(SqlTypes.JSON) — native Hibernate 6)
   │     └── config shape: { fields[], filters[], groupBy, sortBy, sortDir, chart{type,xAxis,yAxis} }
   ├── report_pin          (user_id + report_id + display_order; UNIQUE per user+report)
   └── report_access_policy (access_group_id + category? + report_id? + can_view + can_export_csv + can_export_pdf)

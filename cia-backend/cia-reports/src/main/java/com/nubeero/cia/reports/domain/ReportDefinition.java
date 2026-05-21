@@ -3,6 +3,8 @@ package com.nubeero.cia.reports.domain;
 import com.nubeero.cia.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "report_definition",
@@ -35,7 +37,18 @@ public class ReportDefinition extends BaseEntity {
     @Column(name = "data_source", nullable = false, length = 50)
     private DataSource dataSource;
 
-    @Convert(converter = ReportConfigConverter.class)
+    /**
+     * Stored as PostgreSQL JSONB. Hibernate 6 native JSON binding via
+     * {@code @JdbcTypeCode(SqlTypes.JSON)} — uses Jackson for serialization
+     * (auto-discovered from the classpath) and binds the column with the
+     * correct {@code jsonb} type code, so PostgreSQL accepts the parameter
+     * on INSERT without a JDBC URL-level {@code stringtype=unspecified} hack.
+     *
+     * Replaces the older {@code @Convert(ReportConfigConverter.class)}
+     * pattern which wrote the value as VARCHAR and got rejected by the
+     * jsonb column on INSERT.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false, columnDefinition = "jsonb")
     private ReportConfig config;
 

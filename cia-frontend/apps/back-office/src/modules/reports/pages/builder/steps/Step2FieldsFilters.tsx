@@ -1,4 +1,4 @@
-import { Badge, Checkbox, Label } from '@cia/ui';
+import { Badge, Checkbox, Input, Label } from '@cia/ui';
 import type { ReportField, ReportFilter } from '../../../types/report.types';
 
 const AVAILABLE_FIELDS: Record<string, ReportField[]> = {
@@ -88,6 +88,13 @@ export default function Step2FieldsFilters({ dataSource, selectedFields, filters
     onChange(selectedFields, updated);
   }
 
+  function setFilterDefault(key: string, defaultValue: string) {
+    const updated = filters.map((f) =>
+      f.key === key ? { ...f, defaultValue: defaultValue || undefined } : f,
+    );
+    onChange(selectedFields, updated);
+  }
+
   return (
     <div className="space-y-5">
       <div className="space-y-2">
@@ -130,20 +137,52 @@ export default function Step2FieldsFilters({ dataSource, selectedFields, filters
 
       <div className="space-y-2">
         <p className="text-sm font-medium">Date filters</p>
-        <div className="flex gap-4">
+        <p className="text-xs text-muted-foreground">
+          Toggle a date filter to make it available on the report. Optionally set a default date — it will pre-fill the picker when the report runs.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {[
             { key: 'date_from', label: 'Date From' },
             { key: 'date_to',   label: 'Date To'   },
-          ].map(({ key, label }) => (
-            <div key={key} className="flex items-center gap-2">
-              <Checkbox
-                id={key}
-                checked={filters.some((f) => f.key === key)}
-                onCheckedChange={() => toggleFilter(key, label)}
-              />
-              <Label htmlFor={key} className="cursor-pointer text-sm">{label}</Label>
-            </div>
-          ))}
+          ].map(({ key, label }) => {
+            const filter = filters.find((f) => f.key === key);
+            const enabled = !!filter;
+            return (
+              <div
+                key={key}
+                className="flex items-start gap-3 p-3 rounded border bg-secondary/20"
+              >
+                <Checkbox
+                  id={key}
+                  checked={enabled}
+                  onCheckedChange={() => toggleFilter(key, label)}
+                  className="mt-0.5"
+                />
+                <div className="flex-1 space-y-1.5">
+                  <Label htmlFor={key} className="cursor-pointer text-sm leading-none">
+                    {label}
+                  </Label>
+                  {enabled && (
+                    <div className="space-y-1">
+                      <Label
+                        htmlFor={`${key}-default`}
+                        className="text-[11px] text-muted-foreground font-normal"
+                      >
+                        Default value (optional)
+                      </Label>
+                      <Input
+                        id={`${key}-default`}
+                        type="date"
+                        value={filter?.defaultValue ?? ''}
+                        onChange={(e) => setFilterDefault(key, e.target.value)}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

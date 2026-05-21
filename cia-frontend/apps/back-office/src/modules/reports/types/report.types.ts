@@ -43,6 +43,8 @@ export interface ReportFilter {
   label: string;
   type: FilterType;
   required: boolean;
+  /** Optional default value set in the Builder; pre-fills the Viewer's filter input. */
+  defaultValue?: string;
 }
 
 export interface ReportChart {

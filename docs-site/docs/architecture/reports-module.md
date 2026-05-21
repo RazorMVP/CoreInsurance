@@ -36,9 +36,9 @@ SYSTEM reports can be **cloned** into CUSTOM reports for user modification.
 ```
 cia-reports/src/main/java/com/nubeero/cia/reports/
 ├── domain/
-│   ├── ReportDefinition.java       # JPA entity — config JSONB via AttributeConverter
+│   ├── ReportDefinition.java       # JPA entity — config JSONB via @JdbcTypeCode(SqlTypes.JSON) (native Hibernate 6)
 │   ├── ReportConfig.java           # JSONB POJO: fields, filters, groupBy, sortBy, chart
-│   ├── ReportConfigConverter.java  # AttributeConverter<ReportConfig, String>
+│   # (ReportConfigConverter.java was deleted — replaced by @JdbcTypeCode native binding)
 │   ├── ReportField.java            # { key, label, type, computed }
 │   ├── ReportFilter.java           # { key, label, type, required }
 │   ├── ReportChart.java            # { type, xAxis, yAxis }
