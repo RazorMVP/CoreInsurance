@@ -12,9 +12,25 @@ No open items as of 2026-05-20. Slice 1.10 (GL substrate enrichment) was the onl
 
 ---
 
-## 2026-05-21 — Session 74 (`main`, continued): Slices F5.1 → F5.13 — Phase 1 GL + Phase 2 PAA + IFRS 9 (holdings + measurement engines)
+## 2026-05-21 — Session 74 (`main`, continued): Slices F5.1 → F5.14 — Phase 1 GL + Phase 2 PAA + Phase 3 IFRS 9 complete
 
-Phase 5 (Module 12 frontend) opened; eleven slices shipped across the session. **Phase 1 GL frontend + admin loop complete (6/6). Phase 2 IFRS 17 PAA frontend complete (3/3). Phase 3 IFRS 9 frontend: 2/3 (F5.12 holdings + F5.13 measurement engines).** Remaining: F5.7 (Posting Rules, skipped), F5.14 (IFRS 9 §B5.5.39 movement analysis), F5.15–F5.16 (Phase 4 NAICOM).
+Phase 5 (Module 12 frontend) opened; twelve slices shipped across the session. **Phase 1 GL frontend + admin loop complete (6/6). Phase 2 IFRS 17 PAA frontend complete (3/3). Phase 3 IFRS 9 frontend complete (3/3).** Remaining: F5.7 (Posting Rules, skipped), F5.15–F5.16 (Phase 4 NAICOM).
+
+### Slice F5.14 — IFRS 9 §B5.5.39 Movement Analysis (Phase 3 closes)
+
+Closes out Phase 3. Read-only relay over `GET /api/v1/finance/ifrs9/movement-analysis/{periodId}` — backend was complete; this is pure frontend work, mirroring F5.10 (IFRS 17 §103) for the IFRS 9 surface.
+
+- `@cia/api-client/finance-closures.ts` — added `Ifrs9InvestmentTotalsSchema` (11 movement fields per §B5.5.39 disclosure shape: opening, effective interest income, coupon, FV P&L, FV OCI, ECL movement, impairment, disposals, closing, total P&L income, total OCI movement), `Ifrs9HoldingMovementSchema` (per-holding entries with same fields plus metadata + ECL stage + closing fair value), `Ifrs9InvestmentSectionSchema`, `Ifrs9PremiumReceivableSectionSchema` (opening / movement / closing + direction), `Ifrs9MovementAnalysisDtoSchema`.
+- `Ifrs9MovementAnalysisPage.tsx` (new) — FY + MONTH period selectors, 4 StatCards (Opening / Closing investments / Total P&L income / Total OCI movement), §B5.5.39 investment roll-forward table with sign indicators (`+` for income/movement-up rows, `−` for outflow rows, bold Closing separated by thicker top border), per-holding breakdown table with classification badges + ECL stage chips + red-tinted negative movements, dedicated Premium-receivable ECL section with INCREASE/REVERSAL/NO_CHANGE direction badge.
+- `modules/closures/index.tsx` — eleventh tab "IFRS 9 §B5.5.39" + `/closures/ifrs9-movement-analysis` route.
+
+**Schema ordering bug caught at edit time:** initial edit inserted the new section ABOVE the Holdings section that defines `AssetTypeSchema`, `InvestmentClassificationSchema`, and `HoldingStatusSchema`. TypeScript flagged 6 errors (used-before-declaration). Fixed by moving the section to after the Holdings block — confirms the schema-mirror discipline catches ordering issues too.
+
+**Smoke test (live `:8090`):** FY 2027 → Jan 2027 selection rendered all sections: investment roll-forward with 9 movement rows (all ₦0.00), per-holding breakdown with empty-state ("No investment holdings with carrying-value rows for this period" — correct because the FGN bond's acquisitionDate 2026-06-01 post-dates the Jan 2027 measurement window per V40's view filter), Premium-receivable ECL section with NO_CHANGE direction badge.
+
+### Slice F5.13 — IFRS 9 Measurement engines (recap)
+
+Commit `2334a0b`. Single page with 4 engine sections: Amortised Cost (§5.4.1), Fair Value (§5.7), Investment ECL (§5.5), Premium Receivable ECL (§5.5.15 simplified approach). Each independently runnable.
 
 ### Slice F5.13 — IFRS 9 Measurement engines (AC + FV + InvECL + PremRcvECL)
 

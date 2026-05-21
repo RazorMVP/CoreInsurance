@@ -356,6 +356,69 @@ export const InvestmentClassificationHistoryDtoSchema = z.object({
 });
 export type InvestmentClassificationHistoryDto = z.infer<typeof InvestmentClassificationHistoryDtoSchema>;
 
+// ── IFRS 9 §B5.5.39 Movement Analysis (Slice 3.7) ────────────────────────
+
+export const Ifrs9InvestmentTotalsSchema = z.object({
+  openingBalance:           z.number(),
+  effectiveInterestIncome:  z.number(),
+  couponReceived:           z.number(),
+  fairValueChangePnl:       z.number(),
+  fairValueChangeOci:       z.number(),
+  eclMovement:              z.number(),
+  impairmentLoss:           z.number(),
+  disposals:                z.number(),
+  closingBalance:           z.number(),
+  totalPnlIncome:           z.number(),
+  totalOciMovement:         z.number(),
+});
+
+export const Ifrs9HoldingMovementSchema = z.object({
+  holdingId:                z.string(),
+  isin:                     z.string().nullable().optional(),
+  securityName:             z.string(),
+  issuer:                   z.string().nullable().optional(),
+  assetType:                AssetTypeSchema,
+  classification:           InvestmentClassificationSchema,
+  holdingStatus:            HoldingStatusSchema,
+  currencyCode:             z.string(),
+  maturityDate:             z.string().nullable().optional(),
+  openingBalance:           z.number(),
+  effectiveInterestIncome:  z.number(),
+  couponReceived:           z.number(),
+  fairValueChangePnl:       z.number(),
+  fairValueChangeOci:       z.number(),
+  eclMovement:              z.number(),
+  impairmentLoss:           z.number(),
+  disposals:                z.number(),
+  closingBalance:           z.number(),
+  closingFairValue:         z.number().nullable().optional(),
+  eclStage:                 z.number().nullable().optional(),
+  totalPnlIncome:           z.number(),
+  totalOciMovement:         z.number(),
+});
+
+export const Ifrs9InvestmentSectionSchema = z.object({
+  totals:    Ifrs9InvestmentTotalsSchema,
+  byHolding: z.array(Ifrs9HoldingMovementSchema),
+});
+
+export const Ifrs9PremiumReceivableSectionSchema = z.object({
+  openingAllowance: z.number(),
+  periodMovement:   z.number(),
+  closingAllowance: z.number(),
+  direction:        z.string(),
+});
+
+export const Ifrs9MovementAnalysisDtoSchema = z.object({
+  periodId:              z.string(),
+  periodStart:           z.string(),
+  periodEnd:             z.string(),
+  investments:           Ifrs9InvestmentSectionSchema,
+  premiumReceivableEcl:  Ifrs9PremiumReceivableSectionSchema,
+});
+export type Ifrs9MovementAnalysisDto = z.infer<typeof Ifrs9MovementAnalysisDtoSchema>;
+export type Ifrs9InvestmentTotalsDto = z.infer<typeof Ifrs9InvestmentTotalsSchema>;
+
 // ── IFRS 17 Contract Groups + Portfolios (Slice 2.2) ─────────────────────
 
 export const OnerousnessSchema = z.enum(['NOT_ONEROUS', 'NO_SIGNIFICANT_POSSIBILITY', 'ONEROUS']);
