@@ -786,6 +786,6 @@ export const SubmissionArtifactDtoSchema = z.object({
   sizeBytes:    z.number(),
   sha256Hex:    z.string(),
   renderedAt:   z.string(),
-  renderedBy:   z.string(),
+  renderedBy:   z.string().nullable().optional(),
 });
 export type SubmissionArtifactDto = z.infer<typeof SubmissionArtifactDtoSchema>;

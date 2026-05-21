@@ -8,7 +8,41 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-20. Slice 1.10 (GL substrate enrichment) was the only outstanding backlog item; it shipped via Session 73 below.
+### MinIO `cia-documents` bucket bootstrap (1–2 hr)
+
+Dev MinIO ships empty — `cia-documents` does not exist, so every first-time storage upload (policy PDFs, claim DVs, NAICOM artifacts, KYC docs) 500s with `NoSuchBucket` until someone creates it via `mc mb`. Reproduced cleanly during F5.16 smoke testing.
+
+**Two viable fixes:**
+
+1. `@PostConstruct ensureBucketExists()` on `MinioStorageService` — call `bucketExists(BucketExistsArgs)` and create on miss. Self-contained in `cia-storage`; runs once per backend boot.
+2. docker-compose init container that runs `mc mb local/cia-documents` against the MinIO service on `up` — keeps the Java code path lean but requires a compose-file edit.
+
+(1) is cleaner and survives Docker-less dev (Testcontainers-based ITs already auto-create buckets via Testcontainers's MinIO module). Prefer it unless someone has a reason to keep `cia-storage` infra-agnostic. ETA <1 day either way.
+
+---
+
+---
+
+## 2026-05-21 — Session 74 (`main`, continued): Slice F5.16 — NAICOM artifact viewer / download (Phase 4 closes)
+
+Closes Phase 4 — and effectively all of Phase 5 (the new build queue ends here pending posting-rules and wrap-up smoke). Pure frontend slice over `SubmissionArtifactService` (Slice 4.10 backend). Three new affordances live inside the existing `NaicomSubmissionDetailSheet`: list rendered artifacts, render/re-render per format, download the live artifact bytes.
+
+- `@cia/api-client/finance-closures.ts` — `SubmissionArtifactDtoSchema.renderedBy` made `z.string().nullable().optional()`. The backend DB column is nullable (`@Column(name = "rendered_by", length = 100)` with no `nullable = false`) and the response DTO is `@JsonInclude(Include.NON_NULL)` so null `renderedBy` is omitted from the wire payload entirely. The original `z.string()` would have rejected the omitted-field case. Pre-emptive fix — no live submission has actor=null today, but the system actor path (e.g. Temporal-driven future re-renders) could produce it.
+- `NaicomSubmissionDetailSheet.tsx` — new "Rendered artifacts" block inserted between the events timeline and the payload-preview details. Pulls `GET /api/v1/finance/naicom/submissions/{id}/artifacts` (live-only — `SubmissionArtifactService.findBySubmission()` already filters by `deleted_at IS NULL`). Three format rows hard-coded as `ARTIFACT_FORMATS = ['PDF', 'CSV', 'JSON']` — XML excluded from the UI because the backend has no `XmlArtifactRenderer` despite `ArtifactFormat.XML` existing in the enum (a render attempt would 500 with "No renderer registered for artifact format XML"). Each row shows format badge + size (formatBytes helper) + truncated SHA-256 (first 12 chars) + rendered timestamp + actor when present, with Render / Re-render and Download buttons. Render gated on `hasRole('FINANCE_APPROVE')` (matches `@PreAuthorize("hasRole('FINANCE_APPROVE')")` on `POST /artifacts/{format}`); Download is FINANCE_VIEW so it's always visible when an artifact exists.
+- `renderArtifactMutation` keyed by format via `useMutation<…, …, ArtifactFormat>` — the mutation variable doubles as the per-row spinner key (`renderArtifactMutation.variables === format` flips that specific row's button to `…` while in flight). On success the artifacts query invalidates and the row repaints with metadata. On error, a destructive toast carries the backend error message.
+- `downloadArtifact(format)` — direct `apiClient.get(`…/{format}/download`, { responseType: 'blob' })` per the existing PolicyDetailPage pattern. Synthesizes the filename as `naicom-{submissionType lowercased}-{periodEnd}.{format lowercased}` from the in-memory submission object — does not parse the backend's `Content-Disposition: attachment; filename="…"` header (axios doesn't expose response headers cleanly through the blob path, and the synthesized form is consistent and human-readable). Uses Blob + URL.createObjectURL + synthetic `<a>` click + revoke — same idiom as `PolicyDetailPage.downloadPdf`.
+- `NaicomSubmissionsPage.tsx` (drive-by) — removed an unused `Input` import that was blocking the back-office tsc run.
+
+**Smoke test (live `:8090` + Vite `:5173`)**:
+
+1. Set up: hard-closed FY 2026 → January 2026 (period was already SOFT_CLOSED from prior testing) via `POST /api/v1/finance/period-locks/{periodId}/hard-close`. Generated a fresh `PREMIUM_BORDEREAUX` (N05) DRAFT submission via the backend so the detail sheet had a click target. *Backend side-effect to preserve for replays: FY 2026 / Jan 2026 is now HARD_CLOSED, and a DRAFT N05 submission `a3c482f9-9dbd-4764-b0bd-e25fc0ea8296` lives in the dev tenant.*
+2. Frontend: NAICOM tab → FY 2026 → January 2026 → state filter DRAFT → list shows the N05 row. Click into it → detail sheet renders with three artifact rows ("Not yet rendered" + Render button each). Click Render (CSV) → toast "CSV artifact rendered · 462 B · SHA-256 72e6cf20c94a…" → row repaints with size/SHA/timestamp/actor + Re-render and Download buttons. Header counter updates to "(2 live)" (PDF was rendered out-of-band via curl during diagnosis). Click Download (PDF) → `naicom-premium_bordereaux-2026-01-31.pdf` arrives in the browser downloads, `file(1)` confirms PDF v1.6 + size matches `sizeBytes`.
+
+**Pre-existing dev-env gap surfaced and patched out-of-band**: the dev MinIO instance has no `cia-documents` bucket. Storage upload throws `NoSuchBucket → "Storage upload failed"`, surfacing as a generic INTERNAL_ERROR via `GlobalExceptionHandler` (the stack trace lands in spring-boot stdout but not in any persisted log file in the current dev setup). Created the bucket once via `docker exec coreinsurance-minio-1 mc mb local/cia-documents` so the smoke could complete. *This affects every document path (policy PDFs, claim DV PDFs, KYC uploads) — they would all 500 first-time in dev. Follow-up: either add `@PostConstruct ensureBucketExists()` to `MinioStorageService` (the cleanest fix) or wire a docker-compose init step that runs `mc mb` on the MinIO container's startup. Not in scope for F5.16; logged here so the next person hitting it knows it isn't an artifact-renderer bug.*
+
+### F5.15 → F5.16 schema bridge
+
+The `SubmissionArtifactDtoSchema` was added in F5.15 ahead of need — F5.16 only had to flip one field to nullable. That ordering was deliberate: keeping the new NAICOM schemas in a single contiguous block at the time of the original artifact-of-thought, rather than splitting them across two slices, made the F5.14b enum-hoisting clean-up land before either was used.
 
 ---
 

@@ -5,7 +5,6 @@ import {
   Badge,
   Button,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-  Input,
   Label,
   PageHeader, PageSection,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,

@@ -12,13 +12,18 @@ import {
   useToast,
 } from '@cia/ui';
 import {
+  apiClient,
   validatedGet, validatedPost,
   NaicomSubmissionDtoSchema,
   NaicomSubmissionEventDtoSchema,
+  SubmissionArtifactDtoSchema,
   type NaicomSubmissionDto,
   type NaicomSubmissionEventDto,
   type NaicomSubmissionState,
+  type SubmissionArtifactDto,
+  type ArtifactFormat,
 } from '@cia/api-client';
+import { useAuth } from '@cia/auth';
 
 interface NaicomSubmissionDetailSheetProps {
   submissionId: string | null;
@@ -39,9 +44,19 @@ function formatInstant(iso?: string | null) {
   return new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+function formatBytes(n: number) {
+  if (n < 1024)         return `${n} B`;
+  if (n < 1024 * 1024)  return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(2)} MB`;
+}
+
+const ARTIFACT_FORMATS: ArtifactFormat[] = ['PDF', 'CSV', 'JSON'];
+
 export default function NaicomSubmissionDetailSheet({ submissionId, open, onOpenChange }: NaicomSubmissionDetailSheetProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { hasRole } = useAuth();
+  const canRender = hasRole('FINANCE_APPROVE');
 
   const submissionQuery = useQuery<NaicomSubmissionDto>({
     queryKey: ['closures', 'naicom-submission', submissionId],
@@ -58,8 +73,18 @@ export default function NaicomSubmissionDetailSheet({ submissionId, open, onOpen
     enabled:  open && !!submissionId,
   });
 
+  const artifactsQuery = useQuery<SubmissionArtifactDto[]>({
+    queryKey: ['closures', 'naicom-artifacts', submissionId],
+    queryFn:  () => validatedGet(
+      `/api/v1/finance/naicom/submissions/${submissionId}/artifacts`,
+      z.array(SubmissionArtifactDtoSchema),
+    ),
+    enabled:  open && !!submissionId,
+  });
+
   const submission = submissionQuery.data;
   const events     = eventsQuery.data ?? [];
+  const artifacts  = artifactsQuery.data ?? [];
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ['closures', 'naicom-submission', submissionId] });
@@ -132,6 +157,48 @@ export default function NaicomSubmissionDetailSheet({ submissionId, open, onOpen
       toast({ title: 'Archive failed', description: err instanceof Error ? err.message : 'Request failed', variant: 'destructive' });
     },
   });
+
+  // ── Artifact render + download ─────────────────────────────────────────
+
+  const renderArtifactMutation = useMutation({
+    mutationFn: (format: ArtifactFormat) => validatedPost(
+      `/api/v1/finance/naicom/submissions/${submissionId}/artifacts/${format}`,
+      {},
+      SubmissionArtifactDtoSchema,
+    ),
+    onSuccess: (a) => {
+      toast({
+        title: `${a.format} artifact rendered`,
+        description: `${formatBytes(a.sizeBytes)} · SHA-256 ${a.sha256Hex.slice(0, 12)}…`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['closures', 'naicom-artifacts', submissionId] });
+    },
+    onError: (err: unknown) => {
+      toast({ title: 'Render failed', description: err instanceof Error ? err.message : 'Request failed', variant: 'destructive' });
+    },
+  });
+
+  function downloadArtifact(format: ArtifactFormat) {
+    if (!submissionId) return;
+    apiClient.get(
+      `/api/v1/finance/naicom/submissions/${submissionId}/artifacts/${format}/download`,
+      { responseType: 'blob' },
+    )
+      .then((res) => {
+        const blob = new Blob([res.data as Blob]);
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url;
+        a.download = submission
+          ? `naicom-${submission.submissionType.toLowerCase()}-${submission.periodEnd}.${format.toLowerCase()}`
+          : `naicom-artifact.${format.toLowerCase()}`;
+        a.click();
+        URL.revokeObjectURL(url);
+      })
+      .catch((err: unknown) => {
+        toast({ title: 'Download failed', description: err instanceof Error ? err.message : 'Request failed', variant: 'destructive' });
+      });
+  }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -277,6 +344,61 @@ export default function NaicomSubmissionDetailSheet({ submissionId, open, onOpen
                   </li>
                 ))}
               </ol>
+            </div>
+
+            {/* ── Artifacts ────────────────────────────────────────── */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Rendered artifacts {artifacts.length > 0 && <span className="text-muted-foreground/70 normal-case">({artifacts.length} live)</span>}
+              </h4>
+              <p className="text-[11px] text-muted-foreground italic">
+                One live artifact per (submission, format). Re-rendering soft-deletes the prior row and inserts a fresh one — every render attempt survives in audit history.
+              </p>
+              {artifactsQuery.isLoading && <Skeleton className="h-24 w-full rounded-md" />}
+              {!artifactsQuery.isLoading && (
+                <div className="space-y-1.5">
+                  {ARTIFACT_FORMATS.map((format) => {
+                    const artifact     = artifacts.find((x) => x.format === format);
+                    const isRendering  = renderArtifactMutation.isPending && renderArtifactMutation.variables === format;
+                    return (
+                      <div key={format} className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-xs">
+                        <Badge variant="outline" className="font-mono">{format}</Badge>
+                        <div className="flex-1 min-w-0">
+                          {artifact ? (
+                            <div className="space-y-0.5">
+                              <div className="font-mono text-[10px] text-muted-foreground truncate">
+                                {formatBytes(artifact.sizeBytes)} · SHA {artifact.sha256Hex.slice(0, 12)}…
+                              </div>
+                              <div className="text-[10px] text-muted-foreground">
+                                Rendered {formatInstant(artifact.renderedAt)}{artifact.renderedBy ? ` · ${artifact.renderedBy}` : ''}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground italic">Not yet rendered</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {canRender && (
+                            <Button
+                              size="sm"
+                              variant={artifact ? 'ghost' : 'outline'}
+                              onClick={() => renderArtifactMutation.mutate(format)}
+                              disabled={isRendering}
+                            >
+                              {isRendering ? '…' : artifact ? 'Re-render' : 'Render'}
+                            </Button>
+                          )}
+                          {artifact && (
+                            <Button size="sm" variant="outline" onClick={() => downloadArtifact(format)}>
+                              Download
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* ── Payload preview ──────────────────────────────────── */}
