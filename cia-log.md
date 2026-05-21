@@ -8,7 +8,74 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-21. Sessions 79 and 80 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, and the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc).
+No open items as of 2026-05-21. Sessions 79, 80, and 81 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), and the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab).
+
+---
+
+## 2026-05-21 — Session 81 (`main`): Agent master data — 9th Setup → Organisations tab
+
+User flagged that Setup → Organisations had no provision for agents and asked for both frontend + backend coverage. In Nigerian insurance, **Agents** are NAICOM-licensed counterparties that represent the **INSURER** and earn commission on policies sold — distinct from Brokers (who represent the INSURED, with `rcNumber` + license number) and from Relationship Managers (internal staff, not commission-earning external counterparties). The Setup module had `commissionRate.agent` referenced in product setup but no master-data entity to point those commissions at.
+
+### What shipped
+
+The Agent feature mirrors the Adjuster pattern shipped in Session 78 (V45) — the most recent comparable master-data entity. Two adaptations: the `type` enum is **INDIVIDUAL / CORPORATE** (the natural legal-form distinction for licensed agents) rather than adjusters' INTERNAL / EXTERNAL engagement-model distinction; description text reflects the insurer-side commission role.
+
+**Backend (cia-setup):**
+
+- V48 migration creates the `agents` table — same shape as `adjusters` (V45): `id`, `name`, `code UNIQUE`, `type CHECK (INDIVIDUAL|CORPORATE)`, `license_number`, `email`, `phone`, `address`, `created_at`, `updated_at`, `created_by`, `deleted_at` + active + type partial indexes.
+- `Agent` entity, `AgentType` enum, `AgentRepository` (with `findAllByDeletedAtIsNull` for the soft-delete scope), `AgentRequest` + `AgentResponse` DTOs.
+- `AgentService` with the same CRUD + soft-delete-with-reason shape as `AdjusterService`. `delete(UUID id, String reason)` writes through `AuditService.logWithReason` so the V47 reasoned-delete substrate captures the deletion reason on `audit_log.reason`.
+- `AgentController` at `/api/v1/setup/agents` — full GET/POST/PUT/DELETE with `?reason=` query param on DELETE (the V47 convention), Springdoc `@Operation` + `@ApiResponses` + `@Tag` annotations, RBAC: `SETUP_VIEW` for reads, `SETUP_CREATE` / `SETUP_UPDATE` / `SETUP_DELETE` for writes.
+- 34 IT files bumped from `spring.flyway.target = "47"` → `"48"` so the new migration applies cleanly in Testcontainers.
+
+**Frontend:**
+
+- `@cia/api-client/setup.ts` gains `AgentType` ('INDIVIDUAL' | 'CORPORATE') and `AgentDto` (mirrors `AdjusterDto` shape).
+- New `AgentSheet.tsx` — create/edit sheet form with the same RHF + zod + RTK-mutation skeleton as `AdjusterSheet`. Form description text reflects the insurer-side commission role.
+- `OrganisationsPage.tsx` gains a 9th tab "**Agents**" between Brokers and Reinsurers (placed after Brokers since the two roles are conceptually adjacent — both are commission-earning policy-distribution counterparties, just on opposite sides of the buy-sell axis). New `AgentsTab` component mirrors `AdjustersTab` exactly: query + DataTable with type badge + license + phone columns, `useDeleteWithReason` hook wired to `/api/v1/setup/agents/${id}`. PageHeader description updated to mention agents.
+
+### Verification
+
+**Live end-to-end smoke test:**
+
+```bash
+$ curl /api/v1/setup/agents                                            → 200, {"data":[],"meta":{"total":0,...}}
+$ curl -X POST /api/v1/setup/agents -d '{"name":"Test Agent","code":"AGT001","type":"INDIVIDUAL",...}'
+                                                                       → 200 with full Agent JSON incl. id + timestamps
+$ curl -X DELETE "/api/v1/setup/agents/${id}?reason=Smoke+test+cleanup" → 200
+$ curl /api/v1/setup/agents                                            → 200, {"data":[]} (agent hidden — soft-delete OK)
+
+$ psql -c "SELECT entity_type, action, reason FROM public.audit_log WHERE entity_type='Agent' ORDER BY timestamp DESC"
+ entity_type | action | reason
+-------------+--------+---------------------
+ Agent       | DELETE | Smoke test cleanup ← V47 reason persisted ✓
+ Agent       | CREATE |
+```
+
+**Build / install:** `mvn install -DskipTests -pl cia-api -am` clean (BUILD SUCCESS). The 9 new `Agent*.class` files are in `cia-setup-1.0.0-SNAPSHOT.jar`. Backend restarted on :8090; Flyway log shows `Migrating schema "public" to version "48 - create agents table"`.
+
+### Naming + scope decisions
+
+- **"Agent" vs naming alternatives:** the Insurance Act 2003 uses "agent" for individuals + "agency" for firms, but NAICOM's licensing register uses "Insurance Agent" for both. Went with the regulator's term plus the INDIVIDUAL/CORPORATE type discriminator to capture the legal-form distinction.
+- **No separate `agency` entity.** Brokers are firms-only (with RC number); Agents support both individuals + firms (CORPORATE agents earn commission like INDIVIDUAL agents do — the difference is legal form, not behaviour). One table + a type enum keeps the model symmetric with the regulator's view.
+- **Tab placement: 9th tab between Brokers (1st) and Reinsurers (3rd).** Agents are conceptually closest to Brokers (both are policy-distribution counterparties — one on the insurer side, one on the insured side) so the adjacency aids discoverability. Other tabs slide right by one.
+- **No customer-side FK to Agent yet.** Unlike RelationshipManager which was wired into Customer onboarding in Session 79 (V46), Agent ↔ Policy attribution stays in the existing `commissionRate.agent` field on Product. A future slice can add a `policies.agent_id` FK if per-policy agent-attribution becomes a reporting requirement.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend new | V48 migration; `Agent.java`, `AgentType.java`, `AgentRepository.java`, `AgentService.java`, `AgentController.java`, `dto/AgentRequest.java`, `dto/AgentResponse.java` |
+| Backend modified | 34 IT files (sed bump `spring.flyway.target` "47" → "48") |
+| Frontend new | `AgentSheet.tsx` |
+| Frontend modified | `@cia/api-client/setup.ts` (+ `AgentType` + `AgentDto`), `OrganisationsPage.tsx` (+ AgentsTab + 9th tab wiring + page header text) |
+| Docs | `CLAUDE.md` (Setup module count 36→37 + dependency-graph annotation), `SKILL.md` (Module 1 feature count + description), `cia-log.md` (this entry) |
+
+### Known follow-ups (deliberately deferred)
+
+- **Per-policy agent attribution** — when a policy is created, no `agent_id` is captured today. Commission rate per agent is set on the product (already there), but the actual agent who placed the policy isn't tied to the policy row. A future slice would add a nullable `policies.agent_id` + show it on the policy detail page + flow into the commission statement report. Tracking it as the natural Slice 81-followup.
+- **PRD reconcile.** Modules 1 + 7 PRD pages and the root Module Index will need the same 36 → 37 bump applied yesterday for Adjusters. Not done in this session — the doc reconcile work is a focused pass that can batch multiple master-data additions.
+- **No internal-api.json update.** The Swagger doc has 245 paths; adding agents bumps it to 247. Will batch with the next docs-sync pass alongside the PRD reconcile.
 
 ---
 

@@ -108,7 +108,7 @@ cia-backend/
 ├── cia-notifications/   # NotificationService, Email + SMS implementations
 ├── cia-workflow/        # Temporal client config, workflow & activity interfaces
 ├── cia-documents/       # PDF generation (Apache PDFBox), template rendering, clause bank
-├── cia-setup/           # Module 1: Setup & Administration (36 features — Adjuster master data V45; RelationshipManager now wired into Customer onboarding via V46)
+├── cia-setup/           # Module 1: Setup & Administration (37 features — Adjuster master data V45; RelationshipManager wired into Customer onboarding via V46; Agent master data V48 — NAICOM-licensed agents that represent the insurer, INDIVIDUAL/CORPORATE type)
 ├── cia-customer/        # Module 7: Customer Onboarding & KYC (10 features)
 ├── cia-quotation/       # Module 2: Quotation (5 features)
 ├── cia-policy/          # Module 3: Policy (23 features)
@@ -793,7 +793,7 @@ Each tenant can optionally enable a **sandbox mode** for Insurtechs to test inte
 
 | # | Module | Features | Key Outputs |
 |---|---|---|---|
-| 1 | Setup & Administration | 36 | Products, classes, approval groups, master data (brokers / reinsurers / insurers / branches / SBUs / surveyors / **adjusters** — V45 / **relationship managers** — now UI-surfaced in Session 79 + customer FK via V46), partner management |
+| 1 | Setup & Administration | 37 | Products, classes, approval groups, master data (brokers / **agents** — V48 / reinsurers / insurers / branches / SBUs / surveyors / **adjusters** — V45 / **relationship managers** — UI-surfaced in Session 79 + customer FK via V46), partner management |
 | 2 | Quotation | 6 | Quote documents, per-item loadings/discounts, clause selection, PDF download, quote config tab |
 | 3 | Policy | 23 | Policy documents, debit notes, NAICOM/NIID upload |
 | 4 | Endorsements | 10 | Endorsement documents, debit/credit notes |

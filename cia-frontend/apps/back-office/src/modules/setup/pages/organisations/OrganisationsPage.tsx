@@ -10,7 +10,7 @@ import {
   apiClient,
   type BrokerDto, type BranchDto, type SbuDto, type SurveyorDto,
   type InsuranceCompanyDto, type ReinsuranceCompanyDto, type AdjusterDto,
-  type RelationshipManagerDto,
+  type AgentDto, type RelationshipManagerDto,
 } from '@cia/api-client';
 import BrokerSheet from './BrokerSheet';
 import BranchSheet from './BranchSheet';
@@ -19,6 +19,7 @@ import SurveyorSheet from './SurveyorSheet';
 import InsurerSheet from './InsurerSheet';
 import ReinsurerSheet from './ReinsurerSheet';
 import AdjusterSheet from './AdjusterSheet';
+import AgentSheet from './AgentSheet';
 import RelationshipManagerSheet from './RelationshipManagerSheet';
 
 // ── Brokers ──────────────────────────────────────────────────────────────────
@@ -419,6 +420,73 @@ function AdjustersTab() {
   );
 }
 
+// ── Agents ───────────────────────────────────────────────────────────────────
+
+const agentTypeVariant: Record<AgentDto['type'], 'default' | 'outline'> = { INDIVIDUAL: 'default', CORPORATE: 'outline' };
+
+function AgentsTab() {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editing, setEditing] = useState<AgentDto | null>(null);
+  const { setTarget: setDeleteTarget, dialog: deleteDialog } = useDeleteWithReason<AgentDto>({
+    endpoint: (id) => `/api/v1/setup/agents/${id}`,
+    invalidateKey: ['setup', 'agents'],
+    entityLabel: 'Agent',
+    entityName: (a) => a.name,
+  });
+
+  const query = useQuery<AgentDto[]>({
+    queryKey: ['setup', 'agents'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: AgentDto[] }>('/api/v1/setup/agents');
+      return res.data.data;
+    },
+  });
+  const rows = query.data ?? [];
+
+  const columns: ColumnDef<AgentDto>[] = [
+    {
+      accessorKey: 'name',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Agent" />,
+      cell: ({ row }) => (
+        <div>
+          <p className="font-medium">{row.original.name}</p>
+          <p className="font-mono text-xs text-muted-foreground">{row.original.code}</p>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'type', header: 'Type',
+      cell: ({ getValue }) => {
+        const t = getValue() as AgentDto['type'];
+        return <Badge variant={agentTypeVariant[t]} className="text-xs">{t.toLowerCase()}</Badge>;
+      },
+    },
+    { accessorKey: 'licenseNumber', header: 'NAICOM License', cell: ({ getValue }) => <span className="font-mono text-xs">{(getValue() as string) || '—'}</span> },
+    { accessorKey: 'phone',         header: 'Phone',          cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
+    { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
+      { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
+      { label: 'Delete', onClick: (r) => setDeleteTarget(r.original), separator: true, className: 'text-destructive' },
+    ]} /> },
+  ];
+
+  return (
+    <>
+      <div className="flex justify-end mb-3">
+        <Button size="sm" onClick={() => { setEditing(null); setSheetOpen(true); }}>Add Agent</Button>
+      </div>
+      {query.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : rows.length === 0 ? (
+        <EmptyState title="No agents yet" description="NAICOM-licensed insurance agents represent the insurer and earn commission on policies sold. Add individuals or licensed agency firms." />
+      ) : (
+        <DataTable columns={columns} data={rows} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search agents…' }} />
+      )}
+      <AgentSheet open={sheetOpen} onOpenChange={setSheetOpen} agent={editing} onSuccess={() => setSheetOpen(false)} />
+      {deleteDialog}
+    </>
+  );
+}
+
 // ── Relationship Managers ────────────────────────────────────────────────────
 
 function RelationshipManagersTab() {
@@ -476,11 +544,12 @@ export default function OrganisationsPage() {
     <div className="p-6 space-y-5">
       <PageHeader
         title="Organisations"
-        description="Manage brokers, reinsurers, insurers, branches, SBUs, surveyors, adjusters and relationship managers."
+        description="Manage brokers, agents, reinsurers, insurers, branches, SBUs, surveyors, adjusters and relationship managers."
       />
       <Tabs defaultValue="brokers">
         <TabsList className="mb-4 flex-wrap h-auto">
           <TabsTrigger value="brokers">Brokers</TabsTrigger>
+          <TabsTrigger value="agents">Agents</TabsTrigger>
           <TabsTrigger value="reinsurers">Reinsurers</TabsTrigger>
           <TabsTrigger value="insurers">Insurers</TabsTrigger>
           <TabsTrigger value="branches">Branches</TabsTrigger>
@@ -490,6 +559,7 @@ export default function OrganisationsPage() {
           <TabsTrigger value="relationship-managers">Relationship Managers</TabsTrigger>
         </TabsList>
         <TabsContent value="brokers"><BrokersTab /></TabsContent>
+        <TabsContent value="agents"><AgentsTab /></TabsContent>
         <TabsContent value="reinsurers"><ReinsurersTab /></TabsContent>
         <TabsContent value="insurers"><InsurersTab /></TabsContent>
         <TabsContent value="branches"><BranchesTab /></TabsContent>

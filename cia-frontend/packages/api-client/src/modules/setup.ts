@@ -146,6 +146,25 @@ export interface AdjusterDto {
   updatedAt?:     string | null;
 }
 
+// Mirrors com.nubeero.cia.setup.org.AgentType (V48). Agents represent the
+// INSURER and earn commission on policies sold, distinct from Brokers
+// (who represent the INSURED). Type is the legal form, not engagement model.
+export type AgentType = 'INDIVIDUAL' | 'CORPORATE';
+
+// Mirrors com.nubeero.cia.setup.org.dto.AgentResponse (V48).
+export interface AgentDto {
+  id:             string;
+  name:           string;
+  code:           string;
+  type:           AgentType;
+  licenseNumber?: string | null;
+  email?:         string | null;
+  phone?:         string | null;
+  address?:       string | null;
+  createdAt:      string;
+  updatedAt?:     string | null;
+}
+
 export interface BankDto {
   id:   string;
   name: string;
