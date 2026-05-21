@@ -6,12 +6,14 @@ const PeriodLockListPage       = lazy(() => import('./pages/PeriodLockListPage')
 const ChartOfAccountsPage      = lazy(() => import('./pages/ChartOfAccountsPage'));
 const JournalEntryBrowserPage  = lazy(() => import('./pages/JournalEntryBrowserPage'));
 const TrialBalanceReportPage   = lazy(() => import('./pages/TrialBalanceReportPage'));
+const BackfillAdminPage        = lazy(() => import('./pages/BackfillAdminPage'));
 
 const tabs: { label: string; path: string }[] = [
   { label: 'Periods',           path: '/closures/periods' },
   { label: 'Chart of Accounts', path: '/closures/chart-of-accounts' },
   { label: 'Journal Entries',   path: '/closures/journal-entries' },
   { label: 'Trial Balance',     path: '/closures/trial-balance' },
+  { label: 'Backfill',          path: '/closures/backfill' },
 ];
 
 function Loading() {
@@ -53,6 +55,7 @@ export default function ClosuresModule() {
             <Route path="chart-of-accounts" element={<ChartOfAccountsPage />} />
             <Route path="journal-entries"  element={<JournalEntryBrowserPage />} />
             <Route path="trial-balance"    element={<TrialBalanceReportPage />} />
+            <Route path="backfill"         element={<BackfillAdminPage />} />
           </Routes>
         </Suspense>
       </div>

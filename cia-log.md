@@ -12,9 +12,31 @@ No open items as of 2026-05-20. Slice 1.10 (GL substrate enrichment) was the onl
 
 ---
 
-## 2026-05-20 — Session 74 (`main`): Slices F5.1 → F5.5 — Phase 1 GL frontend complete
+## 2026-05-21 — Session 74 (`main`, continued): Slices F5.1 → F5.6 — Phase 1 GL frontend + GL Backfill console
 
-Phase 5 (Module 12 frontend) opened; the entire Phase 1 GL frontend (5 screens) shipped in the same session.
+Phase 5 (Module 12 frontend) opened; six slices shipped across the session (rolling over midnight). Phase 1 GL frontend is complete (5 screens), plus the Phase 1 admin loop (FY admin + Backfill console).
+
+### Slice F5.6 — GL Backfill admin console
+
+Surfaces Slice 1.8 retroactive JE backfill as a PLATFORM_ADMIN workflow. Two REST endpoints (existing): `POST /api/v1/admin/finance/backfill-journal-entries` to start, `GET .../{workflowId}` to poll status.
+
+- `@cia/api-client/finance-closures.ts` — added `BackfillEventTypeSchema` (6 constants), `BackfillResultStatusSchema` (SUCCESS / PARTIAL_FAILURE / REFUSED), `BackfillEventTypeCountDtoSchema`, `BackfillResultDtoSchema`, `StartBackfillResponseDtoSchema`, `BackfillStatusResponseDtoSchema`.
+- `BackfillAdminPage.tsx` (new) — split into `StartBackfillForm` + `TrackedRunCard`. Form: date range (default last 90 days), 6-event-type checkbox grid with All/None toggles, Dry-run `Switch` (defaults ON, primary button flips to destructive when off). Tracked-run cards: live `useQuery` poll (3s when status RUNNING, off when COMPLETED), Temporal-execution-status + business-result-status badges side-by-side, 4-stat breakdown (Attempted / Posted / Already exists / Failed) with red-tint when `failed > 0`, refusal-reason box (red), collapsible per-event-type table, Forget button.
+- **Workflow tracking persists in `localStorage`** under `cia.closures.backfill.tracked` (max 20 most recent). Survives page reloads so an admin who started a long backfill can return tomorrow and see the result.
+- `modules/closures/index.tsx` — fifth tab "Backfill" + new `/closures/backfill` route.
+
+**Backend hotfix bundled in this commit** (`cia-audit/AuditAlert.java`): added `@JdbcTypeCode(SqlTypes.JSON)` to the `metadata` field. Hibernate 6.x requires the explicit type-code annotation to serialise `String → jsonb` — without it Postgres rejects the insert with `column "metadata" is of type jsonb but expression is of type character varying`. The bug was latent because no test path had hit `AuditService.log` from the backfill admin flow before — my F5.6 smoke test was the first time anything created an `audit_alert` row through this path in dev. Spring stack trace pointed straight at `BackfillAdminService.startBackfill:84 → AuditService.log → audit_alert insert`. Fix is a one-line annotation; production tenants would have hit the same SQLState 42804.
+
+**Frontend schema gotcha caught at runtime by `validatedPost`:** initial `StartBackfillResponseDtoSchema.tenantId` required `z.string()`. The dev backend returns `tenantId: null` (no Keycloak tenant claim in dev). Zod rejected the response, the mutation silently failed onError (toast was off-screen). Relaxed to `z.string().nullable().optional()` on both `StartBackfillResponseDto` and `BackfillResultDto`. Confirms again that the schema-mirror discipline pays for itself.
+
+**Smoke test (live `:8090`):**
+1. Click `Start dry run` with default dates + all 6 event types → 200 OK, workflowId persisted to localStorage.
+2. Tracked workflows card appears with **COMPLETED** + **SUCCESS** badges, 4-stat breakdown rendered, "Per-event-type breakdown" details disclosure expandable.
+3. localStorage round-trip verified: `[{"workflowId":"backfill-null-1779326099254","dryRun":true,"startedAt":"..."}]`.
+
+### Slice F5.5 — Trial Balance report (recap)
+
+Commit `c566ee9`. Closes out Phase 1 GL frontend. Pure read; no backend changes. Grouped by account type, per-group subtotals, footer Total row. UX fix swapped backend's gross line totals for client-side netted column totals so headlines and column subtotals reconcile.
 
 ### Slice F5.5 — Trial Balance report
 

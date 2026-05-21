@@ -119,6 +119,61 @@ export const SpringPageSchema = <T extends z.ZodTypeAny>(item: T) => z.object({
   numberOfElements: z.number(),
 });
 
+// ── Retroactive JE Backfill (Slice 1.8) ──────────────────────────────────
+
+export const BackfillEventTypeSchema = z.enum([
+  'POLICY_APPROVED',
+  'CLAIM_APPROVED',
+  'CLAIM_SETTLED',
+  'CLAIM_EXPENSE_APPROVED',
+  'ENDORSEMENT_APPROVED',
+  'FAC_PREMIUM_CEDED',
+]);
+export type BackfillEventType = z.infer<typeof BackfillEventTypeSchema>;
+
+export const BackfillResultStatusSchema = z.enum(['SUCCESS', 'PARTIAL_FAILURE', 'REFUSED']);
+export type BackfillResultStatus = z.infer<typeof BackfillResultStatusSchema>;
+
+export const BackfillEventTypeCountDtoSchema = z.object({
+  eventType:     BackfillEventTypeSchema,
+  attempted:     z.number(),
+  posted:        z.number(),
+  alreadyExists: z.number(),
+  failed:        z.number(),
+});
+export type BackfillEventTypeCountDto = z.infer<typeof BackfillEventTypeCountDtoSchema>;
+
+export const BackfillResultDtoSchema = z.object({
+  tenantId:           z.string().nullable().optional(),
+  requestId:          z.string(),
+  status:             BackfillResultStatusSchema,
+  dryRun:             z.boolean(),
+  startedAt:          z.string(),
+  completedAt:        z.string().nullable().optional(),
+  totalAttempted:     z.number(),
+  totalPosted:        z.number(),
+  totalAlreadyExists: z.number(),
+  totalFailed:        z.number(),
+  byEventType:        z.array(BackfillEventTypeCountDtoSchema),
+  refusalReason:      z.string().nullable().optional(),
+});
+export type BackfillResultDto = z.infer<typeof BackfillResultDtoSchema>;
+
+export const StartBackfillResponseDtoSchema = z.object({
+  workflowId:  z.string(),
+  tenantId:    z.string().nullable().optional(),
+  dryRun:      z.boolean(),
+  startedAt:   z.string(),
+});
+export type StartBackfillResponseDto = z.infer<typeof StartBackfillResponseDtoSchema>;
+
+export const BackfillStatusResponseDtoSchema = z.object({
+  workflowId:      z.string(),
+  executionStatus: z.string(),  // RUNNING / COMPLETED / FAILED / CANCELED / TERMINATED / TIMED_OUT / NOT_FOUND
+  result:          BackfillResultDtoSchema.nullable().optional(),
+});
+export type BackfillStatusResponseDto = z.infer<typeof BackfillStatusResponseDtoSchema>;
+
 // ── Trial Balance ─────────────────────────────────────────────────────────
 
 export const TrialBalanceLineDtoSchema = z.object({
