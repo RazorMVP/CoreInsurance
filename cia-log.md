@@ -12,6 +12,18 @@ No open items as of 2026-05-20. Slice 1.10 (GL substrate enrichment) was the onl
 
 ---
 
+## 2026-05-21 — Session 74 (`main`, continued): F5.14b housekeeping — enum-hoisting + shared RollforwardTable
+
+Mid-session refactor after the F5.14 schema-ordering bug and the second `RollforwardTable` clone. Two follow-ups from the F5.14 insight memo, both done before opening Phase 4:
+
+1. **`finance-closures.ts` enum convention.** Every `z.enum(...)` now lives in a single "Enums" section at the top of the file (dependency-free zone). Hoisted 7 previously-scattered enums: `JournalEntryStatusSchema`, `AssetTypeSchema`, `InvestmentClassificationSchema`, `HoldingStatusSchema`, `OnerousnessSchema`, `GroupStatusSchema`, `BackfillEventTypeSchema`, `BackfillResultStatusSchema`. Header comment now documents the convention: "all `z.enum(...)` schemas live in the single 'Enums' section at the top; DTO sections may reference any enum from there + any earlier DTO; recursive shapes use `z.lazy()` with an explicit `z.ZodType<DtoType>`." With every enum at the top, new DTO sections can be inserted anywhere below without forward-reference risk — the F5.14 bug is now structurally impossible.
+
+2. **`RollforwardTable<T>` extracted to `modules/closures/components/RollforwardTable.tsx`.** Shared between `PaaMovementAnalysisPage` (IFRS 17 §103) and `Ifrs9MovementAnalysisPage` (IFRS 9 §B5.5.39). Same generic signature: `T extends Record<string, number>`, rows array of `{key, label, sign?}` with the closing row identified by `key === 'closing' || key === 'closingBalance'`. The IFRS 9 page used `closingBalance` as the key while the PAA page used `closing`; the shared component accepts both so neither page had to change its `totals` shape. Removed ~50 lines of inline duplication (one local function in PAA + one inline JSX block in IFRS 9).
+
+**Smoke test:** both pages reload to identical pixel output as before refactor. PAA: §103(a) LRC roll-forward + §103(b) LIC roll-forward both render with `(start)` / `(end)` hints and bold closing rows. IFRS 9: 9-row investment roll-forward renders with `+`/`−` sign gutter, italic start/end hints, bold closing-balance row separated by thicker top border.
+
+---
+
 ## 2026-05-21 — Session 74 (`main`, continued): Slices F5.1 → F5.14 — Phase 1 GL + Phase 2 PAA + Phase 3 IFRS 9 complete
 
 Phase 5 (Module 12 frontend) opened; twelve slices shipped across the session. **Phase 1 GL frontend + admin loop complete (6/6). Phase 2 IFRS 17 PAA frontend complete (3/3). Phase 3 IFRS 9 frontend complete (3/3).** Remaining: F5.7 (Posting Rules, skipped), F5.15–F5.16 (Phase 4 NAICOM).

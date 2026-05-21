@@ -1,22 +1,38 @@
-// ── Finance — Closures (Module 12, Slice 1.6 + 1.7) ──────────────────────
+// ── Finance — Closures (Module 12, Slices 1.6 + 1.7 + Phase 2 + Phase 3) ─
 //
 // Wire shapes for the Period-End Closures backend. Field names mirror the
-// canonical Java DTOs (FiscalYearResponse, FiscalPeriodResponse,
-// PeriodLockResponse, LockReportEntry) in cia-finance/src/main/java/com/
-// nubeero/cia/finance/dto/.
+// canonical Java DTOs in cia-finance/src/main/java/com/nubeero/cia/finance/
+// dto/ (Phase 1 + 2) and com/nubeero/cia/finance/{paa,ifrs9}/ (Phase 2/3
+// engine result records).
 //
 // Schemas are the source of truth — derive types via z.infer<typeof T>.
 // Fetch with validatedGet so backend rename drift fails loudly at runtime.
+//
+// ── File ordering convention ─────────────────────────────────────────────
+// 1. All z.enum(...) schemas live in the single "Enums" section below
+//    (dependency-free zone — never references another schema).
+// 2. DTO sections come after. They may reference any enum from §1 and
+//    any earlier DTO. Recursive shapes use z.lazy() with an explicit
+//    z.ZodType<DtoType> annotation.
+// 3. Adding a new section: declare its enums in §1, place its DTOs in
+//    a fresh section header (`// ── New thing ─ … ─`) anywhere below.
+//    Never declare a new z.enum outside §1; TypeScript will catch the
+//    forward reference but the convention prevents the trip in the
+//    first place. Bug encountered + caught in F5.14, 2026-05-21.
 
 import { z } from 'zod';
 
 // ── Enums ─────────────────────────────────────────────────────────────────
+// Single home for every z.enum(...). Never declare an enum outside this
+// section; later DTO sections rely on these being all-up-front.
 
+// Fiscal calendar (Slice 1.6)
 export const FiscalYearStatusSchema   = z.enum(['PLANNING', 'ACTIVE', 'CLOSED']);
 export const FiscalPeriodTypeSchema   = z.enum(['DAY', 'MONTH', 'QUARTER', 'HALF_YEAR', 'YEAR']);
 export const FiscalPeriodStatusSchema = z.enum(['OPEN', 'SOFT_CLOSED', 'HARD_CLOSED', 'REOPENED']);
 export const LockTypeSchema           = z.enum(['SOFT', 'HARD']);
 
+// Chart of accounts (Slice 1.3 + V32)
 export const AccountTypeSchema = z.enum(['ASSET', 'LIABILITY', 'EQUITY', 'INCOME', 'EXPENSE']);
 
 export const Ifrs17RoleSchema = z.enum([
@@ -38,18 +54,48 @@ export const Ifrs9RoleSchema = z.enum([
   'FVPL_GAINS', 'FVPL_LOSSES',
 ]);
 
-export type FiscalYearStatus   = z.infer<typeof FiscalYearStatusSchema>;
-export type FiscalPeriodType   = z.infer<typeof FiscalPeriodTypeSchema>;
-export type FiscalPeriodStatus = z.infer<typeof FiscalPeriodStatusSchema>;
-export type LockType           = z.infer<typeof LockTypeSchema>;
-export type AccountType        = z.infer<typeof AccountTypeSchema>;
-export type Ifrs17Role         = z.infer<typeof Ifrs17RoleSchema>;
-export type Ifrs9Role          = z.infer<typeof Ifrs9RoleSchema>;
+// Journal entry (Slice 1.4)
+export const JournalEntryStatusSchema = z.enum(['DRAFT', 'POSTED', 'REVERSED']);
+
+// IFRS 17 contract grouping (Slice 2.2)
+export const OnerousnessSchema = z.enum(['NOT_ONEROUS', 'NO_SIGNIFICANT_POSSIBILITY', 'ONEROUS']);
+export const GroupStatusSchema = z.enum(['OPEN', 'CLOSED']);
+
+// IFRS 9 holdings (Slice 3.2)
+export const AssetTypeSchema = z.enum(['DEBT', 'EQUITY', 'MONEY_MARKET', 'DERIVATIVE']);
+export const InvestmentClassificationSchema = z.enum([
+  'AMORTISED_COST', 'FVOCI_DEBT', 'FVOCI_EQUITY', 'FVPL',
+]);
+export const HoldingStatusSchema = z.enum(['ACTIVE', 'MATURED', 'SOLD', 'IMPAIRED']);
+
+// Backfill workflow (Slice 1.8)
+export const BackfillEventTypeSchema = z.enum([
+  'POLICY_APPROVED',
+  'CLAIM_APPROVED',
+  'CLAIM_SETTLED',
+  'CLAIM_EXPENSE_APPROVED',
+  'ENDORSEMENT_APPROVED',
+  'FAC_PREMIUM_CEDED',
+]);
+export const BackfillResultStatusSchema = z.enum(['SUCCESS', 'PARTIAL_FAILURE', 'REFUSED']);
+
+export type FiscalYearStatus         = z.infer<typeof FiscalYearStatusSchema>;
+export type FiscalPeriodType         = z.infer<typeof FiscalPeriodTypeSchema>;
+export type FiscalPeriodStatus       = z.infer<typeof FiscalPeriodStatusSchema>;
+export type LockType                 = z.infer<typeof LockTypeSchema>;
+export type AccountType              = z.infer<typeof AccountTypeSchema>;
+export type Ifrs17Role               = z.infer<typeof Ifrs17RoleSchema>;
+export type Ifrs9Role                = z.infer<typeof Ifrs9RoleSchema>;
+export type JournalEntryStatus       = z.infer<typeof JournalEntryStatusSchema>;
+export type Onerousness              = z.infer<typeof OnerousnessSchema>;
+export type GroupStatus              = z.infer<typeof GroupStatusSchema>;
+export type AssetType                = z.infer<typeof AssetTypeSchema>;
+export type InvestmentClassification = z.infer<typeof InvestmentClassificationSchema>;
+export type HoldingStatus            = z.infer<typeof HoldingStatusSchema>;
+export type BackfillEventType        = z.infer<typeof BackfillEventTypeSchema>;
+export type BackfillResultStatus     = z.infer<typeof BackfillResultStatusSchema>;
 
 // ── Journal Entries ───────────────────────────────────────────────────────
-
-export const JournalEntryStatusSchema = z.enum(['DRAFT', 'POSTED', 'REVERSED']);
-export type  JournalEntryStatus = z.infer<typeof JournalEntryStatusSchema>;
 
 export const JournalEntrySummaryDtoSchema = z.object({
   id:                     z.string(),
@@ -314,17 +360,6 @@ export type PremiumReceivableEclResultDto = z.infer<typeof PremiumReceivableEclR
 
 // ── IFRS 9 Investment Holdings + Classification History (Slice 3.2) ─────
 
-export const AssetTypeSchema = z.enum(['DEBT', 'EQUITY', 'MONEY_MARKET', 'DERIVATIVE']);
-export type AssetType = z.infer<typeof AssetTypeSchema>;
-
-export const InvestmentClassificationSchema = z.enum([
-  'AMORTISED_COST', 'FVOCI_DEBT', 'FVOCI_EQUITY', 'FVPL',
-]);
-export type InvestmentClassification = z.infer<typeof InvestmentClassificationSchema>;
-
-export const HoldingStatusSchema = z.enum(['ACTIVE', 'MATURED', 'SOLD', 'IMPAIRED']);
-export type HoldingStatus = z.infer<typeof HoldingStatusSchema>;
-
 export const InvestmentHoldingDtoSchema = z.object({
   id:               z.string(),
   isin:             z.string().nullable().optional(),
@@ -420,12 +455,6 @@ export type Ifrs9MovementAnalysisDto = z.infer<typeof Ifrs9MovementAnalysisDtoSc
 export type Ifrs9InvestmentTotalsDto = z.infer<typeof Ifrs9InvestmentTotalsSchema>;
 
 // ── IFRS 17 Contract Groups + Portfolios (Slice 2.2) ─────────────────────
-
-export const OnerousnessSchema = z.enum(['NOT_ONEROUS', 'NO_SIGNIFICANT_POSSIBILITY', 'ONEROUS']);
-export type Onerousness = z.infer<typeof OnerousnessSchema>;
-
-export const GroupStatusSchema = z.enum(['OPEN', 'CLOSED']);
-export type GroupStatus = z.infer<typeof GroupStatusSchema>;
 
 export const ContractGroupSummaryDtoSchema = z.object({
   id:             z.string(),
@@ -524,19 +553,6 @@ export const MovementAnalysisDtoSchema = z.object({
 export type MovementAnalysisDto = z.infer<typeof MovementAnalysisDtoSchema>;
 
 // ── Retroactive JE Backfill (Slice 1.8) ──────────────────────────────────
-
-export const BackfillEventTypeSchema = z.enum([
-  'POLICY_APPROVED',
-  'CLAIM_APPROVED',
-  'CLAIM_SETTLED',
-  'CLAIM_EXPENSE_APPROVED',
-  'ENDORSEMENT_APPROVED',
-  'FAC_PREMIUM_CEDED',
-]);
-export type BackfillEventType = z.infer<typeof BackfillEventTypeSchema>;
-
-export const BackfillResultStatusSchema = z.enum(['SUCCESS', 'PARTIAL_FAILURE', 'REFUSED']);
-export type BackfillResultStatus = z.infer<typeof BackfillResultStatusSchema>;
 
 export const BackfillEventTypeCountDtoSchema = z.object({
   eventType:     BackfillEventTypeSchema,

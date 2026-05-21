@@ -16,6 +16,7 @@ import {
   type LrcMovementTotalsDto,
   type LicMovementTotalsDto,
 } from '@cia/api-client';
+import { RollforwardTable } from '../components/RollforwardTable';
 
 function formatNGN(amount: number) {
   return `₦${amount.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -222,36 +223,3 @@ export default function PaaMovementAnalysisPage() {
   );
 }
 
-interface RollforwardTableProps<T> {
-  rows:   { key: keyof T; label: string; sign?: '+' | '−' }[];
-  totals: T;
-}
-
-function RollforwardTable<T extends Record<string, number>>({ rows, totals }: RollforwardTableProps<T>) {
-  return (
-    <table className="w-full text-sm border-collapse">
-      <tbody>
-        {rows.map((r, i) => {
-          const isClosing = r.key === 'closing';
-          const isOpening = r.key === 'opening';
-          const amount    = totals[r.key];
-          return (
-            <tr
-              key={String(r.key)}
-              className={`border-b last:border-0 ${isClosing ? 'border-t-2 border-foreground/20 font-semibold' : ''}`}
-            >
-              <td className="py-1.5 px-2 w-12 text-center font-mono text-xs text-muted-foreground">
-                {r.sign ?? ''}
-              </td>
-              <td className="py-1.5 px-2">
-                {r.label}
-                {(isOpening || isClosing) && <span className="ml-2 text-xs text-muted-foreground">{i === 0 ? '(start)' : '(end)'}</span>}
-              </td>
-              <td className="py-1.5 px-2 text-right font-mono">{formatNGN(amount)}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  );
-}
