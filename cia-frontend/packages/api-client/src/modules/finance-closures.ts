@@ -228,6 +228,80 @@ export const PaaPeriodCloseResultDtoSchema = z.object({
 });
 export type PaaPeriodCloseResultDto = z.infer<typeof PaaPeriodCloseResultDtoSchema>;
 
+// ── IFRS 17 §103 Movement Analysis (Slice 2.8) ───────────────────────────
+
+export const LrcMovementTotalsSchema = z.object({
+  opening:                   z.number(),
+  premiumsReceived:          z.number(),
+  premiumEarned:             z.number(),
+  acquisitionCostsDeferred:  z.number(),
+  acquisitionCostsAmortised: z.number(),
+  lossComponent:             z.number(),
+  lossComponentChange:       z.number(),
+  closing:                   z.number(),
+});
+export type LrcMovementTotalsDto = z.infer<typeof LrcMovementTotalsSchema>;
+
+export const LicMovementTotalsSchema = z.object({
+  opening:              z.number(),
+  claimsIncurred:       z.number(),
+  claimsPaid:           z.number(),
+  caseReserveChange:    z.number(),
+  ibnrEstimate:         z.number(),
+  ibnrChange:           z.number(),
+  riskAdjustment:       z.number(),
+  riskAdjustmentChange: z.number(),
+  discountUnwind:       z.number(),
+  closing:              z.number(),
+});
+export type LicMovementTotalsDto = z.infer<typeof LicMovementTotalsSchema>;
+
+export const GroupMovementEntrySchema = z.object({
+  groupId:                   z.string(),
+  portfolioCode:             z.string().nullable().optional(),
+  portfolioName:             z.string().nullable().optional(),
+  cohortYear:                z.number().nullable().optional(),
+  onerousness:               z.string().nullable().optional(),
+  groupStatus:               z.string().nullable().optional(),
+  // LRC side
+  lrcOpening:                z.number(),
+  premiumReceived:           z.number(),
+  premiumEarned:             z.number(),
+  acquisitionCostsDeferred:  z.number(),
+  acquisitionCostsAmortised: z.number(),
+  lossComponent:             z.number(),
+  lossComponentChange:       z.number(),
+  lrcClosing:                z.number(),
+  // LIC side
+  licOpening:                z.number(),
+  claimsIncurred:            z.number(),
+  claimsPaid:                z.number(),
+  caseReserveChange:         z.number(),
+  ibnrEstimate:              z.number(),
+  ibnrChange:                z.number(),
+  riskAdjustment:            z.number(),
+  riskAdjustmentChange:      z.number(),
+  discountUnwind:            z.number(),
+  licClosing:                z.number(),
+  // Combined
+  totalOpening:              z.number(),
+  totalClosing:              z.number(),
+  currencyCode:              z.string().nullable().optional(),
+});
+export type GroupMovementEntryDto = z.infer<typeof GroupMovementEntrySchema>;
+
+export const MovementAnalysisDtoSchema = z.object({
+  periodId:              z.string(),
+  periodStart:           z.string(),
+  periodEnd:             z.string(),
+  lrcTotals:             LrcMovementTotalsSchema,
+  licTotals:             LicMovementTotalsSchema,
+  totalOpeningLiability: z.number(),
+  totalClosingLiability: z.number(),
+  byGroup:               z.array(GroupMovementEntrySchema),
+});
+export type MovementAnalysisDto = z.infer<typeof MovementAnalysisDtoSchema>;
+
 // ── Retroactive JE Backfill (Slice 1.8) ──────────────────────────────────
 
 export const BackfillEventTypeSchema = z.enum([

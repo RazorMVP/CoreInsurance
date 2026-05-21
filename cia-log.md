@@ -12,9 +12,25 @@ No open items as of 2026-05-20. Slice 1.10 (GL substrate enrichment) was the onl
 
 ---
 
-## 2026-05-21 — Session 74 (`main`, continued): Slices F5.1 → F5.8 — Phase 1 GL frontend + GL Backfill + PAA period close (Phase 2 opens)
+## 2026-05-21 — Session 74 (`main`, continued): Slices F5.1 → F5.9/F5.10 — Phase 1 GL + GL Backfill + PAA period close + §103 movement analysis
 
-Phase 5 (Module 12 frontend) opened; seven slices shipped across the session. Phase 1 GL frontend is complete (5 screens), Phase 1 admin loop is complete (FY admin + Backfill), and Phase 2 IFRS 17 PAA frontend is now opened (PAA period close orchestrator).
+Phase 5 (Module 12 frontend) opened; eight slices shipped across the session. Phase 1 GL frontend is complete (5 screens), Phase 1 admin loop is complete (FY admin + Backfill), and Phase 2 IFRS 17 PAA frontend now has three of its four planned screens (period close orchestrator + §103 movement analysis).
+
+### Slice F5.9 + F5.10 — LRC/LIC roll-forward + §103 movement analysis (collapsed)
+
+Originally planned as two separate slices: F5.9 (LRC/LIC roll-forward viewers) and F5.10 (§103 movement analysis report). On inspection they collapse into one — the existing `GET /api/v1/finance/paa/movement-analysis/{periodId}` endpoint already returns the full §103 shape (LRC totals + LIC totals + per-group breakdown), which IS the canonical historical LRC + LIC roll-forward view. Built as one page; F5.9 and F5.10 share commit and tab.
+
+- `@cia/api-client/finance-closures.ts` — added `LrcMovementTotalsSchema` (8 fields, §103(a) shape), `LicMovementTotalsSchema` (10 fields, §103(b) shape), `GroupMovementEntrySchema` (per-(portfolio × cohort × onerousness) detail), `MovementAnalysisDtoSchema` (top-level wrapper with opening + closing aggregates).
+- `PaaMovementAnalysisPage.tsx` (new) — FY + MONTH period selectors cascaded the usual way, 3 StatCards (Opening liability / Closing liability / Net movement), two `RollforwardTable`-rendered sections — §103(a) LRC with sign indicators (`+ Premiums received`, `− Premium earned`, `+ Loss-component change`, etc., bold "Closing balance" row separated by thicker top border) and §103(b) LIC similarly, plus a per-group breakdown table with portfolio name / cohort / onerousness badge (ONEROUS = red, PROFITABLE_AT_RECOGNITION = green, POTENTIAL_ONEROUS = amber).
+- `modules/closures/index.tsx` — seventh tab "Movement Analysis" + `/closures/movement-analysis` route.
+
+**Why collapsing was the right call:** building F5.9 as a separate page would have meant either (a) inventing a redundant /lrc/state + /lic/state endpoint, or (b) re-using the movement-analysis endpoint and presenting the same data twice with different framing. The §103 disclosure shape already IS the roll-forward; the only honest choice is one page.
+
+**Smoke test (live `:8090`):** Selected FY 2027 → Jan 2027. All sections rendered: §103(a) LRC roll-forward (Opening + Received − Earned + Loss change = Closing), §103(b) LIC roll-forward (Opening + Incurred − Paid + IBNR change + RA change + Discount unwind = Closing), empty-state "No contract groups for this period" message (no policies seeded in dev). Aggregate StatCards all ₦0.00 as expected for empty tenant.
+
+### Slice F5.8 — PAA period close orchestrator (Phase 2 opens — recap)
+
+Commit `1fa8cff`. Surfaces `PaaPeriodCloseService` as a FINANCE_APPROVE-gated workflow. Single page handles the full orchestrator response — 4 engine output cards (LRC §44(a) / LIC §40(b) / Discount Unwind §87-92 / Onerous Test §47-49) + §83/§84 Insurance Service Result StatCards.
 
 ### Slice F5.8 — PAA period close orchestrator (Phase 2 begins)
 
