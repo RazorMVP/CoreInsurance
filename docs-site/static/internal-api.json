@@ -327,6 +327,10 @@
         {
             "name": "Setup \u2014 Adjusters",
             "description": "NAICOM-licensed loss-adjuster master data. Distinct from surveyors (pre-loss inspections); adjusters perform post-loss claim assessment (Module 5)."
+        },
+        {
+            "name": "Setup \u2014 Agents",
+            "description": "NAICOM-licensed insurance agent master data (V48 / Session 81). Agents represent the INSURER and earn commission on policies sold, distinct from Brokers (who represent the INSURED) and from Relationship Managers (internal staff). INDIVIDUAL or CORPORATE legal-form type."
         }
     ],
     "paths": {
@@ -18558,6 +18562,247 @@
                 ],
                 "summary": "Soft-delete adjuster",
                 "operationId": "deleteAdjuster",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "reason",
+                        "in": "query",
+                        "required": false,
+                        "description": "Free-text justification for the soft-delete. Persisted to audit_log.reason (V47) alongside the resolved user + timestamp. Optional at the API for IT compatibility; required at the back-office UI via the shared ConfirmDeleteDialog.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearer-jwt": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/setup/agents": {
+            "get": {
+                "tags": [
+                    "Setup \u2014 Agents"
+                ],
+                "summary": "List agents (paginated)",
+                "operationId": "listAgents",
+                "parameters": [
+                    {
+                        "name": "pageable",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/components/schemas/Pageable"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AgentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    }
+                },
+                "security": [
+                    {
+                        "bearer-jwt": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Setup \u2014 Agents"
+                ],
+                "summary": "Create an agent",
+                "operationId": "createAgent",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AgentRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AgentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    }
+                },
+                "security": [
+                    {
+                        "bearer-jwt": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/setup/agents/{id}": {
+            "get": {
+                "tags": [
+                    "Setup \u2014 Agents"
+                ],
+                "summary": "Get agent by id",
+                "operationId": "getAgent",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AgentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearer-jwt": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Setup \u2014 Agents"
+                ],
+                "summary": "Update agent",
+                "operationId": "updateAgent",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AgentRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AgentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearer-jwt": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Setup \u2014 Agents"
+                ],
+                "summary": "Soft-delete agent",
+                "operationId": "deleteAgent",
                 "parameters": [
                     {
                         "name": "id",

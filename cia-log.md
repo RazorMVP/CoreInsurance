@@ -8,7 +8,66 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-21. Sessions 79, 80, 81, and 82 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), and the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation).
+No open items as of 2026-05-22. Sessions 79, 80, 81, 82, and 83 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), and the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49).
+
+---
+
+## 2026-05-22 — Session 83 (`main`): Doc-sync wrap-up — internal-api.json swagger + PRD v2.7 reconcile for V48 / V49
+
+User asked for the standard "update all docs, apis, and swagger docs" sweep after Sessions 81 (Agent V48) and 82 (Broker V49). Same shape as the Session 80 wrap-up — pick up any documentation that drifted while the engineering shipped, push the static swagger doc + the Confluence PRD pages back into sync.
+
+### What shipped
+
+**Internal Swagger doc — `docs-site/static/internal-api.json`:**
+
+- Added `Setup — Agents` tag (was missing since Session 81 / V48 — the deferred-follow-up note in Session 81 flagged this exact gap).
+- Added `/api/v1/setup/agents` (GET list paginated + POST create) and `/api/v1/setup/agents/{id}` (GET + PUT + DELETE with the standard `?reason` query parameter — V47 convention).
+- Path count: **245 → 247**.
+- Broker `licenseNumber` (V49) didn't need a schema-level update — `components.schemas` in this file is empty by design; Springdoc resolves `$ref`s at render time, so the existing `BrokerResponse` reference flows the new field through with no JSON change.
+- Edited via the same one-shot Python `OrderedDict` pass used in Session 80 — preserves Springdoc's path ordering so the diff is exactly the agents tag + 2 new paths, no reordering noise.
+
+**Confluence — Module 1 PRD page (v5 → v6):**
+
+- Feature count **36 → 37**.
+- New **2.1.37 Agent Setup** section (V48 / Session 81 — NAICOM-licensed individuals + firms representing the INSURER, INDIVIDUAL/CORPORATE type).
+- **2.1.26 Broker Setup** now flags that the long-specified `license_number` field shipped to schema + UI (V49 / Session 82); the field was on the PRD acceptance criteria from the start but absent from the entity until V49.
+- Cross-cutting reasoned-soft-delete entity count **10 → 11** (added Agents).
+- Header `Last updated:` line bumped to reflect Session 81 + 82 changes.
+
+**Confluence — Root PRD page (v10 → v11, now PRD v2.7):**
+
+- Module Index Setup row updated to **37 features** with V48 + V49 callouts.
+- Scope section: brokers now explicitly mention "with NAICOM licence number added V49"; agents called out alongside brokers/adjusters as a first-class master-data entity.
+- Personas: the "Insurance Agents, Brokers & Customers" blurb now flags that both Agents and Brokers are first-class master-data entities in Setup → Organisations (V48 / V49), each carrying a NAICOM licence number.
+- Compliance NFR bullet added: every NAICOM-licensed counterparty (brokers, agents, surveyors, adjusters, insurance companies, reinsurance companies) now carries a licence number consistently.
+- New **Open Question #11** (per-policy agent attribution — natural follow-up to V48 once commission-statement work resumes).
+- Glossary entries added for **Agent** (V48) and **Broker** (with V49 note).
+- Revision History row v2.7 dated **22 May 2026**.
+
+### Verification
+
+- `python3 -c "import json; spec=json.load(open('docs-site/static/internal-api.json')); print(len(spec['paths']))"` → 247.
+- Inspection script verifies `/api/v1/setup/agents/{id}` DELETE op carries the `?reason` query param + all 4 expected response codes (200/401/403/404).
+- Module 1 PRD page renders cleanly in Confluence at v6; Root PRD at v11.
+- No backend, controller, or runtime behaviour changed. No DB migration. No IT impact.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Swagger doc | `docs-site/static/internal-api.json` (+ 1 tag, + 2 paths, + 5 operations) |
+| Confluence | Module 1 PRD page (v5 → v6); Root PRD page (v10 → v11, v2.6 → v2.7) |
+| Docs | `cia-log.md` (this entry) |
+
+### Why no backend/frontend code in this session
+
+Sessions 81 + 82 already shipped the runtime work; today's task was strictly to close documentation drift. The two artifacts that needed touching (internal-api.json + Confluence PRD pages) are documentation surfaces, not runtime behaviour. Same shape as Session 80.
+
+### Known follow-ups (deliberately deferred — not blockers)
+
+- **`docs-site/build/internal-api.json`** is a stale build copy from the last Docusaurus run. Regenerates on the next `npm run build` / Docusaurus deploy.
+- **Per-policy agent attribution** — flagged as Open Question #11 on the root PRD. Adding `policies.agent_id` FK + threading it through commission-statement reports is the natural V48 follow-up but requires product input on per-product vs per-policy attribution semantics.
+- **Springdoc live `/v3/api-docs` still 500s in dev** — pre-existing auth NPE on unauthenticated probes (flagged in Session 80). Frontend doesn't consume the live spec; consumers use the static `internal-api.json`. Not blocking.
 
 ---
 
