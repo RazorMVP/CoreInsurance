@@ -5,23 +5,33 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type BrokerDto } from '@cia/api-client';
+import {
+  apiClient,
+  type BrokerDto, type BranchDto, type SbuDto, type SurveyorDto,
+  type InsuranceCompanyDto, type ReinsuranceCompanyDto, type AdjusterDto,
+} from '@cia/api-client';
 import BrokerSheet from './BrokerSheet';
+import BranchSheet from './BranchSheet';
+import SbuSheet from './SbuSheet';
+import SurveyorSheet from './SurveyorSheet';
+import InsurerSheet from './InsurerSheet';
+import ReinsurerSheet from './ReinsurerSheet';
+import AdjusterSheet from './AdjusterSheet';
 
-const statusVariant: Record<BrokerDto['status'], 'active' | 'draft'> = { ACTIVE: 'active', INACTIVE: 'draft' };
+// ── Brokers ──────────────────────────────────────────────────────────────────
 
 function BrokersTab() {
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [editing,   setEditing]   = useState<BrokerDto | null>(null);
+  const [editing, setEditing] = useState<BrokerDto | null>(null);
 
-  const brokersQuery = useQuery<BrokerDto[]>({
+  const query = useQuery<BrokerDto[]>({
     queryKey: ['setup', 'brokers'],
     queryFn: async () => {
       const res = await apiClient.get<{ data: BrokerDto[] }>('/api/v1/setup/brokers');
       return res.data.data;
     },
   });
-  const brokers = brokersQuery.data ?? [];
+  const rows = query.data ?? [];
 
   const columns: ColumnDef<BrokerDto>[] = [
     {
@@ -34,18 +44,11 @@ function BrokersTab() {
         </div>
       ),
     },
-    { accessorKey: 'contactPerson', header: 'Contact Person', cell: ({ getValue }) => <span className="text-sm">{getValue() as string}</span> },
-    { accessorKey: 'email',         header: 'Email',          cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{getValue() as string}</span> },
-    {
-      accessorKey: 'status',
-      header: 'Status',
-      cell: ({ getValue }) => {
-        const s = getValue() as BrokerDto['status'];
-        return <Badge variant={statusVariant[s]}>{s.toLowerCase()}</Badge>;
-      },
-    },
+    { accessorKey: 'rcNumber', header: 'RC Number', cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
+    { accessorKey: 'email',    header: 'Email',    cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{(getValue() as string) || '—'}</span> },
+    { accessorKey: 'phone',    header: 'Phone',    cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
     { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
-      { label: 'Edit',   onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
+      { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
       { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
     ]} /> },
   ];
@@ -55,35 +58,323 @@ function BrokersTab() {
       <div className="flex justify-end mb-3">
         <Button size="sm" onClick={() => { setEditing(null); setSheetOpen(true); }}>Add Broker</Button>
       </div>
-      {brokersQuery.isLoading ? (
+      {query.isLoading ? (
         <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
-      ) : brokers.length === 0 ? (
-        <EmptyState title="No brokers yet" />
+      ) : rows.length === 0 ? (
+        <EmptyState title="No brokers yet" description="Add the first broker to begin tracking commissions and policy placements." />
       ) : (
-        <DataTable columns={columns} data={brokers}
-          toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search brokers…' }} />
+        <DataTable columns={columns} data={rows} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search brokers…' }} />
       )}
       <BrokerSheet open={sheetOpen} onOpenChange={setSheetOpen} broker={editing} onSuccess={() => setSheetOpen(false)} />
     </>
   );
 }
 
-function SimpleOrgTab({ label }: { label: string }) {
+// ── Reinsurers ───────────────────────────────────────────────────────────────
+
+function ReinsurersTab() {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editing, setEditing] = useState<ReinsuranceCompanyDto | null>(null);
+
+  const query = useQuery<ReinsuranceCompanyDto[]>({
+    queryKey: ['setup', 'reinsurance-companies'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ReinsuranceCompanyDto[] }>('/api/v1/setup/reinsurance-companies');
+      return res.data.data;
+    },
+  });
+  const rows = query.data ?? [];
+
+  const columns: ColumnDef<ReinsuranceCompanyDto>[] = [
+    { accessorKey: 'name', header: ({ column }) => <DataTableColumnHeader column={column} title="Reinsurer" />, cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
+    { accessorKey: 'country',  header: 'Country',   cell: ({ getValue }) => <Badge variant="outline" className="text-xs">{getValue() as string}</Badge> },
+    { accessorKey: 'rcNumber', header: 'RC Number', cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
+    { accessorKey: 'email',    header: 'Email',     cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{(getValue() as string) || '—'}</span> },
+    { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
+      { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
+      { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
+    ]} /> },
+  ];
+
   return (
-    <EmptyState
-      title={`${label} management`}
-      description={`${label} records will appear here. Add the first one to get started.`}
-      action={<Button size="sm">Add {label}</Button>}
-    />
+    <>
+      <div className="flex justify-end mb-3">
+        <Button size="sm" onClick={() => { setEditing(null); setSheetOpen(true); }}>Add Reinsurer</Button>
+      </div>
+      {query.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : rows.length === 0 ? (
+        <EmptyState title="No reinsurers yet" description="Add reinsurance counter-parties to enable treaty + FAC cover setup (Module 6)." />
+      ) : (
+        <DataTable columns={columns} data={rows} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search reinsurers…' }} />
+      )}
+      <ReinsurerSheet open={sheetOpen} onOpenChange={setSheetOpen} reinsurer={editing} onSuccess={() => setSheetOpen(false)} />
+    </>
   );
 }
+
+// ── Insurance Companies ──────────────────────────────────────────────────────
+
+function InsurersTab() {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editing, setEditing] = useState<InsuranceCompanyDto | null>(null);
+
+  const query = useQuery<InsuranceCompanyDto[]>({
+    queryKey: ['setup', 'insurance-companies'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: InsuranceCompanyDto[] }>('/api/v1/setup/insurance-companies');
+      return res.data.data;
+    },
+  });
+  const rows = query.data ?? [];
+
+  const columns: ColumnDef<InsuranceCompanyDto>[] = [
+    { accessorKey: 'name',          header: ({ column }) => <DataTableColumnHeader column={column} title="Insurance Company" />, cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
+    { accessorKey: 'naicomLicense', header: 'NAICOM License', cell: ({ getValue }) => <span className="font-mono text-xs">{(getValue() as string) || '—'}</span> },
+    { accessorKey: 'rcNumber',      header: 'RC Number',      cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
+    { accessorKey: 'phone',         header: 'Phone',          cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
+    { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
+      { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
+      { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
+    ]} /> },
+  ];
+
+  return (
+    <>
+      <div className="flex justify-end mb-3">
+        <Button size="sm" onClick={() => { setEditing(null); setSheetOpen(true); }}>Add Insurance Company</Button>
+      </div>
+      {query.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : rows.length === 0 ? (
+        <EmptyState title="No insurers yet" description="Add insurance counter-parties to support coinsurance participant tracking (Module 3)." />
+      ) : (
+        <DataTable columns={columns} data={rows} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search insurers…' }} />
+      )}
+      <InsurerSheet open={sheetOpen} onOpenChange={setSheetOpen} insurer={editing} onSuccess={() => setSheetOpen(false)} />
+    </>
+  );
+}
+
+// ── Branches ─────────────────────────────────────────────────────────────────
+
+function BranchesTab() {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editing, setEditing] = useState<BranchDto | null>(null);
+
+  const query = useQuery<BranchDto[]>({
+    queryKey: ['setup', 'branches'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: BranchDto[] }>('/api/v1/setup/branches');
+      return res.data.data;
+    },
+  });
+  const rows = query.data ?? [];
+
+  const columns: ColumnDef<BranchDto>[] = [
+    {
+      accessorKey: 'name',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Branch" />,
+      cell: ({ row }) => (
+        <div>
+          <p className="font-medium">{row.original.name}</p>
+          <p className="font-mono text-xs text-muted-foreground">{row.original.code}</p>
+        </div>
+      ),
+    },
+    { accessorKey: 'sbuName', header: 'Parent SBU', cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
+    { accessorKey: 'address', header: 'Address',    cell: ({ getValue }) => <span className="text-sm text-muted-foreground line-clamp-1">{(getValue() as string) || '—'}</span> },
+    { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
+      { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
+      { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
+    ]} /> },
+  ];
+
+  return (
+    <>
+      <div className="flex justify-end mb-3">
+        <Button size="sm" onClick={() => { setEditing(null); setSheetOpen(true); }}>Add Branch</Button>
+      </div>
+      {query.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : rows.length === 0 ? (
+        <EmptyState title="No branches yet" description="Branches roll up to SBUs. Add at least one to start scoping policies." />
+      ) : (
+        <DataTable columns={columns} data={rows} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search branches…' }} />
+      )}
+      <BranchSheet open={sheetOpen} onOpenChange={setSheetOpen} branch={editing} onSuccess={() => setSheetOpen(false)} />
+    </>
+  );
+}
+
+// ── SBUs ─────────────────────────────────────────────────────────────────────
+
+function SbusTab() {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editing, setEditing] = useState<SbuDto | null>(null);
+
+  const query = useQuery<SbuDto[]>({
+    queryKey: ['setup', 'sbus'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: SbuDto[] }>('/api/v1/setup/sbus');
+      return res.data.data;
+    },
+  });
+  const rows = query.data ?? [];
+
+  const columns: ColumnDef<SbuDto>[] = [
+    {
+      accessorKey: 'name',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="SBU" />,
+      cell: ({ row }) => (
+        <div>
+          <p className="font-medium">{row.original.name}</p>
+          <p className="font-mono text-xs text-muted-foreground">{row.original.code}</p>
+        </div>
+      ),
+    },
+    { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
+      { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
+      { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
+    ]} /> },
+  ];
+
+  return (
+    <>
+      <div className="flex justify-end mb-3">
+        <Button size="sm" onClick={() => { setEditing(null); setSheetOpen(true); }}>Add SBU</Button>
+      </div>
+      {query.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : rows.length === 0 ? (
+        <EmptyState title="No SBUs yet" description="Strategic Business Units group branches for portfolio-level reporting." />
+      ) : (
+        <DataTable columns={columns} data={rows} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search SBUs…' }} />
+      )}
+      <SbuSheet open={sheetOpen} onOpenChange={setSheetOpen} sbu={editing} onSuccess={() => setSheetOpen(false)} />
+    </>
+  );
+}
+
+// ── Surveyors ────────────────────────────────────────────────────────────────
+
+const surveyorTypeVariant: Record<SurveyorDto['type'], 'default' | 'outline'> = { INTERNAL: 'default', EXTERNAL: 'outline' };
+
+function SurveyorsTab() {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editing, setEditing] = useState<SurveyorDto | null>(null);
+
+  const query = useQuery<SurveyorDto[]>({
+    queryKey: ['setup', 'surveyors'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: SurveyorDto[] }>('/api/v1/setup/surveyors');
+      return res.data.data;
+    },
+  });
+  const rows = query.data ?? [];
+
+  const columns: ColumnDef<SurveyorDto>[] = [
+    { accessorKey: 'name', header: ({ column }) => <DataTableColumnHeader column={column} title="Surveyor" />, cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
+    {
+      accessorKey: 'type', header: 'Type',
+      cell: ({ getValue }) => {
+        const t = getValue() as SurveyorDto['type'];
+        return <Badge variant={surveyorTypeVariant[t]} className="text-xs">{t.toLowerCase()}</Badge>;
+      },
+    },
+    { accessorKey: 'licenseNumber', header: 'NAICOM License', cell: ({ getValue }) => <span className="font-mono text-xs">{(getValue() as string) || '—'}</span> },
+    { accessorKey: 'phone',         header: 'Phone',          cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
+    { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
+      { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
+      { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
+    ]} /> },
+  ];
+
+  return (
+    <>
+      <div className="flex justify-end mb-3">
+        <Button size="sm" onClick={() => { setEditing(null); setSheetOpen(true); }}>Add Surveyor</Button>
+      </div>
+      {query.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : rows.length === 0 ? (
+        <EmptyState title="No surveyors yet" description="Surveyors handle pre-loss inspections + claim inspections." />
+      ) : (
+        <DataTable columns={columns} data={rows} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search surveyors…' }} />
+      )}
+      <SurveyorSheet open={sheetOpen} onOpenChange={setSheetOpen} surveyor={editing} onSuccess={() => setSheetOpen(false)} />
+    </>
+  );
+}
+
+// ── Adjusters ────────────────────────────────────────────────────────────────
+
+const adjusterTypeVariant: Record<AdjusterDto['type'], 'default' | 'outline'> = { INTERNAL: 'default', EXTERNAL: 'outline' };
+
+function AdjustersTab() {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editing, setEditing] = useState<AdjusterDto | null>(null);
+
+  const query = useQuery<AdjusterDto[]>({
+    queryKey: ['setup', 'adjusters'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: AdjusterDto[] }>('/api/v1/setup/adjusters');
+      return res.data.data;
+    },
+  });
+  const rows = query.data ?? [];
+
+  const columns: ColumnDef<AdjusterDto>[] = [
+    {
+      accessorKey: 'name',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Adjuster" />,
+      cell: ({ row }) => (
+        <div>
+          <p className="font-medium">{row.original.name}</p>
+          <p className="font-mono text-xs text-muted-foreground">{row.original.code}</p>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'type', header: 'Type',
+      cell: ({ getValue }) => {
+        const t = getValue() as AdjusterDto['type'];
+        return <Badge variant={adjusterTypeVariant[t]} className="text-xs">{t.toLowerCase()}</Badge>;
+      },
+    },
+    { accessorKey: 'licenseNumber', header: 'NAICOM License', cell: ({ getValue }) => <span className="font-mono text-xs">{(getValue() as string) || '—'}</span> },
+    { accessorKey: 'phone',         header: 'Phone',          cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
+    { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
+      { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
+      { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
+    ]} /> },
+  ];
+
+  return (
+    <>
+      <div className="flex justify-end mb-3">
+        <Button size="sm" onClick={() => { setEditing(null); setSheetOpen(true); }}>Add Adjuster</Button>
+      </div>
+      {query.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : rows.length === 0 ? (
+        <EmptyState title="No adjusters yet" description="Loss adjusters handle post-loss claim assessment. Add NAICOM-licensed firms or internal staff." />
+      ) : (
+        <DataTable columns={columns} data={rows} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search adjusters…' }} />
+      )}
+      <AdjusterSheet open={sheetOpen} onOpenChange={setSheetOpen} adjuster={editing} onSuccess={() => setSheetOpen(false)} />
+    </>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function OrganisationsPage() {
   return (
     <div className="p-6 space-y-5">
       <PageHeader
         title="Organisations"
-        description="Manage brokers, reinsurers, insurers, branches, SBUs and other organisational entities."
+        description="Manage brokers, reinsurers, insurers, branches, SBUs, surveyors and adjusters."
       />
       <Tabs defaultValue="brokers">
         <TabsList className="mb-4">
@@ -93,13 +384,15 @@ export default function OrganisationsPage() {
           <TabsTrigger value="branches">Branches</TabsTrigger>
           <TabsTrigger value="sbus">SBUs</TabsTrigger>
           <TabsTrigger value="surveyors">Surveyors</TabsTrigger>
+          <TabsTrigger value="adjusters">Adjusters</TabsTrigger>
         </TabsList>
         <TabsContent value="brokers"><BrokersTab /></TabsContent>
-        <TabsContent value="reinsurers"><SimpleOrgTab label="Reinsurer" /></TabsContent>
-        <TabsContent value="insurers"><SimpleOrgTab label="Insurance Company" /></TabsContent>
-        <TabsContent value="branches"><SimpleOrgTab label="Branch" /></TabsContent>
-        <TabsContent value="sbus"><SimpleOrgTab label="SBU" /></TabsContent>
-        <TabsContent value="surveyors"><SimpleOrgTab label="Surveyor" /></TabsContent>
+        <TabsContent value="reinsurers"><ReinsurersTab /></TabsContent>
+        <TabsContent value="insurers"><InsurersTab /></TabsContent>
+        <TabsContent value="branches"><BranchesTab /></TabsContent>
+        <TabsContent value="sbus"><SbusTab /></TabsContent>
+        <TabsContent value="surveyors"><SurveyorsTab /></TabsContent>
+        <TabsContent value="adjusters"><AdjustersTab /></TabsContent>
       </Tabs>
     </div>
   );

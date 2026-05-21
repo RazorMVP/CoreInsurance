@@ -108,7 +108,7 @@ cia-backend/
 ├── cia-notifications/   # NotificationService, Email + SMS implementations
 ├── cia-workflow/        # Temporal client config, workflow & activity interfaces
 ├── cia-documents/       # PDF generation (Apache PDFBox), template rendering, clause bank
-├── cia-setup/           # Module 1: Setup & Administration (35 features)
+├── cia-setup/           # Module 1: Setup & Administration (36 features — adds Adjuster master data via V45)
 ├── cia-customer/        # Module 7: Customer Onboarding & KYC (10 features)
 ├── cia-quotation/       # Module 2: Quotation (5 features)
 ├── cia-policy/          # Module 3: Policy (23 features)
@@ -793,7 +793,7 @@ Each tenant can optionally enable a **sandbox mode** for Insurtechs to test inte
 
 | # | Module | Features | Key Outputs |
 |---|---|---|---|
-| 1 | Setup & Administration | 35 | Products, classes, approval groups, master data, partner management |
+| 1 | Setup & Administration | 36 | Products, classes, approval groups, master data (brokers / reinsurers / insurers / branches / SBUs / surveyors / **adjusters** — V45), partner management |
 | 2 | Quotation | 6 | Quote documents, per-item loadings/discounts, clause selection, PDF download, quote config tab |
 | 3 | Policy | 23 | Policy documents, debit notes, NAICOM/NIID upload |
 | 4 | Endorsements | 10 | Endorsement documents, debit/credit notes |
@@ -1091,7 +1091,7 @@ bash cia-frontend/scripts/check-api-wiring.sh
 | `[x]` | Products | DataTable list + ProductSheet (single/multi-risk, commission rate, 14 seed classes); inline `+ New Class of Business` via Dialog inside Sheet |
 | `[x]` | Policy Specifications | Clause bank DataTable (search, product/type filter, mandatory/optional, CRUD); template manager (per-product, type-coloured badges, upload/replace/archive/delete); **Quotes tab** — Discount Types CRUD, Loading Types CRUD, Quote Validity Period, Premium Calculation Sequence (LOADING_FIRST/DISCOUNT_FIRST) |
 | `[x]` | Claims Setup | Tabbed: Reserve Categories, Notification Timelines, Documents, Loss Types (skeleton tabs ready) |
-| `[x]` | Organisations | Tabbed: Brokers (full CRUD + BrokerSheet), Reinsurers/Insurers/Branches/SBUs/Surveyors (skeleton) |
+| `[x]` | Organisations | 7 working tabs (Session 78): Brokers, Reinsurers, Insurers, Branches, SBUs, Surveyors, **Adjusters** (new). Each tab has list + add/edit sheet wired to its `/api/v1/setup/*` endpoint. BrokerDto realigned to the backend shape (dropped legacy `status` + `contactPerson`, added `rcNumber` + `address`); the previous frontend↔backend drift was silent because Jackson dropped unknown fields. New `cia-setup/.../org/Adjuster*` module + V45 migration (`adjusters` table, INTERNAL/EXTERNAL type). |
 | `[x]` | Vehicle Registry | Tabbed: Makes, Models, Types (skeleton tabs ready) |
 | `[x]` | Partner App Management | EmptyState with Register App action (skeleton) |
 | `[x]` | Customer Number Format | CustomerNumberFormatPage — prefix, includeYear, includeType (IND/CORP segments with separate sequences), sequenceLength (default 8 → 99M/type/year); live format preview via useMemo; amber warning when unconfigured |

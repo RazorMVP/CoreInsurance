@@ -8,9 +8,108 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-21. The MinIO bucket-bootstrap and `FiscalYearService.close()` cascade follow-ups (flagged during F5.16 / wrap-up smoke) both shipped via the Session 74 entry below. The 12 CLOSURES reports were added in Session 75 below. The Builder date-picker UX + JSONB binding fix shipped in Session 76 below. The 9 missing closures-source descriptions shipped via the Session 76 continuation entry below. The **47-controller** Page-in-data anti-pattern fix shipped in Session 77 below.
+No open items as of 2026-05-21. The MinIO bucket-bootstrap and `FiscalYearService.close()` cascade follow-ups (flagged during F5.16 / wrap-up smoke) both shipped via the Session 74 entry below. The 12 CLOSURES reports were added in Session 75 below. The Builder date-picker UX + JSONB binding fix shipped in Session 76 below. The 9 missing closures-source descriptions shipped via the Session 76 continuation entry below. The **47-controller** Page-in-data anti-pattern fix shipped in Session 77 below. The Setup → Organisations page got 7 working tabs (5 stubs → live + new Adjusters) plus the silent BrokerDto drift fix in Session 78 below.
 
 **Known follow-up (not yet a bug, just a consistency gap):** the 19 controllers fixed in the Session 77 broader sweep (RiTreatyController, RiAllocationController, CustomerController, PolicyController, QuoteController, ClaimController, ClaimCommentController, ClaimDocumentController, ClaimExpenseController, EndorsementController, ReceiptController, PaymentController, DebitNoteController, CreditNoteController, DocumentTemplateController, PartnerAppController, PartnerProductController, PartnerWebhookController, RiFacCoverController) now return `data` as an array but **without** building `meta` (the original 28 controllers that already had `ApiResponse.success(page, meta)` retained their meta). Frontend list hooks don't currently read `meta`, so this is a cosmetic inconsistency, not a defect. If pagination UI is added later, all 19 should be brought up to spec.
+
+---
+
+## 2026-05-21 — Session 78 (`main`): Setup → Organisations — 7 working tabs (5 stubs activated + Adjusters added + Broker drift fixed)
+
+User flagged that on `/setup/organisations`, all the "Add X" buttons except "Add Broker" did nothing when clicked — Add Reinsurer, Add Insurance Company, Add Branch, Add SBU, Add Surveyor were all dead clicks. They also asked for a new "Adjusters" tab + "Add Adjuster" flow. Confirmed scope to include a third concern noticed during inspection: a silent BrokerDto frontend↔backend drift where the frontend sent `status` + `contactPerson` and the backend (Jackson) silently dropped both, with `rcNumber` + `address` never round-tripping through the sheet.
+
+### Why every tab except Brokers was dead
+
+`OrganisationsPage.tsx` had a `SimpleOrgTab` stub for the 5 unfinished tabs:
+
+```tsx
+function SimpleOrgTab({ label }: { label: string }) {
+  return (
+    <EmptyState
+      action={<Button size="sm">Add {label}</Button>}   // ← no onClick
+    />
+  );
+}
+```
+
+Five tabs all rendered the same `<Button>` with no `onClick`. The backend controllers + entities for all five had been ready since the original Module 1 ship (V3 — `brokers`, `branches`, `sbus`, `surveyors`, `insurance_companies`, `reinsurance_companies`). The frontend just never wired them.
+
+Adjusters didn't exist anywhere — neither backend nor frontend.
+
+### Backend — new Adjuster module (8 files)
+
+NAICOM-licensed loss adjusters are distinct from surveyors (who do pre-loss inspections); adjusters perform post-loss claim assessment. Modeled on `Surveyor`'s shape + added `code` (unique, max 20 — consistent with brokers/branches/sbus) + `address`:
+
+| File | Purpose |
+|---|---|
+| `cia-setup/.../org/AdjusterType.java` | Enum: `INTERNAL` (staff) / `EXTERNAL` (independent firm). Mirrors `SurveyorType`. |
+| `cia-setup/.../org/Adjuster.java` | JPA entity. `code` is `UNIQUE`, `type` is `@Enumerated(STRING)`. |
+| `cia-setup/.../org/AdjusterRepository.java` | `findAllByDeletedAtIsNull(pageable)`. |
+| `cia-setup/.../org/AdjusterService.java` | CRUD + soft-delete + audit log on every mutation. |
+| `cia-setup/.../org/AdjusterController.java` | `/api/v1/setup/adjusters` — list/get/create/update/delete with `SETUP_*` RBAC. Returns `ApiResponse<List<AdjusterResponse>>` (Session-77 canonical pattern with `ApiMeta` populated). |
+| `cia-setup/.../org/dto/AdjusterRequest.java` | `@NotBlank name`, `@NotBlank code`, `@NotNull type`, optional licenseNumber/email/phone/address. |
+| `cia-setup/.../org/dto/AdjusterResponse.java` | Full read shape. |
+| `cia-api/.../db/migration/V45__create_adjusters_table.sql` | DDL with `CHECK type IN ('INTERNAL', 'EXTERNAL')` + partial indexes on `deleted_at` and `type`. |
+
+### Frontend — `@cia/api-client/setup.ts` (DTO realignment + 4 new types)
+
+The pre-existing `BrokerDto` had `status: 'ACTIVE' | 'INACTIVE'` and `contactPerson: string` — neither exists on the backend `Broker` entity. Jackson silently dropped both on POST/PUT (the project doesn't set `FAIL_ON_UNKNOWN_PROPERTIES = true`), and the GET path could never round-trip them back, so users typing "contactPerson" in the form saw their input vanish. Rewrote to match the backend 1:1 — `rcNumber`, `address`, optional `email`/`phone`.
+
+Added four new DTOs that the previous code didn't have at all:
+
+- `BranchDto` — id, name, code, sbuId (foreign key), sbuName (denormalised by service), address
+- `SbuDto` — id, name, code (the minimum 2-field master)
+- `ReinsuranceCompanyDto` — id, name, country (required by backend), rcNumber, address, email, phone
+- `AdjusterType` — `'INTERNAL' | 'EXTERNAL'`
+- `AdjusterDto` — id, name, code, type, licenseNumber, email, phone, address
+
+`SurveyorDto` and `InsuranceCompanyDto` already matched the backend — left alone.
+
+### Frontend — 7 Sheet components
+
+Each sheet follows the exact pattern of the original `BrokerSheet.tsx`: RHF + zod schema + `useMutation` POST or PUT against the right endpoint, with `applyApiErrors` mapping backend validation failures back into the form. Sheets:
+
+- `BrokerSheet.tsx` — rewritten (drops `contactPerson` field; adds `rcNumber` + `address`)
+- `BranchSheet.tsx` — includes an SBU `<Select>` populated by `useQuery(['setup', 'sbus'])` so the parent picker is live
+- `SbuSheet.tsx` — minimal name+code form
+- `SurveyorSheet.tsx` — type select (INTERNAL/EXTERNAL) + NAICOM license
+- `InsurerSheet.tsx` — full company details + NAICOM license
+- `ReinsurerSheet.tsx` — full company details + required country
+- `AdjusterSheet.tsx` — type select + NAICOM license + code + address (new)
+
+Single zod gotcha across all: `z.string().email().optional().or(z.literal(''))` lets an empty email pass validation (HTML5 forms emit `''` not `undefined`), and the mutation normalises empty strings → `undefined` before submitting so `@Email` only kicks in for non-empty values.
+
+### Frontend — `OrganisationsPage.tsx` refactor
+
+`SimpleOrgTab` removed. 7 inline tab components (`BrokersTab`, `ReinsurersTab`, `InsurersTab`, `BranchesTab`, `SbusTab`, `SurveyorsTab`, `AdjustersTab`) — each is ~50 lines following an identical shape: `useQuery` → `DataTable` (or `EmptyState` if empty) → its dedicated Sheet. Tab header gained a 7th `<TabsTrigger value="adjusters">Adjusters</TabsTrigger>`.
+
+### Verification
+
+Live POST round-trip on three samples (all returned **HTTP 201**), then cleaned up:
+
+```bash
+$ curl POST /api/v1/setup/sbus     {"name":"Retail Test","code":"RTL-SMK"}                        → 201
+$ curl POST /api/v1/setup/adjusters {"name":"...","code":"ADJ-SMK","type":"EXTERNAL", ...}          → 201
+$ curl POST /api/v1/setup/reinsurance-companies {"name":"...","country":"Nigeria", ...}             → 201
+$ curl GET  /api/v1/setup/adjusters  → data is `list` (Session-77 envelope), meta carries pagination
+```
+
+`mvn -pl cia-api verify` → see commit message for the numbers (274 baseline preserved).
+
+### Notes for future work
+
+- **Broker delete + soft-delete UX** — Edit works end-to-end. Delete action exists in the row menu but doesn't wire to a confirm dialog yet; same for the other 6 tabs. Out of scope for this fix; the per-tab `Sheet` only handles create/update. Adding delete is a single shared `ConfirmDialog` + per-tab mutation.
+- **`RelationshipManager`** is a 7th org entity that already has a backend (`RelationshipManagerController.java`) but no UI surface in `OrganisationsPage` at all — neither stub nor tab. Not in the user's report. If we want it in the Organisations panel, that's a future Slice 1 addition.
+- **The meta-consistency follow-up from Session 77** still stands — 19 list controllers don't populate `ApiMeta`. The 7 setup controllers (including the new `AdjusterController`) all do populate meta because they're in the "first 28" group from Session 77, so the org page itself is internally consistent.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend (new) | 7 Adjuster sources + 1 Flyway migration (V45) |
+| Frontend (new) | 6 sheets (Branch, Sbu, Surveyor, Insurer, Reinsurer, Adjuster) — broker sheet was rewritten not new |
+| Frontend (modified) | `@cia/api-client/setup.ts` (BrokerDto fix + 5 new types); `BrokerSheet.tsx` (rewrite); `OrganisationsPage.tsx` (5 stubs → 6 working tabs + 1 new Adjusters tab) |
+| Docs | CLAUDE.md (Module 1 row, Build 2 Organisations row, module inventory comment), SKILL.md (Module 1 description, schema list), cia-log.md (this entry) |
 
 ---
 

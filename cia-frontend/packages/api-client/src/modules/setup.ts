@@ -66,14 +66,70 @@ export interface ClassOfBusinessDto {
   products: number;
 }
 
+// Mirrors com.nubeero.cia.setup.org.dto.BrokerResponse.
+// Previously carried `status` + `contactPerson` which the backend never accepted
+// (Jackson silently dropped them on the way in). Now matches the entity 1:1.
 export interface BrokerDto {
-  id:           string;
-  name:         string;
-  code:         string;
-  email:        string;
-  phone:        string;
-  status:       'ACTIVE' | 'INACTIVE';
-  contactPerson: string;
+  id:         string;
+  name:       string;
+  code:       string;
+  rcNumber?:  string | null;
+  address?:   string | null;
+  email?:     string | null;
+  phone?:     string | null;
+  createdAt:  string;
+  updatedAt?: string | null;
+}
+
+// Mirrors com.nubeero.cia.setup.org.dto.BranchResponse.
+export interface BranchDto {
+  id:         string;
+  name:       string;
+  code:       string;
+  sbuId?:     string | null;
+  sbuName?:   string | null;
+  address?:   string | null;
+  createdAt:  string;
+  updatedAt?: string | null;
+}
+
+// Mirrors com.nubeero.cia.setup.org.dto.SbuResponse.
+export interface SbuDto {
+  id:         string;
+  name:       string;
+  code:       string;
+  createdAt:  string;
+  updatedAt?: string | null;
+}
+
+// Mirrors com.nubeero.cia.setup.org.dto.ReinsuranceCompanyResponse.
+export interface ReinsuranceCompanyDto {
+  id:         string;
+  name:       string;
+  rcNumber?:  string | null;
+  address?:   string | null;
+  email?:     string | null;
+  phone?:     string | null;
+  country:    string;
+  createdAt:  string;
+  updatedAt?: string | null;
+}
+
+// Mirrors com.nubeero.cia.setup.org.AdjusterType (V45).
+export type AdjusterType = 'INTERNAL' | 'EXTERNAL';
+
+// Mirrors com.nubeero.cia.setup.org.dto.AdjusterResponse (V45).
+export interface AdjusterDto {
+  id:             string;
+  name:           string;
+  code:           string;
+  type:           AdjusterType;
+  licenseNumber?: string | null;
+  email?:         string | null;
+  phone?:         string | null;
+  address?:       string | null;
+  createdAt:      string;
+  updatedAt?:     string | null;
 }
 
 export interface BankDto {
