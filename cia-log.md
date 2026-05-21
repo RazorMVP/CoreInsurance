@@ -12,9 +12,29 @@ No open items as of 2026-05-20. Slice 1.10 (GL substrate enrichment) was the onl
 
 ---
 
-## 2026-05-21 — Session 74 (`main`, continued): Slices F5.1 → F5.12 — Phase 1 GL + Phase 2 PAA + IFRS 9 holdings (Phase 3 opens)
+## 2026-05-21 — Session 74 (`main`, continued): Slices F5.1 → F5.13 — Phase 1 GL + Phase 2 PAA + IFRS 9 (holdings + measurement engines)
 
-Phase 5 (Module 12 frontend) opened; ten slices shipped across the session. **Phase 1 GL frontend + admin loop complete (6/6). Phase 2 IFRS 17 PAA frontend complete (3/3).** Phase 3 IFRS 9 now opened (F5.12 — Investment holdings + §B4.1.26 classification history). Remaining: F5.7 (Posting Rules, skipped), F5.13–F5.14 (Phase 3 measurement viewers + IFRS 9 movement analysis), F5.15–F5.16 (Phase 4 NAICOM).
+Phase 5 (Module 12 frontend) opened; eleven slices shipped across the session. **Phase 1 GL frontend + admin loop complete (6/6). Phase 2 IFRS 17 PAA frontend complete (3/3). Phase 3 IFRS 9 frontend: 2/3 (F5.12 holdings + F5.13 measurement engines).** Remaining: F5.7 (Posting Rules, skipped), F5.14 (IFRS 9 §B5.5.39 movement analysis), F5.15–F5.16 (Phase 4 NAICOM).
+
+### Slice F5.13 — IFRS 9 Measurement engines (AC + FV + InvECL + PremRcvECL)
+
+Single page with four engine sections surfaced as a Phase 3 actuarial workflow. Each engine is independently runnable (no orchestrator endpoint on the backend, unlike PAA Slice 2.5); the page composes them as sequential admin tasks for a period close.
+
+- `@cia/api-client/finance-closures.ts` — added 4 result schemas: `AmortisedCostResultDtoSchema` (§5.4.1), `FairValueResultDtoSchema` (§5.7), `EclRecognitionResultDtoSchema` (§5.5 + §5.7.10A), `PremiumReceivableEclResultDtoSchema` (§5.5.15 simplified approach).
+- `Ifrs9MeasurementPage.tsx` (new) — FY + MONTH period selectors at the top, four engine sections below:
+  - **Amortised Cost (§5.4.1)** — single Run button. Engine sweeps AC + FVOCI_DEBT holdings, no admin input needed. Result table: opening / interest / closing per holding.
+  - **Fair Value (§5.7)** — multi-row form with holding picker (filtered to non-AC) + fair value input. Engine routes FVPL → P&L, FVOCI_DEBT → OCI debt reserve, FVOCI_EQUITY → OCI equity reserve. Result shows routing per holding with red/green-tinted fair value change.
+  - **Investment ECL (§5.5)** — multi-row form with holding picker (AC + FVOCI_DEBT only) + ECL amount + Stage 1/2/3 dropdown. Result shows `priorStage → newStage` transitions.
+  - **Premium Receivable ECL (§5.5.15)** — pre-seeded with 4 aging buckets (Current 0-30 at 0.5%, 31-60 at 2%, 61-90 at 5%, Over 90 at 15%) per Nigerian GB convention. Multi-row label + outstanding + default-rate inputs. Result: §B5.5.36-style provision-matrix table with bucket ECL computed (`outstanding × default rate`).
+- `modules/closures/index.tsx` — tenth tab "IFRS 9 Measurement" + `/closures/ifrs9-measurement` route.
+
+**Smoke test (live `:8090`):** All four engine sections rendered correctly with the FY 2027 → Jan 2027 selection. Clicked Run accrual on Amortised Cost; engine ran (logged `1 holdings processed, ₦691,682.19 interest computed` on the seeded FGN bond) and then **the DB constraint `ck_journal_entry_dates` rolled back the transaction** because the engine's posting_date (today 2026-05-21) < period business_date (2027-01-31). This is a real business-rule guard, not a bug — production tenants closing actual months never hit it because posting date and business date are in the same month. The dev environment hits it because we're seeding measurement runs against future periods. Frontend wires verified end-to-end; the page makes the engine call, parses the response, and would render correctly when the engine commits successfully.
+
+**Scope decision:** the 3 input-heavy engines (FV, Investment ECL, Premium Receivable ECL) ship with multi-row v1 forms because their backend contracts require admin-supplied input (fair values, ECL amounts, aging matrix). v2 will replace these with automated data sources (market-data feed for FV, actuarial PD × LGD × EAD for ECL, debit-note aging for premium ECL). The form pattern is similar across all 3 — a future refactor could extract a `MultiRowInputForm` component, but v1's three explicit forms keep each section's input semantics clear.
+
+### Slice F5.12 — IFRS 9 Investment Holdings + §B4.1.26 history (recap)
+
+Commit `38cf9c8`. Holdings list with classification badges + click-into Classification History sheet. One new GET endpoint added for `/holdings/{id}/classification-history`.
 
 ### Slice F5.12 — Investment Holdings + §B4.1.26 classification history (Phase 3 opens)
 

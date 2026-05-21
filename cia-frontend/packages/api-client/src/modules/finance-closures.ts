@@ -228,6 +228,90 @@ export const PaaPeriodCloseResultDtoSchema = z.object({
 });
 export type PaaPeriodCloseResultDto = z.infer<typeof PaaPeriodCloseResultDtoSchema>;
 
+// ── IFRS 9 Measurement engines (Slices 3.3–3.6) ──────────────────────────
+
+// Slice 3.3 — Amortised Cost (effective interest method)
+export const AmortisedCostEntrySchema = z.object({
+  holdingId:      z.string(),
+  securityName:   z.string(),
+  classification: z.string(),
+  openingBalance: z.number(),
+  interestIncome: z.number(),
+  closingBalance: z.number(),
+  journalEntryId: z.string().nullable().optional(),
+});
+export const AmortisedCostResultDtoSchema = z.object({
+  periodId:                 z.string(),
+  holdingsProcessed:        z.number(),
+  holdingsWithJournalEntry: z.number(),
+  totalInterestIncome:      z.number(),
+  entries:                  z.array(AmortisedCostEntrySchema),
+});
+export type AmortisedCostResultDto = z.infer<typeof AmortisedCostResultDtoSchema>;
+
+// Slice 3.4 — Fair Value
+export const FairValueEntrySchema = z.object({
+  holdingId:           z.string(),
+  securityName:        z.string(),
+  classification:      z.string(),
+  routing:             z.string(),  // "PnL" | "OCI"
+  preFairValueBalance: z.number(),
+  newFairValue:        z.number(),
+  fairValueChange:     z.number(),
+  journalEntryId:      z.string().nullable().optional(),
+});
+export const FairValueResultDtoSchema = z.object({
+  periodId:                  z.string(),
+  holdingsProcessed:         z.number(),
+  holdingsWithJournalEntry:  z.number(),
+  totalFairValueChangePnl:   z.number(),
+  totalFairValueChangeOci:   z.number(),
+  entries:                   z.array(FairValueEntrySchema),
+});
+export type FairValueResultDto = z.infer<typeof FairValueResultDtoSchema>;
+
+// Slice 3.5 — Investment ECL
+export const EclEntrySchema = z.object({
+  holdingId:      z.string(),
+  securityName:   z.string(),
+  classification: z.string(),
+  priorStage:     z.number().nullable().optional(),
+  newStage:       z.number().nullable().optional(),
+  priorEcl:       z.number(),
+  newEcl:         z.number(),
+  eclMovement:    z.number(),
+  journalEntryId: z.string().nullable().optional(),
+});
+export const EclRecognitionResultDtoSchema = z.object({
+  periodId:                 z.string(),
+  holdingsProcessed:        z.number(),
+  holdingsWithJournalEntry: z.number(),
+  totalEclIncrease:         z.number(),
+  totalEclReversal:         z.number(),
+  totalEclMovement:         z.number(),
+  entries:                  z.array(EclEntrySchema),
+});
+export type EclRecognitionResultDto = z.infer<typeof EclRecognitionResultDtoSchema>;
+
+// Slice 3.6 — Premium Receivable ECL (provision matrix)
+export const ProvisionBucketSchema = z.object({
+  label:             z.string(),
+  outstandingAmount: z.number(),
+  defaultRate:       z.number(),
+  bucketEcl:         z.number(),
+});
+export const PremiumReceivableEclResultDtoSchema = z.object({
+  periodId:             z.string(),
+  totalOutstanding:     z.number(),
+  targetLifetimeEcl:    z.number(),
+  priorCumulativeEcl:   z.number(),
+  eclMovement:          z.number(),
+  direction:            z.string(),  // INCREASE / REVERSAL / NO_CHANGE
+  journalEntryId:       z.string().nullable().optional(),
+  buckets:              z.array(ProvisionBucketSchema),
+});
+export type PremiumReceivableEclResultDto = z.infer<typeof PremiumReceivableEclResultDtoSchema>;
+
 // ── IFRS 9 Investment Holdings + Classification History (Slice 3.2) ─────
 
 export const AssetTypeSchema = z.enum(['DEBT', 'EQUITY', 'MONEY_MARKET', 'DERIVATIVE']);
