@@ -12,6 +12,74 @@ No open items as of 2026-05-21. The MinIO bucket-bootstrap and `FiscalYearServic
 
 ---
 
+## 2026-05-21 — Session 74 (`main`, continued): Figma sync — new "Closures" page with 20 editable frames for Phase 5
+
+Synced Phase 5 (Module 12 back-office frontend) into the BackOffice Figma file (`Zaiu2K7NvEJ7Cjj6z1xt2D`) ahead of Phase 6 design work. The Figma file had 11 existing module pages (Setup / Customers / Quotation / Policies / Endorsements / Finance / Claims / Reinsurance / Audit / Reports / Dashboard) but no Closures page — the entire Phase 5 surface was missing from the design system of record.
+
+**Hard rule honoured:** every Figma frame is an editable auto-layout `FRAME` / `TEXT` / `RECTANGLE` / `ELLIPSE` node — no screenshots, no raster imports, no flat pixel uploads. Real named layers throughout; text is editable, components can be re-themed, and the file continues to serve as the source of design truth.
+
+**What shipped (20 frames total):**
+
+| Type | Count | Naming convention |
+|---|---|---|
+| Main screens (1440×900) | 13 | `BackOffice / Closures / [SubView]` — matches the file's existing `BackOffice / [Module]` pattern |
+| Supporting Sheets | 5 | `Sheet: [Name]` (480w or 640w) — matches Customers/Audit drawer convention |
+| Supporting Dialogs | 3 | `Dialog: [Name]` (440w) — matches Audit's `Dialog: Alert Config` |
+
+**13 main screens (in tab order):**
+
+1. `BackOffice / Closures / Periods` (F5.1) — FY + Granularity selectors, ACTIVE badge, Close year + Create FY buttons, 4 StatCards (Open / Soft-closed / Hard-closed / Reopened), 7-column DataTable with January 2026 HARD_CLOSED row + 3 OPEN rows + status-gated row actions (Reopen + History on closed; Soft-close + Hard-close + History on open).
+2. `BackOffice / Closures / Chart of Accounts` (F5.3) — 4 StatCards (Accounts / Asset / Liability / Income·Expense), search input + 6 account-type pill filters, tree view with 5 root account types (ASSET + LIABILITY expanded showing key codes like 1120 / 1310 / 2110 / 2140 with IFRS-17 + IFRS-9 role badges; EQUITY / INCOME / EXPENSE collapsed).
+3. `BackOffice / Closures / Posting Rules` (F5.7) — 3 StatCards (Rules / Active / Compound hard-coded with FAC_PREMIUM_CEDED sub-label), 6-row rules table with event-type + COA-resolved Dr/Cr names + narrative template + ACTIVE badge, FAC carve-out footer block explaining the 3-line compound posting.
+4. `BackOffice / Closures / Journal Entries` (F5.4) — 3 StatCards (Entries / Page / Per page), filter row with Status + Source-module + Account-code + Business-date-range + Reset, JE DataTable with 3 sample rows showing manual smoke-test JEs (claim payment / premium receipt / broker commission, all POSTED).
+5. `BackOffice / Closures / Trial Balance` (F5.5) — As-of date input + Run report button + Generated-at hint, account-type-grouped TB (Assets / Liabilities / Income / Expenses with sub-totals), Total row showing balanced ₦162,000.00 Dr = Cr, green "Balanced — Σ dr = Σ cr" footer + JE-line backing count.
+6. `BackOffice / Closures / Backfill` (F5.6) — PLATFORM_ADMIN amber warning banner, parameters card with Tenant ID + Event-type filter + Business date range + Batch size, Start dry run + Start backfill buttons, Tracked workflows section with empty-state.
+7. `BackOffice / Closures / PAA Close` (F5.8) — FY + Period selectors + Run PAA close button, §83/§84 Insurance Service Result card with 4 line items + ₦58,000.00 total in teal, 2×2 engine breakdown grid (LrcEngine POSTED / LicEngine NOOP / DiscountUnwindEngine NOOP / OnerousContractTestEngine NOOP).
+8. `BackOffice / Closures / Movement Analysis` (F5.9/10) — FY + Period selectors, §103(a) LRC roll-forward with opening + premium received + insurance revenue + acquisition + discount-unwind rows + LRC closing ₦150,000.00, §103(b) LIC roll-forward with similar structure. Each row has a +/− sign gutter matching the code's RollforwardTable component.
+9. `BackOffice / Closures / Contract Groups` (F5.11) — 3 StatCards (Groups / Onerous / Open cohorts), Portfolio + Cohort year + Onerousness + Status filters + Reset, "No portfolios exist yet" empty-state pointing at ContractGroupingService event-driven creation.
+10. `BackOffice / Closures / Holdings` (F5.12) — 4 StatCards (Holdings / Active / FVPL / Total acquisition cost), Asset-type + Classification + Status + Reset filter row, Holdings table with FGN 16.2884% 2027 row (AMORTISED_COST badge, Stage 1 ECL, ₦50,000,000.00 acquisition cost).
+11. `BackOffice / Closures / IFRS 9 Measurement` (F5.13) — FY + Period selectors, 2×2 engine card grid (Amortised Cost §5.4.1 / Fair Value §5.7 / Investment ECL §5.5+§5.7.10A / Premium Receivable ECL §5.5.15) each with Run button + Last-run-at hint.
+12. `BackOffice / Closures / IFRS 9 §B5.5.39` (F5.14) — FY + Period selectors, 4 StatCards (Opening / Closing investments / Total P&L income / Total OCI movement), Investment roll-forward (§B5.5.39) with 8 movement rows + Closing total, Premium-receivable ECL section with NO_CHANGE direction badge + opening/movement/closing rows.
+13. `BackOffice / Closures / NAICOM Submissions` (F5.15) — FY + Period + State filter row + Generate submission CTA, 4 StatCards (Submissions filtered / DRAFT / SUBMITTED / ACKNOWLEDGED), submissions table with the N05 PREMIUM_BORDEREAUX DRAFT row reflecting the F5.16 dev-tenant smoke state.
+
+**7 supporting Sheets / Dialogs:**
+
+| Frame | Width | What it shows |
+|---|---|---|
+| `Sheet: Lock History` | 480 | Type-2 SCD timeline — HARD ACTIVE entry + SOFT RELEASED entry with grace window + release reason "promoted to HARD: Smoke test for F5.16 NAICOM artifacts" |
+| `Sheet: Create Fiscal Year` | 480 | Name + Start date + End date inputs + Cancel/Create footer; helper text on each field about constraints |
+| `Dialog: Close Period` | 440 | Period header (Feb 2026), red warning banner about CFO-only reopen, reason textarea, destructive Hard-close button |
+| `Dialog: Reopen Period` | 440 | Period header (Jan 2026 HARD_CLOSED), amber IAS-8 PPA notice, mandatory reason textarea, Reopen button |
+| `Sheet: Journal Entry Detail` | 640 | POSTED badge + business/posting date dl + idempotency triple (MANUAL / CLAIM_PAYMENT / SMK-002) block + 2-line table with COA-resolved names |
+| `Sheet: Holding Classification History` | 480 | Current classification card (AMORTISED_COST + SPPI passed + HOLD_TO_COLLECT business model + 0 reclassifications) + Type-2 SCD timeline with the original registration entry marked CURRENT |
+| `Sheet: NAICOM Submission Detail` | 640 | DRAFT state badge, state-transition controls (Submit to NAICOM with optional reason), event history with the initial DRAFT row, RENDERED ARTIFACTS section with PDF + CSV live rows (with size + SHA prefix + render timestamp + actor + Re-render/Download buttons) and a JSON "Not yet rendered" row |
+| `Dialog: Generate Submission` | 440 | Submission type select (N05 · Premium Bordereaux), optional reason textarea, Cancel + Generate footer |
+
+**Conventions discovered + matched:**
+
+- Existing screens are built from primitives, not from any of the many attached library design systems (Material / Paas / etc). Local components count: 0. Local variable collections: 0. I built closures the same way to stay consistent — the file is a hand-curated mock library, not a token-driven system.
+- Fonts: Bricolage Grotesque / SemiBold (display + page titles + headline numbers); Inter / Semi Bold (UI labels + emphasis); Inter / Medium (nav labels + group headings); Inter / Regular (body + helpers).
+- Palette discovered from the Audit screen + matched: white #ffffff, dark slate #1e2430 (sidebar bg + body text), muted #6c7886, Nubeero teal #00b4cb (accent + active states), teal-bg #eff8fa (active nav item), page bg #f8fafb, soft gray #f4f7f9 (table header), green-bg #e5faef + green-fg #14853c (OK/active badges), amber-bg #fef8e0 + amber-fg #c38100 (DRAFT/warning), red-fg for destructive.
+- Layout: every screen is a fixed 1440×900 frame split into a 256×900 dark sidebar + a 1184×900 right column (Topbar 1184×60 + Main padded 24px on all sides). Tab row caps at the inner 1136 width; the 13-tab list overflows on the right (last tab clipped) which faithfully represents the actual `overflow-x: auto` scroll behaviour in the browser.
+
+**Workflow used:**
+
+1. Inspected the file's existing pages, named sections, fonts, palette, top-level structure (one `use_figma` read-only call).
+2. Built the F5.1 Periods screen + Lock History sheet as a **pilot** for user review (8 incremental `use_figma` calls + 2 screenshot validations + 2 fix passes for sidebar fills / tab overflow / Actions column clipping).
+3. User reviewed pilot and approved.
+4. Cloned the F5.1 wrapper to 12 new positions in a 4-wide × 3-row grid, then mutated each clone: renamed, set new active tab (de-highlighted Periods, highlighted target tab), updated page header title + description, removed inherited filter row + StatCards + table so each could be repopulated fresh (1 `use_figma` call cloning all 12).
+5. Populated each new screen's main content (11 `use_figma` calls, one per screen).
+6. Built the 7 supporting Sheets / Dialogs in 2 calls (4 small ones + 3 large ones).
+7. Validated with 2 final screenshots (page overview + Posting Rules zoom).
+
+**Total Figma write operations: ~20 `use_figma` calls + 4 screenshots. All atomic — no orphan nodes; failed scripts didn't write anything.**
+
+**One self-correction worth keeping:** the first pilot screenshot showed the sidebar rendering mostly white because every child `createAutoLayout` frame inherited a default white fill that hid the dark slate parent bg. Cleared with a targeted `findAll → fills = []` sweep. The figma-use skill calls this out specifically; this was a reminder why the "discover conventions first" step matters — once I'd seen the existing Audit screen confirmed dark sidebar, the rendering bug was obvious.
+
+**Not committed to git:** Figma file changes are not tracked by the repo. This entry is the only persistent record. The file key `Zaiu2K7NvEJ7Cjj6z1xt2D` is documented in `.claude/skills/cia/SKILL.md` line 395 for future Figma syncs.
+
+---
+
 ## 2026-05-21 — Session 74 (`main`, continued): Reconcile all docs + OpenAPI specs to Phase 5 shipped reality
 
 Comprehensive documentation refresh after the session's eight functional commits (F5.15 → F5.16 → F5.7 → MinIO/cascade → lazy-DAY-deletion → doc reconciliation). Goal: every reference doc + the docusaurus OpenAPI specs reflect what's actually shipped, so the next session opens cold against accurate state.
