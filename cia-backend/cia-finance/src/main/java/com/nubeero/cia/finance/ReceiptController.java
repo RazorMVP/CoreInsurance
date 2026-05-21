@@ -12,13 +12,13 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -40,11 +40,11 @@ public class ReceiptController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_VIEW", content = @Content)
     })
-    public ApiResponse<Page<ReceiptResponse>> list(
+    public ApiResponse<List<ReceiptResponse>> list(
             @PathVariable UUID debitNoteId,
             @PageableDefault(size = 20) Pageable pageable) {
         return ApiResponse.success(
-                service.findByDebitNote(debitNoteId, pageable).map(this::toResponse));
+                service.findByDebitNote(debitNoteId, pageable).map(this::toResponse).getContent());
     }
 
     @GetMapping("/{id}")

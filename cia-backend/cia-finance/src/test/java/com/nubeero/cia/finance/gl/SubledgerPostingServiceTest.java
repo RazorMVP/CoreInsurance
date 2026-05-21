@@ -62,7 +62,7 @@ class SubledgerPostingServiceTest {
     @BeforeEach
     void wire() {
         ChartOfAccountService coaService = new ChartOfAccountService(coaRepository);
-        FiscalPeriodResolver resolver = new FiscalPeriodResolver(fiscalPeriodRepository, fiscalYearRepository);
+        FiscalPeriodResolver resolver = new FiscalPeriodResolver(fiscalPeriodRepository);
         JournalEntryService journalEntryService = new JournalEntryService(
             journalEntryRepository, coaService, resolver, FIXED_CLOCK);
         PostingRuleService postingRuleService = new PostingRuleService(postingRuleRepository);

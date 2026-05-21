@@ -36,13 +36,13 @@ public class AuditReportController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Paginated audit events for user"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
     })
-    public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> actionsByUser(
+    public ResponseEntity<ApiResponse<List<AuditLogResponse>>> actionsByUser(
             @RequestParam String userId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @PageableDefault(size = 20) Pageable pageable) {
         Page<AuditLogResponse> page = reportService.actionsByUser(userId, from, to, pageable);
-        return ResponseEntity.ok(ApiResponse.success(page, buildMeta(page)));
+        return ResponseEntity.ok(ApiResponse.success(page.getContent(), buildMeta(page)));
     }
 
     @GetMapping("/actions-by-module")
@@ -52,13 +52,13 @@ public class AuditReportController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Paginated audit events for module"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
     })
-    public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> actionsByModule(
+    public ResponseEntity<ApiResponse<List<AuditLogResponse>>> actionsByModule(
             @RequestParam String entityType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @PageableDefault(size = 20) Pageable pageable) {
         Page<AuditLogResponse> page = reportService.actionsByModule(entityType, from, to, pageable);
-        return ResponseEntity.ok(ApiResponse.success(page, buildMeta(page)));
+        return ResponseEntity.ok(ApiResponse.success(page.getContent(), buildMeta(page)));
     }
 
     @GetMapping("/approvals")
@@ -68,12 +68,12 @@ public class AuditReportController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Paginated approval events"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
     })
-    public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> approvalAuditTrail(
+    public ResponseEntity<ApiResponse<List<AuditLogResponse>>> approvalAuditTrail(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @PageableDefault(size = 20) Pageable pageable) {
         Page<AuditLogResponse> page = reportService.approvalAuditTrail(from, to, pageable);
-        return ResponseEntity.ok(ApiResponse.success(page, buildMeta(page)));
+        return ResponseEntity.ok(ApiResponse.success(page.getContent(), buildMeta(page)));
     }
 
     @GetMapping("/data-changes")
@@ -83,12 +83,12 @@ public class AuditReportController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Paginated change events"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
     })
-    public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> dataChanges(
+    public ResponseEntity<ApiResponse<List<AuditLogResponse>>> dataChanges(
             @RequestParam String entityType,
             @RequestParam String entityId,
             @PageableDefault(size = 20) Pageable pageable) {
         Page<AuditLogResponse> page = reportService.dataChanges(entityType, entityId, pageable);
-        return ResponseEntity.ok(ApiResponse.success(page, buildMeta(page)));
+        return ResponseEntity.ok(ApiResponse.success(page.getContent(), buildMeta(page)));
     }
 
     @GetMapping("/login-security")
@@ -98,12 +98,12 @@ public class AuditReportController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Paginated login events"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
     })
-    public ResponseEntity<ApiResponse<Page<LoginAuditLogResponse>>> loginSecurityReport(
+    public ResponseEntity<ApiResponse<List<LoginAuditLogResponse>>> loginSecurityReport(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @PageableDefault(size = 20) Pageable pageable) {
         Page<LoginAuditLogResponse> page = reportService.loginSecurityReport(from, to, pageable);
-        return ResponseEntity.ok(ApiResponse.success(page, buildMeta(page)));
+        return ResponseEntity.ok(ApiResponse.success(page.getContent(), buildMeta(page)));
     }
 
     @GetMapping("/user-activity")

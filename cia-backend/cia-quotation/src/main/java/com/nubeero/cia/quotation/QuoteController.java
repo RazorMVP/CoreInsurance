@@ -20,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -42,11 +43,11 @@ public class QuoteController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks QUOTATION_VIEW", content = @Content)
     })
-    public ApiResponse<Page<QuoteSummaryResponse>> list(
+    public ApiResponse<List<QuoteSummaryResponse>> list(
             @RequestParam(required = false) QuoteStatus status,
             @RequestParam(required = false) UUID customerId,
             @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.success(service.list(status, customerId, pageable));
+        return ApiResponse.success(service.list(status, customerId, pageable).getContent());
     }
 
     @GetMapping("/search")
@@ -59,10 +60,10 @@ public class QuoteController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks QUOTATION_VIEW", content = @Content)
     })
-    public ApiResponse<Page<QuoteSummaryResponse>> search(
+    public ApiResponse<List<QuoteSummaryResponse>> search(
             @RequestParam String q,
             @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.success(service.search(q, pageable));
+        return ApiResponse.success(service.search(q, pageable).getContent());
     }
 
     @GetMapping("/{id}")

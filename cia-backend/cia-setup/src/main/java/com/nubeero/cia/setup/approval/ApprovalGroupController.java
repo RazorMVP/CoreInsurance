@@ -41,12 +41,12 @@ public class ApprovalGroupController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content)
     })
-    public ResponseEntity<ApiResponse<Page<ApprovalGroupResponse>>> list(
+    public ResponseEntity<ApiResponse<List<ApprovalGroupResponse>>> list(
             @PageableDefault(size = 20) Pageable pageable) {
         Page<ApprovalGroupResponse> page = service.list(pageable);
         ApiMeta meta = ApiMeta.builder()
                 .total(page.getTotalElements()).page(page.getNumber()).size(page.getSize()).build();
-        return ResponseEntity.ok(ApiResponse.success(page, meta));
+        return ResponseEntity.ok(ApiResponse.success(page.getContent(), meta));
     }
 
     @GetMapping("/by-entity-type/{entityType}")

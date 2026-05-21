@@ -63,7 +63,7 @@ export default function CoinsuranceEditorDialog({
         '/api/v1/setup/insurance-companies',
         { params: { size: 200 } },
       );
-      return res.data.data.content ?? [];
+      return res.data.data ?? [];
     },
     enabled: open,
   });

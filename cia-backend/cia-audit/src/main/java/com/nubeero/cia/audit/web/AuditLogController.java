@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/audit/logs")
 @RequiredArgsConstructor
@@ -37,7 +39,7 @@ public class AuditLogController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient role — requires AUDIT_VIEW or SETUP_UPDATE")
     })
-    public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> search(
+    public ResponseEntity<ApiResponse<List<AuditLogResponse>>> search(
             AuditLogFilter filter,
             @PageableDefault(size = 20) Pageable pageable) {
         Page<AuditLogResponse> page = queryService.search(filter, pageable);
@@ -46,6 +48,6 @@ public class AuditLogController {
                 .page(page.getNumber())
                 .size(page.getSize())
                 .build();
-        return ResponseEntity.ok(ApiResponse.success(page, meta));
+        return ResponseEntity.ok(ApiResponse.success(page.getContent(), meta));
     }
 }

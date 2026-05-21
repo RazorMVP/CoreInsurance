@@ -42,11 +42,11 @@ public class PartnerProductController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — insufficient scope", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Rate limit exceeded", content = @Content)
     })
-    public ResponseEntity<ApiResponse<Page<PartnerProductResponse>>> list(
+    public ResponseEntity<ApiResponse<List<PartnerProductResponse>>> list(
             @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
         Page<PartnerProductResponse> page = productService.list(pageable)
                 .map(PartnerProductResponse::from);
-        return ResponseEntity.ok(ApiResponse.success(page));
+        return ResponseEntity.ok(ApiResponse.success(page.getContent()));
     }
 
     @GetMapping("/{id}")

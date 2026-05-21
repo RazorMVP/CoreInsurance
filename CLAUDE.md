@@ -958,7 +958,7 @@ bash cia-frontend/scripts/check-api-wiring.sh
 - All endpoints prefixed `/api/v1/`.
 - Tenant context always resolved from JWT, never from request body.
 - Standard response envelope: `{ "data": ..., "meta": ..., "errors": [...] }`.
-- Pagination: cursor-based for large lists.
+- Pagination: cursor-based for large lists. **List endpoints must place the array directly in `data` and the pagination metadata (`total`, `page`, `size`, `nextCursor`, `prevCursor`) in `meta`.** Never serialise Spring's full `Page<T>` object into `data` — the frontend's `useQuery` hooks unwrap `res.data.data` as an array, and a Page object there crashes the consumer with `(query.data ?? []).map is not a function`. The canonical controller idiom is `ApiResponse.success(page.getContent(), ApiMeta.builder().total(page.getTotalElements()).page(page.getNumber()).size(page.getSize()).build())` — return type `ResponseEntity<ApiResponse<List<T>>>`, never `ResponseEntity<ApiResponse<Page<T>>>`.
 
 ### Partner API Design (cia-partner-api specific)
 

@@ -32,6 +32,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -70,7 +71,7 @@ public class JournalEntryController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_VIEW", content = @Content)
     })
-    public ApiResponse<Page<JournalEntrySummaryResponse>> list(
+    public ApiResponse<List<JournalEntrySummaryResponse>> list(
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate businessFrom,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate businessTo,
         @RequestParam(required = false) UUID periodId,
@@ -89,7 +90,7 @@ public class JournalEntryController {
             .page(page.getNumber())
             .size(page.getSize())
             .build();
-        return ApiResponse.success(page, meta);
+        return ApiResponse.success(page.getContent(), meta);
     }
 
     @GetMapping("/{id}")

@@ -142,7 +142,7 @@ export default function ClaimDetailPage() {
         `/api/v1/claims/${id}/documents`,
         { params: { documentType: 'SURVEY_REPORT', size: 100 } },
       );
-      return res.data.data.content ?? [];
+      return res.data.data ?? [];
     },
     enabled: !!id,
   });
@@ -269,7 +269,7 @@ export default function ClaimDetailPage() {
         `/api/v1/claims/${id}/documents`,
         { params: { size: 100 } },
       );
-      return res.data.data.content ?? [];
+      return res.data.data ?? [];
     },
     enabled: !!id,
   });
@@ -282,7 +282,7 @@ export default function ClaimDetailPage() {
         `/api/v1/claims/${id}/comments`,
         { params: { size: 100 } },
       );
-      return res.data.data.content ?? [];
+      return res.data.data ?? [];
     },
     enabled: !!id,
   });

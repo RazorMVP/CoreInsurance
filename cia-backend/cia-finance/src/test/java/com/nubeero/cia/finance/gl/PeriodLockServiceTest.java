@@ -86,7 +86,7 @@ class PeriodLockServiceTest {
 
     @BeforeEach
     void init() {
-        resolver = new FiscalPeriodResolver(periodRepository, fiscalYearRepository);
+        resolver = new FiscalPeriodResolver(periodRepository);
         cache = new FiscalPeriodLookupCache();
         // Real AuditService — Java 25's Mockito agent cannot redefine concrete
         // Spring services. Built from mocked repository + real ObjectMapper.

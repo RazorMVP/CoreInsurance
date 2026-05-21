@@ -3,11 +3,12 @@
 // Mirrors cia-audit/dto/* records. Serves at /api/v1/audit/...
 //
 // Backend conventions:
-//   - Listing endpoints return `Page<T>` (Spring Data) wrapped in
-//     ApiResponse: `{ data: { content: [], totalElements, ... }, meta? }`.
-//     The frontend reads `res.data.data.content` to get the array.
-//   - The user-activity report endpoint returns a flat `List<T>`, no
-//     Page wrapper.
+//   - Listing endpoints return `ApiResponse<List<T>>` where `data` is the
+//     array directly and `meta` carries pagination (`{ total, page, size }`).
+//     The frontend reads `res.data.data` to get the array. (Earlier the
+//     controllers exposed Spring's full `Page<T>` object inside `data`;
+//     fixed in Session 77.)
+//   - The user-activity report endpoint returns a flat `List<T>`.
 //
 // Note: AlertType backend enum is FAILED_LOGIN (singular) — earlier
 // hand-rolled frontend interface had FAILED_LOGINS (plural). Aligning

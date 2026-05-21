@@ -22,6 +22,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -64,13 +65,13 @@ public class PartnerWebhookController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — insufficient scope", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Rate limit exceeded", content = @Content)
     })
-    public ResponseEntity<ApiResponse<Page<PartnerWebhookResponse>>> list(
+    public ResponseEntity<ApiResponse<List<PartnerWebhookResponse>>> list(
             @AuthenticationPrincipal Jwt jwt,
             @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
         UUID partnerAppId = resolvePartnerAppId(jwt);
         Page<PartnerWebhookResponse> page = webhookService.list(partnerAppId, pageable)
                 .map(PartnerWebhookResponse::from);
-        return ResponseEntity.ok(ApiResponse.success(page));
+        return ResponseEntity.ok(ApiResponse.success(page.getContent()));
     }
 
     @DeleteMapping("/{id}")

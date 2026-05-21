@@ -12,7 +12,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
@@ -22,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -47,13 +47,13 @@ public class ClaimController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks CLAIMS_VIEW", content = @Content)
     })
-    public ApiResponse<Page<ClaimResponse>> list(
+    public ApiResponse<List<ClaimResponse>> list(
             @RequestParam(required = false) UUID policyId,
             @RequestParam(required = false) ClaimStatus status,
             @RequestParam(required = false) UUID customerId,
             @PageableDefault(size = 20) Pageable pageable) {
         return ApiResponse.success(
-                service.list(policyId, status, customerId, pageable).map(this::toResponse));
+                service.list(policyId, status, customerId, pageable).map(this::toResponse).getContent());
     }
 
     @GetMapping("/search")
@@ -66,10 +66,10 @@ public class ClaimController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks CLAIMS_VIEW", content = @Content)
     })
-    public ApiResponse<Page<ClaimResponse>> search(
+    public ApiResponse<List<ClaimResponse>> search(
             @RequestParam String q,
             @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.success(service.search(q, pageable).map(this::toResponse));
+        return ApiResponse.success(service.search(q, pageable).map(this::toResponse).getContent());
     }
 
     @GetMapping("/{id}")
@@ -316,7 +316,7 @@ public class ClaimController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks CLAIMS_VIEW", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Claim not found", content = @Content)
     })
-    public ApiResponse<Page<ClaimReserveResponse>> reserves(
+    public ApiResponse<List<ClaimReserveResponse>> reserves(
             @PathVariable UUID id,
             @PageableDefault(size = 20) Pageable pageable) {
         Claim claim = service.findOrThrow(id);
@@ -326,10 +326,7 @@ public class ClaimController {
                         .map(r -> new ClaimReserveResponse(
                                 r.getId(), r.getAmount(), r.getPreviousAmount(),
                                 r.getReason(), r.getCreatedBy(), r.getCreatedAt()))
-                        .collect(java.util.stream.Collectors.collectingAndThen(
-                                java.util.stream.Collectors.toList(),
-                                list -> new org.springframework.data.domain.PageImpl<>(
-                                        list, pageable, list.size()))));
+                        .toList());
     }
 
     // ─── Post-loss inspection workflow (B6) ───────────────────────────────

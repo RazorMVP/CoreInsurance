@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -46,14 +47,14 @@ public class ClaimDocumentController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks CLAIMS_VIEW", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Claim not found", content = @Content)
     })
-    public ApiResponse<Page<ClaimDocumentResponse>> list(
+    public ApiResponse<List<ClaimDocumentResponse>> list(
             @PathVariable UUID claimId,
             @RequestParam(required = false) ClaimDocumentType documentType,
             @PageableDefault(size = 20) Pageable pageable) {
         Page<ClaimDocument> page = documentType != null
                 ? service.findByClaimIdAndType(claimId, documentType, pageable)
                 : service.findByClaimId(claimId, pageable);
-        return ApiResponse.success(page.map(this::toResponse));
+        return ApiResponse.success(page.map(this::toResponse).getContent());
     }
 
     @GetMapping("/{id}/content")

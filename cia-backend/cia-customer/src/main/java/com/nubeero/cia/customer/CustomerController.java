@@ -10,7 +10,6 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -43,11 +42,11 @@ public class CustomerController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks CUSTOMER_VIEW", content = @Content)
     })
-    public ApiResponse<Page<CustomerSummaryResponse>> list(
+    public ApiResponse<List<CustomerSummaryResponse>> list(
             @RequestParam(required = false) CustomerType type,
             @RequestParam(required = false) KycStatus kycStatus,
             @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.success(service.list(type, kycStatus, pageable));
+        return ApiResponse.success(service.list(type, kycStatus, pageable).getContent());
     }
 
     @GetMapping("/search")
@@ -60,10 +59,10 @@ public class CustomerController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks CUSTOMER_VIEW", content = @Content)
     })
-    public ApiResponse<Page<CustomerSummaryResponse>> search(
+    public ApiResponse<List<CustomerSummaryResponse>> search(
             @RequestParam String q,
             @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.success(service.search(q, pageable));
+        return ApiResponse.success(service.search(q, pageable).getContent());
     }
 
     @GetMapping("/{id}")

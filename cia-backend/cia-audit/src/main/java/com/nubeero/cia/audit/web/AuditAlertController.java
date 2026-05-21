@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -36,7 +37,7 @@ public class AuditAlertController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient role")
     })
-    public ResponseEntity<ApiResponse<Page<AuditAlertResponse>>> listAll(
+    public ResponseEntity<ApiResponse<List<AuditAlertResponse>>> listAll(
             @RequestParam(defaultValue = "false") boolean unacknowledgedOnly,
             @PageableDefault(size = 20) Pageable pageable) {
         Page<AuditAlertResponse> page = unacknowledgedOnly
@@ -44,7 +45,7 @@ public class AuditAlertController {
                 : alertService.listAll(pageable);
         ApiMeta meta = ApiMeta.builder()
                 .total(page.getTotalElements()).page(page.getNumber()).size(page.getSize()).build();
-        return ResponseEntity.ok(ApiResponse.success(page, meta));
+        return ResponseEntity.ok(ApiResponse.success(page.getContent(), meta));
     }
 
     @PostMapping("/{id}/acknowledge")

@@ -22,6 +22,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -92,7 +93,7 @@ public class LoginAuditController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient role")
     })
-    public ResponseEntity<ApiResponse<Page<LoginAuditLogResponse>>> list(
+    public ResponseEntity<ApiResponse<List<LoginAuditLogResponse>>> list(
             @RequestParam(required = false) String userId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
@@ -108,6 +109,6 @@ public class LoginAuditController {
         }
         ApiMeta meta = ApiMeta.builder()
                 .total(page.getTotalElements()).page(page.getNumber()).size(page.getSize()).build();
-        return ResponseEntity.ok(ApiResponse.success(page, meta));
+        return ResponseEntity.ok(ApiResponse.success(page.getContent(), meta));
     }
 }

@@ -20,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -40,7 +41,7 @@ public class ProductController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content)
     })
-    public ResponseEntity<ApiResponse<Page<ProductResponse>>> list(
+    public ResponseEntity<ApiResponse<List<ProductResponse>>> list(
             @PageableDefault(size = 20) Pageable pageable) {
         Page<ProductResponse> page = service.list(pageable);
         ApiMeta meta = ApiMeta.builder()
@@ -48,7 +49,7 @@ public class ProductController {
                 .page(page.getNumber())
                 .size(page.getSize())
                 .build();
-        return ResponseEntity.ok(ApiResponse.success(page, meta));
+        return ResponseEntity.ok(ApiResponse.success(page.getContent(), meta));
     }
 
     @GetMapping("/{id}")

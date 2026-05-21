@@ -43,7 +43,7 @@ export default function AssignInspectorDialog({ open, onOpenChange, claimId, cla
         '/api/v1/setup/surveyors',
         { params: { size: 200 } },
       );
-      return res.data.data.content ?? [];
+      return res.data.data ?? [];
     },
     enabled: open,
   });

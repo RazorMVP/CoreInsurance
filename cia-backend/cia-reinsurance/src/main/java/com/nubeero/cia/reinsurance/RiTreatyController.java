@@ -10,13 +10,13 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -39,12 +39,12 @@ public class RiTreatyController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks REINSURANCE_VIEW", content = @Content)
     })
-    public ApiResponse<Page<TreatyResponse>> list(
+    public ApiResponse<List<TreatyResponse>> list(
             @RequestParam(required = false) TreatyType type,
             @RequestParam(required = false) TreatyStatus status,
             @RequestParam(required = false) Integer year,
             @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.success(service.list(type, status, year, pageable).map(this::toResponse));
+        return ApiResponse.success(service.list(type, status, year, pageable).map(this::toResponse).getContent());
     }
 
     @GetMapping("/{id}")

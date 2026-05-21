@@ -12,7 +12,6 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -45,13 +44,13 @@ public class EndorsementController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks UNDERWRITING_VIEW", content = @Content)
     })
-    public ApiResponse<Page<EndorsementResponse>> list(
+    public ApiResponse<List<EndorsementResponse>> list(
             @RequestParam(required = false) UUID policyId,
             @RequestParam(required = false) EndorsementStatus status,
             @RequestParam(required = false) UUID customerId,
             @PageableDefault(size = 20) Pageable pageable) {
         return ApiResponse.success(
-                service.list(policyId, status, customerId, pageable).map(this::toResponse));
+                service.list(policyId, status, customerId, pageable).map(this::toResponse).getContent());
     }
 
     @GetMapping("/{id}")

@@ -12,7 +12,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
@@ -22,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -45,11 +45,11 @@ public class PolicyController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks UNDERWRITING_VIEW", content = @Content)
     })
-    public ApiResponse<Page<PolicySummaryResponse>> list(
+    public ApiResponse<List<PolicySummaryResponse>> list(
             @RequestParam(required = false) PolicyStatus status,
             @RequestParam(required = false) UUID customerId,
             @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.success(service.list(status, customerId, pageable));
+        return ApiResponse.success(service.list(status, customerId, pageable).getContent());
     }
 
     @GetMapping("/search")
@@ -62,10 +62,10 @@ public class PolicyController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks UNDERWRITING_VIEW", content = @Content)
     })
-    public ApiResponse<Page<PolicySummaryResponse>> search(
+    public ApiResponse<List<PolicySummaryResponse>> search(
             @RequestParam String q,
             @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.success(service.search(q, pageable));
+        return ApiResponse.success(service.search(q, pageable).getContent());
     }
 
     @GetMapping("/{id}")

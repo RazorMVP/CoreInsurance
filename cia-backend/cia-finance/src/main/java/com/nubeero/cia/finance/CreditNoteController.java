@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -39,7 +40,7 @@ public class CreditNoteController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_VIEW", content = @Content)
     })
-    public ApiResponse<Page<CreditNoteResponse>> list(
+    public ApiResponse<List<CreditNoteResponse>> list(
             @RequestParam(required = false) CreditNoteStatus status,
             @RequestParam(required = false) UUID entityId,
             @PageableDefault(size = 20) Pageable pageable) {
@@ -48,7 +49,7 @@ public class CreditNoteController {
                 : entityId != null
                         ? service.findByEntity(entityId, pageable)
                         : service.findAll(pageable);
-        return ApiResponse.success(page.map(this::toResponse));
+        return ApiResponse.success(page.map(this::toResponse).getContent());
     }
 
     @GetMapping("/{id}")

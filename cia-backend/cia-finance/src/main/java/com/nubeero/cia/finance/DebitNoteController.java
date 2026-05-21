@@ -16,6 +16,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -38,7 +39,7 @@ public class DebitNoteController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_VIEW", content = @Content)
     })
-    public ApiResponse<Page<DebitNoteResponse>> list(
+    public ApiResponse<List<DebitNoteResponse>> list(
             @RequestParam(required = false) DebitNoteStatus status,
             @RequestParam(required = false) UUID customerId,
             @PageableDefault(size = 20) Pageable pageable) {
@@ -47,7 +48,7 @@ public class DebitNoteController {
                 : customerId != null
                         ? service.findByCustomer(customerId, pageable)
                         : service.findAll(pageable);
-        return ApiResponse.success(page.map(this::toResponse));
+        return ApiResponse.success(page.map(this::toResponse).getContent());
     }
 
     @GetMapping("/{id}")

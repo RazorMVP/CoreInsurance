@@ -43,7 +43,7 @@ export default function AssignSurveyorDialog({ open, onOpenChange, policyId, pol
         '/api/v1/setup/surveyors',
         { params: { size: 200 } },
       );
-      return res.data.data.content ?? [];
+      return res.data.data ?? [];
     },
     enabled: open,
   });

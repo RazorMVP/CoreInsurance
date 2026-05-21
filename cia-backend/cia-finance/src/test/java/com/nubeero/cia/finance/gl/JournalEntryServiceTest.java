@@ -79,7 +79,7 @@ class JournalEntryServiceTest {
     @BeforeEach
     void seed() {
         chartOfAccountService = new ChartOfAccountService(coaRepository);
-        fiscalPeriodResolver = new FiscalPeriodResolver(fiscalPeriodRepository, fiscalYearRepository);
+        fiscalPeriodResolver = new FiscalPeriodResolver(fiscalPeriodRepository);
         service = new JournalEntryService(repository, chartOfAccountService, fiscalPeriodResolver, FIXED_CLOCK);
 
         cash = newAccount("1110", "Cash on hand", AccountType.ASSET, true);

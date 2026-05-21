@@ -20,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -41,13 +42,13 @@ public class VehicleModelController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Make not found", content = @Content)
     })
-    public ResponseEntity<ApiResponse<Page<VehicleModelResponse>>> list(
+    public ResponseEntity<ApiResponse<List<VehicleModelResponse>>> list(
             @PathVariable UUID makeId,
             @PageableDefault(size = 20) Pageable pageable) {
         Page<VehicleModelResponse> page = service.listByMake(makeId, pageable);
         ApiMeta meta = ApiMeta.builder()
                 .total(page.getTotalElements()).page(page.getNumber()).size(page.getSize()).build();
-        return ResponseEntity.ok(ApiResponse.success(page, meta));
+        return ResponseEntity.ok(ApiResponse.success(page.getContent(), meta));
     }
 
     @GetMapping("/{id}")

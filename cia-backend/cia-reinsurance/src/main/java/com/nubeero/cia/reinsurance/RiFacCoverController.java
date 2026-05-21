@@ -10,13 +10,13 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -39,13 +39,13 @@ public class RiFacCoverController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks REINSURANCE_VIEW", content = @Content)
     })
-    public ApiResponse<Page<FacCoverResponse>> list(
+    public ApiResponse<List<FacCoverResponse>> list(
             @RequestParam(required = false) UUID policyId,
             @RequestParam(required = false) FacCoverStatus status,
             @RequestParam(required = false) UUID reinsuranceCompanyId,
             @PageableDefault(size = 20) Pageable pageable) {
         return ApiResponse.success(
-                service.list(policyId, status, reinsuranceCompanyId, pageable).map(this::toResponse));
+                service.list(policyId, status, reinsuranceCompanyId, pageable).map(this::toResponse).getContent());
     }
 
     @GetMapping("/{id}")
