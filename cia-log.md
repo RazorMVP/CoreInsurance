@@ -8,7 +8,45 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-21. The MinIO bucket-bootstrap and `FiscalYearService.close()` cascade follow-ups (flagged during F5.16 / wrap-up smoke) both shipped via the Session 74 entry below. The 12 CLOSURES reports were added in Session 75 below. The Builder date-picker UX + JSONB binding fix shipped in Session 76 below.
+No open items as of 2026-05-21. The MinIO bucket-bootstrap and `FiscalYearService.close()` cascade follow-ups (flagged during F5.16 / wrap-up smoke) both shipped via the Session 74 entry below. The 12 CLOSURES reports were added in Session 75 below. The Builder date-picker UX + JSONB binding fix shipped in Session 76 below. The 9 missing closures-source descriptions shipped via the Session 76 continuation entry below.
+
+---
+
+## 2026-05-21 — Session 76 (`main`, continued): Custom Report Builder Step 1 — descriptions for the 9 closures data sources
+
+The user flagged that on the New Custom Report Builder's Step 1 ("Data Source"), the 9 new closures cards (Trial Balance, General Ledger, Period Locks, PAA — LRC, PAA — Contract Groups, IFRS 17 §103 Movement, IFRS 9 — Holdings, IFRS 9 — Carrying Value, IFRS 9 §B5.5.39 Movement) showed **only headings** — no descriptions — while the original 6 data sources (Policies, Claims, Finance, Reinsurance, Customers, Endorsements) had concrete one-sentence descriptions beneath each card title.
+
+### What was broken
+
+`Step1DataSource.tsx` carries a `DESCRIPTIONS: Record<DataSource, string>` map. Session 75 extended the `DataSource` union with 9 new values but **did not** add entries to this map. The lookup `DESCRIPTIONS[opt.value]` then resolves to `undefined` at runtime for the new sources, and the JSX `<p>{undefined}</p>` collapses to an empty paragraph — silent on the page, silent in CI.
+
+The type system was supposed to catch this. `Record<K, V>` requires every key in `K` to be present, so once `DataSource` grew by 9, TypeScript should have errored. It didn't surface during Session 75 because Vite's dev-mode TS check is permissive (TypeScript runs as a warning-only pass rather than blocking the bundle). Same compile-time-exhaustiveness lesson as the closures expansion's broader takeaway: type-system guarantees only fire when they're actually enforced.
+
+### Fix
+
+Added the 9 missing entries in the same concrete-fields style as the original 6 (commit `1b27045`):
+
+| Source | Description |
+|---|---|
+| `TRIAL_BALANCE` | Aggregated debit, credit, and net balance per account as of a chosen date. |
+| `GENERAL_LEDGER` | Per-line journal entries with COA, class, source module, and narrative. |
+| `GL_PERIOD_LOCK` | Soft-close, hard-close, and release events across fiscal periods. |
+| `PAA_LRC` | Liability for Remaining Coverage roll-forward per group and period. |
+| `PAA_GROUPS` | IFRS 17 §22 contract groups — portfolio, cohort year, and onerousness. |
+| `IFRS17_MOVEMENT` | §103 LRC and LIC movement-analysis disclosure (V38 view). |
+| `IFRS9_HOLDINGS` | Financial assets by classification — AC, FVOCI debt/equity, FVPL. |
+| `IFRS9_CARRYING` | Per-holding period roll-forward — interest, fair-value change, ECL. |
+| `IFRS9_MOVEMENT` | §B5.5.39 combined investment movement disclosure (V40 view). |
+
+### Verification
+
+- Vite HMR picked up the change live; cards on `/reports/custom` (Step 1) now render with descriptions matching the original-6 style.
+- No backend touch, no IT rerun needed.
+- 1 file changed, 16 insertions / 6 deletions.
+
+### Why this is worth a session entry
+
+It's tiny — but the missed type-error path is a real signal. The `Record<DataSource, string>` pattern is used in at least three other places in this repo (`CATEGORY_LABELS`, `CATEGORY_COLORS`, and now `DESCRIPTIONS`); two of them happened to live in `report.types.ts` where the IDE *did* flag the missing `CLOSURES` row last session, but this one was in a different file the same edit didn't visit. If Vite's TS pass isn't blocking the bundle, exhaustive-Record patterns can silently degrade. Worth keeping an eye on whenever extending an enum that's referenced as a `Record` key elsewhere.
 
 ---
 
