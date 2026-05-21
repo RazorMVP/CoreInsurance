@@ -119,6 +119,115 @@ export const SpringPageSchema = <T extends z.ZodTypeAny>(item: T) => z.object({
   numberOfElements: z.number(),
 });
 
+// ── IFRS 17 PAA — Period Close (Slice 2.5) ───────────────────────────────
+
+export const LrcGroupEntrySchema = z.object({
+  groupId:         z.string(),
+  openingBalance:  z.number(),
+  premiumReceived: z.number(),
+  premiumEarned:   z.number(),
+  closingBalance:  z.number(),
+  journalEntryId:  z.string().nullable().optional(),
+});
+
+export const LrcResultDtoSchema = z.object({
+  periodId:                z.string(),
+  groupsProcessed:         z.number(),
+  groupsWithJournalEntry:  z.number(),
+  totalPremiumEarned:      z.number(),
+  entries:                 z.array(LrcGroupEntrySchema),
+});
+export type LrcResultDto = z.infer<typeof LrcResultDtoSchema>;
+
+export const LicGroupEntrySchema = z.object({
+  groupId:        z.string(),
+  openingBalance: z.number(),
+  claimsIncurred: z.number(),
+  claimsPaid:     z.number(),
+  closingBalance: z.number(),
+});
+
+export const LicResultDtoSchema = z.object({
+  periodId:            z.string(),
+  groupsProcessed:     z.number(),
+  totalClaimsIncurred: z.number(),
+  totalClaimsPaid:     z.number(),
+  entries:             z.array(LicGroupEntrySchema),
+});
+export type LicResultDto = z.infer<typeof LicResultDtoSchema>;
+
+export const DiscountUnwindGroupEntrySchema = z.object({
+  groupId:        z.string(),
+  openingBalance: z.number(),
+  unwindAmount:   z.number(),
+  closingBalance: z.number(),
+  journalEntryId: z.string().nullable().optional(),
+});
+
+export const DiscountUnwindResultDtoSchema = z.object({
+  periodId:               z.string(),
+  discountingDisabled:    z.boolean(),
+  routing:                z.string().nullable().optional(),
+  groupsProcessed:        z.number(),
+  groupsWithJournalEntry: z.number(),
+  totalUnwind:            z.number(),
+  entries:                z.array(DiscountUnwindGroupEntrySchema),
+});
+export type DiscountUnwindResultDto = z.infer<typeof DiscountUnwindResultDtoSchema>;
+
+export const OnerousGroupEntrySchema = z.object({
+  groupId:             z.string(),
+  cumulativeEarned:    z.number(),
+  cumulativeIncurred:  z.number(),
+  priorLossComponent:  z.number(),
+  newLossComponent:    z.number(),
+  lossComponentChange: z.number(),
+  journalEntryId:      z.string().nullable().optional(),
+});
+
+export const OnerousTestResultDtoSchema = z.object({
+  periodId:                       z.string(),
+  groupsTested:                   z.number(),
+  groupsWithLossComponentChange:  z.number(),
+  totalLossComponentIncrease:     z.number(),
+  totalLossComponentReversal:     z.number(),
+  entries:                        z.array(OnerousGroupEntrySchema),
+});
+export type OnerousTestResultDto = z.infer<typeof OnerousTestResultDtoSchema>;
+
+export const InsuranceServiceGroupResultSchema = z.object({
+  groupId:                 z.string(),
+  portfolioCode:           z.string().nullable().optional(),
+  cohortYear:              z.number().nullable().optional(),
+  onerousness:             z.string().nullable().optional(),
+  insuranceRevenue:        z.number(),
+  insuranceServiceExpense: z.number(),
+  insuranceServiceResult:  z.number(),
+});
+
+export const InsuranceServiceResultDtoSchema = z.object({
+  periodId:                     z.string(),
+  periodStart:                  z.string(),
+  periodEnd:                    z.string(),
+  totalInsuranceRevenue:        z.number(),
+  totalInsuranceServiceExpense: z.number(),
+  totalInsuranceServiceResult:  z.number(),
+  byGroup:                      z.array(InsuranceServiceGroupResultSchema),
+});
+export type InsuranceServiceResultDto = z.infer<typeof InsuranceServiceResultDtoSchema>;
+
+export const PaaPeriodCloseResultDtoSchema = z.object({
+  periodId:               z.string(),
+  periodStart:            z.string(),
+  periodEnd:              z.string(),
+  lrc:                    LrcResultDtoSchema.nullable().optional(),
+  lic:                    LicResultDtoSchema.nullable().optional(),
+  discountUnwind:         DiscountUnwindResultDtoSchema,
+  onerousTest:            OnerousTestResultDtoSchema,
+  insuranceServiceResult: InsuranceServiceResultDtoSchema,
+});
+export type PaaPeriodCloseResultDto = z.infer<typeof PaaPeriodCloseResultDtoSchema>;
+
 // ── Retroactive JE Backfill (Slice 1.8) ──────────────────────────────────
 
 export const BackfillEventTypeSchema = z.enum([

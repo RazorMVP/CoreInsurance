@@ -12,9 +12,38 @@ No open items as of 2026-05-20. Slice 1.10 (GL substrate enrichment) was the onl
 
 ---
 
-## 2026-05-21 — Session 74 (`main`, continued): Slices F5.1 → F5.6 — Phase 1 GL frontend + GL Backfill console
+## 2026-05-21 — Session 74 (`main`, continued): Slices F5.1 → F5.8 — Phase 1 GL frontend + GL Backfill + PAA period close (Phase 2 opens)
 
-Phase 5 (Module 12 frontend) opened; six slices shipped across the session (rolling over midnight). Phase 1 GL frontend is complete (5 screens), plus the Phase 1 admin loop (FY admin + Backfill console).
+Phase 5 (Module 12 frontend) opened; seven slices shipped across the session. Phase 1 GL frontend is complete (5 screens), Phase 1 admin loop is complete (FY admin + Backfill), and Phase 2 IFRS 17 PAA frontend is now opened (PAA period close orchestrator).
+
+### Slice F5.8 — PAA period close orchestrator (Phase 2 begins)
+
+Surfaces IFRS 17 PAA Slice 2.5's `PaaPeriodCloseService` as a FINANCE_APPROVE-gated workflow. Single page handles the full orchestrator response: 4 engine outputs (LRC / LIC / Discount Unwind / Onerous test) + the §83/§84 Insurance Service Result.
+
+- `@cia/api-client/finance-closures.ts` — added the full PAA result chain: `LrcResultDtoSchema`, `LicResultDtoSchema`, `DiscountUnwindResultDtoSchema`, `OnerousTestResultDtoSchema`, `InsuranceServiceResultDtoSchema`, `PaaPeriodCloseResultDtoSchema` — each mirrors the corresponding Java record exactly (engine-entry sub-records included).
+- `PaaPeriodClosePage.tsx` (new) — FY selector (defaults to ACTIVE) + Period MONTH selector cascaded off it, "Run PAA close" CTA, status badge for the selected period. Below: §83/§84 ISR (read-only `GET /insurance-service-result/{periodId}`, 3 StatCards), and on-demand engine output panel showing 4 `EngineCard` components after a close run completes — LRC + LIC + Discount Unwind + Onerous Test, each with section reference (§44(a) / §40(b) / §87-92 / §47-49), RAN / SKIPPED / DISABLED / CHANGES / NO-CHANGE badge, per-engine StatRows, and a collapsible per-group detail table on LRC.
+- `modules/closures/index.tsx` — sixth tab "PAA Close" + new `/closures/paa-close` route.
+
+**Smoke test (live `:8090`):** Selected FY 2027 → Jan 2027 → clicked Run PAA close. Got 200 OK with all engines returning zero-data results (no policies seeded in dev). Verified: LRC RAN with 0 groups, LIC RAN with ₦0 claims, Discount Unwind DISABLED with the "Nigerian short-tail GB default" italic note rendering correctly (paa_config.discount_lic == false), Onerous Test NO-CHANGE with 0 groups tested. ISR all zeros as expected. No `@Cacheable` bugs encountered (PAA services don't cache).
+
+### Slices F5.1–F5.6 (recap)
+
+| Slice | Commit | Surface |
+|---|---|---|
+| F5.1 | `fc51e8d` | Period Lock console |
+| F5.2 | `835a7d3` | Fiscal Year admin (create / activate / close) |
+| F5.3 | `7d5cc0d` | Chart of Accounts viewer + `@Cacheable` null-tenant hotfix |
+| F5.4 | `19a9f8f` | Journal Entry browser (backend list endpoint added) |
+| F5.5 | `c566ee9` | Trial Balance report |
+| F5.6 | `26cea1c` | GL Backfill admin console + `AuditAlert.metadata` JSONB hotfix |
+| F5.8 | this commit | PAA period close orchestrator (Phase 2 opens) |
+
+### Cumulative backend hotfixes shipped this session
+
+1. `ChartOfAccountService.@Cacheable.condition` — skip caching when `TenantContext.getTenantId()` is null (4 annotations).
+2. `AuditAlert.metadata` — `@JdbcTypeCode(SqlTypes.JSON)` so Hibernate 6.x maps `String → jsonb`.
+
+Both bugs were latent — the dev path never exercised them before. Both would have fired in production tenants on first use. Frontend smoke tests are doing real work.
 
 ### Slice F5.6 — GL Backfill admin console
 
