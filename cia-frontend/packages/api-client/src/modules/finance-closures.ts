@@ -613,6 +613,21 @@ export const BackfillStatusResponseDtoSchema = z.object({
 });
 export type BackfillStatusResponseDto = z.infer<typeof BackfillStatusResponseDtoSchema>;
 
+// ── Posting Rules (Slice 1.5 service / F5.7 frontend) ─────────────────────
+
+export const PostingRuleDtoSchema = z.object({
+  id:                  z.string(),
+  sourceEventType:     z.string(),
+  debitAccountCode:    z.string(),
+  debitAccountName:    z.string(),
+  creditAccountCode:   z.string(),
+  creditAccountName:   z.string(),
+  narrativeTemplate:   z.string().nullable().optional(),
+  active:              z.boolean(),
+  createdAt:           z.string(),
+});
+export type PostingRuleDto = z.infer<typeof PostingRuleDtoSchema>;
+
 // ── Trial Balance ─────────────────────────────────────────────────────────
 
 export const TrialBalanceLineDtoSchema = z.object({

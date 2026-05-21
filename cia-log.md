@@ -23,6 +23,30 @@ Dev MinIO ships empty — `cia-documents` does not exist, so every first-time st
 
 ---
 
+## 2026-05-21 — Session 74 (`main`, continued): Slice F5.7 — Posting Rules viewer (Phase 1 closes)
+
+The last Phase 1 GL frontend gap — a read-only viewer over the V33-seeded `posting_rule` table. Same backend-gap pattern as F5.4 (JE browser) and F5.11 (Contract Groups): the service existed (`PostingRuleService.findByEventType` on the hot path), but no REST surface. This slice adds the controller alongside the page.
+
+**Backend (`cia-finance`)**:
+
+- `PostingRuleRepository` — added derived finder `findAllByDeletedAtIsNullOrderBySourceEventTypeAsc()`.
+- `PostingRuleService` — added uncached `findAll()` that returns active+inactive non-soft-deleted rules. *Deliberately uncached* because the admin-facing read rate is ~0; the hot-path `findByEventType` lookup keeps its `@Cacheable` and stays untouched.
+- `PostingRuleResponse` (new) — wire DTO enriched with COA names. Built from a `PostingRule` entity plus a `Function<String,String>` resolver (typically `ChartOfAccountService::findByCode` followed by `.getName()`). Server-side enrichment spares the client a second round-trip and keeps both sides in lock-step on what each code means today.
+- `PostingRuleController` (new) — single `GET /api/v1/finance/posting-rules` endpoint, `@PreAuthorize("hasRole('FINANCE_VIEW')")`, OpenAPI-annotated (matches the cia-partner-api discipline). Controller-layer join: injects both `PostingRuleService` and `ChartOfAccountService`, calls `service.findAll().stream().map(...)`. Service-layer join was the alternative but would have coupled `PostingRuleService` to `ChartOfAccountService` purely for presentation, which is an inversion — kept the entity service entity-typed and put the join at the orchestration layer.
+- `PostingRuleServiceTest` — added a mocked-repo test for the new `findAll` path. 4/4 green.
+
+**Frontend (`cia-frontend`)**:
+
+- `@cia/api-client/finance-closures.ts` — new "Posting Rules" section between Backfill and Trial Balance, with `PostingRuleDtoSchema` (`narrativeTemplate` left `z.string().nullable().optional()` because the V31 column declares no `nullable=false`).
+- `PostingRulesPage.tsx` (new) — flat table (6 rows fits in one screen, no need for tree/search/filter): event type column shows the SCREAMING_SNAKE original alongside a humanised version, Dr/Cr columns show code + COA name, narrative template rendered as monospaced `<code>`, ACTIVE/INACTIVE badge. Three StatCards above the table: total Rules, Active count, and a "Compound (hard-coded)" card valued `1` with sub-label `FAC_PREMIUM_CEDED` — a deliberate eyebrow-raiser so admins notice the exception. A bordered footer block titled "Why is FAC_PREMIUM_CEDED missing?" explains the 3-line carve-out so the absence reads as design, not gap.
+- `modules/closures/index.tsx` — thirteenth tab "Posting Rules" + `/closures/posting-rules` route, slotted between Chart of Accounts and Journal Entries (natural reading order: COA → posting rules that use it → journal entries that result from it).
+
+**Smoke test (live `:8090` + `:5173`)**: `GET /api/v1/finance/posting-rules` returns 6 rows (CLAIM_APPROVED / CLAIM_EXPENSE_APPROVED / CLAIM_SETTLED / ENDORSEMENT_PREMIUM_ADDITIONAL / ENDORSEMENT_PREMIUM_REFUND / POLICY_APPROVED), all `active=true`, all COA names resolved. Frontend table renders all 6 rows with the right Dr/Cr badges, monospaced narrative templates, ACTIVE badge per row, and the FAC carve-out footer. StatCards show 6 / 6 / 1. Console clean (0 errors).
+
+**Phase 5 status:** 16/16 slices shipped (F5.1–F5.16, with F5.9+F5.10 collapsed into one IFRS-17 movement page). Phase 1–4 frontend complete. Backend Phase 1–4 all green.
+
+---
+
 ## 2026-05-21 — Session 74 (`main`, continued): Slice F5.16 — NAICOM artifact viewer / download (Phase 4 closes)
 
 Closes Phase 4 — and effectively all of Phase 5 (the new build queue ends here pending posting-rules and wrap-up smoke). Pure frontend slice over `SubmissionArtifactService` (Slice 4.10 backend). Three new affordances live inside the existing `NaicomSubmissionDetailSheet`: list rendered artifacts, render/re-render per format, download the live artifact bytes.

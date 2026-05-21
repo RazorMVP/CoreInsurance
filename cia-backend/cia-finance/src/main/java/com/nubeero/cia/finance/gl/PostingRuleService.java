@@ -5,6 +5,8 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 /**
  * Read-only access to {@link PostingRule} rows seeded by V33.
  *
@@ -37,5 +39,14 @@ public class PostingRuleService {
     public PostingRule findByEventType(String sourceEventType) {
         return repository.findBySourceEventTypeAndActiveTrueAndDeletedAtIsNull(sourceEventType)
             .orElseThrow(() -> new PostingRuleNotFoundException(sourceEventType));
+    }
+
+    /**
+     * Returns every non-soft-deleted rule, sorted ascending by event type
+     * for deterministic display. Uncached — admin-facing read with a low
+     * call rate; the hot-path lookup is {@link #findByEventType(String)}.
+     */
+    public List<PostingRule> findAll() {
+        return repository.findAllByDeletedAtIsNullOrderBySourceEventTypeAsc();
     }
 }

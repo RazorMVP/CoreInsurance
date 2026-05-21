@@ -7,6 +7,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -62,6 +63,23 @@ class PostingRuleServiceTest {
 
         assertThatThrownBy(() -> service.findByEventType("DEACTIVATED"))
             .isInstanceOf(PostingRuleNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("findAll delegates to the repo's ordered-non-deleted finder")
+    void findAllReturnsAllNonDeletedOrderedByEventType() {
+        // The ordering contract lives in the repo derived-query name; the
+        // service is a thin pass-through. This test asserts both that the
+        // service uses the correct repo method and that it returns the list
+        // unchanged.
+        PostingRule rule1 = newRule("CLAIM_APPROVED",   "5110", "2140");
+        PostingRule rule2 = newRule("POLICY_APPROVED",  "1310", "2110");
+        when(repository.findAllByDeletedAtIsNullOrderBySourceEventTypeAsc())
+            .thenReturn(List.of(rule1, rule2));
+
+        List<PostingRule> resolved = service.findAll();
+        assertThat(resolved).extracting(PostingRule::getSourceEventType)
+            .containsExactly("CLAIM_APPROVED", "POLICY_APPROVED");
     }
 
     private static PostingRule newRule(String eventType, String debit, String credit) {

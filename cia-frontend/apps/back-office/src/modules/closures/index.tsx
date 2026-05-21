@@ -4,6 +4,7 @@ import { cn, Skeleton } from '@cia/ui';
 
 const PeriodLockListPage       = lazy(() => import('./pages/PeriodLockListPage'));
 const ChartOfAccountsPage      = lazy(() => import('./pages/ChartOfAccountsPage'));
+const PostingRulesPage         = lazy(() => import('./pages/PostingRulesPage'));
 const JournalEntryBrowserPage  = lazy(() => import('./pages/JournalEntryBrowserPage'));
 const TrialBalanceReportPage   = lazy(() => import('./pages/TrialBalanceReportPage'));
 const BackfillAdminPage        = lazy(() => import('./pages/BackfillAdminPage'));
@@ -18,6 +19,7 @@ const NaicomSubmissionsPage     = lazy(() => import('./pages/NaicomSubmissionsPa
 const tabs: { label: string; path: string }[] = [
   { label: 'Periods',            path: '/closures/periods' },
   { label: 'Chart of Accounts',  path: '/closures/chart-of-accounts' },
+  { label: 'Posting Rules',      path: '/closures/posting-rules' },
   { label: 'Journal Entries',    path: '/closures/journal-entries' },
   { label: 'Trial Balance',      path: '/closures/trial-balance' },
   { label: 'Backfill',           path: '/closures/backfill' },
@@ -67,6 +69,7 @@ export default function ClosuresModule() {
             <Route index element={<Navigate to="periods" replace />} />
             <Route path="periods"          element={<PeriodLockListPage />} />
             <Route path="chart-of-accounts" element={<ChartOfAccountsPage />} />
+            <Route path="posting-rules"    element={<PostingRulesPage />} />
             <Route path="journal-entries"  element={<JournalEntryBrowserPage />} />
             <Route path="trial-balance"    element={<TrialBalanceReportPage />} />
             <Route path="backfill"         element={<BackfillAdminPage />} />
