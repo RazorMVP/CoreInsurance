@@ -9,12 +9,22 @@ interface Props {
 }
 
 const DESCRIPTIONS: Record<DataSource, string> = {
-  POLICIES:     'Premium, sum insured, product, class, dates, and policy status.',
-  CLAIMS:       'Claim number, reserve, payments, class, and status.',
-  FINANCE:      'Debit notes, credit notes, receipts, and payments.',
-  REINSURANCE:  'RI allocations, treaties, retained and ceded amounts.',
-  CUSTOMERS:    'Customer demographics, type, KYC status, and channel.',
-  ENDORSEMENTS: 'Endorsement type, pro-rata premium, and effective dates.',
+  POLICIES:        'Premium, sum insured, product, class, dates, and policy status.',
+  CLAIMS:          'Claim number, reserve, payments, class, and status.',
+  FINANCE:         'Debit notes, credit notes, receipts, and payments.',
+  REINSURANCE:     'RI allocations, treaties, retained and ceded amounts.',
+  CUSTOMERS:       'Customer demographics, type, KYC status, and channel.',
+  ENDORSEMENTS:    'Endorsement type, pro-rata premium, and effective dates.',
+  // Module 12 — Period-End Closures
+  TRIAL_BALANCE:   'Aggregated debit, credit, and net balance per account as of a chosen date.',
+  GENERAL_LEDGER:  'Per-line journal entries with COA, class, source module, and narrative.',
+  GL_PERIOD_LOCK:  'Soft-close, hard-close, and release events across fiscal periods.',
+  PAA_LRC:         'Liability for Remaining Coverage roll-forward per group and period.',
+  PAA_GROUPS:      'IFRS 17 §22 contract groups — portfolio, cohort year, and onerousness.',
+  IFRS17_MOVEMENT: '§103 LRC and LIC movement-analysis disclosure (V38 view).',
+  IFRS9_HOLDINGS:  'Financial assets by classification — AC, FVOCI debt/equity, FVPL.',
+  IFRS9_CARRYING:  'Per-holding period roll-forward — interest, fair-value change, ECL.',
+  IFRS9_MOVEMENT:  '§B5.5.39 combined investment movement disclosure (V40 view).',
 };
 
 export default function Step1DataSource({ value, onChange }: Props) {
