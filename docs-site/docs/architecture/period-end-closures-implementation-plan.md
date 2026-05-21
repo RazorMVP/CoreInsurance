@@ -7,7 +7,7 @@ sidebar_label: Period-End Closures (Implementation Plan)
 # Period-End Closures — Implementation Plan
 
 **Original draft:** 2026-05-09 (Status: Draft for review).
-**Reconciled to shipped reality:** 2026-05-20. **Phases 1–4 are complete and merged to `main`.** Phase 1 + Phase 2 + Phase 3 merged via `fe904f3`; Phase 4 (all 10 slices) merged via `50e5b11`; Slice 1.10 (GL-substrate enrichment — `class_of_business_id` promoted onto `journal_entry_line` + N01 over GL with reconciliation assertion) merged via `fd795f6`. Phase 5 (frontend) and Phase 6 (cross-tenant platform admin view) remain.
+**Reconciled to shipped reality:** 2026-05-21. **Phases 1–5 are complete and merged to `main`.** Phase 1 + Phase 2 + Phase 3 merged via `fe904f3`; Phase 4 (all 10 slices) merged via `50e5b11`; Slice 1.10 (GL-substrate enrichment — `class_of_business_id` promoted onto `journal_entry_line` + N01 over GL with reconciliation assertion) merged via `fd795f6`; Phase 5 (Module 12 back-office frontend, 16 slices F5.1–F5.16) shipped 2026-05-21 across commits `3d9e932..b12c052` plus closeout fixes in `e56847b`. Phase 6 (cross-tenant platform admin view) remains.
 
 **Phase numbering reconciled.** The original May-9 plan defined seven phases, with NAICOM submissions as "Phase 5" and a generic "Closure Orchestration" layer as "Phase 4." The team chose **per-domain orchestrators** (PaaPeriodCloseService for IFRS 17, NaicomSubmissionService for NAICOM) over a generic activity registry, so the original Phase 4 was deferred and the remaining phases shifted down by one. Current numbering:
 
@@ -18,7 +18,7 @@ sidebar_label: Period-End Closures (Implementation Plan)
 | §4 Phase 3 — cia-investments + IFRS 9 | **Phase 3** | Shipped (7 slices) — lives in `cia-finance/ifrs9/`, not a separate module |
 | §5 Phase 4 — Closure Orchestration + Activity Registry | **Deferred** (per-domain orchestration chosen instead) | Not built; see "Deferred work" section below |
 | §6 Phase 5 — NAICOM Submission Pack Generators | **Phase 4** | **Shipped (all 10 slices)** |
-| §7 Phase 6 — Frontend Admin UI + Investments UI | **Phase 5** | Not started |
+| §7 Phase 6 — Frontend Admin UI + Investments UI | **Phase 5** | **Shipped (16 slices, F5.1–F5.16)** |
 | §8 Phase 7 — Finality Transitions + Cross-Tenant Platform View | **Phase 6** | Partial — per-period finality absorbed into Slice 1.7c (PPA workflow + period reopen + tenant_holiday calendar); cross-tenant platform view still not built |
 
 For slice-level detail on Phases 1–3 see `cia-log.md` sessions 60–72. For Phase 4 + Slice 1.10 see the Phase 4 + Slice 1.10 session entries in `cia-log.md`.
@@ -35,7 +35,7 @@ Orchestration│  Phase 4  NAICOM submission pack generators (formerly plan-§6 
 Continuous   │  Tests, observability, documentation, performance, security review
 ```
 
-Phases 1–4 are complete. Slice 1.10 closed the original Phase 1 ↔ Phase 4 substrate gap (`class_of_business_id` on JE lines, enabling N01 to read directly from GL with reconciliation against `TrialBalanceService`). Phase 5 (Frontend) depends on Phase 4's `NaicomSubmissionService` REST surface — now stable. Phase 6 (Platform) depends on Phases 4–5.
+Phases 1–5 are complete. Slice 1.10 closed the original Phase 1 ↔ Phase 4 substrate gap (`class_of_business_id` on JE lines, enabling N01 to read directly from GL with reconciliation against `TrialBalanceService`). Phase 5 ships the Module 12 back-office frontend in full (16/16 slices across periods, COA, posting rules, JEs, trial balance, backfill, PAA close, §103 movement, contract groups, holdings, IFRS 9 measurement, §B5.5.39 movement, NAICOM submissions, NAICOM artifacts). Phase 6 (Platform) depends on Phases 4–5 — still the only outstanding workstream.
 
 ---
 
@@ -212,37 +212,52 @@ Phases 1–4 are complete. Slice 1.10 closed the original Phase 1 ↔ Phase 4 su
 
 ## 7. Phase 5 — Frontend Admin UI for Module 12
 
-**Status:** Not started. Will start when Phase 4's `SubmissionOrchestrator` REST surface (Slice 4.9) is stable.
+**Status:** Shipped 2026-05-21. 16 slices (F5.1–F5.16), one route module `apps/back-office/src/modules/closures/` mounting a 13-tab navigation, all backed by zod schemas in `@cia/api-client/finance-closures.ts`. Plus three closeout fixes that landed against the backend during the same session.
 
-**Goal:** ship the back-office UI that lets a finance / CFO user actually drive Module 12 — period close, period browse, submission generation + review + submit, IFRS-17/9 disclosure rendering, CFO reopen flow. Without this UI, Phases 1–4 are admin-only / API-only.
+**Goal achieved:** finance / CFO user can drive Module 12 end-to-end from the UI — period close, period browse, submission generation + review + submit + acknowledge + archive + retract, IFRS-17/9 disclosure rendering, CFO reopen flow, retroactive backfill (PLATFORM_ADMIN). 0 mocks, 0 TODOs, all forms `useMutation`, all reads `validatedGet` zod-checked. No SSE/WebSocket — polling on the artifacts query is sufficient.
 
-**Scope (revised from the original Phase 6 plan):**
+**Scope landed (revised from the original Phase 6 plan):**
 
-The original plan bundled "Investments UI" into this phase. That work is now smaller because Phase 3 stayed inside `cia-finance` rather than spinning out as `cia-investments`. Module 12's investment-related UI is just the IFRS-9 disclosure viewer that surfaces V40 data — not a full instrument-master / valuation / accrual UI.
+The original plan bundled "Investments UI" into this phase. That work was smaller than originally scoped because Phase 3 stayed inside `cia-finance` rather than spinning out as `cia-investments`. Module 12's investment-related UI is the IFRS-9 disclosure viewer that surfaces V40 data + a holdings list with classification-history sheet — not a full instrument-master / valuation / accrual UI. The artifact rendering loop (F5.16) ended up larger than scoped because the backend exposes JSON/CSV/PDF (XML reserved-but-not-implemented) per-format render + download endpoints.
 
-**Deliverables:**
+**What shipped:**
 
-- New back-office module `apps/back-office/src/modules/period-end/`:
-  - `PeriodsHomePage` — list of fiscal periods with status badges (OPEN / SOFT_CLOSED / HARD_CLOSED / REOPENED), grace-window countdown, drilldown.
-  - `PeriodDetailPage` — per-period: trial balance, IFRS-17 movement analysis, IFRS-9 movement analysis, submissions list, lock-state history.
-  - `RunCloseSheet` — confirmation + progress for the period close (PaaPeriodCloseService trigger).
-  - `SubmissionsPage` — list of NAICOM submissions per period; generate / review / submit / acknowledge actions.
-  - `SubmissionDetailPage` — submission payload preview, artifact download (PDF + CSV), state history.
-  - `ReopenPeriodSheet` — CFO-authorised reopen with reason; triggers the IAS-8 PPA workflow.
-- React Query hooks following the project's `useGet` / `useList` / `useCreate` / `useUpdate` patterns.
-- Sidebar entry: "Period End" under Finance (or top-level — TBD with UX).
-- Server-rendered PDF + CSV exports already exist from Phase 4 Slice 4.10 — frontend triggers via mutation, browser downloads via Blob.
+| Slice | Scope |
+|---|---|
+| F5.1 | `PeriodLockListPage` (FY + granularity selectors, 4 StatCards, period DataTable with status-gated row actions) + `ClosePeriodDialog` (soft/hard) + `ReopenPeriodDialog` (HARD only, CFO role) + `LockHistorySheet` (Type-2 SCD `period_lock` history) + `CreateFiscalYearSheet` |
+| F5.3 | Read-only `ChartOfAccountsPage` — 129-row 3-level tree with expand/collapse, account-type filter, IFRS-17 + IFRS-9 role badges per node |
+| F5.7 | Read-only `PostingRulesPage` — 6 V33-seeded rules with Dr/Cr code + COA-resolved name + monospaced narrative template + ACTIVE badge + FAC carve-out footer. Backend gap closed: `PostingRuleController` (`GET /api/v1/finance/posting-rules`), `PostingRuleService.findAll()`, `PostingRuleResponse` enriched via `Function<String,String>` COA-name resolver |
+| F5.4 | `JournalEntryBrowserPage` (status / source-module / account / business-date filters, cursor pagination, 3 StatCards) + `JournalEntryDetailSheet` (idempotency triple, line table with COA-resolved names + class-of-business chip) |
+| F5.5 | `TrialBalanceReportPage` — cumulative-since-inception balance at chosen business date, account-type sub-totals, Σdr = Σcr footer with JE-line backing count |
+| F5.6 | PLATFORM_ADMIN `BackfillAdminPage` — start dry-run / live, parameters form, localStorage workflow tracking with polling status, Temporal workflow ID + activity log per run |
+| F5.8 | `PaaPeriodClosePage` — FY + Period selectors, Run PAA close button (orchestrator), §83/§84 `InsuranceServiceResult` card with per-engine breakdown |
+| F5.9/10 | `PaaMovementAnalysisPage` (collapsed when the single endpoint already returned both halves) — §103 LRC + LIC roll-forward tables via shared generic `RollforwardTable<T extends Record<string, number>>` component; per-group breakdown rows |
+| F5.11 | `ContractGroupsPage` — portfolio + cohort + onerousness + status filters; §22 permanent-assignment empty state pointing at `ContractGroupingService` event-driven creation |
+| F5.12 | `HoldingsListPage` (asset-type + classification + status filters; 4 StatCards) + `HoldingClassificationHistorySheet` (Type-2 SCD §B4.1.26 reclassification trail) |
+| F5.13 | `Ifrs9MeasurementPage` — per-engine run buttons (AmortisedCost / FairValue / InvestmentECL / PremiumReceivableECL), per-engine result cards, FINANCE_APPROVE gated |
+| F5.14 | `Ifrs9MovementAnalysisPage` — combined investment roll-forward + premium-receivable ECL section via shared `RollforwardTable<T>`; relays V40 view |
+| F5.15 | `NaicomSubmissionsPage` — FY + Period + State filter row, 4 StatCards, submissions table with N01–N08 type codes, `enabled: canList` query gate (mirrors backend "at least one filter" guard), `GenerateSubmissionDialog` with 8 NAICOM types; `NaicomSubmissionDetailSheet` state-machine console (Submit / Acknowledge / Retract / Archive depending on state) + Type-2 SCD event timeline + collapsible payload JSON preview |
+| F5.16 | "Rendered artifacts" block inside `NaicomSubmissionDetailSheet` — JSON / CSV / PDF rows (XML excluded — no backend renderer); render mutation keyed by `ArtifactFormat` doubles as per-row spinner state via `mutation.variables === format`; download via `apiClient.get { responseType: 'blob' }` + synthesized filename; Re-render gated on FINANCE_APPROVE |
 
-**Exit criteria:**
+**Closeout fixes (same session, against backend):**
 
-- Finance / CFO user can drive an end-to-end period close from the UI: hard-close → run IFRS 17 close → review disclosures → generate NAICOM submissions → submit → acknowledge → period transitions to closed.
-- `bash cia-frontend/scripts/check-api-wiring.sh` green — no mocks, no leftover TODOs, all forms wired via `useMutation`.
-- Playwright smoke tests cover: open a period, run a close, generate a submission, submit, acknowledge.
+- `MinioStorageService.@PostConstruct ensureBucketExists()` — `BucketExistsArgs → MakeBucketArgs`, non-fatal on failure. Eliminates "fresh dev MinIO 500s every first-time upload" surfaced by F5.16 artifact testing.
+- `FiscalYearService.close()` now cascades hard-close on every non-HARD child period via `PeriodLockService.hardClose` — closes the OpenAPI-doc promise the service had never delivered. Per-period delegation; idempotent on already-CLOSED FY. Existing CLOSED FYs with OPEN children stay inconsistent rather than being silently repaired (segregation-of-duties trade-off).
+- Deleted unused `FiscalPeriodResolver.resolveDayForBusinessDate` infrastructure — zero production callers, JEs anchor to MONTH per Slice 1.4 D1=A. `FiscalPeriodType.DAY` enum value retained for schema-level reservation (V31 CHECK constraint binds — "never edit existing migrations"). Surfaced two pre-existing `FiscalYearServiceIT` bugs in the same pass (missing `PeriodLockService` mock + missing `CiaCommonAutoConfiguration` `@Import` for `@EnableJpaAuditing`) which are also fixed.
 
-**Engineering watch-outs:**
+**Test coverage at phase-end:** 274 cia-api failsafe ITs (down from 275 with the lazy-DAY IT deletion), 0 failures, 0 errors, 1 intentional benchmark skip. `FiscalYearServiceIT` was failing all 12 tests since at least commit `b12c052`; now green at 11/11.
 
-- **No real-time progress streaming required in v1.** Polling against the period status endpoint is sufficient. SSE / WebSocket can be a Phase 5b enhancement if user feedback demands it.
-- **The reopen flow is high-stakes UX.** Treat the confirmation step with care — irreversible-after-reopen workflows deserve a typed-confirmation pattern, not just an "Are you sure?" dialog.
+**Engineering decisions captured:**
+
+- **`RollforwardTable<T extends Record<string, number>>` is the only shared UI component extracted in Phase 5.** Used by both PAA and IFRS 9 movement-analysis pages. Rule-of-three rather than rule-of-two — two flagged-not-extracted patterns sit in `cia-log.md` under the F5.15 entry: state-conditional transition controls (F5.1 + F5.15) and `enabled: canList` filter-shape-validity gate (single occurrence at F5.15).
+- **`@cia/api-client/finance-closures.ts` enum convention.** All `z.enum(...)` declarations live in a single "Enums" section at the top of the file. DTO sections may reference any enum + any earlier DTO. Recursive shapes use `z.lazy()` with explicit `z.ZodType<...>`. Established after the F5.14 ordering bug (IFRS 9 schemas inserted above their enum dependencies).
+- **The `enabled: canList` gate pattern (F5.15) is the right way to mirror "supply at least one of X or Y" backend guards.** Frontend computes `canList` from the filter state, threads it into `useQuery.enabled`. Backend never sees a guaranteed-to-fail request; user sees a smart empty-state hint instead of an error toast.
+- **F5.16 artifact mutation key doubles as per-row spinner state.** `useMutation<…, …, ArtifactFormat>` — `mutation.variables === format` is true only for the in-flight row, so each format's button can flip independently to `…` without any local `isRenderingPdf`/`isRenderingCsv` state. Co-locates the loading flag with React Query's mutation lifecycle.
+
+**Engineering watch-outs that turned out fine:**
+
+- No real-time progress streaming required in v1 — polling sufficient. SSE / WebSocket can be a Phase 5b enhancement if user feedback demands it.
+- Reopen flow stayed simple. Plain confirmation dialog with reason textarea; typed-confirmation pattern not needed because the CFO role + audit trail provide the friction.
 
 ---
 
@@ -336,10 +351,11 @@ Original plan estimated 17 sprints / 17 weeks for the full Module 12 build with 
 | Sprint 9 | 2026-05-19 | Slice T1 (focused upstream contract tests for the 6 events Module 12 consumes). |
 | Sprint 10 | 2026-05-19 | Phase 4 slices 4.1–4.10 shipped end-to-end. Merge to `main` via `50e5b11`. |
 | Sprint 11 | 2026-05-20 | Slice 1.10a + 1.10b — GL-substrate enrichment (`class_of_business_id` on JE lines) + N01 over GL with reconciliation assertion. Merge to `main` via `fd795f6`. |
+| Sprint 12 | 2026-05-21 (single session) | Phase 5 (16 slices F5.1–F5.16) shipped end-to-end across `cia-frontend/apps/back-office/src/modules/closures/`. Plus three closeout fixes against the backend (MinIO bucket bootstrap, FY-close cascade, lazy-DAY infrastructure deletion). Tests baseline went from 275 → 274 (dead IT removed); `FiscalYearServiceIT` recovered from a long-standing failure that was masked by context-startup errors. |
 
-**Calendar-time reality:** Phases 1–4 + T1 + Slice 1.10 took ~10 weeks of calendar time with one developer plus AI-assisted slice execution. The original estimate of 16–20 weeks with 3 engineers turned out to be wildly conservative for this pace; the original estimate of 30–40 weeks for one engineer sequential is what you'd get without the slice discipline and the JE-gateway architecture.
+**Calendar-time reality:** Phases 1–5 + T1 + Slice 1.10 took ~10 weeks of calendar time with one developer plus AI-assisted slice execution. The original estimate of 16–20 weeks with 3 engineers turned out to be wildly conservative for this pace; the original estimate of 30–40 weeks for one engineer sequential is what you'd get without the slice discipline and the JE-gateway architecture.
 
-**Remaining estimate:** Phase 5 frontend is ~3 weeks (existing frontend-build patterns; Phase 4 REST surface stable). Phase 6 is ~1 week (small scope after Phase 1 absorbed most of Phase 7's original work).
+**Remaining estimate:** Phase 6 (cross-tenant platform admin view) is ~1 week (small scope after Phase 1 absorbed most of Phase 7's original work).
 
 ---
 

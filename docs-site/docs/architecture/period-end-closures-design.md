@@ -62,7 +62,7 @@ cia-finance/
 └── backfill/                        # Slice 1.8 — retroactive JE backfill (Temporal workflow)
 ```
 
-What's NOT shipped (still on backlog): the EOD/EOM/EOQ/HY/EOY unified closure orchestration (§2.2, §3.1, §3.2, §5) — the per-domain orchestrators above cover the financial close paths that have shipped. A unified admin closure UI is Phase 5 frontend scope.
+What's NOT shipped (still on backlog): the EOD/EOM/EOQ/HY/EOY unified closure orchestration (§2.2, §3.1, §3.2, §5) — the per-domain orchestrators above cover the financial close paths that have shipped. The Module 12 back-office frontend itself shipped 2026-05-21 as Phase 5 (16 slices F5.1–F5.16); a unified admin closure UI that bundles hard-close → IFRS 17 close → NAICOM generation behind one button still belongs to Phase 6.
 
 The sections below preserve the original design as written 2026-05-09 — read them as historical context, not as the current implementation map.
 

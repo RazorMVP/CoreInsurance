@@ -62,7 +62,9 @@ cia-finance/
 └── backfill/  # Slice 1.8 — retroactive JE backfill (Temporal workflow)
 ```
 
-See [`period-end-closures-implementation-plan.md`](./period-end-closures-implementation-plan.md) for the per-slice shipping history (V31–V43 migrations, 275 cia-api failsafe ITs).
+The Module 12 back-office frontend lives at `cia-frontend/apps/back-office/src/modules/closures/` — 13 tabs mounting `PeriodLockListPage`, `ChartOfAccountsPage`, `PostingRulesPage`, `JournalEntryBrowserPage`, `TrialBalanceReportPage`, `BackfillAdminPage`, `PaaPeriodClosePage`, `PaaMovementAnalysisPage`, `ContractGroupsPage`, `HoldingsListPage`, `Ifrs9MeasurementPage`, `Ifrs9MovementAnalysisPage`, `NaicomSubmissionsPage`. All API calls go through `validatedGet` / `validatedPost` against zod schemas in `@cia/api-client/finance-closures.ts`.
+
+See [`period-end-closures-implementation-plan.md`](./period-end-closures-implementation-plan.md) for the per-slice shipping history (V31–V43 migrations, 274 cia-api failsafe ITs, 16 Phase 5 frontend slices F5.1–F5.16).
 
 ## Dependency Rules
 

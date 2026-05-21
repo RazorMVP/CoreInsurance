@@ -4,22 +4,18 @@
     "title": "CIA Partner Open API",
     "description": "REST API for Insurtech partners to access insurance products and services",
     "contact": {
-      "name": "CIA Partner Support",
-      "email": "partners@cia.app"
+      "name": "CIA Platform Team",
+      "email": "platform@nubeero.com"
     },
     "license": {
       "name": "Proprietary"
     },
-    "version": "2026.05.20"
+    "version": "v1"
   },
   "servers": [
     {
-      "url": "https://api.cia.app",
-      "description": "Production"
-    },
-    {
       "url": "http://localhost:8090",
-      "description": "Local development"
+      "description": "Generated server url"
     }
   ],
   "tags": [
@@ -95,13 +91,13 @@
         ],
         "responses": {
           "403": {
-            "description": "Forbidden — insufficient scope"
+            "description": "Forbidden \u2014 insufficient scope"
           },
           "429": {
             "description": "Rate limit exceeded"
           },
           "401": {
-            "description": "Unauthorized — invalid or expired token"
+            "description": "Unauthorized \u2014 invalid or expired token"
           },
           "200": {
             "description": "Webhooks listed",
@@ -138,17 +134,8 @@
           "required": true
         },
         "responses": {
-          "400": {
-            "description": "Validation error — invalid URL, secret too short, or unknown event type"
-          },
           "403": {
-            "description": "Forbidden — insufficient scope"
-          },
-          "429": {
-            "description": "Rate limit exceeded"
-          },
-          "401": {
-            "description": "Unauthorized — invalid or expired token"
+            "description": "Forbidden \u2014 insufficient scope"
           },
           "201": {
             "description": "Webhook registered",
@@ -159,6 +146,15 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Validation error \u2014 invalid URL, secret too short, or unknown event type"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
           }
         },
         "security": [
@@ -188,13 +184,7 @@
         },
         "responses": {
           "403": {
-            "description": "Forbidden — insufficient scope"
-          },
-          "429": {
-            "description": "Rate limit exceeded"
-          },
-          "400": {
-            "description": "Validation error — missing or invalid fields"
+            "description": "Forbidden \u2014 insufficient scope"
           },
           "201": {
             "description": "Quote created",
@@ -206,8 +196,14 @@
               }
             }
           },
+          "400": {
+            "description": "Validation error \u2014 missing or invalid fields"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          },
           "401": {
-            "description": "Unauthorized — invalid or expired token"
+            "description": "Unauthorized \u2014 invalid or expired token"
           }
         },
         "security": [
@@ -237,21 +233,6 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Forbidden — insufficient scope"
-          },
-          "429": {
-            "description": "Rate limit exceeded"
-          },
-          "400": {
-            "description": "Validation error or quote not in APPROVED state"
-          },
-          "401": {
-            "description": "Unauthorized — invalid or expired token"
-          },
-          "404": {
-            "description": "Quote not found"
-          },
           "201": {
             "description": "Policy issued",
             "content": {
@@ -261,6 +242,21 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "404": {
+            "description": "Quote not found"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          },
+          "400": {
+            "description": "Validation error or quote not in APPROVED state"
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
           }
         },
         "security": [
@@ -311,19 +307,19 @@
             }
           },
           "403": {
-            "description": "Forbidden — insufficient scope"
+            "description": "Forbidden \u2014 insufficient scope"
           },
           "404": {
             "description": "Policy not found"
           },
+          "400": {
+            "description": "Validation error \u2014 missing or invalid fields"
+          },
           "429": {
             "description": "Rate limit exceeded"
           },
-          "400": {
-            "description": "Validation error — missing or invalid fields"
-          },
           "401": {
-            "description": "Unauthorized — invalid or expired token"
+            "description": "Unauthorized \u2014 invalid or expired token"
           }
         },
         "security": [
@@ -352,20 +348,8 @@
           "required": true
         },
         "responses": {
-          "403": {
-            "description": "Forbidden — insufficient scope"
-          },
-          "429": {
-            "description": "Rate limit exceeded"
-          },
-          "400": {
-            "description": "Validation error — missing or invalid fields"
-          },
-          "401": {
-            "description": "Unauthorized — invalid or expired token"
-          },
           "201": {
-            "description": "Customer registered — KYC verification initiated",
+            "description": "Customer registered \u2014 KYC verification initiated",
             "content": {
               "application/json": {
                 "schema": {
@@ -373,6 +357,18 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "400": {
+            "description": "Validation error \u2014 missing or invalid fields"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
           }
         },
         "security": [
@@ -402,16 +398,16 @@
         },
         "responses": {
           "403": {
-            "description": "Forbidden — insufficient scope"
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "400": {
+            "description": "Validation error \u2014 missing or invalid fields"
           },
           "429": {
             "description": "Rate limit exceeded"
           },
-          "400": {
-            "description": "Validation error — missing or invalid fields"
-          },
           "201": {
-            "description": "Corporate customer registered — KYC verification initiated",
+            "description": "Corporate customer registered \u2014 KYC verification initiated",
             "content": {
               "application/json": {
                 "schema": {
@@ -421,7 +417,7 @@
             }
           },
           "401": {
-            "description": "Unauthorized — invalid or expired token"
+            "description": "Unauthorized \u2014 invalid or expired token"
           }
         },
         "security": [
@@ -452,13 +448,16 @@
         ],
         "responses": {
           "403": {
-            "description": "Forbidden — insufficient scope"
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "404": {
+            "description": "Quote not found"
           },
           "429": {
             "description": "Rate limit exceeded"
           },
           "401": {
-            "description": "Unauthorized — invalid or expired token"
+            "description": "Unauthorized \u2014 invalid or expired token"
           },
           "200": {
             "description": "Quote found",
@@ -469,9 +468,6 @@
                 }
               }
             }
-          },
-          "404": {
-            "description": "Quote not found"
           }
         },
         "security": [
@@ -527,13 +523,7 @@
         ],
         "responses": {
           "403": {
-            "description": "Forbidden — insufficient scope"
-          },
-          "429": {
-            "description": "Rate limit exceeded"
-          },
-          "401": {
-            "description": "Unauthorized — invalid or expired token"
+            "description": "Forbidden \u2014 insufficient scope"
           },
           "200": {
             "description": "Products retrieved",
@@ -544,6 +534,12 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
           }
         },
         "security": [
@@ -573,18 +569,6 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Forbidden — insufficient scope"
-          },
-          "429": {
-            "description": "Rate limit exceeded"
-          },
-          "404": {
-            "description": "Product not found"
-          },
-          "401": {
-            "description": "Unauthorized — invalid or expired token"
-          },
           "200": {
             "description": "Product found",
             "content": {
@@ -594,6 +578,18 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "404": {
+            "description": "Product not found"
           }
         },
         "security": [
@@ -609,7 +605,7 @@
           "Products"
         ],
         "summary": "List classes of business under a product",
-        "description": "Returns the class(es) of business associated with the product — used to populate quote requests",
+        "description": "Returns the class(es) of business associated with the product \u2014 used to populate quote requests",
         "operationId": "listClasses",
         "parameters": [
           {
@@ -623,18 +619,6 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Forbidden — insufficient scope"
-          },
-          "429": {
-            "description": "Rate limit exceeded"
-          },
-          "404": {
-            "description": "Product not found"
-          },
-          "401": {
-            "description": "Unauthorized — invalid or expired token"
-          },
           "200": {
             "description": "Classes retrieved",
             "content": {
@@ -644,6 +628,18 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "404": {
+            "description": "Product not found"
           }
         },
         "security": [
@@ -672,18 +668,6 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Forbidden — insufficient scope"
-          },
-          "404": {
-            "description": "Policy not found"
-          },
-          "429": {
-            "description": "Rate limit exceeded"
-          },
-          "401": {
-            "description": "Unauthorized — invalid or expired token"
-          },
           "200": {
             "description": "Policy found",
             "content": {
@@ -693,6 +677,18 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "404": {
+            "description": "Policy not found"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
           }
         },
         "security": [
@@ -722,23 +718,23 @@
           }
         ],
         "responses": {
-          "404": {
-            "description": "Policy not found or document not yet generated"
-          },
           "403": {
-            "description": "Forbidden — insufficient scope"
+            "description": "Forbidden \u2014 insufficient scope"
           },
           "429": {
             "description": "Rate limit exceeded"
+          },
+          "404": {
+            "description": "Policy not found or document not yet generated"
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
           },
           "200": {
             "description": "PDF document",
             "content": {
               "application/pdf": {}
             }
-          },
-          "401": {
-            "description": "Unauthorized — invalid or expired token"
           }
         },
         "security": [
@@ -768,12 +764,6 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Forbidden — insufficient scope"
-          },
-          "429": {
-            "description": "Rate limit exceeded"
-          },
           "404": {
             "description": "Customer not found"
           },
@@ -787,8 +777,14 @@
               }
             }
           },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          },
           "401": {
-            "description": "Unauthorized — invalid or expired token"
+            "description": "Unauthorized \u2014 invalid or expired token"
           }
         },
         "security": [
@@ -819,7 +815,10 @@
         ],
         "responses": {
           "403": {
-            "description": "Forbidden — insufficient scope"
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "404": {
+            "description": "Claim not found"
           },
           "429": {
             "description": "Rate limit exceeded"
@@ -835,10 +834,7 @@
             }
           },
           "401": {
-            "description": "Unauthorized — invalid or expired token"
-          },
-          "404": {
-            "description": "Claim not found"
+            "description": "Unauthorized \u2014 invalid or expired token"
           }
         },
         "security": [
@@ -869,16 +865,16 @@
         ],
         "responses": {
           "403": {
-            "description": "Forbidden — insufficient scope"
+            "description": "Forbidden \u2014 insufficient scope"
           },
           "429": {
             "description": "Rate limit exceeded"
           },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
           "204": {
             "description": "Webhook removed"
-          },
-          "401": {
-            "description": "Unauthorized — invalid or expired token"
           },
           "404": {
             "description": "Webhook registration not found"
@@ -986,7 +982,7 @@
             ]
           },
           "value": {
-            "minimum": 0.00,
+            "minimum": 0.0,
             "exclusiveMinimum": false,
             "type": "number"
           }
@@ -1104,7 +1100,7 @@
             "type": "number"
           },
           "rate": {
-            "minimum": 0.00,
+            "minimum": 0.0,
             "exclusiveMinimum": false,
             "type": "number"
           },

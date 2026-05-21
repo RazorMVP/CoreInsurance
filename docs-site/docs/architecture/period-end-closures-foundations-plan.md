@@ -12,7 +12,7 @@ Status: **Historical** — Phases 1, 2, 3 all shipped (see [`period-end-closures
 
 Branch (integration target — now merged): `module-12-period-end-closures`
 
-Scope: This document expands [`period-end-closures-implementation-plan.md`](./period-end-closures-implementation-plan.md) Phases 1, 2, and 3 to PR-slice granularity. **All three phases shipped end-to-end** between 2026-05-12 and 2026-05-19 across 27 slices. Phase 4 (NAICOM monthly recap submissions) was subsequently scoped at the parent-plan granularity and shipped 2026-05-19/20 across 10 slices (see commit `50e5b11`); Phase 5 (frontend) and Phase 6 (cross-tenant platform admin) remain on backlog.
+Scope: This document expands [`period-end-closures-implementation-plan.md`](./period-end-closures-implementation-plan.md) Phases 1, 2, and 3 to PR-slice granularity. **All three phases shipped end-to-end** between 2026-05-12 and 2026-05-19 across 27 slices. Phase 4 (NAICOM monthly recap submissions) was subsequently scoped at the parent-plan granularity and shipped 2026-05-19/20 across 10 slices (see commit `50e5b11`); Phase 5 (Module 12 back-office frontend) shipped 2026-05-21 across 16 slices F5.1–F5.16 (see the implementation-plan §7 for slice-level detail). Phase 6 (cross-tenant platform admin view) remains on backlog.
 
 ## 0. Implementation Note — Module Layout As Shipped
 
