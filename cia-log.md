@@ -12,6 +12,25 @@ No open items as of 2026-05-20. Slice 1.10 (GL substrate enrichment) was the onl
 
 ---
 
+## 2026-05-21 — Session 74 (`main`, continued): Slice F5.15 — NAICOM submission console (Phase 4 opens)
+
+Opens the Phase 4 NAICOM frontend surface. Pure frontend slice — backend `NaicomSubmissionController` already exposes the full state machine + events + artifact endpoints (Slice 4.9 + 4.10). This slice ships the state-machine console (F5.15); artifact rendering/download (F5.16) is a follow-up.
+
+- `@cia/api-client/finance-closures.ts` — added `NaicomSubmissionStateSchema` (5 states: DRAFT / SUBMITTED / ACKNOWLEDGED / ARCHIVED / RETRACTED), `NaicomSubmissionTypeSchema` (8 form types N01–N08: ANNUAL_REVENUE_ACCOUNT / BALANCE_SHEET / PRUDENTIAL_RETURN / RI_QUARTERLY_RETURN / PREMIUM_BORDEREAUX / CLAIMS_BORDEREAUX / NIID_STATUS_SNAPSHOT / INVESTMENT_STATEMENT), `ArtifactFormatSchema` (PDF / CSV / JSON / XML), `NaicomSubmissionDtoSchema` (with all state-transition timestamps + actor + payload), `NaicomSubmissionEventDtoSchema` (Type-2 SCD audit row), `SubmissionArtifactDtoSchema` (for F5.16 reuse).
+- `NaicomSubmissionsPage.tsx` (new) — FY + Period + State filter row, 4 StatCards (filtered count + DRAFT + SUBMITTED + ACKNOWLEDGED counts), submissions table with N01–N08 type codes + period range + state badge + submitted/acknowledged dates + NAICOM UID, row-click → detail sheet, `+ Generate submission` CTA opens `GenerateSubmissionDialog` (8-option type select + optional reason textarea).
+- `NaicomSubmissionDetailSheet.tsx` (new) — full state-machine UI in one sheet: state badge + metadata definition list (submitted/acknowledged/retracted timestamps + actors + NAICOM UID + retraction reason), state-conditional transition controls (DRAFT shows Submit button with optional reason; SUBMITTED shows Acknowledge with NAICOM UID input AND Retract with mandatory reason; ACKNOWLEDGED shows Archive button; ARCHIVED/RETRACTED show terminal-state message), event timeline (Type-2 SCD history rendered as vertical timeline with `fromState → toState` badges + actor + reason per row), collapsible JSON payload preview.
+- `modules/closures/index.tsx` — twelfth tab "NAICOM" + `/closures/naicom` route.
+
+**Backend full-table-scan guard surfaced cleanly:** the backend rejects `GET /naicom/submissions` with both filters omitted (`IllegalArgumentException` from the controller). The frontend's `canList` boolean (`selectedPeriodId !== null || stateFilter !== 'ALL'`) gates the `useQuery` `enabled` flag so the no-filter case shows a smart empty-state message ("Pick a period and/or state to list submissions") instead of hitting the backend and crashing. Matches the F5.12 holdings empty-state framing.
+
+**Smoke test (live `:8090`):** Page loads with FY 2027 default, empty-state guidance for no-filter case. Picking `DRAFT` state filter activates the list endpoint — 4 zero-StatCards render (no submissions in dev tenant), empty-state ("No submissions match the current filters") with reference to the Generate CTA. Opened Generate dialog with FY 2027 → Jan 2027 — title shows "Period January 2027 must be HARD_CLOSED", 8 NAICOM form types in the select dropdown, optional reason textarea, Cancel + Generate buttons. State-transition flow not exercised end-to-end because no submission exists (HARD_CLOSED + valid period required to generate).
+
+### F5.14b housekeeping recap
+
+Commit `3c14b2f`. Enum-hoisting + `RollforwardTable<T>` extraction. Done before opening Phase 4 so the new NAICOM schemas could land in the now-single Enums section without ordering risk.
+
+---
+
 ## 2026-05-21 — Session 74 (`main`, continued): F5.14b housekeeping — enum-hoisting + shared RollforwardTable
 
 Mid-session refactor after the F5.14 schema-ordering bug and the second `RollforwardTable` clone. Two follow-ups from the F5.14 insight memo, both done before opening Phase 4:

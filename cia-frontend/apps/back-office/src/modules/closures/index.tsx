@@ -13,6 +13,7 @@ const ContractGroupsPage       = lazy(() => import('./pages/ContractGroupsPage')
 const HoldingsListPage         = lazy(() => import('./pages/HoldingsListPage'));
 const Ifrs9MeasurementPage     = lazy(() => import('./pages/Ifrs9MeasurementPage'));
 const Ifrs9MovementAnalysisPage = lazy(() => import('./pages/Ifrs9MovementAnalysisPage'));
+const NaicomSubmissionsPage     = lazy(() => import('./pages/NaicomSubmissionsPage'));
 
 const tabs: { label: string; path: string }[] = [
   { label: 'Periods',            path: '/closures/periods' },
@@ -26,6 +27,7 @@ const tabs: { label: string; path: string }[] = [
   { label: 'Holdings',           path: '/closures/holdings' },
   { label: 'IFRS 9 Measurement', path: '/closures/ifrs9-measurement' },
   { label: 'IFRS 9 §B5.5.39',    path: '/closures/ifrs9-movement-analysis' },
+  { label: 'NAICOM',             path: '/closures/naicom' },
 ];
 
 function Loading() {
@@ -74,6 +76,7 @@ export default function ClosuresModule() {
             <Route path="holdings"            element={<HoldingsListPage />} />
             <Route path="ifrs9-measurement"          element={<Ifrs9MeasurementPage />} />
             <Route path="ifrs9-movement-analysis"    element={<Ifrs9MovementAnalysisPage />} />
+            <Route path="naicom"                     element={<NaicomSubmissionsPage />} />
           </Routes>
         </Suspense>
       </div>

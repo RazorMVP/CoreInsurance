@@ -79,6 +79,22 @@ export const BackfillEventTypeSchema = z.enum([
 ]);
 export const BackfillResultStatusSchema = z.enum(['SUCCESS', 'PARTIAL_FAILURE', 'REFUSED']);
 
+// NAICOM submission state machine (Slice 4.9)
+export const NaicomSubmissionStateSchema = z.enum(['DRAFT', 'SUBMITTED', 'ACKNOWLEDGED', 'ARCHIVED', 'RETRACTED']);
+export const NaicomSubmissionTypeSchema = z.enum([
+  'ANNUAL_REVENUE_ACCOUNT',
+  'BALANCE_SHEET',
+  'PRUDENTIAL_RETURN',
+  'RI_QUARTERLY_RETURN',
+  'PREMIUM_BORDEREAUX',
+  'CLAIMS_BORDEREAUX',
+  'NIID_STATUS_SNAPSHOT',
+  'INVESTMENT_STATEMENT',
+]);
+
+// NAICOM artifact formats (Slice 4.10)
+export const ArtifactFormatSchema = z.enum(['PDF', 'CSV', 'JSON', 'XML']);
+
 export type FiscalYearStatus         = z.infer<typeof FiscalYearStatusSchema>;
 export type FiscalPeriodType         = z.infer<typeof FiscalPeriodTypeSchema>;
 export type FiscalPeriodStatus       = z.infer<typeof FiscalPeriodStatusSchema>;
@@ -94,6 +110,9 @@ export type InvestmentClassification = z.infer<typeof InvestmentClassificationSc
 export type HoldingStatus            = z.infer<typeof HoldingStatusSchema>;
 export type BackfillEventType        = z.infer<typeof BackfillEventTypeSchema>;
 export type BackfillResultStatus     = z.infer<typeof BackfillResultStatusSchema>;
+export type NaicomSubmissionState    = z.infer<typeof NaicomSubmissionStateSchema>;
+export type NaicomSubmissionType     = z.infer<typeof NaicomSubmissionTypeSchema>;
+export type ArtifactFormat           = z.infer<typeof ArtifactFormatSchema>;
 
 // ── Journal Entries ───────────────────────────────────────────────────────
 
@@ -724,3 +743,49 @@ export const CreateFiscalYearRequestSchema = z.object({
 });
 
 export type CreateFiscalYearRequest = z.infer<typeof CreateFiscalYearRequestSchema>;
+
+// ── NAICOM Submissions (Slice 4.9 + 4.10) ────────────────────────────────
+
+export const NaicomSubmissionDtoSchema = z.object({
+  id:               z.string(),
+  submissionType:   NaicomSubmissionTypeSchema,
+  periodId:         z.string(),
+  periodStart:      z.string(),
+  periodEnd:        z.string(),
+  state:            NaicomSubmissionStateSchema,
+  submittedAt:      z.string().nullable().optional(),
+  submittedBy:      z.string().nullable().optional(),
+  acknowledgedAt:   z.string().nullable().optional(),
+  acknowledgedBy:   z.string().nullable().optional(),
+  naicomUid:        z.string().nullable().optional(),
+  archivedAt:       z.string().nullable().optional(),
+  retractedAt:      z.string().nullable().optional(),
+  retractedBy:      z.string().nullable().optional(),
+  retractionReason: z.string().nullable().optional(),
+  notes:            z.string().nullable().optional(),
+  payload:          z.record(z.string(), z.unknown()).nullable().optional(),
+});
+export type NaicomSubmissionDto = z.infer<typeof NaicomSubmissionDtoSchema>;
+
+export const NaicomSubmissionEventDtoSchema = z.object({
+  id:           z.string(),
+  submissionId: z.string(),
+  fromState:    NaicomSubmissionStateSchema.nullable().optional(),
+  toState:      NaicomSubmissionStateSchema,
+  reason:       z.string().nullable().optional(),
+  actor:        z.string(),
+  occurredAt:   z.string(),
+});
+export type NaicomSubmissionEventDto = z.infer<typeof NaicomSubmissionEventDtoSchema>;
+
+export const SubmissionArtifactDtoSchema = z.object({
+  id:           z.string(),
+  submissionId: z.string(),
+  format:       ArtifactFormatSchema,
+  storagePath:  z.string(),
+  sizeBytes:    z.number(),
+  sha256Hex:    z.string(),
+  renderedAt:   z.string(),
+  renderedBy:   z.string(),
+});
+export type SubmissionArtifactDto = z.infer<typeof SubmissionArtifactDtoSchema>;
