@@ -8,18 +8,42 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-### MinIO `cia-documents` bucket bootstrap (1–2 hr)
-
-Dev MinIO ships empty — `cia-documents` does not exist, so every first-time storage upload (policy PDFs, claim DVs, NAICOM artifacts, KYC docs) 500s with `NoSuchBucket` until someone creates it via `mc mb`. Reproduced cleanly during F5.16 smoke testing.
-
-**Two viable fixes:**
-
-1. `@PostConstruct ensureBucketExists()` on `MinioStorageService` — call `bucketExists(BucketExistsArgs)` and create on miss. Self-contained in `cia-storage`; runs once per backend boot.
-2. docker-compose init container that runs `mc mb local/cia-documents` against the MinIO service on `up` — keeps the Java code path lean but requires a compose-file edit.
-
-(1) is cleaner and survives Docker-less dev (Testcontainers-based ITs already auto-create buckets via Testcontainers's MinIO module). Prefer it unless someone has a reason to keep `cia-storage` infra-agnostic. ETA <1 day either way.
+No open items as of 2026-05-21. The MinIO bucket-bootstrap and `FiscalYearService.close()` cascade follow-ups (flagged during F5.16 / wrap-up smoke) both shipped via the Session 74 entry below.
 
 ---
+
+---
+
+## 2026-05-21 — Session 74 (`main`, continued): Closeout fixes — MinIO bucket bootstrap + FY-close cascade
+
+Two follow-ups flagged during F5.16 / wrap-up smoke, both shipped in one pass.
+
+### Fix 1 — MinIO bucket bootstrap
+
+`MinioStorageService` now ensures the configured bucket exists at startup via a `@PostConstruct ensureBucketExists()` that calls `BucketExistsArgs` → on-miss `MakeBucketArgs`. Without this, every first-time storage upload (policy PDFs, claim DVs, NAICOM artifacts, KYC docs) 500'd with `NoSuchBucket` on a fresh dev MinIO — reproduced cleanly during F5.16 NAICOM artifact testing.
+
+**Failure handling is deliberately non-fatal**: a `try { … } catch (Exception e) { log.warn(…); }` wraps the call. Rationale: object-storage may be temporarily unreachable at boot, or the configured credentials may lack `s3:CreateBucket` against a pre-provisioned production bucket. The application should still start and surface upload errors on the request path rather than crash-loop on a transient infra hiccup. Testcontainers-based ITs are unaffected because the `MinIOContainer` module auto-creates a bucket per container — the bootstrap is purely for first-time docker-compose-or-cold-prod startups.
+
+**Verified live:** deleted the dev `cia-documents` bucket via `mc rb`, restarted backend, log emitted `MinIO bucket=cia-documents created on startup`, bucket appeared in `mc ls`. Backend healthy on :8090.
+
+### Fix 2 — `FiscalYearService.close()` cascades hard-close to non-HARD child periods
+
+The `FiscalYearController.close` OpenAPI doc promised "Year-end close cascades hard-close to all child periods that are still OPEN" but `FiscalYearService.close()` only flipped the FY status — no cascade. That doc-drift left CLOSED FYs with OPEN child periods (observed on FY 2026 Feb–Oct during the wrap-up smoke), which is logically inconsistent: an admin who re-opened a period after FY-close could silently re-open the year's books.
+
+`close()` now iterates non-deleted child periods and calls `PeriodLockService.hardClose(periodId, "fiscal-year close cascade: " + fy.getName())` on each non-HARD one. HARD periods are skipped (idempotent). The cascade leans entirely on `PeriodLockService.hardClose`'s existing state-machine:
+
+- OPEN          → `softClose` auto-applies first to honour V31 `ck_fiscal_period_close_chronology` (`hard_closed_at >= soft_closed_at`), then HARD lock written.
+- SOFT_CLOSED   → existing SOFT lock released with `"promoted to HARD: …"` reason, HARD lock written.
+- REOPENED      → no active lock present (HARD was released), so the path falls through to auto-soft + HARD.
+- HARD_CLOSED   → caller skips (no `hardClose` call), zero work, zero audit churn.
+
+Each cascade step writes its own `period_lock` Type-2 SCD row and `audit_log` entry through `PeriodLockService`'s normal path, so the FY-close becomes traceable per child period rather than appearing as a single FY-level event with no breadcrumbs.
+
+**`close()` idempotent semantics preserved on already-CLOSED FY** — the existing early-return on `status == CLOSED` is kept. Legacy CLOSED FYs with OPEN children (e.g. dev's FY 2026) stay inconsistent rather than being silently repaired; the cascade only fires on the ACTIVE → CLOSED transition. Replaying close on an already-CLOSED FY produces no work. Trade-off: forgoes auto-repair on the existing state, but preserves the valuable "calling close twice has no side effects" property. Legacy state can be repaired manually via per-period hard-close from the Periods tab.
+
+**Tests:** `FiscalYearServiceTest` now exercises all four child-state paths (OPEN / SOFT_CLOSED / REOPENED / HARD_CLOSED) with explicit Mockito verifications on `periodLockService.hardClose(...)` call counts (`times(3)` + a `never()` on the HARD child). Added `closeIdempotent` test asserting zero `hardClose` calls + zero saves on already-CLOSED. 20 tests in the suite, 0 failures. Full `cia-storage,cia-finance` reactor: 186 tests green.
+
+**Not in scope (explicitly): lazy DAY-period FY-status check.** `FiscalPeriodResolver.generateDayPeriod()` still creates DAY periods OPEN regardless of FY status. The legitimate use case (backfill workflows posting JEs to dates in a CLOSED FY) means the right fix is more nuanced — either propagate the parent FY status into the new DAY's initial lock state, or gate the resolver path on the caller's intent. Leaving for a future slice; the current FY-close cascade closes the observed loophole because no DAY period existed at close time for any practical case in the dev tenant.
 
 ---
 

@@ -58,13 +58,15 @@ class FiscalYearServiceTest {
     @Mock private FiscalYearRepository fiscalYearRepository;
     @Mock private FiscalPeriodRepository fiscalPeriodRepository;
     @Mock private JournalEntryRepository journalEntryRepository;
+    @Mock private PeriodLockService periodLockService;
 
     private FiscalYearService service;
 
     @BeforeEach
     void setup() {
         service = new FiscalYearService(
-            fiscalYearRepository, fiscalPeriodRepository, journalEntryRepository, FIXED_CLOCK_2026);
+            fiscalYearRepository, fiscalPeriodRepository, journalEntryRepository,
+            periodLockService, FIXED_CLOCK_2026);
     }
 
     // ── create() ─────────────────────────────────────────────────────────────
@@ -333,18 +335,67 @@ class FiscalYearServiceTest {
     // ── close() ──────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("close flips ACTIVE → CLOSED")
+    @DisplayName("close flips ACTIVE → CLOSED and cascades hard-close on every non-HARD child period")
     void closeHappyPath() {
         UUID id = UUID.randomUUID();
         FiscalYear fy = new FiscalYear();
         fy.setId(id);
         fy.setName("FY2026");
         fy.setStatus(FiscalYearStatus.ACTIVE);
+
+        // 4 children spanning the four states close() must handle:
+        //   OPEN          → auto-soft + HARD (delegated to PeriodLockService)
+        //   SOFT_CLOSED   → release SOFT + HARD
+        //   REOPENED      → auto-soft + HARD
+        //   HARD_CLOSED   → skipped (no PeriodLockService call)
+        FiscalPeriod openPeriod   = childPeriod(fy, FiscalPeriodStatus.OPEN);
+        FiscalPeriod softPeriod   = childPeriod(fy, FiscalPeriodStatus.SOFT_CLOSED);
+        FiscalPeriod reopenedP    = childPeriod(fy, FiscalPeriodStatus.REOPENED);
+        FiscalPeriod alreadyHard  = childPeriod(fy, FiscalPeriodStatus.HARD_CLOSED);
+
         when(fiscalYearRepository.findByIdAndDeletedAtIsNull(id)).thenReturn(Optional.of(fy));
+        when(fiscalPeriodRepository
+            .findByFiscalYearIdAndDeletedAtIsNullOrderByStartDateAscPeriodTypeAsc(id))
+            .thenReturn(List.of(openPeriod, softPeriod, reopenedP, alreadyHard));
         when(fiscalYearRepository.save(any(FiscalYear.class))).thenAnswer(inv -> inv.getArgument(0));
 
         FiscalYearResponse response = service.close(id);
+
         assertThat(response.status()).isEqualTo(FiscalYearStatus.CLOSED);
+        // PeriodLockService.hardClose called exactly 3× — the HARD child is skipped.
+        verify(periodLockService, times(3)).hardClose(any(UUID.class), any(String.class));
+        verify(periodLockService).hardClose(openPeriod.getId(),    "fiscal-year close cascade: FY2026");
+        verify(periodLockService).hardClose(softPeriod.getId(),    "fiscal-year close cascade: FY2026");
+        verify(periodLockService).hardClose(reopenedP.getId(),     "fiscal-year close cascade: FY2026");
+        verify(periodLockService, never()).hardClose(alreadyHard.getId(), "fiscal-year close cascade: FY2026");
+    }
+
+    @Test
+    @DisplayName("close on already-CLOSED FY is idempotent — no cascade, no DB writes")
+    void closeIdempotent() {
+        UUID id = UUID.randomUUID();
+        FiscalYear fy = new FiscalYear();
+        fy.setId(id);
+        fy.setName("FY2026");
+        fy.setStatus(FiscalYearStatus.CLOSED);
+        when(fiscalYearRepository.findByIdAndDeletedAtIsNull(id)).thenReturn(Optional.of(fy));
+
+        FiscalYearResponse response = service.close(id);
+
+        assertThat(response.status()).isEqualTo(FiscalYearStatus.CLOSED);
+        verify(periodLockService, never()).hardClose(any(UUID.class), any(String.class));
+        verify(fiscalYearRepository, never()).save(any(FiscalYear.class));
+    }
+
+    private FiscalPeriod childPeriod(FiscalYear fy, FiscalPeriodStatus status) {
+        FiscalPeriod p = new FiscalPeriod();
+        p.setId(UUID.randomUUID());
+        p.setFiscalYearId(fy.getId());
+        p.setPeriodType(FiscalPeriodType.MONTH);
+        p.setStartDate(LocalDate.of(2026, 1, 1));
+        p.setEndDate(LocalDate.of(2026, 1, 31));
+        p.setStatus(status);
+        return p;
     }
 
     @Test

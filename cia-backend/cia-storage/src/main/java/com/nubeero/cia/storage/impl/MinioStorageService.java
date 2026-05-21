@@ -4,6 +4,7 @@ import com.nubeero.cia.storage.DocumentStorageService;
 import com.nubeero.cia.storage.config.StorageProperties;
 import io.minio.*;
 import io.minio.http.Method;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -20,6 +21,48 @@ public class MinioStorageService implements DocumentStorageService {
 
     private final MinioClient minioClient;
     private final StorageProperties storageProperties;
+
+    /**
+     * Ensures the configured bucket exists on startup. Without this, every
+     * first-time upload (policy PDFs, claim DVs, NAICOM artifacts, KYC docs)
+     * fails with {@code NoSuchBucket} until an operator creates it
+     * out-of-band — surfaced during F5.16 NAICOM artifact smoke testing
+     * where the dev MinIO ships empty.
+     *
+     * <p>Failures here are intentionally non-fatal: object-storage may be
+     * temporarily unreachable at boot or the configured credentials may
+     * lack {@code s3:CreateBucket}; the application should still start and
+     * surface upload errors on the request path rather than crash-looping.
+     * Testcontainers-based ITs are unaffected because the
+     * {@code MinIOContainer} module auto-creates a bucket per container.
+     */
+    @PostConstruct
+    void ensureBucketExists() {
+        String bucket = storageProperties.getBucketName();
+        if (bucket == null || bucket.isBlank()) {
+            log.warn("cia.storage.bucket-name is unset; skipping bucket bootstrap.");
+            return;
+        }
+        try {
+            boolean exists = minioClient.bucketExists(BucketExistsArgs.builder()
+                    .bucket(bucket)
+                    .build());
+            if (exists) {
+                log.info("MinIO bucket={} already exists.", bucket);
+                return;
+            }
+            minioClient.makeBucket(MakeBucketArgs.builder()
+                    .bucket(bucket)
+                    .build());
+            log.info("MinIO bucket={} created on startup.", bucket);
+        } catch (Exception e) {
+            // Non-fatal — the application still boots; uploads will surface
+            // the real error per-request if the bucket genuinely cannot be
+            // reached or created.
+            log.warn("MinIO bucket bootstrap failed for bucket={} — uploads will fail until resolved: {}",
+                bucket, e.getMessage());
+        }
+    }
 
     @Override
     public String upload(String tenantId, String path, InputStream content, String mimeType) {

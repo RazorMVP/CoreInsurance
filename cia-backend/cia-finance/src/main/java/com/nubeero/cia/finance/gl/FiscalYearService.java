@@ -55,6 +55,7 @@ public class FiscalYearService {
     private final FiscalYearRepository fiscalYearRepository;
     private final FiscalPeriodRepository fiscalPeriodRepository;
     private final JournalEntryRepository journalEntryRepository;
+    private final PeriodLockService periodLockService;
     private final Clock clock;
 
     // ── reads ────────────────────────────────────────────────────────────────
@@ -161,10 +162,22 @@ public class FiscalYearService {
     }
 
     /**
-     * Flips an {@code ACTIVE} FY to {@code CLOSED}. Period-level postings
-     * are governed independently by Slice 1.7's period_lock; closing the
-     * FY just retires the "current year" badge so a successor can be
-     * activated.
+     * Flips an {@code ACTIVE} FY to {@code CLOSED} and cascades a hard-close
+     * to every non-deleted child period that is not already HARD_CLOSED.
+     * The cascade is per-period via {@link PeriodLockService#hardClose} so
+     * the {@code period_lock} Type-2 SCD audit trail records the FY-close
+     * as the proximate cause (reason {@code "fiscal-year close cascade"})
+     * — including the V31 chronology-constraint dance for periods that
+     * were OPEN at close time (auto-soft → HARD in one TX). REOPENED
+     * periods (HARD lock previously released) are re-locked the same way.
+     *
+     * <p>A CLOSED FY with OPEN child periods is logically inconsistent —
+     * an admin who re-opened a period after FY-close could otherwise
+     * silently re-open the FY's books. The cascade closes that loophole.
+     * Reopening a specific period after FY-close still works the same way
+     * (CFO-only via {@link PeriodLockService#reopen}); period-lock and
+     * FY-status remain independent dimensions, but the FY-close transition
+     * point is now the consistent baseline.
      */
     @Transactional
     public FiscalYearResponse close(UUID id) {
@@ -178,6 +191,18 @@ public class FiscalYearService {
                 "Cannot close fiscal year " + id + ": only ACTIVE fiscal years can be closed " +
                     "(current status: " + fy.getStatus() + ").");
         }
+
+        // Cascade hard-close on all non-HARD child periods BEFORE flipping the
+        // FY status. PeriodLockService.hardClose is idempotent on HARD periods
+        // and handles OPEN / SOFT_CLOSED / REOPENED via its existing
+        // chronology-aware transition (V31 ck_fiscal_period_close_chronology).
+        List<FiscalPeriod> children = fiscalPeriodRepository
+            .findByFiscalYearIdAndDeletedAtIsNullOrderByStartDateAscPeriodTypeAsc(fy.getId());
+        for (FiscalPeriod p : children) {
+            if (p.getStatus() == FiscalPeriodStatus.HARD_CLOSED) continue;
+            periodLockService.hardClose(p.getId(), "fiscal-year close cascade: " + fy.getName());
+        }
+
         fy.setStatus(FiscalYearStatus.CLOSED);
         return toResponse(fiscalYearRepository.save(fy), null);
     }
