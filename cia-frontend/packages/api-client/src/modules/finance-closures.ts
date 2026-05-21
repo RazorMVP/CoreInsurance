@@ -228,6 +228,36 @@ export const PaaPeriodCloseResultDtoSchema = z.object({
 });
 export type PaaPeriodCloseResultDto = z.infer<typeof PaaPeriodCloseResultDtoSchema>;
 
+// ── IFRS 17 Contract Groups + Portfolios (Slice 2.2) ─────────────────────
+
+export const OnerousnessSchema = z.enum(['NOT_ONEROUS', 'NO_SIGNIFICANT_POSSIBILITY', 'ONEROUS']);
+export type Onerousness = z.infer<typeof OnerousnessSchema>;
+
+export const GroupStatusSchema = z.enum(['OPEN', 'CLOSED']);
+export type GroupStatus = z.infer<typeof GroupStatusSchema>;
+
+export const ContractGroupSummaryDtoSchema = z.object({
+  id:             z.string(),
+  portfolioId:    z.string(),
+  portfolioCode:  z.string(),
+  portfolioName:  z.string(),
+  cohortYear:     z.number(),
+  onerousness:    OnerousnessSchema,
+  status:         GroupStatusSchema,
+  createdAt:      z.string(),
+});
+export type ContractGroupSummaryDto = z.infer<typeof ContractGroupSummaryDtoSchema>;
+
+export const PortfolioSummaryDtoSchema = z.object({
+  id:                z.string(),
+  code:              z.string(),
+  name:              z.string(),
+  classOfBusinessId: z.string().nullable().optional(),
+  description:       z.string().nullable().optional(),
+  active:            z.boolean(),
+});
+export type PortfolioSummaryDto = z.infer<typeof PortfolioSummaryDtoSchema>;
+
 // ── IFRS 17 §103 Movement Analysis (Slice 2.8) ───────────────────────────
 
 export const LrcMovementTotalsSchema = z.object({

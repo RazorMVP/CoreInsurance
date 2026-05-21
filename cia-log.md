@@ -12,9 +12,34 @@ No open items as of 2026-05-20. Slice 1.10 (GL substrate enrichment) was the onl
 
 ---
 
-## 2026-05-21 — Session 74 (`main`, continued): Slices F5.1 → F5.9/F5.10 — Phase 1 GL + GL Backfill + PAA period close + §103 movement analysis
+## 2026-05-21 — Session 74 (`main`, continued): Slices F5.1 → F5.11 — Phase 1 GL + Backfill + PAA period close + §103 + Contract Groups (Phase 2 complete)
 
-Phase 5 (Module 12 frontend) opened; eight slices shipped across the session. Phase 1 GL frontend is complete (5 screens), Phase 1 admin loop is complete (FY admin + Backfill), and Phase 2 IFRS 17 PAA frontend now has three of its four planned screens (period close orchestrator + §103 movement analysis).
+Phase 5 (Module 12 frontend) opened; nine slices shipped across the session. **Phase 1 GL frontend + admin loop complete (6/6). Phase 2 IFRS 17 PAA frontend complete (3/3).** Remaining: F5.7 (Posting Rules viewer, skipped), Phase 3 IFRS 9 (F5.12–F5.14), Phase 4 NAICOM (F5.15–F5.16).
+
+### Slice F5.11 — Contract Groups list (Phase 2 closes)
+
+Surfaces the IFRS 17 §16-22 contract-group registry as a read-only filterable list. Second slice of Phase 5 (after F5.4) that adds a backend endpoint — the existing PAA controllers exposed no read surface for `group_of_contracts` or `portfolio` tables.
+
+**Backend (cia-finance):**
+
+- `dto/ContractGroupSummaryResponse.java` (new) — header + denormalised portfolio fields (code + name) so the browser DataTable doesn't need a follow-up lookup.
+- `dto/PortfolioSummaryResponse.java` (new) — feeds the portfolio filter dropdown.
+- `GroupOfContractsRepository.search(...)` — JPQL with 4 optional filters (portfolioId / cohortYear / onerousness / status). Default sort: cohort year DESC, portfolio code ASC, onerousness ASC.
+- `ContractGroupQueryService.java` (new) — read-only `@Transactional` wrapper. Two methods: `listGroups(filters)` + `listPortfolios()`.
+- `ContractGroupController.java` (new) — `GET /api/v1/finance/paa/contract-groups` + `GET /api/v1/finance/paa/portfolios`. Both `FINANCE_VIEW` gated.
+
+**Frontend (back-office + api-client):**
+
+- `@cia/api-client/finance-closures.ts` — added `OnerousnessSchema` (3 constants: NOT_ONEROUS / NO_SIGNIFICANT_POSSIBILITY / ONEROUS), `GroupStatusSchema` (OPEN / CLOSED), `ContractGroupSummaryDtoSchema`, `PortfolioSummaryDtoSchema`.
+- `ContractGroupsPage.tsx` (new) — 5-control filter bar (Portfolio dropdown / Cohort year input / Onerousness select / Status select / Reset), 3 StatCards (Groups filtered / Onerous groups / Open cohorts), table sorted DESC cohort with portfolio name + code stacked, onerousness badge (ONEROUS = red, NO_SIGNIFICANT_POSSIBILITY = amber, NOT_ONEROUS = green), status badge, truncated group-ID column.
+- **Smart empty state**: distinguishes between "no portfolios exist yet" (educational message about Slice 2.2 ContractGroupingService auto-creating them on first PolicyApprovedEvent) vs "no groups match filters" (generic).
+- `modules/closures/index.tsx` — eighth tab "Contract Groups" + `/closures/contract-groups` route.
+
+**Smoke test (live `:8090`):** Both endpoints return clean `{"data":[]}` envelopes. Page renders 3 zero StatCards, empty state with the "no portfolios exist yet" educational message (correct — dev tenant has no policies seeded). All 5 filter controls render and behave correctly.
+
+### Slices F5.9 + F5.10 — IFRS 17 §103 movement analysis (recap)
+
+Commit `b7ae4b1`. Collapsed into one page — the existing `/movement-analysis/{periodId}` endpoint already returns the full §103 shape (LRC totals + LIC totals + per-group breakdown).
 
 ### Slice F5.9 + F5.10 — LRC/LIC roll-forward + §103 movement analysis (collapsed)
 
