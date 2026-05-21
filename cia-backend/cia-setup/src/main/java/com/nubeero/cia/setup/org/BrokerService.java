@@ -39,7 +39,9 @@ public class BrokerService {
         }
         Broker saved = repository.save(Broker.builder()
                 .name(request.getName()).code(code)
-                .rcNumber(request.getRcNumber()).address(request.getAddress())
+                .rcNumber(request.getRcNumber())
+                .licenseNumber(request.getLicenseNumber())
+                .address(request.getAddress())
                 .email(request.getEmail()).phone(request.getPhone())
                 .build());
         auditService.log("Broker", saved.getId().toString(), AuditAction.CREATE, null, saved);
@@ -54,7 +56,9 @@ public class BrokerService {
             throw new BusinessRuleException("BROKER_CODE_EXISTS", "Broker code already exists: " + newCode);
         }
         broker.setName(request.getName()); broker.setCode(newCode);
-        broker.setRcNumber(request.getRcNumber()); broker.setAddress(request.getAddress());
+        broker.setRcNumber(request.getRcNumber());
+        broker.setLicenseNumber(request.getLicenseNumber());
+        broker.setAddress(request.getAddress());
         broker.setEmail(request.getEmail()); broker.setPhone(request.getPhone());
         Broker saved = repository.save(broker);
         auditService.log("Broker", id.toString(), AuditAction.UPDATE, null, saved);
@@ -78,7 +82,9 @@ public class BrokerService {
     private BrokerResponse toResponse(Broker b) {
         return BrokerResponse.builder()
                 .id(b.getId()).name(b.getName()).code(b.getCode())
-                .rcNumber(b.getRcNumber()).address(b.getAddress())
+                .rcNumber(b.getRcNumber())
+                .licenseNumber(b.getLicenseNumber())
+                .address(b.getAddress())
                 .email(b.getEmail()).phone(b.getPhone())
                 .createdAt(b.getCreatedAt()).updatedAt(b.getUpdatedAt())
                 .build();

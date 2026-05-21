@@ -54,9 +54,10 @@ function BrokersTab() {
         </div>
       ),
     },
-    { accessorKey: 'rcNumber', header: 'RC Number', cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
-    { accessorKey: 'email',    header: 'Email',    cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{(getValue() as string) || '—'}</span> },
-    { accessorKey: 'phone',    header: 'Phone',    cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
+    { accessorKey: 'rcNumber',      header: 'RC Number',      cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
+    { accessorKey: 'licenseNumber', header: 'NAICOM License', cell: ({ getValue }) => <span className="font-mono text-xs">{(getValue() as string) || '—'}</span> },
+    { accessorKey: 'email',         header: 'Email',          cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{(getValue() as string) || '—'}</span> },
+    { accessorKey: 'phone',         header: 'Phone',          cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
     { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
       { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
       { label: 'Delete', onClick: (r) => setDeleteTarget(r.original), separator: true, className: 'text-destructive' },

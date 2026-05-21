@@ -69,16 +69,19 @@ export interface ClassOfBusinessDto {
 // Mirrors com.nubeero.cia.setup.org.dto.BrokerResponse.
 // Previously carried `status` + `contactPerson` which the backend never accepted
 // (Jackson silently dropped them on the way in). Now matches the entity 1:1.
+// V49 added the optional `licenseNumber` field — NAICOM broker licence.
 export interface BrokerDto {
-  id:         string;
-  name:       string;
-  code:       string;
-  rcNumber?:  string | null;
-  address?:   string | null;
-  email?:     string | null;
-  phone?:     string | null;
-  createdAt:  string;
-  updatedAt?: string | null;
+  id:             string;
+  name:           string;
+  code:           string;
+  rcNumber?:      string | null;
+  /** NAICOM broker licence number (V49). */
+  licenseNumber?: string | null;
+  address?:       string | null;
+  email?:         string | null;
+  phone?:         string | null;
+  createdAt:      string;
+  updatedAt?:     string | null;
 }
 
 // Mirrors com.nubeero.cia.setup.org.dto.BranchResponse.

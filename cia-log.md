@@ -8,7 +8,65 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-21. Sessions 79, 80, and 81 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), and the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab).
+No open items as of 2026-05-21. Sessions 79, 80, 81, and 82 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), and the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation).
+
+---
+
+## 2026-05-21 — Session 82 (`main`): Broker NAICOM licence field (V49) — close licence consistency gap
+
+User flagged that the Brokers tab on Setup → Organisations had no NAICOM licence field while every other NAICOM-regulated counterparty in the module already does: surveyors / adjusters / agents all carry `license_number`, insurance companies carry `naicom_license`. Brokers in Nigerian insurance are NAICOM-licensed too — the missing field was a documentation + UI gap, not a deliberate schema choice.
+
+### What shipped
+
+**Backend (cia-setup):**
+
+- V49 migration `ALTER TABLE brokers ADD COLUMN license_number VARCHAR(50)` — nullable for migration safety so pre-V49 rows stay valid.
+- `Broker` entity gains `@Column(name = "license_number", length = 50) private String licenseNumber;`.
+- `BrokerRequest` + `BrokerResponse` DTOs gain the `licenseNumber` field.
+- `BrokerService` threads `licenseNumber` through `create` + `update` + `toResponse`.
+- 34 IT files bumped from `spring.flyway.target = "48"` → `"49"` so the new migration applies to Testcontainers.
+
+**Frontend:**
+
+- `@cia/api-client/setup.ts` `BrokerDto` gains `licenseNumber?: string | null;`.
+- `BrokerSheet.tsx` — zod schema gains `licenseNumber`, defaults + reset paths thread it, payload normalises empty-string → undefined. **Layout change:** RC Number was a full-width row on its own; now it's a 2-column `FormRow` with NAICOM License alongside, matching the AdjusterSheet / AgentSheet shape so the two regulatory identifiers sit side by side.
+- `OrganisationsPage.tsx` BrokersTab adds a **NAICOM License** column between RC Number and Email, mirroring the AdjusterTab / AgentsTab licence column treatment (font-mono small text, em-dash placeholder for nulls).
+
+### Verification
+
+**Live end-to-end smoke test:**
+
+```bash
+$ curl -X POST /api/v1/setup/brokers -d '{"name":"Smoke Brokers Ltd","code":"SMOKE01","licenseNumber":"NAICOM-BRK-2026-001",...}'
+   → 200, returns full broker incl. licenseNumber
+$ curl /api/v1/setup/brokers                                                     → 200, list returns licenseNumber per row
+$ curl -X PUT  /api/v1/setup/brokers/{id} -d '{... "licenseNumber":"NAICOM-BRK-2026-001-UPDATED" ...}'
+   → 200, licenseNumber persisted across the update
+$ curl -X DELETE "/api/v1/setup/brokers/{id}?reason=Smoke+test+cleanup"          → 200, V47 reasoned-soft-delete still working
+```
+
+Backend restarted on :8090; Flyway log: `Migrating schema "public" to version "49 - add license number to brokers"`. `mvn install -DskipTests -pl cia-api -am` clean.
+
+### Scope decisions
+
+- **`licenseNumber` nullable, not required.** Mirrors the same Adjuster / Agent / Surveyor / Insurance Company pattern; pre-V49 broker rows can carry the field on next edit but the migration doesn't reject them. Required-validation can be tightened at the UI layer later if business requires it.
+- **Layout: side-by-side row with RC Number.** RC Number and NAICOM License are the two regulator-issued identifiers for a broker; pairing them in a single 2-column row mirrors the Adjuster + Agent sheets and surfaces the regulatory-identity block as a unit.
+- **No backfill data.** V49 is pure schema (no UPDATE statements). Existing broker rows have `license_number IS NULL`; tenants populate licences as they edit each broker row.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend new | V49 migration |
+| Backend modified | `Broker.java`, `dto/BrokerRequest.java`, `dto/BrokerResponse.java`, `BrokerService.java`, 34 IT files (sed bump `spring.flyway.target` "48" → "49") |
+| Frontend modified | `@cia/api-client/setup.ts` (BrokerDto + `licenseNumber`), `BrokerSheet.tsx` (schema + form row + payload), `OrganisationsPage.tsx` (BrokersTab column) |
+| Docs | `CLAUDE.md`, `SKILL.md`, `cia-log.md` (this entry) |
+
+### Known follow-ups (deliberately deferred)
+
+- **internal-api.json swagger doc.** Brokers gain a new field; the static swagger spec at `docs-site/static/internal-api.json` still lists the old shape. Will batch with the next docs-sync alongside V48 agents (still pending in internal-api.json).
+- **PRD reconcile.** Module 1 PRD page references Broker setup but doesn't enumerate fields. No update needed unless we tighten field-by-field.
+- **No retroactive backfill.** If business requires every broker to carry a NAICOM licence, a separate slice can add a NOT NULL constraint + a backfill UI prompt.
 
 ---
 

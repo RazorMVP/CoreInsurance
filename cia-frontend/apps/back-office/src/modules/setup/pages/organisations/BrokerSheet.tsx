@@ -12,12 +12,13 @@ import { z } from 'zod';
 import { applyApiErrors } from '@/lib/form-errors';
 
 const schema = z.object({
-  name:      z.string().min(2, 'Required'),
-  code:      z.string().min(2, 'Required').max(20),
-  rcNumber:  z.string().optional(),
-  address:   z.string().optional(),
-  email:     z.string().email().optional().or(z.literal('')),
-  phone:     z.string().optional(),
+  name:          z.string().min(2, 'Required'),
+  code:          z.string().min(2, 'Required').max(20),
+  rcNumber:      z.string().optional(),
+  licenseNumber: z.string().optional(),
+  address:       z.string().optional(),
+  email:         z.string().email().optional().or(z.literal('')),
+  phone:         z.string().optional(),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -30,16 +31,17 @@ export default function BrokerSheet({ open, onOpenChange, broker, onSuccess }: P
   const queryClient = useQueryClient();
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: '', code: '', rcNumber: '', address: '', email: '', phone: '' },
+    defaultValues: { name: '', code: '', rcNumber: '', licenseNumber: '', address: '', email: '', phone: '' },
   });
 
   useEffect(() => {
     form.reset(broker ? {
       name: broker.name, code: broker.code,
       rcNumber: broker.rcNumber ?? '',
+      licenseNumber: broker.licenseNumber ?? '',
       address: broker.address ?? '',
       email: broker.email ?? '', phone: broker.phone ?? '',
-    } : { name: '', code: '', rcNumber: '', address: '', email: '', phone: '' });
+    } : { name: '', code: '', rcNumber: '', licenseNumber: '', address: '', email: '', phone: '' });
   }, [broker, form]);
 
   const save = useMutation({
@@ -48,6 +50,7 @@ export default function BrokerSheet({ open, onOpenChange, broker, onSuccess }: P
       const payload = {
         ...values,
         rcNumber: values.rcNumber || undefined,
+        licenseNumber: values.licenseNumber || undefined,
         address: values.address || undefined,
         email: values.email || undefined,
         phone: values.phone || undefined,
@@ -83,9 +86,14 @@ export default function BrokerSheet({ open, onOpenChange, broker, onSuccess }: P
                 <FormItem><FormLabel>Code</FormLabel><FormControl><Input placeholder="LWB" className="uppercase" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
             </FormRow>
-            <FormField control={form.control} name="rcNumber" render={({ field }) => (
-              <FormItem><FormLabel>RC Number</FormLabel><FormControl><Input placeholder="CAC registration number" {...field} /></FormControl><FormMessage /></FormItem>
-            )} />
+            <FormRow>
+              <FormField control={form.control} name="rcNumber" render={({ field }) => (
+                <FormItem><FormLabel>RC Number</FormLabel><FormControl><Input placeholder="CAC registration number" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="licenseNumber" render={({ field }) => (
+                <FormItem><FormLabel>NAICOM License</FormLabel><FormControl><Input placeholder="NAICOM broker licence number" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+            </FormRow>
             <FormField control={form.control} name="address" render={({ field }) => (
               <FormItem><FormLabel>Address</FormLabel><FormControl><Textarea rows={2} {...field} /></FormControl><FormMessage /></FormItem>
             )} />

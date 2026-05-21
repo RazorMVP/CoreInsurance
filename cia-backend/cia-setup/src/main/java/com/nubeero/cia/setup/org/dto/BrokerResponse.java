@@ -13,6 +13,8 @@ public class BrokerResponse {
     private String name;
     private String code;
     private String rcNumber;
+    /** NAICOM broker licence number (V49). */
+    private String licenseNumber;
     private String address;
     private String email;
     private String phone;

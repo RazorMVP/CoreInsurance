@@ -79,7 +79,7 @@ class FiscalYearServiceIT {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         // V43 — match the rest of the cia-api IT suite (Slice 1.10).
-        registry.add("spring.flyway.target", () -> "48");
+        registry.add("spring.flyway.target", () -> "49");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 
