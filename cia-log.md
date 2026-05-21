@@ -8,7 +8,58 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-21. Session 79 below ships the Relationship Manager end-to-end integration and the delete-with-reason audit pattern across 10 setup endpoints.
+No open items as of 2026-05-21. Sessions 79 and 80 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, and the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc).
+
+---
+
+## 2026-05-21 — Session 80 (`main`): Doc-sync wrap-up — api-client CustomerDto + internal-api.json swagger doc
+
+Small follow-up session after Session 79 landed. Two real gaps surfaced during the "update all docs, apis and swagger docs" sweep:
+
+1. **`@cia/api-client/customer.ts` `CustomerDto` was out of sync** with the backend `CustomerResponse`. Backend gained `relationshipManagerId` + `relationshipManagerName` in Session 79; the shared DTO didn't get them. The back-office pages all worked because they declared local snapshot interfaces (e.g. `CustomerSnapshot` in `EditCustomerSheet.tsx`, the inline interface in `CustomerDetailPage.tsx`) — but the shared type was no longer authoritative, which would silently bite future consumers.
+2. **`docs-site/static/internal-api.json` (the live swagger doc at `/internal/api-reference`)** was missing:
+   - The new `?reason` optional query parameter on **all 10 master-data DELETE endpoints** added in Session 79.
+   - The entire `/api/v1/setup/adjusters` (GET, POST) + `/api/v1/setup/adjusters/{id}` (GET, PUT, DELETE) path block. Adjusters were shipped in Session 78 via V45 + AdjusterController, but the static swagger doc never got the corresponding paths.
+   - The `Setup — Adjusters` tag itself.
+
+### Changes
+
+**api-client:**
+- `cia-frontend/packages/api-client/src/modules/customer.ts` — `CustomerDto` gains `relationshipManagerId?: string` + `relationshipManagerName?: string` with a JSDoc explaining the V46 backing.
+
+**Internal swagger doc (`docs-site/static/internal-api.json`):**
+- Added `Setup — Adjusters` tag (description matches the controller's `@Tag`: "NAICOM-licensed loss-adjuster master data. Distinct from surveyors (pre-loss inspections); adjusters perform post-loss claim assessment (Module 5).").
+- Added `?reason` query parameter on the DELETE operation of all 10 setup paths: `/api/v1/setup/{surveyors,sbus,relationship-managers,reinsurance-companies,insurance-companies,classes-of-business,brokers,branches,approval-groups,adjusters}/{id}`. Param is `required: false` (matches `@RequestParam(required = false)` on the controllers) with a description that calls out V47 + the UI-required convention.
+- Added `/api/v1/setup/adjusters` (GET list paginated + POST create) and `/api/v1/setup/adjusters/{id}` (GET + PUT + DELETE) with the same paginated-response + RBAC + 401/403/404 shape used by the surveyors / sbus / relationship-managers blocks.
+- Edited via a one-shot Python script that loads the JSON, mutates with `OrderedDict` (preserves Springdoc's insertion order), and dumps with `indent=4, ensure_ascii=True` (matches the existing `—` em-dash escapes). Path count: 243 → 245.
+
+### Why programmatic, not by-hand edit
+
+Three reasons:
+1. Touching `internal-api.json` line-by-line via the Edit tool would have been 10 nearly-identical edits to inject the same `?reason` parameter block, easy to drift on indentation.
+2. Adding a brand-new path block at the right alphabetical position with full operationIds + tags + parameters + responses + security would have been ~80 lines of manual JSON.
+3. The OrderedDict path keeps the diff small and reviewable — the only changes in the JSON are the 10 inserted `parameters[]` entries, 2 new top-level paths, and 1 new tag. No reordering noise.
+
+### Verification
+
+- `python3 -c "import json; json.load(open('docs-site/static/internal-api.json'))"` → parses clean.
+- All 10 setup DELETEs verified via inspection script: `OK: /api/v1/setup/.../{id}` × 10.
+- `len(spec['paths'])` → 245 (was 243 before adjuster paths).
+- No backend / frontend code changed beyond `customer.ts`; backend restart not required for the swagger-doc edit (static file served by docs-site, not the Spring app).
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend api-client | `cia-frontend/packages/api-client/src/modules/customer.ts` (+ 2 fields on `CustomerDto`) |
+| Swagger doc | `docs-site/static/internal-api.json` (+1 tag, +10 `?reason` params, +2 new paths) |
+| Docs | `cia-log.md` (this entry) |
+
+### Known follow-ups (deliberately deferred — not blockers)
+
+- **`docs-site/build/internal-api.json`** is a stale copy from the last Docusaurus build. Will get rebuilt on the next docs-site deploy / `npm run build` — left untouched here on purpose (we don't commit build outputs to source control by hand; the build step regenerates from `static/`).
+- **`components.schemas` is still empty** in `internal-api.json`. The `$ref: "#/components/schemas/{Schema}"` references throughout the file resolve at render time by the Redoc / Scalar viewer, not at file-load time. Backfilling component schemas (e.g. `AdjusterResponse`, `AdjusterRequest`, `RelationshipManagerResponse`) is a larger Gate-9 deepening that should ideally be auto-generated from the Springdoc live `/v3/api-docs` rather than maintained by hand. Out of scope here.
+- **Springdoc live `/v3/api-docs` returns 500 in dev** (unrelated to today's edits — the security config rejects unauthenticated probes against the docs endpoint and there's likely a `NullPointerException` on the JWT subject when no auth is supplied). Frontend doesn't consume the live spec; consumers use the static `internal-api.json` from docs-site. Not blocking; flagged for a separate triage.
 
 ---
 

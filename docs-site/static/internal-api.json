@@ -323,6 +323,10 @@
         {
             "name": "Setup \u2014 Surveyors",
             "description": "Internal + external surveyor master data. Drives surveyor assignment on pre-loss surveys (Module 3) and post-loss claim inspections (Module 5)."
+        },
+        {
+            "name": "Setup \u2014 Adjusters",
+            "description": "NAICOM-licensed loss-adjuster master data. Distinct from surveyors (pre-loss inspections); adjusters perform post-loss claim assessment (Module 5)."
         }
     ],
     "paths": {
@@ -911,6 +915,15 @@
                             "type": "string",
                             "format": "uuid"
                         }
+                    },
+                    {
+                        "name": "reason",
+                        "in": "query",
+                        "required": false,
+                        "description": "Free-text justification for the soft-delete. Persisted to audit_log.reason (V47) alongside the resolved user + timestamp. Optional at the API for IT compatibility; required at the back-office UI via the shared ConfirmDeleteDialog.",
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 ],
                 "responses": {
@@ -1057,6 +1070,15 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "reason",
+                        "in": "query",
+                        "required": false,
+                        "description": "Free-text justification for the soft-delete. Persisted to audit_log.reason (V47) alongside the resolved user + timestamp. Optional at the API for IT compatibility; required at the back-office UI via the shared ConfirmDeleteDialog.",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 ],
@@ -1205,6 +1227,15 @@
                             "type": "string",
                             "format": "uuid"
                         }
+                    },
+                    {
+                        "name": "reason",
+                        "in": "query",
+                        "required": false,
+                        "description": "Free-text justification for the soft-delete. Persisted to audit_log.reason (V47) alongside the resolved user + timestamp. Optional at the API for IT compatibility; required at the back-office UI via the shared ConfirmDeleteDialog.",
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 ],
                 "responses": {
@@ -1351,6 +1382,15 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "reason",
+                        "in": "query",
+                        "required": false,
+                        "description": "Free-text justification for the soft-delete. Persisted to audit_log.reason (V47) alongside the resolved user + timestamp. Optional at the API for IT compatibility; required at the back-office UI via the shared ConfirmDeleteDialog.",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 ],
@@ -2906,6 +2946,15 @@
                             "type": "string",
                             "format": "uuid"
                         }
+                    },
+                    {
+                        "name": "reason",
+                        "in": "query",
+                        "required": false,
+                        "description": "Free-text justification for the soft-delete. Persisted to audit_log.reason (V47) alongside the resolved user + timestamp. Optional at the API for IT compatibility; required at the back-office UI via the shared ConfirmDeleteDialog.",
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 ],
                 "responses": {
@@ -3354,6 +3403,15 @@
                             "type": "string",
                             "format": "uuid"
                         }
+                    },
+                    {
+                        "name": "reason",
+                        "in": "query",
+                        "required": false,
+                        "description": "Free-text justification for the soft-delete. Persisted to audit_log.reason (V47) alongside the resolved user + timestamp. Optional at the API for IT compatibility; required at the back-office UI via the shared ConfirmDeleteDialog.",
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 ],
                 "responses": {
@@ -3795,6 +3853,15 @@
                             "type": "string",
                             "format": "uuid"
                         }
+                    },
+                    {
+                        "name": "reason",
+                        "in": "query",
+                        "required": false,
+                        "description": "Free-text justification for the soft-delete. Persisted to audit_log.reason (V47) alongside the resolved user + timestamp. Optional at the API for IT compatibility; required at the back-office UI via the shared ConfirmDeleteDialog.",
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 ],
                 "responses": {
@@ -3941,6 +4008,15 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "reason",
+                        "in": "query",
+                        "required": false,
+                        "description": "Free-text justification for the soft-delete. Persisted to audit_log.reason (V47) alongside the resolved user + timestamp. Optional at the API for IT compatibility; required at the back-office UI via the shared ConfirmDeleteDialog.",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 ],
@@ -4317,6 +4393,15 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "reason",
+                        "in": "query",
+                        "required": false,
+                        "description": "Free-text justification for the soft-delete. Persisted to audit_log.reason (V47) alongside the resolved user + timestamp. Optional at the API for IT compatibility; required at the back-office UI via the shared ConfirmDeleteDialog.",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 ],
@@ -18271,6 +18356,247 @@
                     },
                     "403": {
                         "description": "Forbidden \u2014 caller lacks CUSTOMER_UPDATE"
+                    }
+                },
+                "security": [
+                    {
+                        "bearer-jwt": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/setup/adjusters": {
+            "get": {
+                "tags": [
+                    "Setup \u2014 Adjusters"
+                ],
+                "summary": "List adjusters (paginated)",
+                "operationId": "listAdjusters",
+                "parameters": [
+                    {
+                        "name": "pageable",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/components/schemas/Pageable"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdjusterResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    }
+                },
+                "security": [
+                    {
+                        "bearer-jwt": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Setup \u2014 Adjusters"
+                ],
+                "summary": "Create an adjuster",
+                "operationId": "createAdjuster",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdjusterRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdjusterResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    }
+                },
+                "security": [
+                    {
+                        "bearer-jwt": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/setup/adjusters/{id}": {
+            "get": {
+                "tags": [
+                    "Setup \u2014 Adjusters"
+                ],
+                "summary": "Get adjuster by id",
+                "operationId": "getAdjuster",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdjusterResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearer-jwt": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Setup \u2014 Adjusters"
+                ],
+                "summary": "Update adjuster",
+                "operationId": "updateAdjuster",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AdjusterRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdjusterResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "description": "Not found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearer-jwt": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Setup \u2014 Adjusters"
+                ],
+                "summary": "Soft-delete adjuster",
+                "operationId": "deleteAdjuster",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "reason",
+                        "in": "query",
+                        "required": false,
+                        "description": "Free-text justification for the soft-delete. Persisted to audit_log.reason (V47) alongside the resolved user + timestamp. Optional at the API for IT compatibility; required at the back-office UI via the shared ConfirmDeleteDialog.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "description": "Not found"
                     }
                 },
                 "security": [
