@@ -29,18 +29,23 @@ public class ReportQueryBuilder {
 
     private final EntityManager entityManager;
 
-    // Base SQL templates per data source
-    private static final Map<DataSource, String> BASE_QUERIES = Map.of(
-        DataSource.POLICIES,
+    // Base SQL templates per data source.
+    //
+    // Contract: each entry ends at the WHERE clause's last condition (no trailing
+    // ORDER BY / GROUP BY). The filter loop in execute() appends ` AND <expr>`
+    // for each user-supplied filter; if the source needs GROUP BY it lives in
+    // BASE_QUERY_TAILS below. Map.ofEntries because we exceed Map.of's 10-pair cap.
+    private static final Map<DataSource, String> BASE_QUERIES = Map.ofEntries(
+        Map.entry(DataSource.POLICIES,
             "SELECT p.policy_number, c.full_name AS customer_name, " +
             "cob.name AS class_of_business, pr.name AS product_name, " +
             "p.sum_insured, p.premium, p.status, p.start_date, p.end_date, " +
             "p.inception_date, p.created_at FROM policy p " +
             "LEFT JOIN customer c ON c.id = p.customer_id " +
             "LEFT JOIN class_of_business cob ON cob.id = p.class_of_business_id " +
-            "LEFT JOIN product pr ON pr.id = p.product_id WHERE p.deleted_at IS NULL",
+            "LEFT JOIN product pr ON pr.id = p.product_id WHERE p.deleted_at IS NULL"),
 
-        DataSource.CLAIMS,
+        Map.entry(DataSource.CLAIMS,
             "SELECT cl.claim_number, p.policy_number, c.full_name AS customer_name, " +
             "cob.name AS class_of_business, cl.status, cl.reserve_amount, " +
             "cl.total_paid, cl.incident_date, cl.registered_at, cl.created_at " +
@@ -48,34 +53,163 @@ public class ReportQueryBuilder {
             "LEFT JOIN policy p ON p.id = cl.policy_id " +
             "LEFT JOIN customer c ON c.id = p.customer_id " +
             "LEFT JOIN class_of_business cob ON cob.id = p.class_of_business_id " +
-            "WHERE cl.deleted_at IS NULL",
+            "WHERE cl.deleted_at IS NULL"),
 
-        DataSource.FINANCE,
+        Map.entry(DataSource.FINANCE,
             "SELECT dn.debit_note_number, p.policy_number, c.full_name AS customer_name, " +
             "dn.amount, dn.status, dn.due_date, dn.created_at FROM debit_note dn " +
             "LEFT JOIN policy p ON p.id = dn.policy_id " +
             "LEFT JOIN customer c ON c.id = p.customer_id " +
-            "WHERE dn.deleted_at IS NULL",
+            "WHERE dn.deleted_at IS NULL"),
 
-        DataSource.REINSURANCE,
+        Map.entry(DataSource.REINSURANCE,
             "SELECT ria.id AS allocation_id, p.policy_number, t.name AS treaty_name, " +
             "t.type AS treaty_type, ria.retained_amount, ria.ceded_amount, " +
             "ria.status, ria.created_at FROM ri_allocation ria " +
             "LEFT JOIN policy p ON p.id = ria.policy_id " +
             "LEFT JOIN reinsurance_treaty t ON t.id = ria.treaty_id " +
-            "WHERE ria.deleted_at IS NULL",
+            "WHERE ria.deleted_at IS NULL"),
 
-        DataSource.CUSTOMERS,
+        Map.entry(DataSource.CUSTOMERS,
             "SELECT c.id, c.full_name, c.customer_type, c.kyc_status, " +
-            "c.channel, c.created_at FROM customer c WHERE c.deleted_at IS NULL",
+            "c.channel, c.created_at FROM customer c WHERE c.deleted_at IS NULL"),
 
-        DataSource.ENDORSEMENTS,
+        Map.entry(DataSource.ENDORSEMENTS,
             "SELECT e.endorsement_number, p.policy_number, c.full_name AS customer_name, " +
             "e.type AS endorsement_type, e.endorsement_premium, e.effective_date, " +
             "e.status, e.created_at FROM endorsement e " +
             "LEFT JOIN policy p ON p.id = e.policy_id " +
             "LEFT JOIN customer c ON c.id = p.customer_id " +
-            "WHERE e.deleted_at IS NULL"
+            "WHERE e.deleted_at IS NULL"),
+
+        // ── Module 12 — Period-End Closures (CLOSURES category) ───────────────
+        // Trial Balance: aggregated SELECT — GROUP BY supplied by BASE_QUERY_TAILS.
+        // Only POSTED journal entries are counted; date_from / date_to clip on
+        // je.business_date (the IFRS recording-date anchor per Slice 1.4 D1=A).
+        Map.entry(DataSource.TRIAL_BALANCE,
+            "SELECT coa.code AS account_code, coa.name AS account_name, " +
+            "coa.account_type, " +
+            "SUM(jel.debit_amount) AS total_debit, " +
+            "SUM(jel.credit_amount) AS total_credit, " +
+            "SUM(jel.debit_amount) - SUM(jel.credit_amount) AS net_balance " +
+            "FROM journal_entry_line jel " +
+            "JOIN journal_entry je ON je.id = jel.journal_entry_id " +
+            "  AND je.deleted_at IS NULL AND je.status = 'POSTED' " +
+            "JOIN chart_of_account coa ON coa.id = jel.account_id " +
+            "  AND coa.deleted_at IS NULL " +
+            "WHERE jel.deleted_at IS NULL"),
+
+        // General Ledger: per-line JE listing with COA + class_of_business
+        // resolution (Slice 1.10 V42 adds jel.class_of_business_id).
+        Map.entry(DataSource.GENERAL_LEDGER,
+            "SELECT je.id AS journal_entry_id, je.business_date, je.posting_date, " +
+            "je.source_module, je.source_event_type, je.source_reference, " +
+            "coa.code AS account_code, coa.name AS account_name, " +
+            "jel.debit_amount, jel.credit_amount, jel.currency_code, " +
+            "cob.name AS class_of_business, " +
+            "je.narrative, je.status " +
+            "FROM journal_entry_line jel " +
+            "JOIN journal_entry je ON je.id = jel.journal_entry_id AND je.deleted_at IS NULL " +
+            "JOIN chart_of_account coa ON coa.id = jel.account_id AND coa.deleted_at IS NULL " +
+            "LEFT JOIN class_of_business cob ON cob.id = jel.class_of_business_id " +
+            "WHERE jel.deleted_at IS NULL"),
+
+        // Period Lock Audit Trail: every soft/hard/release event since inception.
+        // The Type-2 SCD pattern (Slice 1.7) means a closed-then-reopened period
+        // produces 2+ rows in this listing; the timeline IS the audit history.
+        Map.entry(DataSource.GL_PERIOD_LOCK,
+            "SELECT pl.id, fp.start_date AS period_start, fp.end_date AS period_end, " +
+            "fp.period_type, pl.lock_type, pl.locked_at, pl.locked_by, " +
+            "pl.grace_window_until, pl.released_at, pl.released_by, pl.release_reason " +
+            "FROM period_lock pl " +
+            "JOIN fiscal_period fp ON fp.id = pl.fiscal_period_id AND fp.deleted_at IS NULL " +
+            "WHERE pl.deleted_at IS NULL"),
+
+        // PAA LRC roll-forward (raw table — one row per group×period).
+        // For the disclosure-shaped view that combines LRC + LIC, use IFRS17_MOVEMENT.
+        Map.entry(DataSource.PAA_LRC,
+            "SELECT lrc.id, fp.start_date AS period_start, fp.end_date AS period_end, " +
+            "p.code AS portfolio_code, p.name AS portfolio_name, " +
+            "g.cohort_year, g.onerousness, g.status AS group_status, " +
+            "lrc.opening_balance, lrc.premium_received, lrc.premium_earned, " +
+            "lrc.acquisition_costs_deferred, lrc.acquisition_costs_amortised, " +
+            "lrc.loss_component, lrc.loss_component_change, lrc.closing_balance, " +
+            "lrc.currency_code " +
+            "FROM paa_lrc lrc " +
+            "JOIN fiscal_period fp ON fp.id = lrc.period_id AND fp.deleted_at IS NULL " +
+            "JOIN group_of_contracts g ON g.id = lrc.group_id AND g.deleted_at IS NULL " +
+            "JOIN portfolio p ON p.id = g.portfolio_id AND p.deleted_at IS NULL " +
+            "WHERE lrc.deleted_at IS NULL"),
+
+        // Contract Groups listing — §22 portfolios × cohort_year × onerousness.
+        Map.entry(DataSource.PAA_GROUPS,
+            "SELECT g.id, p.code AS portfolio_code, p.name AS portfolio_name, " +
+            "cob.name AS class_of_business, " +
+            "g.cohort_year, g.onerousness, g.status AS group_status, g.created_at " +
+            "FROM group_of_contracts g " +
+            "JOIN portfolio p ON p.id = g.portfolio_id AND p.deleted_at IS NULL " +
+            "LEFT JOIN class_of_business cob ON cob.id = p.class_of_business_id " +
+            "WHERE g.deleted_at IS NULL"),
+
+        // IFRS 17 §103 movement analysis (V38 view — already shaped for disclosure).
+        // The view filters out (group, period) pairs with no LRC/LIC activity, so
+        // empty cohorts don't appear here.
+        Map.entry(DataSource.IFRS17_MOVEMENT,
+            "SELECT pma.period_id, pma.period_start, pma.period_end, " +
+            "pma.portfolio_code, pma.portfolio_name, " +
+            "pma.cohort_year, pma.onerousness, pma.group_status, " +
+            "pma.lrc_opening, pma.premium_received, pma.premium_earned, " +
+            "pma.acquisition_costs_deferred, pma.acquisition_costs_amortised, " +
+            "pma.loss_component, pma.loss_component_change, pma.lrc_closing, " +
+            "pma.lic_opening, pma.claims_incurred, pma.claims_paid, " +
+            "pma.case_reserve_change, pma.ibnr_estimate, pma.ibnr_change, " +
+            "pma.risk_adjustment, pma.risk_adjustment_change, pma.discount_unwind, pma.lic_closing, " +
+            "pma.total_opening, pma.total_closing, pma.currency_code " +
+            "FROM paa_movement_analysis pma WHERE 1=1"),
+
+        // IFRS 9 holdings register — current state from investment_holding.
+        // Reclassification history lives in investment_classification_history (Type-2 SCD).
+        Map.entry(DataSource.IFRS9_HOLDINGS,
+            "SELECT h.id, h.isin, h.security_name, h.issuer, h.asset_type, " +
+            "h.classification, h.acquisition_date, h.acquisition_cost, " +
+            "h.face_value, h.coupon_rate, h.maturity_date, h.currency_code, " +
+            "h.status, h.ecl_stage " +
+            "FROM investment_holding h WHERE h.deleted_at IS NULL"),
+
+        // IFRS 9 carrying-value roll-forward (raw table — one row per holding×period).
+        // For the disclosure-shaped view, use IFRS9_MOVEMENT.
+        Map.entry(DataSource.IFRS9_CARRYING,
+            "SELECT cv.id, fp.start_date AS period_start, fp.end_date AS period_end, " +
+            "h.isin, h.security_name, h.asset_type, h.classification, " +
+            "h.status AS holding_status, " +
+            "cv.opening_balance, cv.effective_interest_income, cv.coupon_received, " +
+            "cv.fair_value_change_pnl, cv.fair_value_change_oci, " +
+            "cv.ecl_movement, cv.impairment_loss, cv.disposals, " +
+            "cv.closing_balance, cv.closing_fair_value, cv.ecl_stage, cv.currency_code " +
+            "FROM investment_carrying_value cv " +
+            "JOIN fiscal_period fp ON fp.id = cv.period_id AND fp.deleted_at IS NULL " +
+            "JOIN investment_holding h ON h.id = cv.holding_id AND h.deleted_at IS NULL " +
+            "WHERE cv.deleted_at IS NULL"),
+
+        // IFRS 9 §B5.5.39 movement analysis (V40 view — already shaped for disclosure).
+        Map.entry(DataSource.IFRS9_MOVEMENT,
+            "SELECT imv.period_id, imv.period_start, imv.period_end, " +
+            "imv.isin, imv.security_name, imv.issuer, imv.asset_type, " +
+            "imv.classification, imv.holding_status, imv.currency_code, " +
+            "imv.opening_balance, imv.effective_interest_income, imv.coupon_received, " +
+            "imv.fair_value_change_pnl, imv.fair_value_change_oci, " +
+            "imv.ecl_movement, imv.impairment_loss, imv.disposals, " +
+            "imv.closing_balance, imv.closing_fair_value, imv.ecl_stage, " +
+            "imv.total_pnl_income, imv.total_oci_movement " +
+            "FROM ifrs9_investment_movement_analysis imv WHERE 1=1")
+    );
+
+    // GROUP BY / HAVING suffix per data source. Applied AFTER the filter
+    // WHERE clauses and BEFORE the user-supplied ORDER BY. Sources not in
+    // this map have no aggregation tail (the common case).
+    private static final Map<DataSource, String> BASE_QUERY_TAILS = Map.of(
+        DataSource.TRIAL_BALANCE,
+            "GROUP BY coa.code, coa.name, coa.account_type"
     );
 
     public List<Map<String, Object>> execute(ReportDefinition definition,
@@ -123,13 +257,50 @@ public class ReportQueryBuilder {
                         }
                     }
                     case "status" -> {
-                        sql.append(" AND ").append(statusCol(definition.getDataSource()))
-                           .append(" = ?").append(paramIdx++);
-                        params.add(value);
+                        String col = statusCol(definition.getDataSource());
+                        if (col != null) {
+                            sql.append(" AND ").append(col)
+                               .append(" = ?").append(paramIdx++);
+                            params.add(value);
+                        }
+                    }
+                    // ── Closures filters (Module 12) ─────────────────────────
+                    case "account_code" -> {
+                        // Sources that JOIN chart_of_account expose coa.code
+                        if (definition.getDataSource() == DataSource.GENERAL_LEDGER
+                                || definition.getDataSource() == DataSource.TRIAL_BALANCE) {
+                            sql.append(" AND coa.code = ?").append(paramIdx++);
+                            params.add(value);
+                        }
+                    }
+                    case "source_module" -> {
+                        if (definition.getDataSource() == DataSource.GENERAL_LEDGER) {
+                            sql.append(" AND je.source_module = ?").append(paramIdx++);
+                            params.add(value);
+                        }
+                    }
+                    case "classification" -> {
+                        // IFRS 9 reports — AC / FVOCI_DEBT / FVOCI_EQUITY / FVPL
+                        String col = switch (definition.getDataSource()) {
+                            case IFRS9_HOLDINGS, IFRS9_CARRYING -> "h.classification";
+                            case IFRS9_MOVEMENT                 -> "imv.classification";
+                            default                             -> null;
+                        };
+                        if (col != null) {
+                            sql.append(" AND ").append(col)
+                               .append(" = ?").append(paramIdx++);
+                            params.add(value);
+                        }
                     }
                     default -> log.debug("Unhandled filter key: {}", filter.getKey());
                 }
             }
+        }
+
+        // Apply aggregation tail (GROUP BY / HAVING) before ORDER BY
+        String tail = BASE_QUERY_TAILS.get(definition.getDataSource());
+        if (tail != null && !tail.isBlank()) {
+            sql.append(' ').append(tail);
         }
 
         // Apply sort
@@ -222,34 +393,62 @@ public class ReportQueryBuilder {
         return new BigDecimal(val.toString());
     }
 
-    /** Maps each datasource to its primary table's created_at column alias. */
+    /** Maps each datasource to its primary table's date column for date_from / date_to filters. */
     private String createdAtCol(DataSource ds) {
         return switch (ds) {
-            case POLICIES     -> "p.created_at";
-            case CLAIMS       -> "cl.created_at";
-            case FINANCE      -> "dn.created_at";
-            case REINSURANCE  -> "ria.created_at";
-            case CUSTOMERS    -> "c.created_at";
-            case ENDORSEMENTS -> "e.created_at";
+            case POLICIES         -> "p.created_at";
+            case CLAIMS           -> "cl.created_at";
+            case FINANCE          -> "dn.created_at";
+            case REINSURANCE      -> "ria.created_at";
+            case CUSTOMERS        -> "c.created_at";
+            case ENDORSEMENTS     -> "e.created_at";
+            // Closures: business_date / period_start are the natural anchors —
+            // not created_at (which is the row's insertion timestamp).
+            case TRIAL_BALANCE    -> "je.business_date";
+            case GENERAL_LEDGER   -> "je.business_date";
+            case GL_PERIOD_LOCK   -> "pl.locked_at";
+            case PAA_LRC          -> "fp.start_date";
+            case PAA_GROUPS       -> "g.created_at";
+            case IFRS17_MOVEMENT  -> "pma.period_start";
+            case IFRS9_HOLDINGS   -> "h.acquisition_date";
+            case IFRS9_CARRYING   -> "fp.start_date";
+            case IFRS9_MOVEMENT   -> "imv.period_start";
         };
     }
 
-    /** Maps each datasource to its status column alias. */
+    /**
+     * Maps each datasource to its status column, or null if the source has no
+     * single status column meaningful as a filter (the filter is then skipped).
+     */
     private String statusCol(DataSource ds) {
         return switch (ds) {
-            case POLICIES     -> "p.status";
-            case CLAIMS       -> "cl.status";
-            case FINANCE      -> "dn.status";
-            case REINSURANCE  -> "ria.status";
-            case CUSTOMERS    -> "c.kyc_status";
-            case ENDORSEMENTS -> "e.status";
+            case POLICIES         -> "p.status";
+            case CLAIMS           -> "cl.status";
+            case FINANCE          -> "dn.status";
+            case REINSURANCE      -> "ria.status";
+            case CUSTOMERS        -> "c.kyc_status";
+            case ENDORSEMENTS     -> "e.status";
+            // Closures status mappings — null means the source has no useful
+            // single status column for a generic filter.
+            case TRIAL_BALANCE    -> null;
+            case GENERAL_LEDGER   -> "je.status";
+            case GL_PERIOD_LOCK   -> "pl.lock_type";
+            case PAA_LRC          -> "g.status";
+            case PAA_GROUPS       -> "g.status";
+            case IFRS17_MOVEMENT  -> "pma.group_status";
+            case IFRS9_HOLDINGS   -> "h.status";
+            case IFRS9_CARRYING   -> "h.status";
+            case IFRS9_MOVEMENT   -> "imv.holding_status";
         };
     }
 
     /** Returns true only for datasources whose base query JOINs class_of_business. */
     private boolean hasCobJoin(DataSource ds) {
-        return ds == DataSource.POLICIES || ds == DataSource.CLAIMS
-                || ds == DataSource.ENDORSEMENTS;
+        return ds == DataSource.POLICIES
+                || ds == DataSource.CLAIMS
+                || ds == DataSource.ENDORSEMENTS
+                || ds == DataSource.GENERAL_LEDGER
+                || ds == DataSource.PAA_GROUPS;
     }
 
     /** Whitelist-based column name sanitizer — prevents SQL injection in ORDER BY. */

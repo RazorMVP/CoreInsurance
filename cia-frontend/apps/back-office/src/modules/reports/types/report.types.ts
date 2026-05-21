@@ -4,7 +4,8 @@ export type ReportCategory =
   | 'FINANCE'
   | 'REINSURANCE'
   | 'CUSTOMER'
-  | 'REGULATORY';
+  | 'REGULATORY'
+  | 'CLOSURES';
 
 export type ReportType = 'SYSTEM' | 'CUSTOM';
 
@@ -14,7 +15,17 @@ export type DataSource =
   | 'FINANCE'
   | 'REINSURANCE'
   | 'CUSTOMERS'
-  | 'ENDORSEMENTS';
+  | 'ENDORSEMENTS'
+  // Module 12 — Period-End Closures
+  | 'TRIAL_BALANCE'
+  | 'GENERAL_LEDGER'
+  | 'GL_PERIOD_LOCK'
+  | 'PAA_LRC'
+  | 'PAA_GROUPS'
+  | 'IFRS17_MOVEMENT'
+  | 'IFRS9_HOLDINGS'
+  | 'IFRS9_CARRYING'
+  | 'IFRS9_MOVEMENT';
 
 export type FieldType = 'STRING' | 'MONEY' | 'PERCENT' | 'DATE' | 'NUMBER' | 'INTEGER';
 export type FilterType = 'DATE' | 'DATE_RANGE' | 'SELECT' | 'MULTI_SELECT' | 'TEXT' | 'NUMBER';
@@ -99,6 +110,7 @@ export const CATEGORY_LABELS: Record<ReportCategory, string> = {
   REINSURANCE: 'Reinsurance',
   CUSTOMER: 'Customer',
   REGULATORY: 'Regulatory',
+  CLOSURES: 'Closures',
 };
 
 export const CATEGORY_COLORS: Record<ReportCategory, string> = {
@@ -108,13 +120,24 @@ export const CATEGORY_COLORS: Record<ReportCategory, string> = {
   REINSURANCE: 'text-violet-600 bg-violet-50 border-violet-200',
   CUSTOMER: 'text-amber-600 bg-amber-50 border-amber-200',
   REGULATORY: 'text-gray-600 bg-gray-50 border-gray-200',
+  CLOSURES: 'text-cyan-700 bg-cyan-50 border-cyan-200',
 };
 
 export const DATA_SOURCE_OPTIONS: { value: DataSource; label: string }[] = [
-  { value: 'POLICIES',     label: 'Policies' },
-  { value: 'CLAIMS',       label: 'Claims' },
-  { value: 'FINANCE',      label: 'Finance' },
-  { value: 'REINSURANCE',  label: 'Reinsurance' },
-  { value: 'CUSTOMERS',    label: 'Customers' },
-  { value: 'ENDORSEMENTS', label: 'Endorsements' },
+  { value: 'POLICIES',         label: 'Policies' },
+  { value: 'CLAIMS',           label: 'Claims' },
+  { value: 'FINANCE',          label: 'Finance' },
+  { value: 'REINSURANCE',      label: 'Reinsurance' },
+  { value: 'CUSTOMERS',        label: 'Customers' },
+  { value: 'ENDORSEMENTS',     label: 'Endorsements' },
+  // Module 12 — Period-End Closures
+  { value: 'TRIAL_BALANCE',    label: 'Trial Balance' },
+  { value: 'GENERAL_LEDGER',   label: 'General Ledger' },
+  { value: 'GL_PERIOD_LOCK',   label: 'Period Locks' },
+  { value: 'PAA_LRC',          label: 'PAA — LRC' },
+  { value: 'PAA_GROUPS',       label: 'PAA — Contract Groups' },
+  { value: 'IFRS17_MOVEMENT',  label: 'IFRS 17 §103 Movement' },
+  { value: 'IFRS9_HOLDINGS',   label: 'IFRS 9 — Holdings' },
+  { value: 'IFRS9_CARRYING',   label: 'IFRS 9 — Carrying Value' },
+  { value: 'IFRS9_MOVEMENT',   label: 'IFRS 9 §B5.5.39 Movement' },
 ];

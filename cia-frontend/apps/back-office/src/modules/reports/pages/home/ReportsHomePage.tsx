@@ -8,7 +8,7 @@ import { CATEGORY_COLORS, CATEGORY_LABELS } from '../../types/report.types';
 import type { ReportCategory, ReportDefinition } from '../../types/report.types';
 
 const QUICK_ACCESS_CATEGORIES: ReportCategory[] = [
-  'UNDERWRITING', 'CLAIMS', 'FINANCE', 'REINSURANCE', 'CUSTOMER', 'REGULATORY',
+  'UNDERWRITING', 'CLAIMS', 'FINANCE', 'REINSURANCE', 'CUSTOMER', 'REGULATORY', 'CLOSURES',
 ];
 
 function ReportCard({ report, showPin }: { report: ReportDefinition; showPin?: boolean }) {
@@ -71,7 +71,7 @@ export default function ReportsHomePage() {
     <div className="p-6 space-y-6">
       <PageHeader
         title="Reports & Analytics"
-        description="55 pre-built reports across all modules. Run, export, and pin the reports you use most."
+        description="67 pre-built reports across all modules. Run, export, and pin the reports you use most."
         actions={
           <Button asChild size="sm">
             <Link to="/reports/custom">

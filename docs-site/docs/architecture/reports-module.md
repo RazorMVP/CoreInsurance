@@ -6,7 +6,7 @@ sidebar_label: Reports & Analytics
 
 # Reports & Analytics — Module 11
 
-The Reports & Analytics module provides a centralised, permission-controlled reporting layer across all CIAGB modules. It ships **55 pre-built SYSTEM reports** covering underwriting, claims, finance, reinsurance, customer, and Nigerian regulatory (NAICOM/NIID) requirements, plus a **custom report builder** that lets authorised users create, save, and visualise ad-hoc reports.
+The Reports & Analytics module provides a centralised, permission-controlled reporting layer across all CIAGB modules. It ships **67 pre-built SYSTEM reports** across 7 categories — underwriting, claims, finance, reinsurance, customer, Nigerian regulatory (NAICOM/NIID), and closures (Module 12 GL + IFRS 17 PAA + IFRS 9 ledger reports) — plus a **custom report builder** that lets authorised users create, save, and visualise ad-hoc reports.
 
 ## Key Design Decisions
 
@@ -134,20 +134,40 @@ Reports a user cannot view **do not appear** in the library or home page — the
 | Migration | Purpose |
 |-----------|---------|
 | `V17__create_reports_tables.sql` | Creates `report_definition`, `report_pin`, `report_access_policy` + indexes |
-| `V18__seed_system_report_definitions.sql` | Seeds all 55 SYSTEM report definitions |
+| `V18__seed_system_report_definitions.sql` | Seeds the original 55 SYSTEM report definitions (Underwriting + Claims + Finance + Reinsurance + Customer + Regulatory) |
+| `V44__seed_closures_report_definitions.sql` | Adds 12 SYSTEM CLOSURES reports (4 GL + 4 IFRS 17 PAA + 4 IFRS 9). Total reaches 67. |
 
-## Pre-Built Report Catalogue (55 reports)
+## Pre-Built Report Catalogue (67 reports)
 
-| Category | Count | ID Range | Notable |
-|----------|-------|----------|---------|
+| Category | Count | ID Range / Coverage | Notable |
+|----------|-------|---------------------|---------|
 | Underwriting | 12 | U01–U12 | GWP, NWP, Policy Register, Renewal Due, Quote-to-Bind |
 | Claims | 13 | C01–C13 | Loss Ratio, Claims Ageing, Large Loss, Reserve Movement |
 | Finance | 9 | F01–F09 | Receivables Ageing, Collections, Commission Statement, Combined Ratio |
 | Reinsurance | 8 | R01–R08 | RI Bordereaux, Treaty Utilisation, Cession Statement |
 | Customer | 5 | K01–K05 | Active Customers, Customer Loss Ratio, Broker Performance |
 | Regulatory | 8 | N01–N08 | NAICOM Annual Revenue, Prudential Return, NAICOM Bordereaux; `is_pinnable=false` |
+| **Closures (V44)** | **12** | GL × 4 + PAA × 4 + IFRS 9 × 4 | Trial Balance, General Journal Listing, Account Movement Statement, Period Lock Audit Trail, LRC/LIC Roll-forward, Insurance Service Result Summary, Contract Groups Listing, Investment Holdings Schedule, Investment Carrying Value Movement, Premium Receivable ECL Schedule, §B5.5.39 Combined Movement Analysis. All pinnable. Backed by V31 (GL), V36/V38 (PAA), V39/V40 (IFRS 9) substrates. |
 
-Regulatory reports (N01–N08) have `is_pinnable = false` — the Pin button is not shown for these reports in the UI.
+Regulatory reports (N01–N08) have `is_pinnable = false` — the Pin button is not shown for these reports in the UI. CLOSURES reports are all pinnable (`is_pinnable = true`) since they are operational ledger queries, not regulator-mandated forms.
+
+### Closures Data Sources
+
+The CLOSURES category requires 9 new `DataSource` enum values mapped to `BASE_QUERIES` in `ReportQueryBuilder`:
+
+| Data Source        | Substrate                                                                              | Notes                                                                                                       |
+|--------------------|----------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------|
+| `TRIAL_BALANCE` | `journal_entry_line × journal_entry × chart_of_account` | Aggregated — uses `BASE_QUERY_TAILS` for `GROUP BY coa.code, coa.name, coa.account_type` |
+| `GENERAL_LEDGER` | `journal_entry_line × journal_entry × chart_of_account × class_of_business` | Per-line JE listing; class-of-business join via V42 `journal_entry_line.class_of_business_id` |
+| `GL_PERIOD_LOCK` | `period_lock × fiscal_period` | Type-2 SCD timeline of close/release events |
+| `PAA_LRC` | `paa_lrc × group_of_contracts × portfolio × fiscal_period` | Raw LRC roll-forward — one row per (group, period) |
+| `PAA_GROUPS` | `group_of_contracts × portfolio × class_of_business` | §22 group register |
+| `IFRS17_MOVEMENT` | `paa_movement_analysis` (V38 view) | §103 disclosure-shaped LRC + LIC roll-forward |
+| `IFRS9_HOLDINGS` | `investment_holding` | Current-state register |
+| `IFRS9_CARRYING` | `investment_carrying_value × investment_holding × fiscal_period` | Raw IFRS 9 per-(holding, period) roll-forward |
+| `IFRS9_MOVEMENT` | `ifrs9_investment_movement_analysis` (V40 view) | §B5.5.39 disclosure-shaped roll-forward |
+
+Three additional filter keys (`account_code`, `source_module`, `classification`) were added to `ReportQueryBuilder.execute()` to support per-account, per-event-source, and per-IFRS-9-classification scoping on closures reports.
 
 ## Development Conventions
 

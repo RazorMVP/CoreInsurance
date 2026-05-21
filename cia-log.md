@@ -8,11 +8,72 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-21. The MinIO bucket-bootstrap and `FiscalYearService.close()` cascade follow-ups (flagged during F5.16 / wrap-up smoke) both shipped via the Session 74 entry below.
+No open items as of 2026-05-21. The MinIO bucket-bootstrap and `FiscalYearService.close()` cascade follow-ups (flagged during F5.16 / wrap-up smoke) both shipped via the Session 74 entry below. The 12 CLOSURES reports were added in Session 75 below.
 
 ---
 
-## 2026-05-21 — Session 74 (`main`, continued): Figma sync — new "Closures" page with 20 editable frames for Phase 5
+## 2026-05-21 — Session 75 (`module-12-period-end-closures`): Module 11 extended — 12 default SYSTEM CLOSURES reports + new CLOSURES category
+
+The user asked to "update the reports section to include all the reports that can be generated from the Closure section so that they come as default reports while any other report from the closures can be readily configured by the users who have the privileges" — before opening Phase 6.
+
+After the off-topic Stop-hook detour (I had drifted into a scope-options message that included a "defer" path, which violates the user's strict policy of not deferring noticed work), I committed to and shipped the full scope in one bundled task: new `CLOSURES` category, 9 new data sources, 12 default SYSTEM reports, frontend wiring across the 7-category surface, doc-site refresh, full failsafe pass.
+
+### Shipped
+
+**Backend — `cia-reports` module:**
+
+- `DataSource.java` extended with 9 closures data sources covering the V31/V36/V38/V39/V40 substrates: `TRIAL_BALANCE`, `GENERAL_LEDGER`, `GL_PERIOD_LOCK`, `PAA_LRC`, `PAA_GROUPS`, `IFRS17_MOVEMENT` (V38 view), `IFRS9_HOLDINGS`, `IFRS9_CARRYING`, `IFRS9_MOVEMENT` (V40 view).
+- `ReportCategory.java` extended with a new `CLOSURES` value.
+- `ReportQueryBuilder.java`:
+  - `BASE_QUERIES` switched from `Map.of(...)` → `Map.ofEntries(Map.entry(...), ...)` (Java's `Map.of` caps at 10 pairs; we now hold 15).
+  - 9 new SQL templates appended — each follows the existing contract (end at a `WHERE ... IS NULL` so the filter loop's `AND <expr>` appends cleanly).
+  - New `BASE_QUERY_TAILS` map for aggregation suffixes — `TRIAL_BALANCE` is the only entry, supplying `GROUP BY coa.code, coa.name, coa.account_type`. The tail applies after the filter WHERE-clause loop and before the ORDER BY append, so `SELECT ... WHERE ... AND je.business_date <= ? GROUP BY ... ORDER BY ...` is syntactically valid.
+  - `createdAtCol()`, `statusCol()`, `hasCobJoin()` switch expressions extended exhaustively (the Java 21 enum-switch compiler enforces this — if a new enum value is missed, compile fails). For closures, `createdAtCol` returns the natural date anchor per source (`je.business_date`, `pl.locked_at`, `fp.start_date`, `pma.period_start`, etc.) — never `created_at`, since the operational anchor in closures is the business-date or period-start, not the row's insertion timestamp.
+  - `statusCol()` now returns `String?` (nullable) — the `case "status"` filter branch checks for null before appending the AND clause. `TRIAL_BALANCE` returns null (aggregated; no row-level status).
+  - 3 new filter keys: `account_code` (sources that JOIN chart_of_account), `source_module` (GENERAL_LEDGER only), `classification` (IFRS 9 sources — AC/FVOCI_DEBT/FVOCI_EQUITY/FVPL).
+
+**Backend — `cia-api` Flyway migration:**
+
+- `V44__seed_closures_report_definitions.sql` — 12 SYSTEM CLOSURES reports:
+  - GL × 4: Trial Balance, General Journal Listing, Account Movement Statement, Period Lock Audit Trail.
+  - PAA × 4: LRC Roll-forward Schedule, LIC Roll-forward Schedule, Insurance Service Result Summary, Contract Groups Listing.
+  - IFRS 9 × 4: Investment Holdings Schedule, Investment Carrying Value Movement, Premium Receivable ECL Schedule, §B5.5.39 Combined Movement Analysis.
+  - All 12 have `is_pinnable=TRUE` (operational ledger queries, not regulator-mandated forms like N01–N08).
+  - No `report_access_policy` rows seeded — mirrors V18's pattern. Tenant System Admin grants access per access group via the existing Reports → Setup UI. Privileged users (`reports:create_custom`) can clone any of these into a CUSTOM report via the existing `ReportDefinitionService.clone()` path — that's how the user's "readily configured by users who have the privileges" requirement is met without new code.
+
+**Frontend — `cia-frontend/apps/back-office/src/modules/reports/`:**
+
+- `types/report.types.ts` — extended `ReportCategory` union with `'CLOSURES'`, `DataSource` union with the 9 new sources, `CATEGORY_LABELS` + `CATEGORY_COLORS` Records (TypeScript's `Record<ReportCategory, string>` enforces exhaustiveness — the type-checker caught the missing `CLOSURES` row immediately), `DATA_SOURCE_OPTIONS` enriched with all 9 new entries for the Custom Report Builder picker.
+- `pages/home/ReportsHomePage.tsx` — `QUICK_ACCESS_CATEGORIES` extended with `'CLOSURES'` (the grid jumps from 6 to 7 category cards); page header copy updated `55 → 67`.
+- `pages/library/ReportLibraryPage.tsx` — `ALL_CATEGORIES` array gained a `Closures` tab.
+- `ReportAccessSetupPage.tsx` needed no edits — it iterates `Object.keys(CATEGORY_LABELS)` so it picks up CLOSURES automatically.
+
+**Documentation refresh:**
+
+- `CLAUDE.md` — Module 11 row in the summary table updated 55 → 67 + CLOSURES, Build 11 sub-pages table updated for new category count + V44 migration, `cia-reports` module note updated.
+- `.claude/skills/cia/SKILL.md` — Module 11 description + catalogue summary table + frontend ASCII art (6→7 categories) all updated; added the CLOSURES row to the catalogue summary.
+- `docs-site/docs/intro.mdx`, `docs-site/docs/architecture/overview.md`, `docs-site/docs/architecture/modules.md`, `docs-site/docs/architecture/reports-module.md`, `docs-site/docs/guides/database-migrations.md` — all 55-report references replaced with 67. The reports-module.md gained a new "Closures Data Sources" subsection mapping each new `DataSource` enum value to its tenant-schema substrate (V31 GL / V36 PAA / V38 view / V39 IFRS 9 / V40 view).
+
+### What I did NOT change (and why)
+
+- **Access-policy seeding.** V18 does not seed `report_access_policy` rows for the original 55 — that table is per-tenant operational state, not catalog. V44 follows the same pattern. Bypassing this would force a default access matrix on tenants that they cannot un-grant retroactively, breaking the security model.
+- **`cia-reports` test surface.** None exists yet. The cia-api failsafe ITs cover the schema validation (any IT booting Spring runs Flyway, applying V44).
+- **`PAA_LIC` separate data source.** The IFRS 17 §103 disclosure view (`paa_movement_analysis`) already exposes both LRC + LIC sides. ISR Summary, LIC Roll-forward, and LRC Roll-forward all source from `IFRS17_MOVEMENT`. No need for a raw `PAA_LIC` source until a user requests a custom report on raw LIC fields the view doesn't expose.
+
+### Verification
+
+- **`mvn -pl cia-reports clean compile -DskipTests`** — BUILD SUCCESS, 26 source files compiled, no warnings from the exhaustive switch expressions.
+- **`mvn -pl cia-api failsafe:integration-test -Dit.test=ChartOfAccountServiceIT`** — 12/12 tests passed, validating that V44 applies cleanly through Flyway (any IT boot would have failed at startup if V44 had a SQL or JSON error).
+- **`mvn -pl cia-api verify`** (full failsafe suite) — **274 tests, 0 failures, 0 errors, 1 intentional skip, BUILD SUCCESS**. Baseline preserved exactly.
+
+### Architectural callouts
+
+- **Privileged-user configuration model.** The existing `ReportDefinitionService.clone()` + `reports:create_custom` permission is exactly the mechanism the user wanted. A System Admin who grants `reports:create_custom` to a Finance/CFO access group can immediately fork any of the 12 default closures reports and edit fields/filters/charts. No new API surface needed for "readily configured by users with privileges."
+- **Substrate flexibility.** The PAA_LRC and IFRS9_CARRYING raw sources stay in the enum even though no default report uses them — they're available for custom reports that need access to fields the disclosure views don't surface (currency mixing checks, group-level LIC breakdowns).
+- **No frontend type drift.** Because `ReportCategory` is a TypeScript union type, the type system caught every place I needed to add a CLOSURES entry. Same with `DataSource` for the Custom Report Builder. Zero runtime branches needed.
+
+Commit: this entry's session work.
+
 
 Synced Phase 5 (Module 12 back-office frontend) into the BackOffice Figma file (`Zaiu2K7NvEJ7Cjj6z1xt2D`) ahead of Phase 6 design work. The Figma file had 11 existing module pages (Setup / Customers / Quotation / Policies / Endorsements / Finance / Claims / Reinsurance / Audit / Reports / Dashboard) but no Closures page — the entire Phase 5 surface was missing from the design system of record.
 

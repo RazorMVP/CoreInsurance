@@ -29,7 +29,7 @@ cia-backend/
 ├── cia-finance/         # Module 8: Finance — AND Module 12: Period-End Closures (subpackages)
 ├── cia-partner-api/     # Module 9: Partner Open API
 ├── cia-audit/           # Module 10: Audit & Compliance
-├── cia-reports/         # Module 11: Reports & Analytics (55 pre-built reports, custom builder, CSV/PDF export)
+├── cia-reports/         # Module 11: Reports & Analytics (67 pre-built reports incl. CLOSURES category, custom builder, CSV/PDF export)
 └── cia-api/             # Assembly: main app, REST controllers, Flyway, config + Dashboard API
 ```
 

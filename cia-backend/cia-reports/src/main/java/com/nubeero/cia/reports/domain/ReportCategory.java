@@ -6,5 +6,6 @@ public enum ReportCategory {
     FINANCE,
     REINSURANCE,
     CUSTOMER,
-    REGULATORY
+    REGULATORY,
+    CLOSURES
 }

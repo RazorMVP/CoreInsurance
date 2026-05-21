@@ -74,5 +74,5 @@ ApiResponse<T> { data, meta, errors }
 | 8 | Finance | Receipts, payments, reconciliation |
 | 9 | Partner Open API | OAuth2 clients, REST API, webhooks |
 | 10 | Audit & Compliance | Full audit trail, login logs, 6 reports, CSV export, real-time alerts |
-| 11 | Reports & Analytics | 55 pre-built reports (Underwriting / Claims / Finance / Reinsurance / Customer / Regulatory), custom report builder, CSV + PDF export |
+| 11 | Reports & Analytics | 67 pre-built reports (Underwriting / Claims / Finance / Reinsurance / Customer / Regulatory / Closures), custom report builder, CSV + PDF export |
 | 12 | Period-End Closures | GL foundation + IFRS 17 PAA measurement + IFRS 9 measurement + NAICOM monthly recap submissions (N01–N08). Lives inside `cia-finance` — see [Module 12 implementation plan](./period-end-closures-implementation-plan.md). |

@@ -35,7 +35,8 @@ db/migration/
 ├── V15__add_policy_naicom_fields.sql       # naicom_uid, niid_uid on policies
 ├── V16__create_audit_alert_config.sql      # audit_alert_config default row
 ├── V17__create_report_tables.sql           # report_definition, report_pin, report_access_policy
-├── V18__seed_system_report_definitions.sql # 55 SYSTEM report definitions (data migration)
+├── V18__seed_system_report_definitions.sql # 55 SYSTEM report definitions (data migration; original 6 categories)
+├── V44__seed_closures_report_definitions.sql # 12 SYSTEM CLOSURES reports — GL + IFRS 17 PAA + IFRS 9 (lifts total to 67)
 ├── V19__customer_kyc_document_fields.sql   # id_document_url, id_expiry_date, cac fields
 ├── V20__customer_number_format.sql         # customer_number_format singleton; customer_number column
 ├── V21__quote_config_tables.sql            # quote_discount_types, quote_loading_types, quote_config; seeded defaults

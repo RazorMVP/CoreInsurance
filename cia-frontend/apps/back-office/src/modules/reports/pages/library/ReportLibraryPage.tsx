@@ -15,6 +15,7 @@ const ALL_CATEGORIES: Array<{ value: ReportCategory | 'ALL'; label: string }> = 
   { value: 'REINSURANCE',  label: 'Reinsurance' },
   { value: 'CUSTOMER',     label: 'Customer' },
   { value: 'REGULATORY',   label: 'Regulatory' },
+  { value: 'CLOSURES',     label: 'Closures' },
 ];
 
 interface LibraryCardProps {
