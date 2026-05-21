@@ -228,6 +228,50 @@ export const PaaPeriodCloseResultDtoSchema = z.object({
 });
 export type PaaPeriodCloseResultDto = z.infer<typeof PaaPeriodCloseResultDtoSchema>;
 
+// ── IFRS 9 Investment Holdings + Classification History (Slice 3.2) ─────
+
+export const AssetTypeSchema = z.enum(['DEBT', 'EQUITY', 'MONEY_MARKET', 'DERIVATIVE']);
+export type AssetType = z.infer<typeof AssetTypeSchema>;
+
+export const InvestmentClassificationSchema = z.enum([
+  'AMORTISED_COST', 'FVOCI_DEBT', 'FVOCI_EQUITY', 'FVPL',
+]);
+export type InvestmentClassification = z.infer<typeof InvestmentClassificationSchema>;
+
+export const HoldingStatusSchema = z.enum(['ACTIVE', 'MATURED', 'SOLD', 'IMPAIRED']);
+export type HoldingStatus = z.infer<typeof HoldingStatusSchema>;
+
+export const InvestmentHoldingDtoSchema = z.object({
+  id:               z.string(),
+  isin:             z.string().nullable().optional(),
+  securityName:     z.string(),
+  issuer:           z.string().nullable().optional(),
+  assetType:        AssetTypeSchema,
+  classification:   InvestmentClassificationSchema,
+  acquisitionDate:  z.string(),
+  acquisitionCost:  z.number(),
+  faceValue:        z.number().nullable().optional(),
+  couponRate:       z.number().nullable().optional(),
+  maturityDate:     z.string().nullable().optional(),
+  currencyCode:     z.string(),
+  status:           HoldingStatusSchema,
+  sppiTestPassed:   z.boolean().nullable().optional(),
+  eclStage:         z.number().nullable().optional(),
+});
+export type InvestmentHoldingDto = z.infer<typeof InvestmentHoldingDtoSchema>;
+
+export const InvestmentClassificationHistoryDtoSchema = z.object({
+  id:                     z.string(),
+  holdingId:              z.string(),
+  previousClassification: InvestmentClassificationSchema,
+  newClassification:      InvestmentClassificationSchema,
+  reclassificationDate:   z.string(),
+  reason:                 z.string(),
+  approvedBy:             z.string(),
+  createdAt:              z.string(),
+});
+export type InvestmentClassificationHistoryDto = z.infer<typeof InvestmentClassificationHistoryDtoSchema>;
+
 // ── IFRS 17 Contract Groups + Portfolios (Slice 2.2) ─────────────────────
 
 export const OnerousnessSchema = z.enum(['NOT_ONEROUS', 'NO_SIGNIFICANT_POSSIBILITY', 'ONEROUS']);

@@ -45,6 +45,7 @@ public class Ifrs9HoldingController {
 
     private final InvestmentClassificationService classificationService;
     private final InvestmentHoldingRepository holdingRepository;
+    private final InvestmentClassificationHistoryRepository historyRepository;
 
     @PostMapping
     @PreAuthorize("hasRole('FINANCE_APPROVE')")
@@ -96,6 +97,25 @@ public class Ifrs9HoldingController {
             .findByDeletedAtIsNullOrderBySecurityNameAsc()
             .stream()
             .map(InvestmentHoldingResponse::from)
+            .toList();
+        return ApiResponse.success(list);
+    }
+
+    @GetMapping("/{holdingId}/classification-history")
+    @PreAuthorize("hasRole('FINANCE_VIEW')")
+    @Operation(summary = "Get classification history of a holding (§B4.1.26)",
+               description = "Returns every Type-2 SCD row from investment_classification_history for the holding, ordered ASC by reclassification date. NAICOM auditors require this trail per §B4.1.26 — previous → new classification, the reclassification date, the textual reason, and the approver.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Classification history",
+            content = @Content(schema = @Schema(implementation = InvestmentClassificationHistoryResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content)
+    })
+    public ApiResponse<List<InvestmentClassificationHistoryResponse>> classificationHistory(@PathVariable UUID holdingId) {
+        List<InvestmentClassificationHistoryResponse> list = historyRepository
+            .findByHoldingIdAndDeletedAtIsNullOrderByReclassificationDateAsc(holdingId)
+            .stream()
+            .map(InvestmentClassificationHistoryResponse::from)
             .toList();
         return ApiResponse.success(list);
     }

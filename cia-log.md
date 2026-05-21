@@ -12,9 +12,33 @@ No open items as of 2026-05-20. Slice 1.10 (GL substrate enrichment) was the onl
 
 ---
 
-## 2026-05-21 — Session 74 (`main`, continued): Slices F5.1 → F5.11 — Phase 1 GL + Backfill + PAA period close + §103 + Contract Groups (Phase 2 complete)
+## 2026-05-21 — Session 74 (`main`, continued): Slices F5.1 → F5.12 — Phase 1 GL + Phase 2 PAA + IFRS 9 holdings (Phase 3 opens)
 
-Phase 5 (Module 12 frontend) opened; nine slices shipped across the session. **Phase 1 GL frontend + admin loop complete (6/6). Phase 2 IFRS 17 PAA frontend complete (3/3).** Remaining: F5.7 (Posting Rules viewer, skipped), Phase 3 IFRS 9 (F5.12–F5.14), Phase 4 NAICOM (F5.15–F5.16).
+Phase 5 (Module 12 frontend) opened; ten slices shipped across the session. **Phase 1 GL frontend + admin loop complete (6/6). Phase 2 IFRS 17 PAA frontend complete (3/3).** Phase 3 IFRS 9 now opened (F5.12 — Investment holdings + §B4.1.26 classification history). Remaining: F5.7 (Posting Rules, skipped), F5.13–F5.14 (Phase 3 measurement viewers + IFRS 9 movement analysis), F5.15–F5.16 (Phase 4 NAICOM).
+
+### Slice F5.12 — Investment Holdings + §B4.1.26 classification history (Phase 3 opens)
+
+Opens the IFRS 9 frontend surface. The existing `Ifrs9HoldingController` had list + detail endpoints but no classification-history endpoint despite `InvestmentClassificationHistoryRepository.findByHoldingId...` existing — same pattern as the JE browser (F5.4): backend had the data, no REST surface.
+
+**Backend (cia-finance):**
+
+- `InvestmentClassificationHistoryResponse.java` (new DTO) — flat Type-2 SCD row: holdingId, previousClassification, newClassification, reclassificationDate, reason, approvedBy, createdAt. The four fields NAICOM auditors sample (previous, new, date, reason) all surfaced.
+- `Ifrs9HoldingController.classificationHistory(holdingId)` — new `GET /api/v1/finance/ifrs9/holdings/{holdingId}/classification-history` endpoint, FINANCE_VIEW gated. Reuses the existing repository finder.
+
+**Frontend (back-office + api-client):**
+
+- `@cia/api-client/finance-closures.ts` — added `AssetTypeSchema` (DEBT / EQUITY / MONEY_MARKET / DERIVATIVE), `InvestmentClassificationSchema` (AMORTISED_COST / FVOCI_DEBT / FVOCI_EQUITY / FVPL), `HoldingStatusSchema` (ACTIVE / MATURED / SOLD / IMPAIRED), `InvestmentHoldingDtoSchema`, `InvestmentClassificationHistoryDtoSchema`.
+- `HoldingsListPage.tsx` (new) — 4-control filter bar (Asset type / Classification / Status / Reset), 4 StatCards (Holdings filtered / Active / FVPL holdings / Total acquisition cost), table with classification badges (AMORTISED_COST = green, FVOCI_DEBT = amber, FVOCI_EQUITY = slate, FVPL = red), ECL stage chips (Stage 1/2/3) for AC + FVOCI_DEBT rows, status badges, hover row → opens detail sheet.
+- `HoldingClassificationHistorySheet.tsx` (new) — current-state metadata card (current classification + asset type + status + acquisition cost + **SPPI test §4.1.3** + **ECL stage §5.5.3**), then §B4.1.26 reclassification trail as a vertical timeline. Each entry shows `previousClassification → newClassification` with the date, italic reason, and approver. Smart empty state: "No reclassifications. Holding has stayed in {CURRENT_CLASS} since recognition." — auditor-friendly framing rather than a generic "no data" message.
+- `modules/closures/index.tsx` — ninth tab "Holdings" + `/closures/holdings` route.
+
+**Smoke test (live `:8090`):**
+1. Registered a sample FGN bond via `curl POST /holdings` — `{isin:"NG0000B65B12", securityName:"FGN 16.2884% 2027", assetType:"DEBT", businessModel:"HOLD_TO_COLLECT", sppiTestPassed:true, acquisitionCost:50000000, ...}`.
+2. Service auto-classified as **AMORTISED_COST** (SPPI passed ✓ + HOLD_TO_COLLECT business model → §4.1 decision matrix lands on AC).
+3. Browser shows the holding, 4 StatCards updated (Holdings 1, Active 1, FVPL 0, Total cost NGN 50,000,000.00), Stage 1 ECL badge auto-set by the service.
+4. Row-click → history sheet renders: current AMORTISED_COST badge, SPPI test ✓ Passed, ECL stage Stage 1, then "No reclassifications" empty state with the correct framing.
+
+**Discovery during smoke test:** the BusinessModel enum is `[HOLD_TO_COLLECT, HOLD_TO_COLLECT_AND_SELL, SELL_FIRST]`, not the more obvious `[HTC, HTCS, OTHER]`. Doc reference for future seed-data scripts.
 
 ### Slice F5.11 — Contract Groups list (Phase 2 closes)
 

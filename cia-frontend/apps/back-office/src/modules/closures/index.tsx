@@ -10,6 +10,7 @@ const BackfillAdminPage        = lazy(() => import('./pages/BackfillAdminPage'))
 const PaaPeriodClosePage       = lazy(() => import('./pages/PaaPeriodClosePage'));
 const PaaMovementAnalysisPage  = lazy(() => import('./pages/PaaMovementAnalysisPage'));
 const ContractGroupsPage       = lazy(() => import('./pages/ContractGroupsPage'));
+const HoldingsListPage         = lazy(() => import('./pages/HoldingsListPage'));
 
 const tabs: { label: string; path: string }[] = [
   { label: 'Periods',            path: '/closures/periods' },
@@ -20,6 +21,7 @@ const tabs: { label: string; path: string }[] = [
   { label: 'PAA Close',          path: '/closures/paa-close' },
   { label: 'Movement Analysis',  path: '/closures/movement-analysis' },
   { label: 'Contract Groups',    path: '/closures/contract-groups' },
+  { label: 'Holdings',           path: '/closures/holdings' },
 ];
 
 function Loading() {
@@ -65,6 +67,7 @@ export default function ClosuresModule() {
             <Route path="paa-close"           element={<PaaPeriodClosePage />} />
             <Route path="movement-analysis"   element={<PaaMovementAnalysisPage />} />
             <Route path="contract-groups"     element={<ContractGroupsPage />} />
+            <Route path="holdings"            element={<HoldingsListPage />} />
           </Routes>
         </Suspense>
       </div>
