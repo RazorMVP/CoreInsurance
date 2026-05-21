@@ -57,11 +57,11 @@ public class BranchService {
     }
 
     @Transactional
-    public void delete(UUID id) {
+    public void delete(UUID id, String reason) {
         Branch entity = findOrThrow(id);
         entity.softDelete();
         repository.save(entity);
-        auditService.log("Branch", id.toString(), AuditAction.DELETE, entity, null);
+        auditService.logWithReason("Branch", id.toString(), AuditAction.DELETE, entity, null, reason);
     }
 
     private Sbu resolveSbu(UUID sbuId) {

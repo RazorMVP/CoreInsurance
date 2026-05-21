@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Data
 public class IndividualCustomerRequest {
@@ -47,4 +48,8 @@ public class IndividualCustomerRequest {
 
     @NotBlank
     private String country;
+
+    /** Assigned Relationship Manager (cia-setup). Optional during transition;
+        UI enforces required-on-create. */
+    private UUID relationshipManagerId;
 }

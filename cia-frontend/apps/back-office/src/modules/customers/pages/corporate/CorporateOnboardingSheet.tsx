@@ -10,7 +10,7 @@ import {
 import { useFieldArray, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type BrokerDto } from '@cia/api-client';
+import { apiClient, type BrokerDto, type RelationshipManagerDto } from '@cia/api-client';
 
 const EXPIRY_TYPES = ['DRIVERS_LICENSE', 'PASSPORT'] as const;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -45,6 +45,7 @@ const schema = z.object({
   directors:     z.array(directorSchema).min(1, 'At least one director required'),
   brokerEnabled: z.boolean(),
   brokerId:      z.string().optional(),
+  relationshipManagerId: z.string().min(1, 'Required'),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -78,6 +79,16 @@ export default function CorporateOnboardingSheet({ open, onOpenChange, onSuccess
   // Memoised so SelectItems aren't re-created on every parent render.
   const brokers = useMemo(() => brokersQuery.data ?? [], [brokersQuery.data]);
 
+  const rmsQuery = useQuery<RelationshipManagerDto[]>({
+    queryKey: ['setup', 'relationship-managers'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: RelationshipManagerDto[] }>('/api/v1/setup/relationship-managers');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const rms = useMemo(() => rmsQuery.data ?? [], [rmsQuery.data]);
+
   // CAC certificate
   const cacFileRef   = useRef<HTMLInputElement>(null);
   const [cacFile, setCacFile]       = useState<File | null>(null);
@@ -95,6 +106,7 @@ export default function CorporateOnboardingSheet({ open, onOpenChange, onSuccess
       companyName: '', rcNumber: '', cacIssuedDate: '', email: '', phone: '', address: '',
       directors:   [{ fullName: '', idType: 'NIN', idNumber: '', idExpiryDate: '' }],
       brokerEnabled: false, brokerId: '',
+      relationshipManagerId: '',
     },
   });
 
@@ -142,6 +154,7 @@ export default function CorporateOnboardingSheet({ open, onOpenChange, onSuccess
       fd.append('phone',         values.phone);
       fd.append('address',       values.address);
       if (values.brokerEnabled && values.brokerId) fd.append('brokerId', values.brokerId);
+      fd.append('relationshipManagerId', values.relationshipManagerId);
 
       // Directors as JSON string (Spring @ModelAttribute will bind list fields)
       values.directors.forEach((d, i) => {
@@ -356,6 +369,26 @@ export default function CorporateOnboardingSheet({ open, onOpenChange, onSuccess
             </div>
 
             <Separator />
+
+            {/* Relationship Manager — required for every customer */}
+            <FormField control={form.control} name="relationshipManagerId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Relationship Manager <span className="text-destructive">*</span></FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select relationship manager" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {rms.map(r => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.name}{r.branchName ? ` — ${r.branchName}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {/* Broker-enabled */}
             <FormField control={form.control} name="brokerEnabled"

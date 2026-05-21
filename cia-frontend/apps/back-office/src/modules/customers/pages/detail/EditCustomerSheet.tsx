@@ -3,7 +3,7 @@ import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type BrokerDto } from '@cia/api-client';
+import { apiClient, type BrokerDto, type RelationshipManagerDto } from '@cia/api-client';
 import {
   Badge, Button, Form, FormControl, FormDescription, FormField, FormItem,
   FormLabel, FormMessage, FormRow, Input,
@@ -59,6 +59,8 @@ export interface CustomerSnapshot {
   contactPerson?: string;
   brokerName?: string;
   brokerId?: string;
+  relationshipManagerId?: string;
+  relationshipManagerName?: string;
   idType?: string;
   idNumber?: string;
   idExpiryDate?: string;
@@ -86,6 +88,7 @@ const schema = z.object({
   address:       z.string().min(5, 'Required').or(z.literal('')),
   contactPerson: z.string().optional(),
   brokerId:      z.string().optional(),
+  relationshipManagerId: z.string().min(1, 'Required'),
   idType:        z.string().optional(),
   idNumber:      z.string().optional(),
   idExpiryDate:  z.string().optional(),
@@ -152,6 +155,15 @@ export default function EditCustomerSheet({ open, onOpenChange, customer, onSucc
     },
     enabled: open,
   });
+  const rmsQuery = useQuery<RelationshipManagerDto[]>({
+    queryKey: ['setup', 'relationship-managers'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: RelationshipManagerDto[] }>('/api/v1/setup/relationship-managers');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const rms = useMemo(() => rmsQuery.data ?? [], [rmsQuery.data]);
   // Prepend the "no broker" sentinel so the select can represent "Direct".
   // Memoised so child Selects don't re-key SelectItems on every parent render.
   const brokerOptions = useMemo(
@@ -287,6 +299,7 @@ export default function EditCustomerSheet({ open, onOpenChange, customer, onSucc
       if (isCorporate && values.contactPerson) fd.append('contactPerson', values.contactPerson);
       const broker = values.brokerId === '__none__' ? '' : (values.brokerId ?? '');
       if (broker) fd.append('brokerId', broker);
+      if (values.relationshipManagerId) fd.append('relationshipManagerId', values.relationshipManagerId);
 
       // Customer-level KYC
       if (customerKycChanged) {
@@ -376,6 +389,19 @@ export default function EditCustomerSheet({ open, onOpenChange, customer, onSucc
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                   <SelectContent>{brokerOptions.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="relationshipManagerId" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Relationship Manager <span className="text-destructive">*</span></FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Select relationship manager" /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    {rms.map(r => (<SelectItem key={r.id} value={r.id}>{r.name}{r.branchName ? ` — ${r.branchName}` : ''}</SelectItem>))}
+                  </SelectContent>
                 </Select>
                 <FormMessage />
               </FormItem>
@@ -629,6 +655,7 @@ function buildDefaults(customer: CustomerSnapshot): FormValues {
     address:         customer.address,
     contactPerson:   customer.contactPerson ?? '',
     brokerId:        customer.brokerId ?? '__none__',
+    relationshipManagerId: customer.relationshipManagerId ?? '',
     idType:          customer.idType        ?? '',
     idNumber:        customer.idNumber      ?? '',
     idExpiryDate:    customer.idExpiryDate  ?? '',

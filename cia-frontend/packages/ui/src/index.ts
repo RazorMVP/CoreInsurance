@@ -28,6 +28,8 @@ export {
   Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogOverlay, DialogPortal, DialogTitle, DialogTrigger,
 } from './components/dialog';
+export { ConfirmDeleteDialog }       from './components/confirm-delete-dialog';
+export type { ConfirmDeleteDialogProps } from './components/confirm-delete-dialog';
 
 // ── Sheet ────────────────────────────────────────────────────────────────
 export {

@@ -6,6 +6,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, type ApprovalGroupDto } from '@cia/api-client';
 import { type Row } from '@tanstack/react-table';
+import { useDeleteWithReason } from '@/lib/use-delete-with-reason';
 import ApprovalGroupSheet from './ApprovalGroupSheet';
 
 const MODULE_LABELS: Record<string, string> = {
@@ -16,6 +17,12 @@ const MODULE_LABELS: Record<string, string> = {
 export default function ApprovalGroupsPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing,   setEditing]   = useState<ApprovalGroupDto | null>(null);
+  const { setTarget: setDeleteTarget, dialog: deleteDialog } = useDeleteWithReason<ApprovalGroupDto>({
+    endpoint: (id) => `/api/v1/setup/approval-groups/${id}`,
+    invalidateKey: ['setup', 'approval-groups'],
+    entityLabel: 'Approval Group',
+    entityName: (g) => g.name,
+  });
 
   const groupsQuery = useQuery<ApprovalGroupDto[]>({
     queryKey: ['setup', 'approval-groups'],
@@ -59,7 +66,7 @@ export default function ApprovalGroupsPage() {
                     row={{ original: group } as Row<ApprovalGroupDto>}
                     actions={[
                       { label: 'Edit',   onClick: (r) => openEdit(r.original) },
-                      { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
+                      { label: 'Delete', onClick: (r) => setDeleteTarget(r.original), separator: true, className: 'text-destructive' },
                     ]}
                   />
                 </div>
@@ -92,6 +99,7 @@ export default function ApprovalGroupsPage() {
         group={editing}
         onSuccess={() => setSheetOpen(false)}
       />
+      {deleteDialog}
     </div>
   );
 }

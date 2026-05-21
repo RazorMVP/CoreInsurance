@@ -108,7 +108,7 @@ cia-backend/
 ├── cia-notifications/   # NotificationService, Email + SMS implementations
 ├── cia-workflow/        # Temporal client config, workflow & activity interfaces
 ├── cia-documents/       # PDF generation (Apache PDFBox), template rendering, clause bank
-├── cia-setup/           # Module 1: Setup & Administration (36 features — adds Adjuster master data via V45)
+├── cia-setup/           # Module 1: Setup & Administration (36 features — Adjuster master data V45; RelationshipManager now wired into Customer onboarding via V46)
 ├── cia-customer/        # Module 7: Customer Onboarding & KYC (10 features)
 ├── cia-quotation/       # Module 2: Quotation (5 features)
 ├── cia-policy/          # Module 3: Policy (23 features)
@@ -793,7 +793,7 @@ Each tenant can optionally enable a **sandbox mode** for Insurtechs to test inte
 
 | # | Module | Features | Key Outputs |
 |---|---|---|---|
-| 1 | Setup & Administration | 36 | Products, classes, approval groups, master data (brokers / reinsurers / insurers / branches / SBUs / surveyors / **adjusters** — V45), partner management |
+| 1 | Setup & Administration | 36 | Products, classes, approval groups, master data (brokers / reinsurers / insurers / branches / SBUs / surveyors / **adjusters** — V45 / **relationship managers** — now UI-surfaced in Session 79 + customer FK via V46), partner management |
 | 2 | Quotation | 6 | Quote documents, per-item loadings/discounts, clause selection, PDF download, quote config tab |
 | 3 | Policy | 23 | Policy documents, debit notes, NAICOM/NIID upload |
 | 4 | Endorsements | 10 | Endorsement documents, debit/credit notes |
@@ -1006,7 +1006,7 @@ bash cia-frontend/scripts/check-api-wiring.sh
 ### Database
 - Migrations via Flyway. One migration file per change. Never edit existing migrations.
 - All foreign keys enforced at DB level.
-- Soft deletes (`deleted_at`) for all master data entities (brokers, products, etc.).
+- Soft deletes (`deleted_at`) for all master data entities (brokers, products, etc.). **Reasoned deletes:** master-data DELETE endpoints accept `?reason=` (optional at the API for IT compatibility, required at the UI via the shared `ConfirmDeleteDialog` + `useDeleteWithReason` hook). The reason persists to `audit_log.reason` (V47) alongside the usual user / timestamp. Auditors can extract any soft-deleted row + its deletion reason via the audit log endpoint or directly from the table.
 - Indexes on all foreign keys and common filter columns.
 - **Schema management:** `spring.jpa.hibernate.ddl-auto: none` (see `application.yml`). Flyway is the source of truth for DDL; Hibernate never creates or validates schema at startup. The `validate` mode is incompatible with the V24 NDPR PII pattern (`@ColumnTransformer` + `columnDefinition = "bytea"`) — Hibernate's schema validator doesn't honour `columnDefinition` and reports a spurious varchar/bytea mismatch. Drift between entities and migrations is caught by integration tests (Testcontainers).
 

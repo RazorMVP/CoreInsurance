@@ -147,6 +147,13 @@ public class Customer extends BaseEntity {
     @Column(name = "blacklisted_by", length = 100)
     private String blacklistedBy;
 
+    // Relationship Manager — V46 added the FK column. The full RM record lives
+    // in cia-setup; we only persist the id here to avoid a cross-module entity
+    // dependency. CustomerService denormalises the name into responses via a
+    // lookup against /api/v1/setup/relationship-managers.
+    @Column(name = "relationship_manager_id")
+    private java.util.UUID relationshipManagerId;
+
     @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<CustomerDirector> directors = new ArrayList<>();

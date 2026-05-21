@@ -62,11 +62,11 @@ public class BrokerService {
     }
 
     @Transactional
-    public void delete(UUID id) {
+    public void delete(UUID id, String reason) {
         Broker broker = findOrThrow(id);
         broker.softDelete();
         repository.save(broker);
-        auditService.log("Broker", id.toString(), AuditAction.DELETE, broker, null);
+        auditService.logWithReason("Broker", id.toString(), AuditAction.DELETE, broker, null, reason);
     }
 
     private Broker findOrThrow(UUID id) {

@@ -28,6 +28,8 @@ interface MockCustomer {
   address: string;
   createdAt: string;
   brokerName?: string;
+  relationshipManagerId?: string;
+  relationshipManagerName?: string;
   // individual
   dateOfBirth?: string;
   idType?: string;
@@ -240,6 +242,7 @@ export default function CustomerDetailPage() {
                 </>
               )}
               <Row label="Channel" value={c.brokerName ?? 'Direct'} />
+              <Row label="Relationship Manager" value={c.relationshipManagerName ?? 'Unassigned'} />
               <Row label="Created" value={c.createdAt} />
             </CardContent>
           </Card>
@@ -360,6 +363,8 @@ export default function CustomerDetailPage() {
         contactPerson: c.contactPerson,
         brokerName:    c.brokerName,
         brokerId:      undefined,
+        relationshipManagerId:   c.relationshipManagerId,
+        relationshipManagerName: c.relationshipManagerName,
         idType:        c.idType,
         idNumber:      c.idNumber,
         idExpiryDate:  c.idExpiryDate,

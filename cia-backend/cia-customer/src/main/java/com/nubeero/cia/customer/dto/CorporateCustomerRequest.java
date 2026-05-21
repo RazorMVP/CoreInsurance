@@ -8,6 +8,7 @@ import lombok.Data;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 @Data
 public class CorporateCustomerRequest {
@@ -44,4 +45,8 @@ public class CorporateCustomerRequest {
     @NotEmpty
     @Valid
     private List<CustomerDirectorRequest> directors;
+
+    /** Assigned Relationship Manager (cia-setup). Optional during transition;
+        UI enforces required-on-create. */
+    private UUID relationshipManagerId;
 }

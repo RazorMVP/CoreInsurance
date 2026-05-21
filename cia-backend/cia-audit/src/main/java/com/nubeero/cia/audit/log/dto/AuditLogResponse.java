@@ -25,6 +25,9 @@ public class AuditLogResponse {
     private String ipAddress;
     private String sessionId;
     private BigDecimal approvalAmount;
+    /** Free-text justification recorded for reasoned actions (DELETE, REJECT,
+     *  OVERRIDE, REOPEN_PERIOD, etc.). Persisted on audit_log.reason via V47. */
+    private String reason;
 
     public static AuditLogResponse from(AuditLog log) {
         return AuditLogResponse.builder()
@@ -40,6 +43,7 @@ public class AuditLogResponse {
                 .ipAddress(log.getIpAddress())
                 .sessionId(log.getSessionId())
                 .approvalAmount(log.getApprovalAmount())
+                .reason(log.getReason())
                 .build();
     }
 }

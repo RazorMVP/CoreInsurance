@@ -8,6 +8,8 @@ import com.nubeero.cia.common.tenant.TenantContext;
 import com.nubeero.cia.customer.dto.*;
 import com.nubeero.cia.integrations.kyc.*;
 import com.nubeero.cia.setup.customer.CustomerNumberFormatService;
+import com.nubeero.cia.setup.org.RelationshipManagerRepository;
+import com.nubeero.cia.setup.org.RelationshipManager;
 import com.nubeero.cia.storage.DocumentStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +38,7 @@ public class CustomerService {
     private final AuditService auditService;
     private final DocumentStorageService documentStorageService;
     private final CustomerNumberFormatService customerNumberFormatService;
+    private final RelationshipManagerRepository relationshipManagerRepository;
 
     // ─── Queries ────────────────────────────────────────────────────
 
@@ -89,6 +92,7 @@ public class CustomerService {
                 .state(request.getState())
                 .country(request.getCountry() != null && !request.getCountry().isBlank()
                         ? request.getCountry() : "Nigeria")
+                .relationshipManagerId(request.getRelationshipManagerId())
                 .build();
 
         // Save first to get ID, then upload document
@@ -134,6 +138,7 @@ public class CustomerService {
                 .state(request.getState())
                 .country(request.getCountry() != null && !request.getCountry().isBlank()
                         ? request.getCountry() : "Nigeria")
+                .relationshipManagerId(request.getRelationshipManagerId())
                 .build();
 
         runCorporateKyc(customer, request.getDirectors());
@@ -616,6 +621,10 @@ public class CustomerService {
         if (r.getCity() != null) c.setCity(r.getCity());
         if (r.getState() != null) c.setState(r.getState());
         if (r.getCountry() != null) c.setCountry(r.getCountry());
+        // Relationship Manager — null on the request means "no change"; clients
+        // wanting to unassign should not call PATCH (or would need a tombstone
+        // value, which we don't model here yet).
+        if (r.getRelationshipManagerId() != null) c.setRelationshipManagerId(r.getRelationshipManagerId());
     }
 
     public Customer findOrThrow(UUID id) {
@@ -634,6 +643,17 @@ public class CustomerService {
 
     // ─── Mapping ────────────────────────────────────────────────────
 
+    /** Resolves a Relationship Manager's display name from cia-setup. Returns
+     *  null if the id is null or the RM was soft-deleted — the response just
+     *  omits the name and the UI can fall back to "Unassigned". */
+    private String resolveRelationshipManagerName(UUID rmId) {
+        if (rmId == null) return null;
+        return relationshipManagerRepository.findById(rmId)
+                .filter(r -> r.getDeletedAt() == null)
+                .map(RelationshipManager::getName)
+                .orElse(null);
+    }
+
     private CustomerSummaryResponse toSummary(Customer c) {
         String displayName = c.getCustomerType() == CustomerType.INDIVIDUAL
                 ? c.getFirstName() + " " + c.getLastName()
@@ -643,6 +663,8 @@ public class CustomerService {
                 .customerType(c.getCustomerType())
                 .customerStatus(c.getCustomerStatus()).kycStatus(c.getKycStatus())
                 .displayName(displayName).email(c.getEmail()).phone(c.getPhone())
+                .relationshipManagerId(c.getRelationshipManagerId())
+                .relationshipManagerName(resolveRelationshipManagerName(c.getRelationshipManagerId()))
                 .createdAt(c.getCreatedAt())
                 .build();
     }
@@ -687,6 +709,8 @@ public class CustomerService {
                 .contactPerson(c.getContactPerson())
                 .email(c.getEmail()).phone(c.getPhone()).alternatePhone(c.getAlternatePhone())
                 .address(c.getAddress()).city(c.getCity()).state(c.getState()).country(c.getCountry())
+                .relationshipManagerId(c.getRelationshipManagerId())
+                .relationshipManagerName(resolveRelationshipManagerName(c.getRelationshipManagerId()))
                 .directors(directors).documents(docs)
                 .createdAt(c.getCreatedAt()).updatedAt(c.getUpdatedAt())
                 .build();

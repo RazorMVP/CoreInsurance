@@ -8,7 +8,103 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-21. The MinIO bucket-bootstrap and `FiscalYearService.close()` cascade follow-ups (flagged during F5.16 / wrap-up smoke) both shipped via the Session 74 entry below. The 12 CLOSURES reports were added in Session 75 below. The Builder date-picker UX + JSONB binding fix shipped in Session 76 below. The 9 missing closures-source descriptions shipped via the Session 76 continuation entry below. The **47-controller** Page-in-data anti-pattern fix shipped in Session 77 below. The Setup → Organisations page got 7 working tabs (5 stubs → live + new Adjusters) plus the silent BrokerDto drift fix in Session 78 below.
+No open items as of 2026-05-21. Session 79 below ships the Relationship Manager end-to-end integration and the delete-with-reason audit pattern across 10 setup endpoints.
+
+---
+
+## 2026-05-21 — Session 79 (`main`): Relationship Manager end-to-end + delete-with-reason audit infrastructure
+
+User scoped two follow-ups from Session 78 with full context:
+
+1. **Relationship Manager** (called "Relationship Officer" in conversation; backend / UI labels keep "Manager" per user's explicit request) — attached to every customer; internal personnel must be set up in the system, then assigned at customer onboarding. Backend was already shipped in Module 1 but had **zero UI** and no FK from `customers`.
+2. **Delete-with-reason** — soft deletes only (which already worked via `BaseEntity.deletedAt`), but **the reason was not captured anywhere**. User wants extractable audit logs with timestamp + user + reason.
+
+Shipped both end-to-end ("C" combo).
+
+### Part A — Relationship Manager
+
+**Backend:**
+- V46 migration adds `relationship_manager_id UUID` column to `customers` (nullable for migration safety; FK to `relationship_managers.id`).
+- `Customer` entity gains `private UUID relationshipManagerId`. No JPA `@ManyToOne` — stored as the bare UUID to avoid a cross-module entity dependency on cia-setup's `RelationshipManager`. CustomerService denormalises the name via a lookup against `RelationshipManagerRepository`.
+- `cia-customer` already depended on `cia-setup` for `CustomerNumberFormatService` — added `RelationshipManagerRepository` injection alongside it.
+- DTO updates: `CustomerResponse` + `CustomerSummaryResponse` gain `relationshipManagerId` + `relationshipManagerName` (denormalised); `IndividualCustomerRequest`, `CorporateCustomerRequest`, and `CustomerUpdateRequest` all accept `relationshipManagerId`.
+- `CustomerService`:
+  - `createIndividual` / `createCorporate` persist the FK from the request.
+  - `applyContactUpdate` reads `relationshipManagerId` (null = no change).
+  - `toResponse` + `toSummary` look up the name via the new `resolveRelationshipManagerName(UUID)` helper.
+
+**Frontend:**
+- `@cia/api-client/setup.ts` gains `RelationshipManagerDto` (mirrors backend response).
+- New `RelationshipManagerSheet.tsx` — name + branch select (populated from `/api/v1/setup/branches`) + email + phone.
+- `OrganisationsPage` gains 8th tab "Relationship Managers" with full list + add/edit (matches the other 7 org tabs' pattern).
+- **Customer flow integration:**
+  - `IndividualOnboardingSheet` — RM picker added as a **required** field (`z.string().min(1, 'Required')`), positioned between the KYC document section and the Broker-enabled section. Populates a `<Select>` from `/api/v1/setup/relationship-managers` (gated on `open` to avoid pre-render fetches).
+  - `CorporateOnboardingSheet` — same RM picker, same required validation, same positioning.
+  - `EditCustomerSheet` — RM picker added below the Channel select so users can reassign. `CustomerSnapshot` interface gains `relationshipManagerId` + `relationshipManagerName`; `buildDefaults` seeds the form from the snapshot.
+  - `CustomerDetailPage` — new `<Row label="Relationship Manager" value={c.relationshipManagerName ?? 'Unassigned'} />` below the Channel row; the snapshot passed to `EditCustomerSheet` now threads both `relationshipManagerId` and `relationshipManagerName`.
+
+### Part B — Delete-with-reason audit
+
+**Backend:**
+- V47 migration adds `reason TEXT` column to `audit_log` (nullable; partial index `WHERE reason IS NOT NULL` to keep the index thin since CREATE / UPDATE actions will dominate).
+- `AuditLog` entity gains `private String reason` mapped to the new column.
+- `AuditService` gets a new `logWithReason(...)` overload — calls the private 9-arg `log(...)` with the reason; the existing 5-arg / 7-arg overloads pass `null`.
+- `AuditLogResponse` DTO (cia-audit/log/dto) gains `reason` field so the audit-log read endpoint surfaces it. Without this, the data persists to DB but never returns through the API.
+- **10 services** updated — `delete(UUID id)` → `delete(UUID id, String reason)` + `auditService.log(...)` → `auditService.logWithReason(..., reason)`. Sites:
+  - cia-setup: Broker, Branch, Sbu, Surveyor, InsuranceCompany, ReinsuranceCompany, Adjuster, RelationshipManager, ClassOfBusiness, ApprovalGroup.
+- **10 controllers** updated — DELETE endpoints accept `@RequestParam(required = false) String reason` and pass it to the service. `required = false` preserves IT compatibility (existing tests don't supply a reason; the column gets null).
+
+**Frontend:**
+- New `ConfirmDeleteDialog` component in `@cia/ui` — required reason textarea + destructive Delete button. Caller passes `entityLabel`, `entityName`, `onConfirm(reason)`.
+- New shared hook `useDeleteWithReason<T>` in `apps/back-office/src/lib/use-delete-with-reason.tsx` — manages target state, builds the `useMutation` for `DELETE {endpoint}?reason={encoded}`, invalidates the caller's list query on success, returns `{ setTarget, dialog }`. Single source of delete-UX behaviour across the back-office.
+- **10 delete sites** wired up via the shared hook:
+  - 8 Organisations tabs (Brokers, Reinsurers, Insurers, Branches, SBUs, Surveyors, Adjusters, Relationship Managers).
+  - ClassesPage.
+  - ApprovalGroupsPage.
+  Each call site is ~7 lines of config (endpoint, invalidateKey, entityLabel, entityName).
+
+### Verification
+
+**Live end-to-end smoke test:**
+
+```bash
+$ curl -X POST /api/v1/setup/relationship-managers -d '{...}'              → 201 (RM created)
+$ curl -X POST /api/v1/setup/brokers -d '{...}'                            → 201 (broker created)
+$ curl -X DELETE "/api/v1/setup/brokers/{id}?reason=Created+in+error+..."  → 200
+$ curl /api/v1/setup/brokers (filtered list)                               → broker hidden (soft-delete OK)
+
+$ psql -c "SELECT entity_type, action, reason FROM public.audit_log WHERE action='DELETE'"
+ entity_type | action | reason
+-------------+--------+------------------------------------
+ Broker      | DELETE | Created in error during smoke test  ← persisted ✓
+```
+
+**Failsafe IT suite:** 274 baseline preserved (see commit message for the run).
+
+### Naming + scope decisions
+
+- **"Manager" vs "Officer":** user explicitly asked to keep `RelationshipManager` everywhere — backend entity, frontend DTO, AND UI labels. Did not rename to "Officer" at any layer.
+- **RM optional on backend, required at frontend.** Backend DTOs have `relationshipManagerId` un-`@NotNull` so PATCH-style updates without an RM change keep working. Frontend onboarding sheets enforce required via zod. Existing customers (pre-V46) have `relationship_manager_id IS NULL`; users can backfill via Edit Customer.
+- **Reason optional on backend, required at frontend.** `@RequestParam(required = false)` keeps existing ITs working; the frontend dialog requires non-blank. Anyone hitting the API directly without a reason gets an audit row with `reason IS NULL` — auditors can filter for those.
+- **No FK to RelationshipManager on the Customer entity** — `cia-customer` already imports `cia-setup` but a `@ManyToOne` would also need a fetch strategy + cascading rules. Storing just the UUID and looking up the name keeps the boundary simpler.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend new | V46 + V47 migrations |
+| Backend modified | AuditLog, AuditService, AuditLogResponse, Customer + 4 DTOs, CustomerService, 10 services + 10 controllers (delete-with-reason) |
+| Frontend new | `lib/use-delete-with-reason.tsx`, `packages/ui/src/components/confirm-delete-dialog.tsx`, `RelationshipManagerSheet.tsx` |
+| Frontend modified | `@cia/api-client/setup.ts` (+ `RelationshipManagerDto`), `OrganisationsPage` (8th tab + hook wiring), `IndividualOnboardingSheet`, `CorporateOnboardingSheet`, `EditCustomerSheet`, `CustomerDetailPage`, `ClassesPage`, `ApprovalGroupsPage`, `packages/ui/src/index.ts` |
+| Docs | CLAUDE.md, SKILL.md, cia-log.md (this entry) |
+
+### Known follow-ups (deliberately deferred — not blockers)
+
+- **6 other placeholder-onClick row actions** elsewhere in the back-office (CustomersListPage Update KYC / Blacklist, ProductsPage Activate/Deactivate, QuotationListPage Submit / Convert / Edit / Duplicate). These are **not** delete actions — they're state-change workflows that need their own per-action flow design. Out of scope here.
+- **API-direct delete bypass.** Anyone can `curl -X DELETE` without `?reason=` and the column gets null. The audit invariant "every DELETE has a reason" is enforced at the UI only. Tightening would require breaking IT tests + downstream consumers; defer until a real abuse case surfaces.
+- **`RelationshipManager.branch` is `@ManyToOne` LAZY** but the Response DTO eagerly exposes `branchName`. If a branch is soft-deleted while an RM still references it, the listing shows the (deleted) branch name. Branch deletion should ideally fail with 409 if there are referencing RMs — not implemented; covered by the same FK-cascade-awareness gap flagged in Session 78.
+
+--- The MinIO bucket-bootstrap and `FiscalYearService.close()` cascade follow-ups (flagged during F5.16 / wrap-up smoke) both shipped via the Session 74 entry below. The 12 CLOSURES reports were added in Session 75 below. The Builder date-picker UX + JSONB binding fix shipped in Session 76 below. The 9 missing closures-source descriptions shipped via the Session 76 continuation entry below. The **47-controller** Page-in-data anti-pattern fix shipped in Session 77 below. The Setup → Organisations page got 7 working tabs (5 stubs → live + new Adjusters) plus the silent BrokerDto drift fix in Session 78 below.
 
 **Known follow-up (not yet a bug, just a consistency gap):** the 19 controllers fixed in the Session 77 broader sweep (RiTreatyController, RiAllocationController, CustomerController, PolicyController, QuoteController, ClaimController, ClaimCommentController, ClaimDocumentController, ClaimExpenseController, EndorsementController, ReceiptController, PaymentController, DebitNoteController, CreditNoteController, DocumentTemplateController, PartnerAppController, PartnerProductController, PartnerWebhookController, RiFacCoverController) now return `data` as an array but **without** building `meta` (the original 28 controllers that already had `ApiResponse.success(page, meta)` retained their meta). Frontend list hooks don't currently read `meta`, so this is a cosmetic inconsistency, not a defect. If pagination UI is added later, all 19 should be brought up to spec.
 

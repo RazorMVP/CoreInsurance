@@ -64,11 +64,11 @@ public class RelationshipManagerService {
     }
 
     @Transactional
-    public void delete(UUID id) {
+    public void delete(UUID id, String reason) {
         RelationshipManager entity = findOrThrow(id);
         entity.softDelete();
         repository.save(entity);
-        auditService.log("RelationshipManager", id.toString(), AuditAction.DELETE, entity, null);
+        auditService.logWithReason("RelationshipManager", id.toString(), AuditAction.DELETE, entity, null, reason);
     }
 
     private Branch resolveBranch(UUID branchId) {

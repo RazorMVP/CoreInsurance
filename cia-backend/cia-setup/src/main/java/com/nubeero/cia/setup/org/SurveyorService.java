@@ -58,11 +58,11 @@ public class SurveyorService {
     }
 
     @Transactional
-    public void delete(UUID id) {
+    public void delete(UUID id, String reason) {
         Surveyor entity = findOrThrow(id);
         entity.softDelete();
         repository.save(entity);
-        auditService.log("Surveyor", id.toString(), AuditAction.DELETE, entity, null);
+        auditService.logWithReason("Surveyor", id.toString(), AuditAction.DELETE, entity, null, reason);
     }
 
     private Surveyor findOrThrow(UUID id) {

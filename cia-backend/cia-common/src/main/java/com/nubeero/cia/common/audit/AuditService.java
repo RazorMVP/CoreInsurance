@@ -39,24 +39,36 @@ public class AuditService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void log(String entityType, String entityId, AuditAction action,
                     Object oldValue, Object newValue) {
-        log(entityType, entityId, action, oldValue, newValue, null, null, null);
+        log(entityType, entityId, action, oldValue, newValue, null, null, null, null);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void log(String entityType, String entityId, AuditAction action,
                     Object oldValue, Object newValue, String ipAddress, String sessionId) {
-        log(entityType, entityId, action, oldValue, newValue, ipAddress, sessionId, null);
+        log(entityType, entityId, action, oldValue, newValue, ipAddress, sessionId, null, null);
+    }
+
+    /**
+     * Log a "reasoned" action — DELETE / REJECT / OVERRIDE / REOPEN_PERIOD,
+     * where WHY the action happened is auditor-relevant. The reason is
+     * stored on {@code audit_log.reason} (V47). Existing 5-arg / 7-arg
+     * overloads stay null on the new column.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logWithReason(String entityType, String entityId, AuditAction action,
+                              Object oldValue, Object newValue, String reason) {
+        log(entityType, entityId, action, oldValue, newValue, null, null, null, reason);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logWithAmount(String entityType, String entityId, AuditAction action,
                               Object oldValue, Object newValue, BigDecimal approvalAmount) {
-        log(entityType, entityId, action, oldValue, newValue, null, null, approvalAmount);
+        log(entityType, entityId, action, oldValue, newValue, null, null, approvalAmount, null);
     }
 
     private void log(String entityType, String entityId, AuditAction action,
                      Object oldValue, Object newValue,
-                     String ipAddress, String sessionId, BigDecimal approvalAmount) {
+                     String ipAddress, String sessionId, BigDecimal approvalAmount, String reason) {
         try {
             AuditLog entry = AuditLog.builder()
                     .entityType(entityType)
@@ -70,6 +82,7 @@ public class AuditService {
                     .ipAddress(ipAddress)
                     .sessionId(sessionId)
                     .approvalAmount(approvalAmount)
+                    .reason(reason)
                     .build();
 
             AuditLog saved = auditLogRepository.save(entry);

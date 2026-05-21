@@ -54,6 +54,11 @@ public class CustomerResponse {
     private String state;
     private String country;
 
+    // Relationship Manager — V46 added FK; CustomerService denormalises the name
+    // by looking up cia-setup's RelationshipManagerRepository at response time.
+    private UUID relationshipManagerId;
+    private String relationshipManagerName;
+
     private List<CustomerDirectorResponse> directors;
     private List<CustomerDocumentResponse> documents;
 

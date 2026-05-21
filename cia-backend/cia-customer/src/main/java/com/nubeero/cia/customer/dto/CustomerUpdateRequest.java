@@ -38,6 +38,9 @@ public class CustomerUpdateRequest {
     // ── Channel ─────────────────────────────────────────────────────
     private UUID brokerId;
 
+    // ── Relationship Manager (cia-setup) ────────────────────────────
+    private UUID relationshipManagerId;
+
     // ── KYC fields (individual + corporate directors) ────────────────
     private IdType idType;
     private String idNumber;

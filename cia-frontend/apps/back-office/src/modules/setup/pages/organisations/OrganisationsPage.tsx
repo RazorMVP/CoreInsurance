@@ -5,10 +5,12 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
+import { useDeleteWithReason } from '@/lib/use-delete-with-reason';
 import {
   apiClient,
   type BrokerDto, type BranchDto, type SbuDto, type SurveyorDto,
   type InsuranceCompanyDto, type ReinsuranceCompanyDto, type AdjusterDto,
+  type RelationshipManagerDto,
 } from '@cia/api-client';
 import BrokerSheet from './BrokerSheet';
 import BranchSheet from './BranchSheet';
@@ -17,12 +19,19 @@ import SurveyorSheet from './SurveyorSheet';
 import InsurerSheet from './InsurerSheet';
 import ReinsurerSheet from './ReinsurerSheet';
 import AdjusterSheet from './AdjusterSheet';
+import RelationshipManagerSheet from './RelationshipManagerSheet';
 
 // ── Brokers ──────────────────────────────────────────────────────────────────
 
 function BrokersTab() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<BrokerDto | null>(null);
+  const { setTarget: setDeleteTarget, dialog: deleteDialog } = useDeleteWithReason<BrokerDto>({
+    endpoint: (id) => `/api/v1/setup/brokers/${id}`,
+    invalidateKey: ['setup', 'brokers'],
+    entityLabel: 'Broker',
+    entityName: (b) => b.name,
+  });
 
   const query = useQuery<BrokerDto[]>({
     queryKey: ['setup', 'brokers'],
@@ -49,7 +58,7 @@ function BrokersTab() {
     { accessorKey: 'phone',    header: 'Phone',    cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
     { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
       { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
-      { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
+      { label: 'Delete', onClick: (r) => setDeleteTarget(r.original), separator: true, className: 'text-destructive' },
     ]} /> },
   ];
 
@@ -66,6 +75,7 @@ function BrokersTab() {
         <DataTable columns={columns} data={rows} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search brokers…' }} />
       )}
       <BrokerSheet open={sheetOpen} onOpenChange={setSheetOpen} broker={editing} onSuccess={() => setSheetOpen(false)} />
+      {deleteDialog}
     </>
   );
 }
@@ -75,6 +85,12 @@ function BrokersTab() {
 function ReinsurersTab() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<ReinsuranceCompanyDto | null>(null);
+  const { setTarget: setDeleteTarget, dialog: deleteDialog } = useDeleteWithReason<ReinsuranceCompanyDto>({
+    endpoint: (id) => `/api/v1/setup/reinsurance-companies/${id}`,
+    invalidateKey: ['setup', 'reinsurance-companies'],
+    entityLabel: 'Reinsurer',
+    entityName: (r) => r.name,
+  });
 
   const query = useQuery<ReinsuranceCompanyDto[]>({
     queryKey: ['setup', 'reinsurance-companies'],
@@ -92,7 +108,7 @@ function ReinsurersTab() {
     { accessorKey: 'email',    header: 'Email',     cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{(getValue() as string) || '—'}</span> },
     { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
       { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
-      { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
+      { label: 'Delete', onClick: (r) => setDeleteTarget(r.original), separator: true, className: 'text-destructive' },
     ]} /> },
   ];
 
@@ -109,6 +125,7 @@ function ReinsurersTab() {
         <DataTable columns={columns} data={rows} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search reinsurers…' }} />
       )}
       <ReinsurerSheet open={sheetOpen} onOpenChange={setSheetOpen} reinsurer={editing} onSuccess={() => setSheetOpen(false)} />
+      {deleteDialog}
     </>
   );
 }
@@ -118,6 +135,12 @@ function ReinsurersTab() {
 function InsurersTab() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<InsuranceCompanyDto | null>(null);
+  const { setTarget: setDeleteTarget, dialog: deleteDialog } = useDeleteWithReason<InsuranceCompanyDto>({
+    endpoint: (id) => `/api/v1/setup/insurance-companies/${id}`,
+    invalidateKey: ['setup', 'insurance-companies'],
+    entityLabel: 'Insurance Company',
+    entityName: (i) => i.name,
+  });
 
   const query = useQuery<InsuranceCompanyDto[]>({
     queryKey: ['setup', 'insurance-companies'],
@@ -135,7 +158,7 @@ function InsurersTab() {
     { accessorKey: 'phone',         header: 'Phone',          cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
     { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
       { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
-      { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
+      { label: 'Delete', onClick: (r) => setDeleteTarget(r.original), separator: true, className: 'text-destructive' },
     ]} /> },
   ];
 
@@ -152,6 +175,7 @@ function InsurersTab() {
         <DataTable columns={columns} data={rows} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search insurers…' }} />
       )}
       <InsurerSheet open={sheetOpen} onOpenChange={setSheetOpen} insurer={editing} onSuccess={() => setSheetOpen(false)} />
+      {deleteDialog}
     </>
   );
 }
@@ -161,6 +185,12 @@ function InsurersTab() {
 function BranchesTab() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<BranchDto | null>(null);
+  const { setTarget: setDeleteTarget, dialog: deleteDialog } = useDeleteWithReason<BranchDto>({
+    endpoint: (id) => `/api/v1/setup/branches/${id}`,
+    invalidateKey: ['setup', 'branches'],
+    entityLabel: 'Branch',
+    entityName: (b) => b.name,
+  });
 
   const query = useQuery<BranchDto[]>({
     queryKey: ['setup', 'branches'],
@@ -186,7 +216,7 @@ function BranchesTab() {
     { accessorKey: 'address', header: 'Address',    cell: ({ getValue }) => <span className="text-sm text-muted-foreground line-clamp-1">{(getValue() as string) || '—'}</span> },
     { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
       { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
-      { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
+      { label: 'Delete', onClick: (r) => setDeleteTarget(r.original), separator: true, className: 'text-destructive' },
     ]} /> },
   ];
 
@@ -203,6 +233,7 @@ function BranchesTab() {
         <DataTable columns={columns} data={rows} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search branches…' }} />
       )}
       <BranchSheet open={sheetOpen} onOpenChange={setSheetOpen} branch={editing} onSuccess={() => setSheetOpen(false)} />
+      {deleteDialog}
     </>
   );
 }
@@ -212,6 +243,12 @@ function BranchesTab() {
 function SbusTab() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<SbuDto | null>(null);
+  const { setTarget: setDeleteTarget, dialog: deleteDialog } = useDeleteWithReason<SbuDto>({
+    endpoint: (id) => `/api/v1/setup/sbus/${id}`,
+    invalidateKey: ['setup', 'sbus'],
+    entityLabel: 'SBU',
+    entityName: (s) => s.name,
+  });
 
   const query = useQuery<SbuDto[]>({
     queryKey: ['setup', 'sbus'],
@@ -235,7 +272,7 @@ function SbusTab() {
     },
     { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
       { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
-      { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
+      { label: 'Delete', onClick: (r) => setDeleteTarget(r.original), separator: true, className: 'text-destructive' },
     ]} /> },
   ];
 
@@ -252,6 +289,7 @@ function SbusTab() {
         <DataTable columns={columns} data={rows} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search SBUs…' }} />
       )}
       <SbuSheet open={sheetOpen} onOpenChange={setSheetOpen} sbu={editing} onSuccess={() => setSheetOpen(false)} />
+      {deleteDialog}
     </>
   );
 }
@@ -263,6 +301,12 @@ const surveyorTypeVariant: Record<SurveyorDto['type'], 'default' | 'outline'> = 
 function SurveyorsTab() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<SurveyorDto | null>(null);
+  const { setTarget: setDeleteTarget, dialog: deleteDialog } = useDeleteWithReason<SurveyorDto>({
+    endpoint: (id) => `/api/v1/setup/surveyors/${id}`,
+    invalidateKey: ['setup', 'surveyors'],
+    entityLabel: 'Surveyor',
+    entityName: (s) => s.name,
+  });
 
   const query = useQuery<SurveyorDto[]>({
     queryKey: ['setup', 'surveyors'],
@@ -286,7 +330,7 @@ function SurveyorsTab() {
     { accessorKey: 'phone',         header: 'Phone',          cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
     { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
       { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
-      { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
+      { label: 'Delete', onClick: (r) => setDeleteTarget(r.original), separator: true, className: 'text-destructive' },
     ]} /> },
   ];
 
@@ -303,6 +347,7 @@ function SurveyorsTab() {
         <DataTable columns={columns} data={rows} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search surveyors…' }} />
       )}
       <SurveyorSheet open={sheetOpen} onOpenChange={setSheetOpen} surveyor={editing} onSuccess={() => setSheetOpen(false)} />
+      {deleteDialog}
     </>
   );
 }
@@ -314,6 +359,12 @@ const adjusterTypeVariant: Record<AdjusterDto['type'], 'default' | 'outline'> = 
 function AdjustersTab() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<AdjusterDto | null>(null);
+  const { setTarget: setDeleteTarget, dialog: deleteDialog } = useDeleteWithReason<AdjusterDto>({
+    endpoint: (id) => `/api/v1/setup/adjusters/${id}`,
+    invalidateKey: ['setup', 'adjusters'],
+    entityLabel: 'Adjuster',
+    entityName: (a) => a.name,
+  });
 
   const query = useQuery<AdjusterDto[]>({
     queryKey: ['setup', 'adjusters'],
@@ -346,7 +397,7 @@ function AdjustersTab() {
     { accessorKey: 'phone',         header: 'Phone',          cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
     { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
       { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
-      { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
+      { label: 'Delete', onClick: (r) => setDeleteTarget(r.original), separator: true, className: 'text-destructive' },
     ]} /> },
   ];
 
@@ -363,6 +414,57 @@ function AdjustersTab() {
         <DataTable columns={columns} data={rows} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search adjusters…' }} />
       )}
       <AdjusterSheet open={sheetOpen} onOpenChange={setSheetOpen} adjuster={editing} onSuccess={() => setSheetOpen(false)} />
+      {deleteDialog}
+    </>
+  );
+}
+
+// ── Relationship Managers ────────────────────────────────────────────────────
+
+function RelationshipManagersTab() {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editing, setEditing] = useState<RelationshipManagerDto | null>(null);
+  const { setTarget: setDeleteTarget, dialog: deleteDialog } = useDeleteWithReason<RelationshipManagerDto>({
+    endpoint: (id) => `/api/v1/setup/relationship-managers/${id}`,
+    invalidateKey: ['setup', 'relationship-managers'],
+    entityLabel: 'Relationship Manager',
+    entityName: (r) => r.name,
+  });
+
+  const query = useQuery<RelationshipManagerDto[]>({
+    queryKey: ['setup', 'relationship-managers'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: RelationshipManagerDto[] }>('/api/v1/setup/relationship-managers');
+      return res.data.data;
+    },
+  });
+  const rows = query.data ?? [];
+
+  const columns: ColumnDef<RelationshipManagerDto>[] = [
+    { accessorKey: 'name', header: ({ column }) => <DataTableColumnHeader column={column} title="Relationship Manager" />, cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
+    { accessorKey: 'branchName', header: 'Branch', cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
+    { accessorKey: 'email',      header: 'Email',  cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{(getValue() as string) || '—'}</span> },
+    { accessorKey: 'phone',      header: 'Phone',  cell: ({ getValue }) => <span className="text-sm">{(getValue() as string) || '—'}</span> },
+    { id: 'actions', cell: ({ row }) => <DataTableRowActions row={row} actions={[
+      { label: 'Edit', onClick: (r) => { setEditing(r.original); setSheetOpen(true); } },
+      { label: 'Delete', onClick: (r) => setDeleteTarget(r.original), separator: true, className: 'text-destructive' },
+    ]} /> },
+  ];
+
+  return (
+    <>
+      <div className="flex justify-end mb-3">
+        <Button size="sm" onClick={() => { setEditing(null); setSheetOpen(true); }}>Add Relationship Manager</Button>
+      </div>
+      {query.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : rows.length === 0 ? (
+        <EmptyState title="No relationship managers yet" description="Internal staff who own customer relationships. Set up here, then assign at customer onboarding." />
+      ) : (
+        <DataTable columns={columns} data={rows} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search relationship managers…' }} />
+      )}
+      <RelationshipManagerSheet open={sheetOpen} onOpenChange={setSheetOpen} rm={editing} onSuccess={() => setSheetOpen(false)} />
+      {deleteDialog}
     </>
   );
 }
@@ -374,10 +476,10 @@ export default function OrganisationsPage() {
     <div className="p-6 space-y-5">
       <PageHeader
         title="Organisations"
-        description="Manage brokers, reinsurers, insurers, branches, SBUs, surveyors and adjusters."
+        description="Manage brokers, reinsurers, insurers, branches, SBUs, surveyors, adjusters and relationship managers."
       />
       <Tabs defaultValue="brokers">
-        <TabsList className="mb-4">
+        <TabsList className="mb-4 flex-wrap h-auto">
           <TabsTrigger value="brokers">Brokers</TabsTrigger>
           <TabsTrigger value="reinsurers">Reinsurers</TabsTrigger>
           <TabsTrigger value="insurers">Insurers</TabsTrigger>
@@ -385,6 +487,7 @@ export default function OrganisationsPage() {
           <TabsTrigger value="sbus">SBUs</TabsTrigger>
           <TabsTrigger value="surveyors">Surveyors</TabsTrigger>
           <TabsTrigger value="adjusters">Adjusters</TabsTrigger>
+          <TabsTrigger value="relationship-managers">Relationship Managers</TabsTrigger>
         </TabsList>
         <TabsContent value="brokers"><BrokersTab /></TabsContent>
         <TabsContent value="reinsurers"><ReinsurersTab /></TabsContent>
@@ -393,6 +496,7 @@ export default function OrganisationsPage() {
         <TabsContent value="sbus"><SbusTab /></TabsContent>
         <TabsContent value="surveyors"><SurveyorsTab /></TabsContent>
         <TabsContent value="adjusters"><AdjustersTab /></TabsContent>
+        <TabsContent value="relationship-managers"><RelationshipManagersTab /></TabsContent>
       </Tabs>
     </div>
   );

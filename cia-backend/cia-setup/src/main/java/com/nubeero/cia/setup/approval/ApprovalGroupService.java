@@ -64,11 +64,11 @@ public class ApprovalGroupService {
     }
 
     @Transactional
-    public void delete(UUID id) {
+    public void delete(UUID id, String reason) {
         ApprovalGroup group = findOrThrow(id);
         group.softDelete();
         repository.save(group);
-        auditService.log("ApprovalGroup", id.toString(), AuditAction.DELETE, group, null);
+        auditService.logWithReason("ApprovalGroup", id.toString(), AuditAction.DELETE, group, null, reason);
     }
 
     private void addLevels(ApprovalGroup group, List<ApprovalGroupRequest.ApprovalLevelRequest> levelRequests) {

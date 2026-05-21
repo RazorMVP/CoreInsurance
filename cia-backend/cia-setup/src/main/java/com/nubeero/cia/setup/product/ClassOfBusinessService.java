@@ -65,11 +65,11 @@ public class ClassOfBusinessService {
     }
 
     @Transactional
-    public void delete(UUID id) {
+    public void delete(UUID id, String reason) {
         ClassOfBusiness entity = findOrThrow(id);
         entity.softDelete();
         repository.save(entity);
-        auditService.log("ClassOfBusiness", id.toString(), AuditAction.DELETE, entity, null);
+        auditService.logWithReason("ClassOfBusiness", id.toString(), AuditAction.DELETE, entity, null, reason);
     }
 
     private ClassOfBusiness findOrThrow(UUID id) {

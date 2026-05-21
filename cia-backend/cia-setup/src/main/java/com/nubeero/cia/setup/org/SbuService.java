@@ -52,11 +52,11 @@ public class SbuService {
     }
 
     @Transactional
-    public void delete(UUID id) {
+    public void delete(UUID id, String reason) {
         Sbu entity = findOrThrow(id);
         entity.softDelete();
         repository.save(entity);
-        auditService.log("Sbu", id.toString(), AuditAction.DELETE, entity, null);
+        auditService.logWithReason("Sbu", id.toString(), AuditAction.DELETE, entity, null, reason);
     }
 
     Sbu findOrThrow(UUID id) {

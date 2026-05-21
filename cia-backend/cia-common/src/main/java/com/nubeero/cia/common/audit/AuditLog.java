@@ -61,4 +61,13 @@ public class AuditLog {
 
     @Column(name = "approval_amount", precision = 19, scale = 2)
     private BigDecimal approvalAmount;
+
+    /**
+     * Free-text justification recorded for any "reasoned" action — most
+     * commonly DELETE (master-data soft deletes), but also reusable for
+     * REJECT / OVERRIDE / REOPEN_PERIOD flows. Nullable: CREATE / UPDATE
+     * actions don't require a reason. V47 adds the column.
+     */
+    @Column(name = "reason", columnDefinition = "TEXT")
+    private String reason;
 }

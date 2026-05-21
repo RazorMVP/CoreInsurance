@@ -57,11 +57,11 @@ public class InsuranceCompanyService {
     }
 
     @Transactional
-    public void delete(UUID id) {
+    public void delete(UUID id, String reason) {
         InsuranceCompany entity = findOrThrow(id);
         entity.softDelete();
         repository.save(entity);
-        auditService.log("InsuranceCompany", id.toString(), AuditAction.DELETE, entity, null);
+        auditService.logWithReason("InsuranceCompany", id.toString(), AuditAction.DELETE, entity, null, reason);
     }
 
     InsuranceCompany findOrThrow(UUID id) {

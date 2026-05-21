@@ -120,8 +120,8 @@ public class RelationshipManagerController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not found", content = @Content)
     })
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
-        service.delete(id);
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id, @RequestParam(required = false) String reason) {
+        service.delete(id, reason);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

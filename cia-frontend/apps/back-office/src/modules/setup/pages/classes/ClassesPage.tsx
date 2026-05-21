@@ -6,11 +6,18 @@ import {
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, type ClassOfBusinessDto } from '@cia/api-client';
+import { useDeleteWithReason } from '@/lib/use-delete-with-reason';
 import ClassSheet from './ClassSheet';
 
 export default function ClassesPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing,   setEditing]   = useState<ClassOfBusinessDto | null>(null);
+  const { setTarget: setDeleteTarget, dialog: deleteDialog } = useDeleteWithReason<ClassOfBusinessDto>({
+    endpoint: (id) => `/api/v1/setup/classes-of-business/${id}`,
+    invalidateKey: ['setup', 'classes-of-business'],
+    entityLabel: 'Class of Business',
+    entityName: (c) => c.name,
+  });
 
   const classesQuery = useQuery<ClassOfBusinessDto[]>({
     queryKey: ['setup', 'classes-of-business'],
@@ -49,7 +56,7 @@ export default function ClassesPage() {
           row={row}
           actions={[
             { label: 'Edit',   onClick: (r) => openEdit(r.original) },
-            { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
+            { label: 'Delete', onClick: (r) => setDeleteTarget(r.original), separator: true, className: 'text-destructive' },
           ]}
         />
       ),
@@ -72,6 +79,7 @@ export default function ClassesPage() {
           toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search classes…' }} />
       )}
       <ClassSheet open={sheetOpen} onOpenChange={setSheetOpen} cls={editing} onSuccess={() => setSheetOpen(false)} />
+      {deleteDialog}
     </div>
   );
 }

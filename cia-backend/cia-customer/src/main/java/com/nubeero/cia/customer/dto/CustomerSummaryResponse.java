@@ -20,5 +20,7 @@ public class CustomerSummaryResponse {
     private String displayName;
     private String email;
     private String phone;
+    private UUID relationshipManagerId;
+    private String relationshipManagerName;
     private Instant createdAt;
 }

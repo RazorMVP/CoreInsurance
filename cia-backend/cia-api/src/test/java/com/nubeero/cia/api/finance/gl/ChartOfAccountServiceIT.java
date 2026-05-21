@@ -71,7 +71,7 @@ class ChartOfAccountServiceIT {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         // Flyway runs through every migration; V32 seeds the COA.
-        registry.add("spring.flyway.target", () -> "43");
+        registry.add("spring.flyway.target", () -> "47");
         // Disable Hibernate's multi-tenant pieces in this slice test — JPA
         // talks to the default public schema where Flyway runs.
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");

@@ -10,7 +10,7 @@ import {
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type BrokerDto } from '@cia/api-client';
+import { apiClient, type BrokerDto, type RelationshipManagerDto } from '@cia/api-client';
 
 const EXPIRY_TYPES = ['DRIVERS_LICENSE', 'PASSPORT'] as const;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -29,6 +29,7 @@ const schema = z.object({
   occupation:    z.string().optional(),
   brokerEnabled: z.boolean(),
   brokerId:      z.string().optional(),
+  relationshipManagerId: z.string().min(1, 'Required'),
 }).superRefine((data, ctx) => {
   if (EXPIRY_TYPES.includes(data.idType as typeof EXPIRY_TYPES[number])) {
     if (!data.idExpiryDate) {
@@ -67,12 +68,23 @@ export default function IndividualOnboardingSheet({ open, onOpenChange, onSucces
   // Memoised so SelectItems aren't re-created on every parent render.
   const brokers = useMemo(() => brokersQuery.data ?? [], [brokersQuery.data]);
 
+  const rmsQuery = useQuery<RelationshipManagerDto[]>({
+    queryKey: ['setup', 'relationship-managers'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: RelationshipManagerDto[] }>('/api/v1/setup/relationship-managers');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const rms = useMemo(() => rmsQuery.data ?? [], [rmsQuery.data]);
+
   const form = useForm<FormValues>({
     resolver:      zodResolver(schema),
     defaultValues: {
       firstName: '', lastName: '', email: '', phone: '', dateOfBirth: '',
       idType: 'NIN', idNumber: '', idExpiryDate: '', address: '',
       occupation: '', brokerEnabled: false, brokerId: '',
+      relationshipManagerId: '',
     },
   });
 
@@ -111,6 +123,7 @@ export default function IndividualOnboardingSheet({ open, onOpenChange, onSucces
       fd.append('address',     values.address);
       if (values.occupation)   fd.append('occupation', values.occupation);
       if (values.brokerEnabled && values.brokerId) fd.append('brokerId', values.brokerId);
+      fd.append('relationshipManagerId', values.relationshipManagerId);
       fd.append('idDocument',  idFile!);
       return apiClient.post('/api/v1/customers/individual', fd);
     },
@@ -251,6 +264,26 @@ export default function IndividualOnboardingSheet({ open, onOpenChange, onSucces
             </FormItem>
 
             <Separator />
+
+            {/* Relationship Manager — required for every customer */}
+            <FormField control={form.control} name="relationshipManagerId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Relationship Manager <span className="text-destructive">*</span></FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select relationship manager" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {rms.map(r => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.name}{r.branchName ? ` — ${r.branchName}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {/* Broker-enabled */}
             <FormField control={form.control} name="brokerEnabled"

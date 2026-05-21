@@ -115,6 +115,20 @@ export interface ReinsuranceCompanyDto {
   updatedAt?: string | null;
 }
 
+// Mirrors com.nubeero.cia.setup.org.dto.RelationshipManagerResponse.
+// V46 added the FK on customers.relationship_manager_id; CustomerService
+// denormalises `relationshipManagerName` into customer responses.
+export interface RelationshipManagerDto {
+  id:         string;
+  name:       string;
+  email?:     string | null;
+  phone?:     string | null;
+  branchId?:  string | null;
+  branchName?: string | null;
+  createdAt:  string;
+  updatedAt?: string | null;
+}
+
 // Mirrors com.nubeero.cia.setup.org.AdjusterType (V45).
 export type AdjusterType = 'INTERNAL' | 'EXTERNAL';
 
