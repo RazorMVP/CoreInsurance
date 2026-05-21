@@ -49,7 +49,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/finance/fiscal-years")
 @Tag(name = "Fiscal Years",
-     description = "Fiscal-year lifecycle and the period tree under each year. State machine: DRAFT → ACTIVE → CLOSED. Creating a fiscal year auto-generates DAY / MONTH / QUARTER / HALF_YEAR / YEAR periods via FiscalYearService — see Slice 1.6.")
+     description = "Fiscal-year lifecycle and the period tree under each year. State machine: DRAFT → ACTIVE → CLOSED. Creating a fiscal year auto-generates MONTH / QUARTER / HALF_YEAR / YEAR periods (19 rows) via FiscalYearService — see Slice 1.6.")
 @SecurityRequirement(name = "bearer-jwt")
 @RequiredArgsConstructor
 public class FiscalYearController {
@@ -87,7 +87,7 @@ public class FiscalYearController {
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('FINANCE_VIEW')")
     @Operation(summary = "Get a fiscal year by id",
-               description = "Set includePeriods=true to embed the period tree (DAY → MONTH → QUARTER → HALF_YEAR → YEAR) inline.")
+               description = "Set includePeriods=true to embed the period tree (MONTH → QUARTER → HALF_YEAR → YEAR) inline.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Fiscal year found",
             content = @Content(schema = @Schema(implementation = FiscalYearResponse.class))),
@@ -104,7 +104,7 @@ public class FiscalYearController {
     @GetMapping("/{id}/periods")
     @PreAuthorize("hasRole('FINANCE_VIEW')")
     @Operation(summary = "List periods under a fiscal year",
-               description = "Returns every DAY / MONTH / QUARTER / HALF_YEAR / YEAR period that belongs to this fiscal year. DAY periods are lazy-resolved (created on first reference).")
+               description = "Returns every MONTH / QUARTER / HALF_YEAR / YEAR period that belongs to this fiscal year (19 rows total, generated eagerly at fiscal-year create).")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Period list",
             content = @Content(schema = @Schema(implementation = FiscalPeriodResponse.class))),
@@ -120,7 +120,7 @@ public class FiscalYearController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('FINANCE_APPROVE')")
     @Operation(summary = "Create a fiscal year + auto-generate periods",
-               description = "Creates the fiscal year in DRAFT state and synchronously generates all MONTH / QUARTER / HALF_YEAR / YEAR periods. DAY periods are lazy (resolved on first use). Activation is a separate step.")
+               description = "Creates the fiscal year in DRAFT state and synchronously generates all 19 MONTH / QUARTER / HALF_YEAR / YEAR periods. Activation is a separate step.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Fiscal year + periods created",
             content = @Content(schema = @Schema(implementation = FiscalYearResponse.class))),

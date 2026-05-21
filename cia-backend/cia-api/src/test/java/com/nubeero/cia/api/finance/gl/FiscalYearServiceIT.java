@@ -1,10 +1,10 @@
 package com.nubeero.cia.api.finance.gl;
 
+import com.nubeero.cia.common.config.CiaCommonAutoConfiguration;
 import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.finance.dto.CreateFiscalYearRequest;
 import com.nubeero.cia.finance.dto.FiscalPeriodResponse;
 import com.nubeero.cia.finance.dto.FiscalYearResponse;
-import com.nubeero.cia.finance.gl.FiscalPeriodResolver;
 import com.nubeero.cia.finance.gl.FiscalPeriodType;
 import com.nubeero.cia.finance.gl.FiscalYearActivationConflictException;
 import com.nubeero.cia.finance.gl.FiscalYearHasJournalEntriesException;
@@ -13,6 +13,8 @@ import com.nubeero.cia.finance.gl.FiscalYearNotFoundException;
 import com.nubeero.cia.finance.gl.FiscalYearService;
 import com.nubeero.cia.finance.gl.FiscalYearStatus;
 import com.nubeero.cia.finance.gl.InvalidFiscalYearBoundsException;
+import com.nubeero.cia.finance.gl.PeriodLockService;
+import org.mockito.Mockito;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,7 +31,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -49,7 +50,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *   <li>full sequence: PLANNING → activate → close → activate successor</li>
  *   <li>delete blocked when a real journal_entry row references a child period</li>
  *   <li>bootstrapForNewTenant idempotence in a fresh schema</li>
- *   <li>lazy DAY-period generation in {@link FiscalPeriodResolver}</li>
  * </ul>
  *
  * <p>Mirrors Slice 1.4 / 1.5 IT structure: @DataJpaTest + Testcontainers +
@@ -60,7 +60,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({
     FiscalYearService.class,
-    FiscalPeriodResolver.class,
+    CiaCommonAutoConfiguration.class,
     FiscalYearServiceIT.TestSupportConfig.class
 })
 class FiscalYearServiceIT {
@@ -78,13 +78,12 @@ class FiscalYearServiceIT {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        // V33 was the last migration shipped by Slice 1.5.
+        // V43 — match the rest of the cia-api IT suite (Slice 1.10).
         registry.add("spring.flyway.target", () -> "43");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 
     @Autowired private FiscalYearService service;
-    @Autowired private FiscalPeriodResolver resolver;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private EntityManager entityManager;
 
@@ -201,39 +200,6 @@ class FiscalYearServiceIT {
     }
 
     @Test
-    @DisplayName("FiscalPeriodResolver lazily creates DAY periods within the active FY (d10)")
-    void resolverLazyDayCreation() {
-        FiscalYearResponse fy = service.create(new CreateFiscalYearRequest(
-            "FY2026 day-laze", LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)));
-        service.activate(fy.id());
-        entityManager.flush();
-
-        LocalDate someDate = LocalDate.of(2026, 5, 14);
-        Long initialDayCount = jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM fiscal_period WHERE fiscal_year_id = ? AND period_type = 'DAY'",
-            Long.class, fy.id());
-        assertThat(initialDayCount).isZero();
-
-        resolver.resolveDayForBusinessDate(someDate);
-        entityManager.flush();
-
-        Long afterDayCount = jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM fiscal_period WHERE fiscal_year_id = ? AND period_type = 'DAY' " +
-                "AND start_date = ?",
-            Long.class, fy.id(), someDate);
-        assertThat(afterDayCount).isEqualTo(1L);
-
-        // Second call returns the existing row — no duplicate.
-        resolver.resolveDayForBusinessDate(someDate);
-        entityManager.flush();
-        Long stillOne = jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM fiscal_period WHERE fiscal_year_id = ? AND period_type = 'DAY' " +
-                "AND start_date = ?",
-            Long.class, fy.id(), someDate);
-        assertThat(stillOne).isEqualTo(1L);
-    }
-
-    @Test
     @DisplayName("create rejects misaligned bounds at the service layer before any INSERT")
     void createMisalignedRejected() {
         assertThatThrownBy(() -> service.create(new CreateFiscalYearRequest(
@@ -294,9 +260,23 @@ class FiscalYearServiceIT {
     @TestConfiguration
     static class TestSupportConfig {
 
+        /**
+         * The IT focuses on FiscalYearService's DB-level behaviour against
+         * the real Flyway-migrated schema. The close-cascade interaction
+         * with {@link PeriodLockService} is fully covered by
+         * {@code FiscalYearServiceTest}; a no-op mock keeps the Spring
+         * context graph small while still satisfying the constructor
+         * dependency added by the cascade fix.
+         *
+         * <p>{@code Clock} is intentionally not provided here —
+         * {@link CiaCommonAutoConfiguration} already exposes a
+         * {@code @ConditionalOnMissingBean} system-default Clock, which is
+         * exactly what this IT needs (no fixed-clock testing). Declaring it
+         * twice triggers a {@code BeanDefinitionOverrideException}.
+         */
         @Bean
-        Clock clock() {
-            return Clock.systemDefaultZone();
+        PeriodLockService periodLockService() {
+            return Mockito.mock(PeriodLockService.class);
         }
     }
 }

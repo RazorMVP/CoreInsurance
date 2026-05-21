@@ -54,7 +54,7 @@ Phases 1–4 are complete. Slice 1.10 closed the original Phase 1 ↔ Phase 4 su
 | 1.3 | `ChartOfAccountService` (read-only) |
 | 1.4 | `JournalEntryService` + `TrialBalanceService` — the **JE-posting gateway**. Every engine posts through this service. Idempotency triple: `(source_module, source_event_type, source_reference)` |
 | 1.5 | `SubledgerPostingService` event listeners — `PolicyApprovedEvent`, `EndorsementApprovedEvent`, `ClaimApprovedEvent`, `ClaimSettledEvent`, `FacPremiumCededEvent`, `ClaimExpenseApprovedEvent` → JE post |
-| 1.6 | `FiscalYearService` + period generation + lazy DAY resolver |
+| 1.6 | `FiscalYearService` + period generation (12 MONTH + 4 QUARTER + 2 HALF_YEAR + 1 YEAR = 19 rows, all eager at FY-create) |
 | 1.7 | `PeriodLockService` + Hibernate `PeriodLockInterceptor`. 5-business-day grace window. Opt-in via the `LockableByPeriod` marker interface (NOT a config table — the marker IS the opt-in mechanism). HTTP 423 LOCKED with structured `meta`. `period_lock` table is a Type-2 SCD; the row sequence IS the audit history. |
 | 1.7a/b | Period-lock entity opt-in sweep — `Receipt`, `Payment`, `ClaimExpense`, `Endorsement`, `DebitNote`, `CreditNote`, `RiAllocation`, `RiFacCover` all implement `LockableByPeriod`. `getLockDate()` returns the **booking date**, not the business-effective date. |
 | 1.7c | V35 IAS-8 PPA workflow (prior-period adjustment for accepted-late-correction scenarios) + `tenant_reopen_recipient` config (CSV fallback) + `tenant_holiday` calendar (makes `addBusinessDays` NAICOM-aware) |

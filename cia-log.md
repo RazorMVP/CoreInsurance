@@ -14,6 +14,42 @@ No open items as of 2026-05-21. The MinIO bucket-bootstrap and `FiscalYearServic
 
 ---
 
+## 2026-05-21 — Session 74 (`main`, continued): Delete unused lazy-DAY-period infrastructure (Slice 1.6 d10)
+
+Investigation of the "FY-close → period-promote behaviour" follow-up (the hypothetical risk that lazy DAY periods could bypass FY-close by being born OPEN inside a CLOSED FY) turned up that the entire DAY-period code path is **dead infrastructure**:
+
+- `FiscalPeriodResolver.resolveDayForBusinessDate()` has **zero production callers** in `cia-backend/cia-finance` or anywhere else.
+- `PeriodLockService.checkWrite` and `PeriodLockService.loadSnapshot` both resolve dates to the enclosing **MONTH** period (`resolveMonthForBusinessDate`), never DAY.
+- The class docstring of [FiscalPeriodResolver.java:15](cia-backend/cia-finance/src/main/java/com/nubeero/cia/finance/gl/FiscalPeriodResolver.java#L15) is unambiguous: "every JournalEntry is anchored to a MONTH period" (Slice 1.4 D1=A). JEs cannot reference DAY rows.
+- The only references to `resolveDayForBusinessDate` were 3 unit tests in `FiscalPeriodResolverTest` and 1 IT in `FiscalYearServiceIT` — all testing the method's own behaviour, not any caller scenario.
+
+The "hole" doesn't exist: JE writes are gated by `PeriodLockInterceptor` → `PeriodLockService.checkWrite` → MONTH period, and the MONTH gate is now uniformly HARD_CLOSED on FY close (from the cascade fix in the previous entry). DAY periods were scaffolded in Slice 1.6 (decision d10) for a use case that never materialized.
+
+Per CLAUDE.md's "no half-finished implementations" rule, **deleted the dead code** instead of either documenting it as reserved or pre-emptively hardening it for a hypothetical caller.
+
+**Backend deletions:**
+
+- `FiscalPeriodResolver` — removed `resolveDayForBusinessDate(LocalDate)` + `generateDayPeriod(LocalDate)` + the now-unused `FiscalYearRepository` field, `SecurityContextHolder` import, and `currentUser()` helper. Class docstring no longer mentions Slice 1.6 (d10) lazy generation. The class now does one thing: resolve MONTH periods (and ID-overload).
+- `FiscalPeriodType` — `DAY` enum value kept intact (V31 `ck_fiscal_period_type` CHECK constraint allows it; "never edit existing migrations" rule binds). The enum's docstring is updated to say DAY is "not produced by any current code path" — the schema reservation stays, the implementation claim goes.
+- `FiscalYearController` — three `@Operation` description strings rewritten to drop the "DAY periods are lazy" / "DAY → MONTH → …" claims. The 19-period eager-generation total is now stated explicitly so future readers don't wonder if DAY is the 20th.
+- `docs-site/.../period-end-closures-implementation-plan.md` — Slice 1.6 row updated from "+ lazy DAY resolver" to spelling out the 12 + 4 + 2 + 1 = 19 eager rows.
+
+**Test deletions:**
+
+- `FiscalPeriodResolverTest` — removed `resolveDayHit`, `resolveDayLazyCreate`, `resolveDayNoEnclosingFy` (3 tests). Remaining 3 tests cover the MONTH resolution paths. The `fiscalYearRepository` `@Mock` field also went since it was only used by the deleted tests.
+- `FiscalYearServiceIT` — removed `resolverLazyDayCreation` (1 IT), removed `FiscalPeriodResolver` import + the autowired `resolver` field + the @Import entry.
+
+**Two pre-existing IT issues caught + fixed in the same pass** (the IT was broken since at least commit `b12c052`, possibly since it was authored — 12 errors before this session, 0 after):
+
+1. **`FiscalYearService`'s new `PeriodLockService` constructor dep (from the cascade fix b12c052) was never wired into the IT context.** Added a `Mockito.mock(PeriodLockService.class)` `@Bean` to `TestSupportConfig`. The close-cascade interaction is unit-tested via `FiscalYearServiceTest`; a real `PeriodLockService` would have required pulling in 7+ transitive beans for an IT focused on FY DB behaviour.
+2. **`@DataJpaTest` doesn't pick up `@EnableJpaAuditing`** — the IT inserts `BaseEntity` rows but `@CreatedDate` never fired because nothing imported `CiaCommonAutoConfiguration`. Classic CLAUDE.md gotcha (already documented in the Development-Standards / Testing block). Added `CiaCommonAutoConfiguration.class` to `@Import`, then dropped the IT's local `@Bean Clock clock()` because `CiaCommonAutoConfiguration` already exposes a `@ConditionalOnMissingBean` system-default Clock and registering both triggers `BeanDefinitionOverrideException`.
+
+Also bumped `spring.flyway.target` from "33" to "43" to match the rest of the cia-api IT suite (the stale value didn't actually fail anything because Slice 1.6's IT doesn't touch V34+ columns, but consistency with siblings is cheaper than a future surprise).
+
+**Tests:** `FiscalPeriodResolverTest` 3/3 green, `FiscalYearServiceTest` 20/20 green, `FiscalYearServiceIT` 11/11 green (previously 12 erroring). Full cia-api failsafe run: **274 tests, 0 failures, 0 errors, 1 intentional benchmark skip** — matches the CLAUDE.md baseline of 275 (one IT method removed).
+
+---
+
 ## 2026-05-21 — Session 74 (`main`, continued): Closeout fixes — MinIO bucket bootstrap + FY-close cascade
 
 Two follow-ups flagged during F5.16 / wrap-up smoke, both shipped in one pass.
