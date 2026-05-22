@@ -896,6 +896,21 @@ Access groups aggregate permissions. Users inherit access group permissions. App
 - All strings externalised for i18n readiness (even if English-only initially).
 - No hardcoded tenant IDs, currency codes, or country codes anywhere.
 
+### Slice discipline
+
+Every commit/slice has **one stated goal**, set before any code is touched. Side-discoveries made during the slice (drift, theatre, bugs in adjacent code, scope-adjacent UX gaps) go to the **canonical backlog table at the top of `cia-log.md`** — they are not pulled into the host slice. This rule exists because nine consecutive cleanup slices (Sessions 84a → 92) kept growing as new bugs were noticed mid-flight, which delayed everything underneath them.
+
+**Hard rules:**
+
+1. **One goal per slice.** State it explicitly in the first message and the commit. If during execution the goal needs to expand, say so explicitly and amend the goal — don't silently broaden.
+2. **Side-discoveries are logged, not absorbed.** When you notice a drift / bug / gap adjacent to the current work, add a row to the backlog table at the top of `cia-log.md` with a priority rating (P1 / P2 / P3) and a one-line note — don't fix it in this slice.
+3. **Every slice ends by reconciling against the backlog.** The session entry's "Known follow-ups" section must explicitly point to (a) rows removed from the backlog as the slice landed them, (b) rows added because the slice surfaced them, or (c) "no backlog change" if neither. If the backlog only grew, that's a signal the goal was too narrow or the scope wasn't honest.
+4. **Backlog is the source of truth for what comes next.** Don't pick the most-recently-noticed item by default — pick from the table by priority. Per-session "Known follow-ups" entries are informational/chronological; the table at the top is canonical.
+
+**When mid-slice growth is legitimate:** if you discover that the stated goal can't ship without also fixing X, the right move is to stop, name the discovery, and either (a) descope the slice + log X to the backlog or (b) explicitly broaden the slice's stated goal with a one-line justification. What's not legitimate is silently expanding scope and letting the commit grow.
+
+This discipline was added in Session 93 after the user observed the original drift items kept getting pushed under newer discoveries. The backlog table at the top of `cia-log.md` is its enforcement mechanism.
+
 ### Frontend API wiring rules
 
 The back-office app reads from `/api/v1/...` everywhere and writes via `useMutation` on every form submit. This invariant is **enforced in CI** by `cia-frontend/scripts/check-api-wiring.sh`, which runs on every PR.

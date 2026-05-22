@@ -6,11 +6,90 @@ All changes, decisions, and configurations made during the development of the Co
 
 ## Tracked follow-up items
 
-Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
+**Canonical backlog.** Every scoped but not-yet-executed slice lives here. Per-session "Known follow-ups" entries below are informational and chronological — they are also promoted to this table so the visible inventory at the top of the file is the single source of truth. Per CLAUDE.md → Slice discipline, side-discoveries during a slice go here, never pulled into the host slice.
 
-No open items as of 2026-05-22. Sessions 79–92 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), the Session 84 PRD §2.1.17 drift remediation slice 84a (ProductDto realignment + CommissionSourceType enum + V50), the Session 85 slice 84b (Product Commission Setup UI + per-policy commission snapshot V51), the Session 86 slice 84c (broker commission JE chain + credit-note generation V52), the Session 87 slice 84e (surface commission snapshot on PolicyResponse + Commission card on policy detail page), the Session 88 slice 84d (per-policy agent attribution + AGENT commission posting V53/V54), the Session 89 Channel picker on CreatePolicySheet, the Session 90 directSchema reconciliation, the Session 91 FromQuoteForm payload cleanup + QuoteDto brokerName silent-drift fix, and the Session 92 DTO drift guard (CI check that catches the next silent drift before merge).
+Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued with context · **P3** long-tail / nice-to-have.
 
-Session 92's baseline captured **12 pre-existing drifts** (CustomerDto, EndorsementDto, QuoteDto, plus 9 smaller cases) into the allow-list. Each one is a future single-slice reconciliation; the allow-list is the to-do list. Remaining queued: drive the allow-list down, Quote-side agent attribution, RM commission via 2520, Policy list page Intermediary column.
+| ID | P | Item | Notes |
+|---|---|---|---|
+| A1 | P2 | Setup-Dto smalls drift cleanup — batch | BankDto + CurrencyDto + AccessGroupDto + ApprovalGroupDto + ClassOfBusinessDto + ProductDto.sections + CompanySettingsDto. Mostly missing createdAt/updatedAt + small name aliases. Decrement 7 dto-drift allow-list entries in one slice. |
+| A2 | P1 | CustomerDto + CustomerDirectorDto reconciliation | Massive drift — `displayName`/`status`/`brokerId` UI projections vs full KYC + address + directors/documents arrays on backend. Customer page is high-traffic, drift is broad. Single slice covering both Dtos. |
+| A3 | P1 | QuoteDto + QuoteRiskDto rewrite | Single-line totals on frontend vs per-risk + quote-level loadings/discounts + workflow state on backend. Quote pages may be silently misrendering today. Slice 91 fixed brokerName but the wider drift remains. |
+| A4 | P2 | EndorsementDto redesign | Single `sumInsured`/`premium` fields vs `oldXxx`/`newXxx`/`premiumAdjustment` diff shape on EndorsementResponse (Java record). Lower traffic than Customer/Quote but conceptually wrong. |
+| B1 | P2 | Quote-side agent attribution | Quote entity doesn't carry `agentId`. Extends Module 2 form + bulk-upload CSV + quote-document templates. Bind-from-quote currently always produces broker-attributed policies even when an agent was the intermediary. |
+| B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
+| B3 | P2 | Policy list page Intermediary column | Surface broker/agent on PolicyListPage. Small UI surface; mirrors the "Intermediary" row Slice 84e added to the detail page. |
+| C1 | P1 | Policy detail Finance tab wired to real cia-finance | "Post Receipt" button + debit-note + commission credit-note status all read from mock data today. Slice 84f originally. |
+| C2 | P3 | Multi-risk on direct create form | `useFieldArray<PolicyRiskRequest>` on CreatePolicySheet. RisksEditorDialog already handles multi-risk post-creation; this is purely a create-time convenience. |
+| C3 | P3 | vehicleRegNumber + sectionId on direct risk row | Backend `PolicyRiskRequest` accepts both as optional; form has neither (filled via RisksEditorDialog on the detail page). |
+| D1 | P3 | Server-side date-range validation on CommissionSetupRequest | `@Future` / cross-field bean validation that effectiveTo ≥ effectiveFrom. Frontend zod refine covers the UX; server-side is correctness defence. |
+| D2 | P3 | internal-api.json `components.schemas` backfill | Static doc has 247 paths but zero inline schemas (only `$ref`s). Auto-generate from Springdoc live `/v3/api-docs` rather than maintain by hand. Larger slice; depends on E1 fix first. |
+| E1 | P3 | Springdoc live `/v3/api-docs` 500s in dev | Pre-existing auth NPE on unauthenticated probes. Frontend uses static `internal-api.json`, so not consumer-impacting; flagged since Session 80. |
+| E2 | P3 | docs-site/build/internal-api.json stale | Build copy regenerates on next Docusaurus deploy. Cosmetic. |
+| E3 | P3 | RelationshipManager.branch FK-cascade-awareness | Branch deletion doesn't 409 if RMs reference it; listing then shows soft-deleted branch name. Defensive only. |
+| F1 | P2 | Placeholder-onClick row actions across back-office | 6 known: CustomersListPage Update KYC + Blacklist; ProductsPage Activate/Deactivate; QuotationListPage Submit + Convert + Edit + Duplicate. Each is small but adds up. Batch as one slice. |
+
+**Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-22 — Session 93 (`main`): Inventory pass + slice discipline rule
+
+Process slice — no code touched. User observed a pattern across Sessions 84a → 92: every cleanup slice surfaced new drift, and the newly-discovered items kept getting prioritised over the older queued ones. The original drifts kept getting pushed under newer findings. Slice 93 fixes that with two artifacts:
+
+1. **Canonical backlog table at the top of `cia-log.md`** — replaces the "No open items" header. Lists every scoped-but-not-yet-executed item across the recent arc with an ID + priority + one-line note. 16 rows: 4 DTO-drift cleanup batches, 3 commission-arc continuations (Quote agent, RM commission, Intermediary column), 3 policy-create polish items, 2 server-side polish items, 3 long-standing infra items, 1 placeholder-action batch.
+
+2. **Slice discipline rule in `CLAUDE.md` under Development Standards → General**. Four hard rules:
+   - One stated goal per slice.
+   - Side-discoveries go to the backlog table — not pulled into the host slice.
+   - Every session entry reconciles against the backlog (rows removed / added / unchanged, explicit).
+   - The backlog is the source of truth for "what next" — picked by priority, not by recency.
+
+### Why this shape
+
+The user's diagnosis was sharp: side-discoveries kept getting absorbed into the host slice ("I'm here anyway, might as well fix this too"), which had three compounding effects:
+
+- The host slice's commit grew to include unrelated work — making the diff harder to review and the rollback harder to scope.
+- The original P-rated backlog items kept being deprioritised by recency. A drift queued three sessions ago felt less urgent than the one noticed five minutes ago.
+- The cia-log's header section said "No open items" while the per-session "Known follow-ups" sections silently accumulated. The single visible inventory was a lie.
+
+The fix is structural: surface the backlog in one canonical, top-of-file table, and write the slice-discipline rule that side-discoveries go *there* instead of into the current commit.
+
+### Backlog seed inventory
+
+The first entry into the table was a one-time pass through the last fifteen sessions' "Known follow-ups" sections, deduped, plus the 12 entries on the Slice 92 dto-drift allow-list batched into 4 logical slices (A1–A4). Items are intentionally grouped, not one-row-per-allow-list-entry, because the right unit of work for Setup-Dto smalls (BankDto + CurrencyDto + AccessGroupDto + ApprovalGroupDto + ClassOfBusinessDto + ProductDto.sections + CompanySettingsDto) is a single batch slice, not seven micro-commits.
+
+The P-rating reflects three things: (1) user-facing impact, (2) likelihood of silently misleading users today, (3) execution effort. The QuoteDto rewrite (A3) sits at P1 because Quote pages probably misrender silently today. The Setup smalls batch (A1) sits at P2 because the asymmetries are additive — frontend just doesn't show audit timestamps — not actively wrong. RM commission (B2) sits at P3 because the doc-type design question hasn't been answered.
+
+### What's NOT in this slice
+
+- **Driving any backlog item down.** Slice 93 is the inventory + discipline pass; the next slice picks an item from the table and executes it.
+- **Tooling changes.** No CI hook, no script. The discipline rule is enforced socially via the cia-log structure + the CLAUDE.md statement. If the rule drifts in practice, a future slice can add tooling (e.g. a pre-commit check that the session entry references the backlog table).
+- **Restructuring older session entries.** Per-session "Known follow-ups" sections from Sessions 78–92 stay as written. They're chronological and informational; the table at the top is canonical going forward.
+
+### Verification
+
+- `cia-log.md` parses cleanly; backlog table renders correctly in the IDE preview.
+- `CLAUDE.md` section structure intact — new "Slice discipline" subsection inserted between "General" and "Frontend API wiring rules".
+- No code changed; no tests / failsafe needed.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Docs — log | `cia-log.md` (backlog table + this entry) |
+| Docs — repo | `CLAUDE.md` (Slice discipline subsection) |
+
+### Backlog reconciliation
+
+- **Removed**: none (this slice doesn't ship any item from the table).
+- **Added**: none — every row in the new table was already named in a prior session's "Known follow-ups" section; this slice just promoted them into one visible inventory.
+- **Net**: backlog made visible, no growth.
+
+### Known follow-ups (deliberately deferred)
+
+- **Tooling enforcement of the discipline rule** (optional) — a CI check that every session log entry has a "Backlog reconciliation" stanza. Not added yet; observing whether the social convention holds first.
+- All other items are now in the canonical table at the top.
 
 ---
 
