@@ -8,7 +8,105 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-22. Sessions 79, 80, 81, 82, and 83 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), and the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49).
+No open items as of 2026-05-22. Sessions 79–84 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), and the Session 84 PRD §2.1.17 drift remediation (ProductDto realignment + CommissionSourceType enum + V50).
+
+The Session 84 audit also surfaced two larger remediation items still pending: a Product Commission Setup UI (no list endpoint UI exists today) and wiring commission into Policy creation as a per-policy snapshot. Both are scoped as a single follow-up slice under the working title "Slice 84b — Commission UI + policy snapshot."
+
+---
+
+## 2026-05-22 — Session 84 (`main`): PRD §2.1.17 drift remediation — ProductDto realignment + CommissionSourceType enum (V50) + reasoned-soft-delete
+
+User pointed to PRD §2.1.17 ("Commission Setup for Product — Policy") and asked for a drift audit between the document and the build. The audit returned nine findings (A–I); user picked the four with the smallest surface area for this slice: realign `ProductDto`, replace `broker_type` free-text with a proper enum + CHECK, add an upper-bound `@DecimalMax` to the commission rate, and bring `CommissionSetup` into the V47 reasoned-soft-delete convention.
+
+### Item 1 — `ProductDto` ↔ `ProductResponse` realignment (silent Jackson drift, mirror of Session 78's `BrokerDto` fix)
+
+`ProductDto` (frontend) carried `status: 'ACTIVE' | 'INACTIVE'` and `commissionRate: number`. Backend `ProductResponse` exposes neither — it has `active: boolean` and no commission field at all (commissions live in `commission_setups` keyed by `CommissionSourceType`, never on the Product row). Same failure mode as the Session 78 `BrokerDto` drift: Jackson dropped both fields silently, the type system never caught it, and `ProductsPage`'s commission column rendered `undefined%` once products existed.
+
+Collateral surfaced during the fix: `ProductSheet`'s form schema was posting `{ name, code, classOfBusinessId, type, commissionRate }` to a backend `ProductRequest` that requires `rate` + `minPremium` as `@NotNull` and accepts neither `commissionRate` nor `status`. The create path has been broken since the backend product model landed — the UI just never exercised it on a fresh deployment.
+
+Changes:
+
+| File | Change |
+|---|---|
+| `cia-frontend/packages/api-client/src/modules/setup.ts` | `ProductDto`: drop `status` + `commissionRate`; add `rate`, `minPremium`, `active`, `updatedAt` |
+| `cia-frontend/apps/back-office/src/modules/setup/pages/products/ProductSheet.tsx` | Zod schema: drop `commissionRate`; add `rate` + `minPremium`. Form field row swapped accordingly |
+| `cia-frontend/apps/back-office/src/modules/setup/pages/products/ProductsPage.tsx` | Drop `statusVariant` map + broken Commission column; rename Premium Rate column; status badge now reads `active: boolean` |
+
+### Item 2 — `CommissionSourceType` enum + V50 migration
+
+`broker_type` was `VARCHAR(50) NOT NULL DEFAULT 'ALL'` — a free-text bucket misnamed for one of the three sources it had to model (PRD §2.1.17 explicitly distinguishes Agents / Brokers / Relationship Managers). The default `'ALL'` sentinel made every commission record ambiguous about which counterparty it credited. With zero downstream consumers and no ITs, this was the cheapest time to fix the model and the vocabulary at once.
+
+V50 ordering:
+
+```sql
+UPDATE commission_setups SET broker_type = 'BROKER'
+ WHERE broker_type NOT IN ('AGENT', 'BROKER', 'RELATIONSHIP_MANAGER');
+
+ALTER TABLE commission_setups RENAME COLUMN broker_type TO commission_source;
+ALTER TABLE commission_setups ALTER COLUMN commission_source DROP DEFAULT;
+ALTER TABLE commission_setups
+  ADD CONSTRAINT ck_commission_source
+  CHECK (commission_source IN ('AGENT', 'BROKER', 'RELATIONSHIP_MANAGER'));
+```
+
+The backfill must run before the CHECK or any tenant with a legacy `'ALL'` row would fail the migration on startup. Reversing the order would also break: dropping the default after the rename leaves the DEFAULT clause referencing the new column name, which Postgres rejects.
+
+Java side:
+
+- New enum `cia.setup.product.CommissionSourceType` with values `AGENT`, `BROKER`, `RELATIONSHIP_MANAGER` (matches PRD §2.1.17 vocabulary).
+- `CommissionSetup.brokerType: String` → `commissionSource: CommissionSourceType` with `@Enumerated(STRING)`.
+- `CommissionSetupRequest.brokerType` → `commissionSource: CommissionSourceType` (`@NotNull`).
+- `CommissionSetupResponse.brokerType` → `commissionSource: CommissionSourceType`.
+- `CommissionSetupService` threads the new field through create / update / `toResponse`.
+
+The rename is **not** backwards-compatible at the API level — `commissionSource` is the only accepted JSON key from this point on. Acceptable here because no frontend consumes the endpoint yet (no commission UI exists — that's Slice 84b).
+
+### Item 3 — `@DecimalMax("100.0")` on commission rate
+
+One-line addition to `CommissionSetupRequest.rate`. Previously only `@DecimalMin("0.0")` — so a 9999% commission was a valid request. The upper bound matches the frontend's `z.coerce.number().min(0).max(100)` discipline now bound on both ends.
+
+### Item 4 — `CommissionSetup` joins the V47 reasoned-soft-delete convention
+
+`CommissionSetupService.delete(productId, id)` → `delete(productId, id, reason)`. Switched `auditService.log(...)` → `auditService.logWithReason(...)` to populate `audit_log.reason` (V47). Controller picks up `@RequestParam(required = false) String reason` exactly mirroring the Adjuster / Agent / Broker / Surveyor / SBU / Branch / Insurer / Reinsurer / RM / Customer pattern. Brings the reasoned-delete entity count from 11 → 12.
+
+### Internal Swagger doc — `docs-site/static/internal-api.json`
+
+- Added the `?reason` query parameter to `DELETE /api/v1/setup/products/{productId}/commission-setups/{id}` using the same wording template as the other 11 reasoned-delete endpoints.
+- No schema body changes — `components.schemas` is empty by design in this file; Springdoc resolves `$ref`s at render time, so the `CommissionSetupRequest`/`CommissionSetupResponse` rename flows through the existing references without a JSON edit.
+- Path count unchanged at 247.
+
+### Verification
+
+- `mvn install -DskipTests -pl cia-setup -am` — green (3.5s).
+- `mvn install -DskipTests -pl cia-api -am` — green.
+- `mvn verify -pl cia-api` (full 274-IT failsafe) — green; V50 applies cleanly across every per-tenant Flyway migration with no existing-rows backfill needed (greenfield ITs).
+- `pnpm --filter @cia/back-office exec tsc --noEmit` filtered to `products/` and `api-client/setup.ts` — zero errors. Pre-existing errors in `policy/detail/AssignSurveyorDialog.tsx` + `policy/detail/CoinsuranceEditorDialog.tsx` are unrelated to this slice.
+- JSON validity check on `internal-api.json` — `python3 -c "import json; json.load(open(...))"` → valid.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend — migration | `cia-backend/cia-api/src/main/resources/db/migration/V50__tighten_commission_setup_source.sql` (new) |
+| Backend — entity | `cia-backend/cia-setup/src/main/java/com/nubeero/cia/setup/product/CommissionSetup.java` |
+| Backend — enum | `cia-backend/cia-setup/src/main/java/com/nubeero/cia/setup/product/CommissionSourceType.java` (new) |
+| Backend — DTOs | `CommissionSetupRequest.java`, `CommissionSetupResponse.java` |
+| Backend — service | `CommissionSetupService.java` (reasoned-delete + enum thread) |
+| Backend — controller | `CommissionSetupController.java` (?reason query param) |
+| Frontend — types | `cia-frontend/packages/api-client/src/modules/setup.ts` |
+| Frontend — pages | `setup/pages/products/ProductSheet.tsx`, `setup/pages/products/ProductsPage.tsx` |
+| Swagger doc | `docs-site/static/internal-api.json` (?reason on commission DELETE) |
+| Docs | `cia-log.md` (this entry) |
+
+### Why this is the right shape
+
+The four items here all share the same property: small surface area, no downstream consumers to coordinate with, no behaviour change a user would notice. The remaining audit findings (E + the Product Commission Setup UI) need the data model from Items 1–4 to be correct first — wiring policy creation to a commission table whose source column was free-text would have built remediation on top of the bug. Doing the model right first is what unlocks the rest.
+
+### Known follow-ups (intentional — not in this slice)
+
+- **Slice 84b — Product Commission Setup UI + Policy snapshot**: the 5th + 6th audit items. Build a Product Details page with a Commission Setups tab consuming `/api/v1/setup/products/{productId}/commission-setups`; add `commission_source_type` + `commission_rate` snapshot columns to `policies` so the commission credit-note generation at policy approval reads from a frozen value instead of re-resolving the active CommissionSetup at settlement time.
+- **`docs-site/build/internal-api.json`** is a stale Docusaurus build copy; regenerates on the next docs deploy.
+- **Springdoc live `/v3/api-docs` still 500s in dev** — pre-existing auth NPE, unchanged from Session 80–83.
 
 ---
 

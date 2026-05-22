@@ -8,10 +8,6 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient, type ProductDto } from '@cia/api-client';
 import ProductSheet from './ProductSheet';
 
-const statusVariant: Record<ProductDto['status'], 'active' | 'draft'> = {
-  ACTIVE: 'active', INACTIVE: 'draft',
-};
-
 export default function ProductsPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing,   setEditing]   = useState<ProductDto | null>(null);
@@ -53,16 +49,16 @@ export default function ProductsPage() {
       },
     },
     {
-      accessorKey: 'commissionRate',
-      header: 'Commission',
+      accessorKey: 'rate',
+      header: 'Premium Rate',
       cell: ({ getValue }) => <span className="text-sm">{getValue() as number}%</span>,
     },
     {
-      accessorKey: 'status',
+      accessorKey: 'active',
       header: 'Status',
       cell: ({ getValue }) => {
-        const s = getValue() as ProductDto['status'];
-        return <Badge variant={statusVariant[s]}>{s.toLowerCase()}</Badge>;
+        const active = getValue() as boolean;
+        return <Badge variant={active ? 'active' : 'draft'}>{active ? 'active' : 'inactive'}</Badge>;
       },
     },
     {
@@ -72,7 +68,7 @@ export default function ProductsPage() {
           row={row}
           actions={[
             { label: 'Edit',   onClick: (r) => openEdit(r.original) },
-            { label: row.original.status === 'ACTIVE' ? 'Deactivate' : 'Activate', onClick: () => {} },
+            { label: row.original.active ? 'Deactivate' : 'Activate', onClick: () => {} },
           ]}
         />
       ),

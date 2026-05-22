@@ -20,8 +20,9 @@ public class CommissionSetup extends BaseEntity {
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
-    @Column(name = "broker_type", nullable = false, length = 50)
-    private String brokerType;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "commission_source", nullable = false, length = 30)
+    private CommissionSourceType commissionSource;
 
     @Column(nullable = false, precision = 6, scale = 4)
     private BigDecimal rate;

@@ -36,7 +36,7 @@ public class CommissionSetupService {
         Product product = resolveProduct(productId);
         CommissionSetup entity = CommissionSetup.builder()
                 .product(product)
-                .brokerType(request.getBrokerType())
+                .commissionSource(request.getCommissionSource())
                 .rate(request.getRate())
                 .effectiveFrom(request.getEffectiveFrom())
                 .effectiveTo(request.getEffectiveTo())
@@ -49,7 +49,7 @@ public class CommissionSetupService {
     @Transactional
     public CommissionSetupResponse update(UUID productId, UUID id, CommissionSetupRequest request) {
         CommissionSetup entity = findOrThrow(productId, id);
-        entity.setBrokerType(request.getBrokerType());
+        entity.setCommissionSource(request.getCommissionSource());
         entity.setRate(request.getRate());
         entity.setEffectiveFrom(request.getEffectiveFrom());
         entity.setEffectiveTo(request.getEffectiveTo());
@@ -59,11 +59,11 @@ public class CommissionSetupService {
     }
 
     @Transactional
-    public void delete(UUID productId, UUID id) {
+    public void delete(UUID productId, UUID id, String reason) {
         CommissionSetup entity = findOrThrow(productId, id);
         entity.softDelete();
         repository.save(entity);
-        auditService.log("CommissionSetup", id.toString(), AuditAction.DELETE, entity, null);
+        auditService.logWithReason("CommissionSetup", id.toString(), AuditAction.DELETE, entity, null, reason);
     }
 
     private Product resolveProduct(UUID productId) {
@@ -85,7 +85,7 @@ public class CommissionSetupService {
     private CommissionSetupResponse toResponse(CommissionSetup e) {
         return CommissionSetupResponse.builder()
                 .id(e.getId()).productId(e.getProduct().getId())
-                .brokerType(e.getBrokerType()).rate(e.getRate())
+                .commissionSource(e.getCommissionSource()).rate(e.getRate())
                 .effectiveFrom(e.getEffectiveFrom()).effectiveTo(e.getEffectiveTo())
                 .createdAt(e.getCreatedAt()).updatedAt(e.getUpdatedAt())
                 .build();

@@ -2232,6 +2232,15 @@
                             "type": "string",
                             "format": "uuid"
                         }
+                    },
+                    {
+                        "name": "reason",
+                        "in": "query",
+                        "required": false,
+                        "description": "Free-text justification for the soft-delete. Persisted to audit_log.reason (V47) alongside the resolved user + timestamp. Optional at the API for IT compatibility; required at the back-office UI via the shared ConfirmDeleteDialog.",
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 ],
                 "responses": {

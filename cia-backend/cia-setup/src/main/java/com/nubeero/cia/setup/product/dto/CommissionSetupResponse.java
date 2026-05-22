@@ -1,5 +1,6 @@
 package com.nubeero.cia.setup.product.dto;
 
+import com.nubeero.cia.setup.product.CommissionSourceType;
 import lombok.Builder;
 import lombok.Data;
 
@@ -13,7 +14,7 @@ import java.util.UUID;
 public class CommissionSetupResponse {
     private UUID id;
     private UUID productId;
-    private String brokerType;
+    private CommissionSourceType commissionSource;
     private BigDecimal rate;
     private LocalDate effectiveFrom;
     private LocalDate effectiveTo;

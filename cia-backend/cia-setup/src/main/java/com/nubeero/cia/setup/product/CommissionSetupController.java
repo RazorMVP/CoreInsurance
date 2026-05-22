@@ -101,8 +101,9 @@ public class CommissionSetupController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Product or commission setup not found", content = @Content)
     })
     public ResponseEntity<ApiResponse<Void>> delete(
-            @PathVariable UUID productId, @PathVariable UUID id) {
-        service.delete(productId, id);
+            @PathVariable UUID productId, @PathVariable UUID id,
+            @RequestParam(required = false) String reason) {
+        service.delete(productId, id, reason);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

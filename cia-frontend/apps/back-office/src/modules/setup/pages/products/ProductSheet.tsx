@@ -15,12 +15,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { applyApiErrors } from '@/lib/form-errors';
 
 // ── Product form schema ────────────────────────────────────────────────────
+// Mirrors com.nubeero.cia.setup.product.dto.ProductRequest. `commissionRate`
+// is intentionally absent — commissions are configured per-product via
+// /api/v1/setup/products/{id}/commission-setups (see Module 1 §2.1.17).
 const productSchema = z.object({
   name:              z.string().min(2, 'Required'),
   code:              z.string().min(2, 'Required'),
   classOfBusinessId: z.string().min(1, 'Select a class of business'),
   type:              z.enum(['SINGLE_RISK', 'MULTI_RISK']),
-  commissionRate:    z.coerce.number().min(0).max(100),
+  rate:              z.coerce.number().min(0).max(100),
+  minPremium:        z.coerce.number().min(0),
 });
 type ProductFormValues = z.infer<typeof productSchema>;
 
@@ -62,7 +66,7 @@ export default function ProductSheet({ open, onOpenChange, product, onSuccess }:
   const form = useForm<ProductFormValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(productSchema) as any,
-    defaultValues: { name: '', code: '', classOfBusinessId: '', type: 'SINGLE_RISK', commissionRate: 10 },
+    defaultValues: { name: '', code: '', classOfBusinessId: '', type: 'SINGLE_RISK', rate: 5, minPremium: 0 },
   });
 
   useEffect(() => {
@@ -73,9 +77,10 @@ export default function ProductSheet({ open, onOpenChange, product, onSuccess }:
             code:              product.code,
             classOfBusinessId: product.classOfBusinessId,
             type:              product.type,
-            commissionRate:    product.commissionRate,
+            rate:              product.rate,
+            minPremium:        product.minPremium,
           }
-        : { name: '', code: '', classOfBusinessId: '', type: 'SINGLE_RISK', commissionRate: 10 },
+        : { name: '', code: '', classOfBusinessId: '', type: 'SINGLE_RISK', rate: 5, minPremium: 0 },
     );
   }, [product, form]);
 
@@ -187,12 +192,28 @@ export default function ProductSheet({ open, onOpenChange, product, onSuccess }:
                 />
                 <FormField
                   control={form.control}
-                  name="commissionRate"
+                  name="rate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Commission (%)</FormLabel>
+                      <FormLabel>Premium Rate (%)</FormLabel>
                       <FormControl>
-                        <Input type="number" min={0} max={100} step={0.5} {...field} />
+                        <Input type="number" min={0} max={100} step={0.01} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </FormRow>
+
+              <FormRow>
+                <FormField
+                  control={form.control}
+                  name="minPremium"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Minimum Premium (₦)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={0} step={100} {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

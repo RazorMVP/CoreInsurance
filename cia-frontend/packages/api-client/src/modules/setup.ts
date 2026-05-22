@@ -47,16 +47,24 @@ export interface ApprovalLevelDto {
   approverNames: string[];
 }
 
+// Mirrors com.nubeero.cia.setup.product.dto.ProductResponse 1:1.
+// Earlier carried `status: ACTIVE|INACTIVE` (backend exposes `active: boolean`)
+// and a flat `commissionRate` (commissions live in `commission_setups` keyed by
+// CommissionSourceType — never on the Product row). Jackson silently dropped
+// both fields on the way in; renderers showed `undefined%` once products
+// existed. Aligned in Session 84.
 export interface ProductDto {
-  id:               string;
-  name:             string;
-  code:             string;
-  classOfBusinessId: string;
+  id:                  string;
+  name:                string;
+  code:                string;
+  classOfBusinessId:   string;
   classOfBusinessName: string;
-  type:             'SINGLE_RISK' | 'MULTI_RISK';
-  status:           'ACTIVE' | 'INACTIVE';
-  commissionRate:   number;
-  createdAt:        string;
+  type:                'SINGLE_RISK' | 'MULTI_RISK';
+  rate:                number;
+  minPremium:          number;
+  active:              boolean;
+  createdAt:           string;
+  updatedAt?:          string | null;
 }
 
 export interface ClassOfBusinessDto {
