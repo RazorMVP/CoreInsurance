@@ -13,7 +13,6 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | ID | P | Item | Notes |
 |---|---|---|---|
 | F4 | P3 | Password Policy UI needs real backend endpoint | CompanySettingsPage's Password Policy card was sending `minPasswordLength` + `passwordExpireDays` in the company-settings PUT body — backend `CompanySettingsRequest` doesn't accept either field. Session 98 removed the card from the form (was pure theatre). When a real password-policy endpoint exists, surface those settings under a separate `/setup/password-policy` page or a dedicated card with a real PUT target. |
-| A3b | P2 | QuoteDetailPage MockQuote → QuoteDto alignment | Session 95 rewrote `QuoteDto` to mirror `QuoteResponse`, but `QuoteDetailPage`'s local `MockQuote` still carries the old field names (`startDate`/`endDate`/`version`/`issueDate`) and types its API query as `useQuery<MockQuote>`. Page renders + PDF preview + `computeQuoteSummary` operate on the local shape. Single focused slice: replace `MockQuote` with `QuoteDto`, rename references, drop `version` UI (backend doesn't ship it). |
 | A4 | P2 | EndorsementDto redesign | Single `sumInsured`/`premium` fields vs `oldXxx`/`newXxx`/`premiumAdjustment` diff shape on EndorsementResponse (Java record). Lower traffic than Customer/Quote but conceptually wrong. |
 | B1 | P2 | Quote-side agent attribution | Quote entity doesn't carry `agentId`. Extends Module 2 form + bulk-upload CSV + quote-document templates. Bind-from-quote currently always produces broker-attributed policies even when an agent was the intermediary. |
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
@@ -30,6 +29,51 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F1 | P2 | Placeholder-onClick row actions across back-office | 6 known: CustomersListPage Update KYC + Blacklist; ProductsPage Activate/Deactivate; QuotationListPage Submit + Convert + Edit + Duplicate. Each is small but adds up. Batch as one slice. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-22 — Session 100 (`main`): Backlog A3b — QuoteDetailPage MockQuote → QuoteDto alignment
+
+Seventh slice under the Session 93 discipline rule. Goal: replace `QuoteDetailPage`'s local `MockQuote` type with `QuoteDto`, rename references through the page, drop the `version` UI (backend doesn't model versions) + the `issueDate` reference (use `createdAt` instead). Closes the side-discovery surfaced by Slice 95's QuoteDto rewrite.
+
+### What the slice did
+
+The page declared `interface MockQuote` with field names from the old QuoteDto shape (`startDate`/`endDate`/`version`/`issueDate`) — the rewrite in Slice 95 aligned the **api-client** type to backend but didn't carry through to this consumer (logged at the time as A3b, deliberately deferred to honour slice discipline).
+
+Three layers to align:
+
+1. **API query** — `useQuery<MockQuote>` → `useQuery<QuoteDto>`. The page now consumes the real wire shape.
+2. **Mock fallback** — `MOCK_QUOTES: MockQuote[]` → `MOCK_QUOTES: QuoteDto[]`. All 5 synthetic entries reshaped: `startDate`/`endDate` → `policyStartDate`/`policyEndDate`; added `productCode`/`productRate`/`totalSumInsured`/`totalGrossPremium`/`totalNetPremium`/`classOfBusinessId`/`coinsuranceParticipants`; each risk row now has `id`/`grossPremium`/`premium`/`orderNo`; each loading/discount has `computedAmount`.
+3. **PDF preview projection** — `QuotePdfPreview` keeps its stable internal interface (`AdjustmentLine` / `RiskItemData` / `QuotePdfData`). Added two small mapping helpers: `toAdjustmentLine(a: AdjustmentEntryDto)` drops `computedAmount` (the PDF computes amounts itself from `format + value + base`); `toRiskItemData(r: QuoteRiskDto)` projects the wire shape into the PDF shape. The previously-inline `resolveAdjustmentNames` was replaced by these two pure mappers.
+
+### What was dropped
+
+- **Version UI** — `q.version` references removed everywhere. The header description was `v${q.version} · ${productName} · ${customerName}` → just `${productName} · ${customerName}`.
+- **Version History card** — the entire sidebar block + the `VERSION_HISTORY` mock constant. Backend doesn't model quote versions; the card was rendering a mock-only timeline that didn't connect to anything real.
+- **`q.issueDate`** — backend doesn't ship a separate issueDate field. PDF data now uses `q.createdAt.slice(0, 10)` (already an ISO string from the API).
+- **`MockQuote` interface** — fully gone; `q` is now `QuoteDto`.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` filtered to `QuoteDetailPage.tsx` — zero errors.
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (28 interfaces, 2 skipped)` unchanged.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — UI | `cia-frontend/apps/back-office/src/modules/quotation/pages/detail/QuoteDetailPage.tsx` (full rewrite) |
+| Docs | `cia-log.md` (this entry + backlog row A3b removed) |
+
+### Backlog reconciliation
+
+- **Removed**: A3b.
+- **Added**: none. No new drift surfaced — the page's PDF projection helpers contain the cross-shape mapping cleanly, the version-history card was mock-only and didn't gate any real backend feature.
+- **Net**: 16 → 15 rows.
+
+### Known follow-ups (deliberately deferred)
+
+None.
 
 ---
 

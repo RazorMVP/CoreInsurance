@@ -5,7 +5,12 @@ import {
   Skeleton,
 } from '@cia/ui';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type QuoteDto } from '@cia/api-client';
+import {
+  apiClient,
+  type AdjustmentEntryDto,
+  type QuoteDto,
+  type QuoteRiskDto,
+} from '@cia/api-client';
 import QuotePdfPreview, {
   type QuotePdfData, type AdjustmentLine, type RiskItemData,
   computeQuoteSummary,
@@ -15,125 +20,122 @@ import {
   MOCK_DISCOUNT_TYPES, MOCK_LOADING_TYPES, MOCK_QUOTE_CONFIG,
 } from '../../../setup/pages/policy-specs/quote-config-types';
 
-// ── Mock quote shape ──────────────────────────────────────────────────────────
-interface MockQuote {
-  id: string; quoteNumber: string; version: number;
-  customerName: string; customerId: string;
-  productId: string; productName: string; classOfBusinessName: string;
-  businessType: string; status: QuoteDto['status'];
-  startDate: string; endDate: string; issueDate: string;
-  createdAt: string; updatedAt: string;
-  inputterName: string; approverName: string;
-  risks: RiskItemData[];
-  quoteLoadings: AdjustmentLine[];
-  quoteDiscounts: AdjustmentLine[];
-  selectedClauseIds: string[];
-}
-
-// ── Extended mock data (all quotes, looked up by id from useParams) ────────────
-// allow-mock: fallback while useQuery is in flight or for unknown ids
-const MOCK_QUOTES: MockQuote[] = [
+// ── Mock fallback (allow-mock: synthetic placeholders for /quotes/{id} when the
+//    backend doesn't have data for an id; same allow-mock pattern as
+//    CustomerDetailPage uses for its synthetic samples) ─────────────────────
+const MOCK_QUOTES: QuoteDto[] = [
   {
-    id: 'q1', quoteNumber: 'QUO-2026-00001', version: 1,
-    customerName: 'Chioma Okafor', customerId: 'c1',
-    productId: 'p1', productName: 'Private Motor Comprehensive', classOfBusinessName: 'Motor (Private)',
-    businessType: 'DIRECT', status: 'APPROVED' as QuoteDto['status'],
-    startDate: '2026-02-01', endDate: '2027-02-01',
-    createdAt: '2026-01-28', updatedAt: '2026-01-30', issueDate: '2026-01-28',
-    inputterName: 'Chidi Okafor', approverName: 'Adeola Bello',
-    risks: [
-      {
-        description: '2022 Toyota Camry, Reg: LND-001-AA',
-        sumInsured: 3_500_000, rate: 2.25,
-        loadings:  [{ typeId: 'l1', typeName: '', format: 'PERCENT' as const, value: 5 }],
-        discounts: [{ typeId: 'd1', typeName: '', format: 'PERCENT' as const, value: 2.5 }],
-      },
-    ],
+    id: 'q1', quoteNumber: 'QUO-2026-00001', status: 'APPROVED',
+    customerId: 'c1', customerName: 'Chioma Okafor',
+    productId: 'p1', productName: 'Private Motor Comprehensive', productCode: 'PMC', productRate: 2.25,
+    classOfBusinessId: 'cob-motor', classOfBusinessName: 'Motor (Private)',
+    businessType: 'DIRECT',
+    policyStartDate: '2026-02-01', policyEndDate: '2027-02-01',
+    totalSumInsured: 3_500_000, totalGrossPremium: 78_750, totalNetPremium: 80_775,
     quoteLoadings: [], quoteDiscounts: [],
     selectedClauseIds: ['c1', 'c2'],
-  },
-  {
-    id: 'q2', quoteNumber: 'QUO-2026-00002', version: 2,
-    customerName: 'Alaba Trading Co.', customerId: 'c2',
-    productId: 'p3', productName: 'Fire & Burglary Standard', classOfBusinessName: 'Fire & Burglary',
-    businessType: 'DIRECT', status: 'SUBMITTED' as QuoteDto['status'],
-    startDate: '2026-03-01', endDate: '2027-03-01',
-    createdAt: '2026-02-01', updatedAt: '2026-02-05', issueDate: '2026-02-01',
-    inputterName: 'Chidi Okafor', approverName: '',
-    risks: [
-      {
-        description: 'Mixed stock — Eko Hotel Annexe, Warehouse B',
-        sumInsured: 10_000_000, rate: 0.80,
-        loadings:  [{ typeId: 'l2', typeName: '', format: 'PERCENT' as const, value: 10 }],
-        discounts: [{ typeId: 'd3', typeName: '', format: 'FLAT' as const, value: 5_000 }],
-      },
-      {
-        description: 'Fixtures & fittings — Warehouse B',
-        sumInsured: 5_000_000, rate: 0.80,
-        loadings:  [],
-        discounts: [{ typeId: 'd2', typeName: '', format: 'PERCENT' as const, value: 5 }],
-      },
-    ],
-    quoteLoadings:  [{ typeId: 'l1', typeName: '', format: 'PERCENT' as const, value: 2.5 }],
-    quoteDiscounts: [{ typeId: 'd4', typeName: '', format: 'FLAT' as const, value: 10_000 }],
-    selectedClauseIds: ['c5', 'c6', 'c8'],
-  },
-  {
-    id: 'q3', quoteNumber: 'QUO-2026-00003', version: 1,
-    customerName: 'Emeka Eze', customerId: 'c3',
-    productId: 'p1', productName: 'Private Motor Comprehensive', classOfBusinessName: 'Motor (Private)',
-    businessType: 'DIRECT', status: 'DRAFT' as QuoteDto['status'],
-    startDate: '2026-03-15', endDate: '2027-03-15',
-    createdAt: '2026-02-10', updatedAt: '2026-02-10', issueDate: '2026-02-10',
-    inputterName: 'Chidi Okafor', approverName: '',
-    risks: [
-      { description: '2020 Honda Accord, Reg: ABJ-222-XY', sumInsured: 2_200_000, rate: 2.25, loadings: [], discounts: [] },
-    ],
-    quoteLoadings: [], quoteDiscounts: [], selectedClauseIds: [],
-  },
-  {
-    id: 'q4', quoteNumber: 'QUO-2026-00004', version: 1,
-    customerName: 'Chioma Okafor', customerId: 'c1',
-    productId: 'p4', productName: 'Marine Cargo Open Cover', classOfBusinessName: 'Marine Cargo',
-    businessType: 'DIRECT', status: 'CONVERTED' as QuoteDto['status'],
-    startDate: '2026-01-15', endDate: '2027-01-15',
-    createdAt: '2026-01-10', updatedAt: '2026-01-15', issueDate: '2026-01-10',
     inputterName: 'Chidi Okafor', approverName: 'Adeola Bello',
     risks: [
-      { description: 'General cargo — Lagos to Kano open cover', sumInsured: 8_000_000, rate: 0.75, loadings: [], discounts: [] },
+      {
+        id: 'r1', description: '2022 Toyota Camry, Reg: LND-001-AA',
+        sumInsured: 3_500_000, rate: 2.25, grossPremium: 78_750, premium: 80_775, orderNo: 1,
+        loadings:  [{ typeId: 'l1', typeName: '', format: 'PERCENT', value: 5,   computedAmount: 3_937.50 }],
+        discounts: [{ typeId: 'd1', typeName: '', format: 'PERCENT', value: 2.5, computedAmount: 2_066.41 }],
+      },
     ],
-    quoteLoadings: [], quoteDiscounts: [], selectedClauseIds: ['c7'],
+    coinsuranceParticipants: [],
+    createdAt: '2026-01-28T09:00:00Z', updatedAt: '2026-01-30T11:00:00Z',
   },
   {
-    id: 'q5', quoteNumber: 'QUO-2026-00005', version: 3,
-    customerName: 'Ngozi Adeyemi', customerId: 'c5',
-    productId: 'p1', productName: 'Private Motor Comprehensive', classOfBusinessName: 'Motor (Private)',
-    businessType: 'DIRECT', status: 'REJECTED' as QuoteDto['status'],
-    startDate: '2026-02-20', endDate: '2027-02-20',
-    createdAt: '2026-02-08', updatedAt: '2026-02-12', issueDate: '2026-02-08',
+    id: 'q2', quoteNumber: 'QUO-2026-00002', status: 'SUBMITTED',
+    customerId: 'c2', customerName: 'Alaba Trading Co.',
+    productId: 'p3', productName: 'Fire & Burglary Standard', productCode: 'FB', productRate: 0.80,
+    classOfBusinessId: 'cob-fire', classOfBusinessName: 'Fire & Burglary',
+    businessType: 'DIRECT',
+    policyStartDate: '2026-03-01', policyEndDate: '2027-03-01',
+    totalSumInsured: 15_000_000, totalGrossPremium: 120_000, totalNetPremium: 117_500,
+    quoteLoadings:  [{ typeId: 'l1', typeName: '', format: 'PERCENT', value: 2.5, computedAmount: 3_000 }],
+    quoteDiscounts: [{ typeId: 'd4', typeName: '', format: 'FLAT',    value: 10_000, computedAmount: 10_000 }],
+    selectedClauseIds: ['c5', 'c6', 'c8'],
     inputterName: 'Chidi Okafor', approverName: '',
     risks: [
-      { description: '2019 Mercedes GLE 450, Reg: LND-999-ZZ', sumInsured: 4_000_000, rate: 2.25, loadings: [], discounts: [] },
+      {
+        id: 'r2', description: 'Mixed stock — Eko Hotel Annexe, Warehouse B',
+        sumInsured: 10_000_000, rate: 0.80, grossPremium: 80_000, premium: 83_600, orderNo: 1,
+        loadings:  [{ typeId: 'l2', typeName: '', format: 'PERCENT', value: 10, computedAmount: 8_000 }],
+        discounts: [{ typeId: 'd3', typeName: '', format: 'FLAT',    value: 5_000, computedAmount: 5_000 }],
+      },
+      {
+        id: 'r3', description: 'Fixtures & fittings — Warehouse B',
+        sumInsured: 5_000_000, rate: 0.80, grossPremium: 40_000, premium: 38_000, orderNo: 2,
+        loadings:  [],
+        discounts: [{ typeId: 'd2', typeName: '', format: 'PERCENT', value: 5, computedAmount: 2_000 }],
+      },
     ],
+    coinsuranceParticipants: [],
+    createdAt: '2026-02-01T09:00:00Z', updatedAt: '2026-02-05T15:00:00Z',
+  },
+  {
+    id: 'q3', quoteNumber: 'QUO-2026-00003', status: 'DRAFT',
+    customerId: 'c3', customerName: 'Emeka Eze',
+    productId: 'p1', productName: 'Private Motor Comprehensive', productCode: 'PMC', productRate: 2.25,
+    classOfBusinessId: 'cob-motor', classOfBusinessName: 'Motor (Private)',
+    businessType: 'DIRECT',
+    policyStartDate: '2026-03-15', policyEndDate: '2027-03-15',
+    totalSumInsured: 2_200_000, totalGrossPremium: 49_500, totalNetPremium: 49_500,
     quoteLoadings: [], quoteDiscounts: [], selectedClauseIds: [],
+    inputterName: 'Chidi Okafor', approverName: '',
+    risks: [
+      {
+        id: 'r4', description: '2020 Honda Accord, Reg: ABJ-222-XY',
+        sumInsured: 2_200_000, rate: 2.25, grossPremium: 49_500, premium: 49_500, orderNo: 1,
+        loadings: [], discounts: [],
+      },
+    ],
+    coinsuranceParticipants: [],
+    createdAt: '2026-02-10T09:00:00Z', updatedAt: '2026-02-10T09:00:00Z',
+  },
+  {
+    id: 'q4', quoteNumber: 'QUO-2026-00004', status: 'CONVERTED',
+    customerId: 'c1', customerName: 'Chioma Okafor',
+    productId: 'p4', productName: 'Marine Cargo Open Cover', productCode: 'MCO', productRate: 0.75,
+    classOfBusinessId: 'cob-marine', classOfBusinessName: 'Marine Cargo',
+    businessType: 'DIRECT',
+    policyStartDate: '2026-01-15', policyEndDate: '2027-01-15',
+    totalSumInsured: 8_000_000, totalGrossPremium: 60_000, totalNetPremium: 60_000,
+    quoteLoadings: [], quoteDiscounts: [], selectedClauseIds: ['c7'],
+    inputterName: 'Chidi Okafor', approverName: 'Adeola Bello',
+    risks: [
+      {
+        id: 'r5', description: 'General cargo — Lagos to Kano open cover',
+        sumInsured: 8_000_000, rate: 0.75, grossPremium: 60_000, premium: 60_000, orderNo: 1,
+        loadings: [], discounts: [],
+      },
+    ],
+    coinsuranceParticipants: [],
+    createdAt: '2026-01-10T09:00:00Z', updatedAt: '2026-01-15T14:00:00Z',
+  },
+  {
+    id: 'q5', quoteNumber: 'QUO-2026-00005', status: 'REJECTED',
+    customerId: 'c5', customerName: 'Ngozi Adeyemi',
+    productId: 'p1', productName: 'Private Motor Comprehensive', productCode: 'PMC', productRate: 2.25,
+    classOfBusinessId: 'cob-motor', classOfBusinessName: 'Motor (Private)',
+    businessType: 'DIRECT',
+    policyStartDate: '2026-02-20', policyEndDate: '2027-02-20',
+    totalSumInsured: 4_000_000, totalGrossPremium: 90_000, totalNetPremium: 90_000,
+    quoteLoadings: [], quoteDiscounts: [], selectedClauseIds: [],
+    inputterName: 'Chidi Okafor', approverName: '',
+    risks: [
+      {
+        id: 'r6', description: '2019 Mercedes GLE 450, Reg: LND-999-ZZ',
+        sumInsured: 4_000_000, rate: 2.25, grossPremium: 90_000, premium: 90_000, orderNo: 1,
+        loadings: [], discounts: [],
+      },
+    ],
+    coinsuranceParticipants: [],
+    createdAt: '2026-02-08T09:00:00Z', updatedAt: '2026-02-12T16:00:00Z',
   },
 ];
-
-// ── Version history mock ──────────────────────────────────────────────────────
-const VERSION_HISTORY: Record<string, { version: number; date: string; change: string; user: string }[]> = {
-  q1: [{ version: 1, date: '28 Jan 2026', change: 'Initial draft created.', user: 'Chidi Okafor' }],
-  q2: [
-    { version: 2, date: '05 Feb 2026', change: 'Sum insured increased from ₦12M to ₦15M. Rate unchanged.', user: 'Chidi Okafor' },
-    { version: 1, date: '01 Feb 2026', change: 'Initial draft created.', user: 'Chidi Okafor' },
-  ],
-  q3: [{ version: 1, date: '10 Feb 2026', change: 'Initial draft created.', user: 'Chidi Okafor' }],
-  q4: [{ version: 1, date: '10 Jan 2026', change: 'Initial draft created.', user: 'Chidi Okafor' }],
-  q5: [
-    { version: 3, date: '12 Feb 2026', change: 'Sum insured revised upward. Loading removed.', user: 'Chidi Okafor' },
-    { version: 2, date: '10 Feb 2026', change: 'Rate adjusted to 2.25%.', user: 'Chidi Okafor' },
-    { version: 1, date: '08 Feb 2026', change: 'Initial draft created.', user: 'Chidi Okafor' },
-  ],
-};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const statusVariant: Record<string, 'active' | 'pending' | 'rejected' | 'draft' | 'cancelled'> = {
@@ -158,22 +160,29 @@ function resolveTypeName(typeId: string, category: 'loading' | 'discount') {
   return list.find(t => t.id === typeId)?.name ?? typeId;
 }
 
-/** Walk the mock quote and populate `typeName` on every AdjustmentLine. */
-function resolveAdjustmentNames(q: MockQuote): {
-  risks: RiskItemData[];
-  quoteLoadings: AdjustmentLine[];
-  quoteDiscounts: AdjustmentLine[];
-} {
-  const enrich = (lines: AdjustmentLine[], cat: 'loading' | 'discount'): AdjustmentLine[] =>
-    lines.map(l => ({ ...l, typeName: l.typeName || resolveTypeName(l.typeId, cat) }));
+/**
+ * Convert a backend AdjustmentEntryDto to the PDF preview's AdjustmentLine.
+ * The PDF preview computes amounts itself from (format, value) + the gross
+ * base, so we drop `computedAmount` here. typeName is enriched from the
+ * mock types list if the backend left it blank.
+ */
+function toAdjustmentLine(a: AdjustmentEntryDto, category: 'loading' | 'discount'): AdjustmentLine {
   return {
-    risks: q.risks.map(r => ({
-      ...r,
-      loadings:  enrich(r.loadings, 'loading'),
-      discounts: enrich(r.discounts, 'discount'),
-    })),
-    quoteLoadings:  enrich(q.quoteLoadings,  'loading'),
-    quoteDiscounts: enrich(q.quoteDiscounts, 'discount'),
+    typeId:   a.typeId,
+    typeName: a.typeName || resolveTypeName(a.typeId, category),
+    format:   a.format,
+    value:    a.value,
+  };
+}
+
+/** Convert a QuoteRiskDto to the PDF preview's RiskItemData. */
+function toRiskItemData(r: QuoteRiskDto): RiskItemData {
+  return {
+    description: r.description,
+    sumInsured:  r.sumInsured,
+    rate:        r.rate,
+    loadings:    r.loadings.map(l => toAdjustmentLine(l, 'loading')),
+    discounts:   r.discounts.map(d => toAdjustmentLine(d, 'discount')),
   };
 }
 
@@ -183,46 +192,42 @@ export default function QuoteDetailPage() {
   const { id }   = useParams<{ id: string }>();
   const [pdfOpen, setPdfOpen] = useState(false);
 
-  // Live quote — falls back to a local mock while the request is in flight.
-  // Maps the backend QuoteResponse shape onto the MockQuote shape the rest
-  // of the page (and PDF preview) expects. Backend returns totalNetPremium
-  // / totalGrossPremium (not premium/netPremium); risks carry per-item
-  // loadings/discounts; quote-level adjustments + selectedClauseIds are
-  // top-level on the response.
-  const quoteQuery = useQuery<MockQuote>({
+  const quoteQuery = useQuery<QuoteDto>({
     queryKey: ['quotes', id],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: MockQuote }>(`/api/v1/quotes/${id}`);
+      const res = await apiClient.get<{ data: QuoteDto }>(`/api/v1/quotes/${id}`);
       return res.data.data;
     },
     enabled: !!id,
   });
 
+  // allow-mock: fallback while useQuery is in flight or for unknown ids
   const q = quoteQuery.data ?? MOCK_QUOTES.find(x => x.id === id) ?? MOCK_QUOTES[0];
-  const versionHistory = VERSION_HISTORY[q.id] ?? [];
 
   const canSubmit  = q.status === 'DRAFT';
   const canConvert = q.status === 'APPROVED';
   const canEdit    = q.status !== 'CONVERTED' && q.status !== 'APPROVED';
   const canDownloadPdf = q.status === 'APPROVED' || q.status === 'CONVERTED';
 
-  // Resolve type names once and feed into both display + PDF data
-  const resolved = resolveAdjustmentNames(q);
+  // Project the API-shape quote into the PDF preview's stable internal shape.
+  const pdfRisks: RiskItemData[] = q.risks.map(toRiskItemData);
+  const pdfQuoteLoadings: AdjustmentLine[]  = q.quoteLoadings.map(l => toAdjustmentLine(l, 'loading'));
+  const pdfQuoteDiscounts: AdjustmentLine[] = q.quoteDiscounts.map(d => toAdjustmentLine(d, 'discount'));
 
   const pdfData: QuotePdfData = {
     quoteNumber:       q.quoteNumber,
-    issueDate:         q.issueDate,
+    issueDate:         q.createdAt.slice(0, 10),
     customerName:      q.customerName,
     productName:       q.productName,
     classOfBusiness:   q.classOfBusinessName,
-    startDate:         q.startDate,
-    endDate:           q.endDate,
-    risks:             resolved.risks,
-    quoteLoadings:     resolved.quoteLoadings,
-    quoteDiscounts:    resolved.quoteDiscounts,
+    startDate:         q.policyStartDate,
+    endDate:           q.policyEndDate,
+    risks:             pdfRisks,
+    quoteLoadings:     pdfQuoteLoadings,
+    quoteDiscounts:    pdfQuoteDiscounts,
     selectedClauseIds: q.selectedClauseIds,
-    inputterName:      q.inputterName,
-    approverName:      q.approverName,
+    inputterName:      q.inputterName ?? '',
+    approverName:      q.approverName ?? '',
     validityDays:      MOCK_QUOTE_CONFIG.validityDays,
   };
 
@@ -247,7 +252,7 @@ export default function QuoteDetailPage() {
     <div className="p-6 space-y-5 max-w-4xl">
       <PageHeader
         title={q.quoteNumber}
-        description={`v${q.version} · ${q.productName} · ${q.customerName}`}
+        description={`${q.productName} · ${q.customerName}`}
         breadcrumb={
           <button onClick={() => navigate('/quotation')} className="text-sm text-muted-foreground hover:text-foreground">
             ← Quotation
@@ -277,7 +282,7 @@ export default function QuoteDetailPage() {
             <Row label="Product"       value={q.productName} />
             <Row label="Class"         value={q.classOfBusinessName} />
             <Row label="Business Type" value={q.businessType} />
-            <Row label="Period"        value={`${q.startDate} → ${q.endDate}`} />
+            <Row label="Period"        value={`${q.policyStartDate} → ${q.policyEndDate}`} />
             {q.inputterName && <Row label="Prepared by" value={q.inputterName} />}
             {q.approverName && <Row label="Approved by" value={q.approverName} />}
           </CardContent>
@@ -398,41 +403,6 @@ export default function QuoteDetailPage() {
           </CardContent>
         </Card>
       )}
-
-      {/* Version history */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Version History</CardTitle>
-            <Badge variant="outline" className="text-xs">v{q.version} current</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-0">
-          {versionHistory.map((v, i) => (
-            <div
-              key={v.version}
-              className="flex gap-4 py-4"
-              style={i < versionHistory.length - 1 ? { boxShadow: '0 1px 0 var(--border)' } : undefined}
-            >
-              <div className="flex flex-col items-center gap-1">
-                <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold ${v.version === q.version ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-                  v{v.version}
-                </div>
-                {i < versionHistory.length - 1 && <div className="w-px flex-1 bg-border" />}
-              </div>
-              <div className="pb-2 space-y-1">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-foreground">{v.change}</p>
-                  {v.version === q.version && (
-                    <Badge variant="active" className="text-[10px]">Current</Badge>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">{v.date} · {v.user}</p>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
 
       {/* PDF Preview Dialog */}
       <QuotePdfPreview
