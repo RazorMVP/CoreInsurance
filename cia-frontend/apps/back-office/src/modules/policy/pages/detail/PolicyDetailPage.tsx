@@ -27,10 +27,16 @@ function showServerError(err: unknown, title: string) {
 type MockPolicy = PolicyDto & {
   riskDescription: string;
   paymentTerms: string;
-  commission: number;
   debitNoteNumber?: string;
   surveyRequired: boolean;
   clauses: { id: string; title: string; text: string }[];
+};
+
+// Display labels for the V50 CommissionSourceType enum, mirroring CommissionSetupsSheet.
+const COMMISSION_SOURCE_LABEL: Record<NonNullable<PolicyDto['commissionSourceType']>, string> = {
+  AGENT:                'Agent',
+  BROKER:               'Broker',
+  RELATIONSHIP_MANAGER: 'Relationship Manager',
 };
 
 // allow-mock: fallback while useQuery is in flight or for unknown ids
@@ -48,7 +54,7 @@ const mockPolicy: MockPolicy = {
   risks: [], coinsuranceParticipants: [], survey: null,
   createdAt: '2026-01-30',
   riskDescription: '2022 Toyota Camry 2.5L, Reg: LND-001-AA, Chassis: ABC123',
-  paymentTerms: 'Immediate', commission: 9_844,
+  paymentTerms: 'Immediate',
   debitNoteNumber: 'DN-2026-00001',
   surveyRequired: false,
   clauses: [
@@ -263,7 +269,14 @@ export default function PolicyDetailPage() {
                 <Row label="Sum Insured"    value={`₦${p.totalSumInsured.toLocaleString()}`} />
                 <Row label="Gross Premium"  value={`₦${p.totalPremium.toLocaleString()}`} />
                 <Row label="Net Premium"    value={`₦${p.netPremium.toLocaleString()}`} />
-                <Row label="Commission"     value={`₦${p.commission.toLocaleString()}`} />
+                <Row
+                  label="Commission"
+                  value={
+                    p.commissionAmount != null
+                      ? `₦${p.commissionAmount.toLocaleString()}`
+                      : undefined
+                  }
+                />
                 <Row label="Payment Terms"  value={p.paymentTerms} />
                 <Row label="Debit Note"     value={p.debitNoteNumber} />
               </CardContent>
@@ -412,7 +425,7 @@ export default function PolicyDetailPage() {
         </TabsContent>
 
         {/* ── Financial ────────────────────────────────────────────────── */}
-        <TabsContent value="financial" className="mt-4">
+        <TabsContent value="financial" className="mt-4 space-y-4">
           <Card>
             <CardHeader><CardTitle>Debit Note & Finance</CardTitle></CardHeader>
             <CardContent>
@@ -420,7 +433,6 @@ export default function PolicyDetailPage() {
                 <>
                   <Row label="Debit Note No."  value={p.debitNoteNumber} />
                   <Row label="Amount"           value={`₦${p.netPremium.toLocaleString()}`} />
-                  <Row label="Commission"       value={`₦${p.commission.toLocaleString()}`} />
                   <Row label="Payment Status"   value="Outstanding" />
                   <Row label="Due Date"         value={p.policyStartDate} />
                   <div className="mt-4">
@@ -429,6 +441,36 @@ export default function PolicyDetailPage() {
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground">Debit note will be generated when the policy is approved.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── Commission snapshot (Slice 84e — V51 fields) ─────────────── */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Commission</CardTitle>
+                {p.commissionSourceType && (
+                  <Badge variant="outline">{COMMISSION_SOURCE_LABEL[p.commissionSourceType]}</Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {p.commissionSourceType && p.commissionRate != null && p.commissionAmount != null ? (
+                <>
+                  <Row label="Source"     value={COMMISSION_SOURCE_LABEL[p.commissionSourceType]} />
+                  <Row label="Rate"       value={`${p.commissionRate}%`} />
+                  <Row label="Amount"     value={`₦${p.commissionAmount.toLocaleString()}`} />
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Snapshotted at policy issuance from the product&apos;s active commission rule. A
+                    credit note for this amount is generated automatically against the {COMMISSION_SOURCE_LABEL[p.commissionSourceType].toLowerCase()}.
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No commission configured at issuance. Configure a commission rule under Setup &rarr; Products
+                  before approving future policies to enable automatic commission credit-note generation.
+                </p>
               )}
             </CardContent>
           </Card>

@@ -131,6 +131,15 @@ export const PolicyDtoSchema = z.object({
   discount:                 z.number(),
   netPremium:               z.number(),
 
+  // Commission snapshot (Slice 84b V51 — surfaced by 84e). All three are null
+  // when no commission is configured at issuance; paired-CHECK semantics on
+  // the DB keep source + rate in lockstep. commissionAmount is computed by the
+  // backend (netPremium × rate / 100, HALF_UP 2dp) so the frontend doesn't
+  // multiply.
+  commissionSourceType:     z.enum(['AGENT', 'BROKER', 'RELATIONSHIP_MANAGER']).nullable().optional(),
+  commissionRate:           z.number().nullable().optional(),
+  commissionAmount:         z.number().nullable().optional(),
+
   notes:                    z.string().nullable().optional(),
   workflowId:               z.string().nullable().optional(),
 

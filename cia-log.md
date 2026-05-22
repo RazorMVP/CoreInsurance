@@ -8,9 +8,79 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-22. Sessions 79–86 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), the Session 84 PRD §2.1.17 drift remediation slice 84a (ProductDto realignment + CommissionSourceType enum + V50), the Session 85 slice 84b (Product Commission Setup UI + per-policy commission snapshot V51), and the Session 86 slice 84c (broker commission JE chain + credit-note generation V52).
+No open items as of 2026-05-22. Sessions 79–87 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), the Session 84 PRD §2.1.17 drift remediation slice 84a (ProductDto realignment + CommissionSourceType enum + V50), the Session 85 slice 84b (Product Commission Setup UI + per-policy commission snapshot V51), the Session 86 slice 84c (broker commission JE chain + credit-note generation V52), and the Session 87 slice 84e (surface commission snapshot on PolicyResponse + Commission card on policy detail page).
 
-Slice 84c closes the last of the six PRD §2.1.17 audit findings under the current attribution model. The remaining work is **Open Question #11** in PRD v2.7 (per-policy agent + relationship-manager attribution) — when that lands, an "84d" slice extends the same plumbing with `POLICY_COMMISSION_AGENT` posting rule + listener branch.
+The Slice 84d AGENT path remains queued behind **Open Question #11** (per-policy agent + RM attribution). User explicitly picked 84e over 84d in Session 87 — visible-to-user completion of the broker flow before opening the next data-model conversation.
+
+---
+
+## 2026-05-22 — Session 87 (`main`): PRD §2.1.17 slice 84e — Surface commission snapshot on PolicyResponse + Commission card on detail page
+
+Lights up what slices 84a → 84c shipped: the V51 commission snapshot stored on `policies` is now exposed on the API response and rendered as its own card on the policy detail page Financial tab. Audits a fully end-to-end user-facing path — from product commission rule config in Setup, through policy issuance and snapshot, into GL posting + payables credit note, and now to a visible summary that ops staff can reconcile against.
+
+Picked over Slice 84d (AGENT commission path) because 84d remains blocked on Open Q#11 and 84e consumes data we already have. No migration. No new endpoint. Pure response-shape extension + UI surfacing.
+
+### Backend
+
+**`PolicyResponse`** gains three nullable fields mirroring V51's policies-table snapshot:
+
+- `commissionSourceType: CommissionSourceType` — the enum (already an enum on the entity since slice 84b, no String coercion needed at this boundary because PolicyResponse lives in cia-policy which already depends on cia-setup).
+- `commissionRate: BigDecimal` — V51's `policies.commission_rate` column verbatim.
+- `commissionAmount: BigDecimal` — computed at response time from `netPremium × commissionRate / 100` (HALF_UP, 2dp), reusing the same `computeCommissionAmount(policy)` helper that PolicyService.approve has used since slice 84c to populate PolicyApprovedEvent. Single source of truth for the formula — no chance of drift between the event payload and the response surface.
+
+**`PolicyService.toResponse`** populates the three fields in the existing builder chain. The amount computation never throws: when `commissionRate` is null (no snapshot), the helper returns null and the response field is null too. The frontend reads null as "no commission configured" and renders the empty-state copy.
+
+All three fields propagate through every `toResponse` call path automatically — list endpoints, detail GET, approve / reject / cancel / reinstate / risks / coinsurance / NAICOM trigger / etc. all share the same builder, so a single edit lights them all up.
+
+### Frontend
+
+**`PolicyDto`** (zod schema) gains three optional+nullable fields matching the backend exactly:
+
+```ts
+commissionSourceType: z.enum(['AGENT', 'BROKER', 'RELATIONSHIP_MANAGER']).nullable().optional(),
+commissionRate:       z.number().nullable().optional(),
+commissionAmount:     z.number().nullable().optional(),
+```
+
+**`PolicyDetailPage.tsx`** changes:
+
+- Removed the legacy mock-only `commission: number` field from the `MockPolicy` type extension. The detail page Premium & Payment row that used to display `₦${p.commission.toLocaleString()}` now displays `₦${p.commissionAmount.toLocaleString()}` when the snapshot is set, and the empty `—` fallback when it's null. No more hardcoded ₦9,844 placeholder rendering for every policy.
+- Financial tab gets a new "Commission" Card under "Debit Note & Finance":
+  - Shows Source / Rate / Amount rows when `commissionSourceType` + `commissionRate` + `commissionAmount` are all non-null (V51 paired-CHECK guarantees this).
+  - Title badge shows the source label (Broker / Agent / Relationship Manager) — same `COMMISSION_SOURCE_LABEL` map used in CommissionSetupsSheet for visual consistency across the two surfaces that talk about commission sources.
+  - Body explainer flags that the values are snapshotted at issuance and that a credit note is auto-generated against the source — sets ops staff expectations correctly.
+  - Empty state when the snapshot is null: nudges admins to configure a commission rule under Setup → Products. Links the chain back to Slice 84b's UI explicitly.
+
+### Verification
+
+- `mvn install -DskipTests -pl cia-policy -am` — green.
+- `mvn install -DskipTests -pl cia-api -am` — green.
+- `mvn verify -pl cia-api` (full 274-IT failsafe) — 0 failures, 0 errors, 1 documented benchmark skip.
+- `pnpm --filter @cia/back-office exec tsc --noEmit` filtered to `PolicyDetailPage.tsx` + `api-client/policy.ts` — zero errors. The pre-existing errors in `AssignSurveyorDialog.tsx` + `CoinsuranceEditorDialog.tsx` (carried since slice 84a) are unchanged and unrelated.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend — DTO | `cia-policy/.../dto/PolicyResponse.java` (+ 3 fields + import) |
+| Backend — service | `cia-policy/.../PolicyService.java` (3 builder calls in `toResponse`) |
+| Frontend — types | `cia-frontend/packages/api-client/src/modules/policy.ts` (PolicyDto schema +3) |
+| Frontend — UI | `cia-frontend/apps/back-office/src/modules/policy/pages/detail/PolicyDetailPage.tsx` |
+| Docs | `cia-log.md` (this entry) |
+
+### Why a card, not a tab
+
+Two reasons. First, the audit findings 5 + 6 didn't ask for a new tab — they asked for the snapshot to be visible. A whole tab would be premature scope. Second, the Financial tab already houses the policy's money story (debit note, payment status, due date); commission is part of that story, not a separate concern. Card-on-existing-tab kept the slice tight and matched the existing information architecture.
+
+### Why not show the credit-note number too
+
+The credit note created by `PolicyCommissionCreditNoteListener` (slice 84c) gets its number from `FinanceNumberService.nextCreditNoteNumber()` — useful to display, but requires either a new endpoint that joins `policies` and `credit_notes` by `entity_id`, or threading the CN number back into the snapshot response. Out of scope for 84e — when there's a Finance link from the policy detail page (currently a "Post Receipt" button that's still wired against mock data), that's the natural slice to surface the commission CN's status too.
+
+### Known follow-ups (deliberately deferred)
+
+- **Slice 84d — AGENT commission path** — still blocked on Open Q#11.
+- **Slice 84f (suggested)** — wire the Finance tab's "Post Receipt" button + surface the actual debit note + commission credit note status from `cia-finance` instead of mock data. Natural follow-up once the policy-finance link is fully API-driven.
+- **Internal swagger doc** — `PolicyResponse` schema is `$ref`'d but the response body shape isn't expanded in `internal-api.json` (matches existing convention). No edit needed.
 
 ---
 

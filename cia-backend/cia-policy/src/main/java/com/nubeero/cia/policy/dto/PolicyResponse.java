@@ -2,6 +2,7 @@ package com.nubeero.cia.policy.dto;
 
 import com.nubeero.cia.policy.PolicyStatus;
 import com.nubeero.cia.quotation.BusinessType;
+import com.nubeero.cia.setup.product.CommissionSourceType;
 import lombok.Builder;
 import lombok.Data;
 
@@ -46,6 +47,16 @@ public class PolicyResponse {
     private BigDecimal totalPremium;
     private BigDecimal discount;
     private BigDecimal netPremium;
+
+    // ── Commission snapshot (Slice 84b — V51; surfaced by 84e) ────────────
+    // All three are null when no commission is configured at issuance. Pair
+    // semantics enforced by V51's ck_policies_commission_pair: source + rate
+    // are both-set or both-null. commissionAmount is computed at response
+    // time from netPremium × commissionRate / 100 (HALF_UP, 2dp) — same
+    // formula PolicyService used to populate PolicyApprovedEvent in Slice 84c.
+    private CommissionSourceType commissionSourceType;
+    private BigDecimal commissionRate;
+    private BigDecimal commissionAmount;
 
     private String notes;
     private String workflowId;
