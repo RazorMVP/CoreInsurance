@@ -32,7 +32,7 @@ public class DebitNoteController {
     @GetMapping
     @PreAuthorize("hasRole('FINANCE_VIEW')")
     @Operation(summary = "List debit notes (paginated, filterable)",
-               description = "Filter by status or customerId; both omitted returns all. Outstanding amount is computed inline (totalAmount − paidAmount).")
+               description = "Filter by status, customerId, or entityId (the underlying policy / endorsement). All omitted returns all. Outstanding amount is computed inline (totalAmount − paidAmount).")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Debit note page",
             content = @Content(schema = @Schema(implementation = DebitNoteResponse.class))),
@@ -42,12 +42,15 @@ public class DebitNoteController {
     public ApiResponse<List<DebitNoteResponse>> list(
             @RequestParam(required = false) DebitNoteStatus status,
             @RequestParam(required = false) UUID customerId,
+            @RequestParam(required = false) UUID entityId,
             @PageableDefault(size = 20) Pageable pageable) {
         Page<DebitNote> page = status != null
                 ? service.findByStatus(status, pageable)
                 : customerId != null
                         ? service.findByCustomer(customerId, pageable)
-                        : service.findAll(pageable);
+                        : entityId != null
+                                ? service.findByEntity(entityId, pageable)
+                                : service.findAll(pageable);
         return ApiResponse.success(page.map(this::toResponse).getContent());
     }
 

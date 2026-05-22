@@ -7,11 +7,15 @@ import {
   Label, Textarea, toast,
 } from '@cia/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type ApiError, type ApiResponse, type PolicyDto } from '@cia/api-client';
+import {
+  apiClient, type ApiError, type ApiResponse, type PolicyDto,
+  type DebitNoteDto, type CreditNoteDto, type ReceiptDto,
+} from '@cia/api-client';
 import AssignSurveyorDialog       from './AssignSurveyorDialog';
 import SubmitSurveyReportDialog   from './SubmitSurveyReportDialog';
 import CoinsuranceEditorDialog    from './CoinsuranceEditorDialog';
 import RisksEditorDialog          from './RisksEditorDialog';
+import PostReceiptDialog          from './PostReceiptDialog';
 
 interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
 
@@ -27,7 +31,6 @@ function showServerError(err: unknown, title: string) {
 type MockPolicy = PolicyDto & {
   riskDescription: string;
   paymentTerms: string;
-  debitNoteNumber?: string;
   surveyRequired: boolean;
   clauses: { id: string; title: string; text: string }[];
 };
@@ -37,6 +40,21 @@ const COMMISSION_SOURCE_LABEL: Record<NonNullable<PolicyDto['commissionSourceTyp
   AGENT:                'Agent',
   BROKER:               'Broker',
   RELATIONSHIP_MANAGER: 'Relationship Manager',
+};
+
+// Badge variant maps for the live debit-note + credit-note status pills.
+const dnStatusVariant: Record<DebitNoteDto['status'], 'pending' | 'active' | 'draft' | 'rejected'> = {
+  OUTSTANDING: 'pending',
+  PARTIAL:     'draft',
+  SETTLED:     'active',
+  CANCELLED:   'rejected',
+  VOID:        'rejected',
+};
+const cnStatusVariant: Record<CreditNoteDto['status'], 'pending' | 'active' | 'draft' | 'rejected'> = {
+  OUTSTANDING: 'pending',
+  PARTIAL:     'draft',
+  SETTLED:     'active',
+  CANCELLED:   'rejected',
 };
 
 // allow-mock: fallback while useQuery is in flight or for unknown ids
@@ -55,7 +73,6 @@ const mockPolicy: MockPolicy = {
   createdAt: '2026-01-30',
   riskDescription: '2022 Toyota Camry 2.5L, Reg: LND-001-AA, Chassis: ABC123',
   paymentTerms: 'Immediate',
-  debitNoteNumber: 'DN-2026-00001',
   surveyRequired: false,
   clauses: [
     { id: 'c1', title: 'Third Party Liability',   text: 'Indemnity for third party bodily injury and property damage as per the Motor Vehicles (Third Party Insurance) Act.' },
@@ -177,6 +194,48 @@ export default function PolicyDetailPage() {
   const [submitReportOpen,    setSubmitReportOpen]    = useState(false);
   const [coinsuranceOpen,     setCoinsuranceOpen]     = useState(false);
   const [risksEditorOpen,     setRisksEditorOpen]     = useState(false);
+
+  // Slice 96 / Backlog C1 — Finance tab queries.
+  // Backend exposes ?entityId=<policyId> for both debit-notes (Session 96
+  // added the filter) and credit-notes (CreditNoteController already had it).
+  // For a policy the lists return at most one DN (premium receivable) and at
+  // most one CN (broker / agent commission payable) — we take the first.
+  // Receipts are queried via the nested endpoint once the DN id is known.
+  const debitNoteQuery = useQuery<DebitNoteDto | null>({
+    queryKey: ['policy-debit-note', id],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: DebitNoteDto[] }>('/api/v1/debit-notes', { params: { entityId: id } });
+      return res.data.data[0] ?? null;
+    },
+    enabled: !!id,
+  });
+  const policyDn = debitNoteQuery.data;
+
+  const commissionCnQuery = useQuery<CreditNoteDto | null>({
+    queryKey: ['policy-commission-cn', id],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: CreditNoteDto[] }>('/api/v1/credit-notes', { params: { entityId: id } });
+      // Filter to POLICY-typed CNs — backend list endpoint doesn't filter by
+      // entityType, and a policy id is unique so practically only the
+      // commission CN matches. Belt-and-braces here in case future code
+      // emits other CN types against the same entityId.
+      return res.data.data.find(cn => cn.entityType === 'POLICY') ?? null;
+    },
+    enabled: !!id,
+  });
+  const commissionCn = commissionCnQuery.data;
+
+  const receiptsQuery = useQuery<ReceiptDto[]>({
+    queryKey: ['policy-receipts', policyDn?.id],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ReceiptDto[] }>(`/api/v1/debit-notes/${policyDn!.id}/receipts`);
+      return res.data.data;
+    },
+    enabled: !!policyDn?.id,
+  });
+  const receipts = receiptsQuery.data ?? [];
+
+  const [postReceiptOpen, setPostReceiptOpen] = useState(false);
   const overrideSurvey = useMutation({
     mutationFn: (reason: string) =>
       apiClient.post(`/api/v1/policies/${id}/survey/override`, { reason }),
@@ -288,7 +347,7 @@ export default function PolicyDetailPage() {
                   }
                 />
                 <Row label="Payment Terms"  value={p.paymentTerms} />
-                <Row label="Debit Note"     value={p.debitNoteNumber} />
+                <Row label="Debit Note"     value={policyDn?.debitNoteNumber} />
               </CardContent>
             </Card>
           </div>
@@ -434,19 +493,37 @@ export default function PolicyDetailPage() {
           </Card>
         </TabsContent>
 
-        {/* ── Financial ────────────────────────────────────────────────── */}
+        {/* ── Financial — wired against real cia-finance (Slice 96 / Backlog C1) ── */}
         <TabsContent value="financial" className="mt-4 space-y-4">
           <Card>
-            <CardHeader><CardTitle>Debit Note & Finance</CardTitle></CardHeader>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Debit Note &amp; Finance</CardTitle>
+                {policyDn && (
+                  <Badge variant={dnStatusVariant[policyDn.status]} className="text-xs">
+                    {policyDn.status.toLowerCase().replace(/_/g, ' ')}
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
             <CardContent>
-              {p.debitNoteNumber ? (
+              {debitNoteQuery.isLoading ? (
+                <Skeleton className="h-32 w-full" />
+              ) : policyDn ? (
                 <>
-                  <Row label="Debit Note No."  value={p.debitNoteNumber} />
-                  <Row label="Amount"           value={`₦${p.netPremium.toLocaleString()}`} />
-                  <Row label="Payment Status"   value="Outstanding" />
-                  <Row label="Due Date"         value={p.policyStartDate} />
+                  <Row label="Debit Note No." value={policyDn.debitNoteNumber} />
+                  <Row label="Amount"          value={`₦${policyDn.totalAmount.toLocaleString()}`} />
+                  <Row label="Paid"            value={`₦${policyDn.paidAmount.toLocaleString()}`} />
+                  <Row label="Outstanding"     value={`₦${policyDn.outstandingAmount.toLocaleString()}`} />
+                  <Row label="Due Date"        value={policyDn.dueDate} />
                   <div className="mt-4">
-                    <Button size="sm">Post Receipt</Button>
+                    <Button
+                      size="sm"
+                      disabled={policyDn.status === 'SETTLED' || policyDn.status === 'CANCELLED' || policyDn.status === 'VOID'}
+                      onClick={() => setPostReceiptOpen(true)}
+                    >
+                      Post Receipt
+                    </Button>
                   </div>
                 </>
               ) : (
@@ -455,14 +532,57 @@ export default function PolicyDetailPage() {
             </CardContent>
           </Card>
 
-          {/* ── Commission snapshot (Slice 84e — V51 fields) ─────────────── */}
+          {/* ── Receipts against this debit note ─────────────────────────── */}
+          {policyDn && (
+            <Card>
+              <CardHeader><CardTitle>Receipts</CardTitle></CardHeader>
+              <CardContent className="p-0">
+                {receiptsQuery.isLoading ? (
+                  <div className="p-6"><Skeleton className="h-12 w-full" /></div>
+                ) : receipts.length === 0 ? (
+                  <p className="px-6 py-6 text-sm text-muted-foreground">No receipts posted yet.</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b bg-muted/40">
+                      {['Receipt No.', 'Date', 'Method', 'Amount', 'Posted By', 'Status'].map(h => (
+                        <th key={h} className="h-10 px-4 text-left text-xs font-semibold text-muted-foreground">{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {receipts.map((r, i) => (
+                        <tr key={r.id} className={i < receipts.length - 1 ? 'border-b' : ''}>
+                          <td className="px-4 py-3 font-mono text-xs">{r.receiptNumber}</td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">{r.paymentDate ?? r.createdAt.slice(0, 10)}</td>
+                          <td className="px-4 py-3 text-xs">{r.paymentMethod.replace(/_/g, ' ')}</td>
+                          <td className="px-4 py-3 font-medium tabular-nums">₦{r.amount.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">{r.postedBy ?? '—'}</td>
+                          <td className="px-4 py-3">
+                            <Badge variant="outline" className="text-[10px]">{r.status.toLowerCase()}</Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── Commission snapshot (Slice 84e) + live CN status (Slice 96) ── */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Commission</CardTitle>
-                {p.commissionSourceType && (
-                  <Badge variant="outline">{COMMISSION_SOURCE_LABEL[p.commissionSourceType]}</Badge>
-                )}
+                <div className="flex items-center gap-2">
+                  {p.commissionSourceType && (
+                    <Badge variant="outline">{COMMISSION_SOURCE_LABEL[p.commissionSourceType]}</Badge>
+                  )}
+                  {commissionCn && (
+                    <Badge variant={cnStatusVariant[commissionCn.status]} className="text-xs">
+                      {commissionCn.status.toLowerCase()}
+                    </Badge>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -471,10 +591,18 @@ export default function PolicyDetailPage() {
                   <Row label="Source"     value={COMMISSION_SOURCE_LABEL[p.commissionSourceType]} />
                   <Row label="Rate"       value={`${p.commissionRate}%`} />
                   <Row label="Amount"     value={`₦${p.commissionAmount.toLocaleString()}`} />
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Snapshotted at policy issuance from the product&apos;s active commission rule. A
-                    credit note for this amount is generated automatically against the {COMMISSION_SOURCE_LABEL[p.commissionSourceType].toLowerCase()}.
-                  </p>
+                  {commissionCn ? (
+                    <>
+                      <Row label="Credit Note No." value={commissionCn.creditNoteNumber} />
+                      <Row label="Beneficiary"     value={commissionCn.beneficiaryName ?? undefined} />
+                      <Row label="Paid"            value={`₦${commissionCn.paidAmount.toLocaleString()}`} />
+                      <Row label="Outstanding"     value={`₦${commissionCn.outstandingAmount.toLocaleString()}`} />
+                    </>
+                  ) : (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Credit note will appear here once the policy is approved.
+                    </p>
+                  )}
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground">
@@ -685,6 +813,13 @@ export default function PolicyDetailPage() {
         risks={p.risks}
         isMotor={p.classOfBusinessName.toLowerCase().includes('motor')}
         onSuccess={() => setRisksEditorOpen(false)}
+      />
+
+      <PostReceiptDialog
+        open={postReceiptOpen}
+        onOpenChange={setPostReceiptOpen}
+        debitNote={policyDn ?? null}
+        onSuccess={() => setPostReceiptOpen(false)}
       />
     </div>
   );

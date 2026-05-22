@@ -58,6 +58,15 @@ export type DebitNoteDto = z.infer<typeof DebitNoteDtoSchema>;
 
 // ── Receipt ───────────────────────────────────────────────────────────────
 
+// Backend ReceiptResponse ships paymentDate / bankId / bankName / narration /
+// postedBy / reversal* metadata as well. They were added optionally in Session
+// 96 (Backlog C1) so PolicyDetailPage's Finance tab can render the receipts
+// list with real values without breaking the ReceivablesTab consumer that
+// only uses the original narrow set.
+//
+// NOTE: ReceiptStatusSchema still doesn't match the backend's TransactionStatus
+// enum ('POSTED' | 'REVERSED'). Fixing it requires updating ReceivablesTab's
+// `rcStatusVariant` Record at the same time; logged as backlog item F2.
 export const ReceiptDtoSchema = z.object({
   id:               z.string(),
   receiptNumber:    z.string(),
@@ -67,9 +76,33 @@ export const ReceiptDtoSchema = z.object({
   paymentMethod:    z.string(),
   status:           ReceiptStatusSchema,
   createdAt:        z.string(),
+  // ── Optional details (Session 96 / Backlog C1) ───────────────────────────
+  paymentDate:      z.string().nullable().optional(),
+  bankId:           z.string().nullable().optional(),
+  bankName:         z.string().nullable().optional(),
+  chequeNumber:     z.string().nullable().optional(),
+  narration:        z.string().nullable().optional(),
+  postedBy:         z.string().nullable().optional(),
 });
 
 export type ReceiptDto = z.infer<typeof ReceiptDtoSchema>;
+
+// Request body for POST /api/v1/debit-notes/{dnId}/receipts. Mirrors
+// com.nubeero.cia.finance.dto.PostReceiptRequest.
+export const PaymentMethodSchema = z.enum(['CASH', 'CHEQUE', 'BANK_TRANSFER', 'DIRECT_DEBIT', 'MOBILE_MONEY', 'POS']);
+export type PaymentMethod = z.infer<typeof PaymentMethodSchema>;
+
+export const PostReceiptRequestSchema = z.object({
+  amount:        z.number().min(0.01),
+  paymentDate:   z.string().min(1),
+  paymentMethod: PaymentMethodSchema,
+  bankId:        z.string().nullable().optional(),
+  bankName:      z.string().nullable().optional(),
+  chequeNumber:  z.string().nullable().optional(),
+  narration:     z.string().nullable().optional(),
+});
+
+export type PostReceiptRequest = z.infer<typeof PostReceiptRequestSchema>;
 
 // ── CreditNote ────────────────────────────────────────────────────────────
 

@@ -18,7 +18,8 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | B1 | P2 | Quote-side agent attribution | Quote entity doesn't carry `agentId`. Extends Module 2 form + bulk-upload CSV + quote-document templates. Bind-from-quote currently always produces broker-attributed policies even when an agent was the intermediary. |
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
 | B3 | P2 | Policy list page Intermediary column | Surface broker/agent on PolicyListPage. Small UI surface; mirrors the "Intermediary" row Slice 84e added to the detail page. |
-| C1 | P1 | Policy detail Finance tab wired to real cia-finance | "Post Receipt" button + debit-note + commission credit-note status all read from mock data today. Slice 84f originally. |
+| F2 | P2 | ReceiptStatusSchema + ReceivablesTab URL mismatch | Frontend ReceiptStatusSchema (`DRAFT/PENDING_APPROVAL/APPROVED/REVERSED`) doesn't match backend TransactionStatus (`POSTED/REVERSED`); ReceivablesTab `rcStatusVariant` Record depends on the wrong enum. Same module also hits `/api/v1/finance/debit-notes` (404; backend is at `/api/v1/debit-notes`) and `/api/v1/finance/receipts` (no such endpoint). Single batch slice: align enum + URLs. |
+| F3 | P3 | DTO drift script picks up zod-derived types | `finance.ts` uses `export type X = z.infer<typeof XSchema>` (not `export interface X`). The drift parser only matches `export interface`, so DebitNoteDto / ReceiptDto / CreditNoteDto / PaymentDto are never checked. Extend the parser to also detect zod-derived types. |
 | C2 | P3 | Multi-risk on direct create form | `useFieldArray<PolicyRiskRequest>` on CreatePolicySheet. RisksEditorDialog already handles multi-risk post-creation; this is purely a create-time convenience. |
 | C3 | P3 | vehicleRegNumber + sectionId on direct risk row | Backend `PolicyRiskRequest` accepts both as optional; form has neither (filled via RisksEditorDialog on the detail page). |
 | D1 | P3 | Server-side date-range validation on CommissionSetupRequest | `@Future` / cross-field bean validation that effectiveTo ≥ effectiveFrom. Frontend zod refine covers the UX; server-side is correctness defence. |
@@ -29,6 +30,68 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F1 | P2 | Placeholder-onClick row actions across back-office | 6 known: CustomersListPage Update KYC + Blacklist; ProductsPage Activate/Deactivate; QuotationListPage Submit + Convert + Edit + Duplicate. Each is small but adds up. Batch as one slice. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-22 — Session 96 (`main`): Backlog C1 — Policy detail Finance tab wired to real cia-finance
+
+Third slice under the Session 93 discipline rule. Goal: replace the mock data on `PolicyDetailPage`'s Finance tab with real queries against cia-finance (debit-note + receipts + commission credit-note), and wire the long-standing "Post Receipt" mock button to an actual `POST /api/v1/debit-notes/{dnId}/receipts` flow.
+
+### Backend gap surfaced + fixed
+
+`CreditNoteController` already exposed `?entityId=<uuid>` as a list filter. `DebitNoteController` did not — only `status` + `customerId`. The service had `findByEntity(entityId, pageable)` already; the controller just didn't expose it. Adding the symmetric `?entityId=` parameter to `DebitNoteController.list` was a 4-line change. This is the single backend change in this slice — without it, the Finance tab had no way to look up the policy's DN by policy id.
+
+### Frontend wiring
+
+**`api-client/finance.ts`** — additive extension:
+
+- `ReceiptDtoSchema` gained `paymentDate`, `bankId`, `bankName`, `chequeNumber`, `narration`, `postedBy` as optional fields. Backend `ReceiptResponse` ships them; the prior schema only carried the bare minimum (`receiptNumber`, `amount`, `paymentMethod`, `status`, `createdAt`). All new fields are optional so the existing `ReceivablesTab` consumer doesn't break.
+- New `PaymentMethodSchema` enum (`CASH/CHEQUE/BANK_TRANSFER/DIRECT_DEBIT/MOBILE_MONEY/POS`) mirroring `com.nubeero.cia.finance.PaymentMethod`.
+- New `PostReceiptRequestSchema` mirroring `com.nubeero.cia.finance.dto.PostReceiptRequest`.
+
+**`PostReceiptDialog.tsx` (new)** — focused dialog under `policy/pages/detail/`. RHF + zod, payment-method-gated bank picker + cheque field, amount defaults to the DN's outstanding balance, banks lazily loaded only when the picker is needed (CHEQUE / BANK_TRANSFER / DIRECT_DEBIT / POS). Distinct from the `PostReceiptSheet` in the finance module — that one handles bulk multi-DN posting; this one is single-DN focused.
+
+**`PolicyDetailPage.tsx` Finance tab — rewrite:**
+
+- Three new queries: `policy-debit-note` (`GET /api/v1/debit-notes?entityId={policyId}`, take `[0]`), `policy-commission-cn` (`GET /api/v1/credit-notes?entityId={policyId}`, filtered to `entityType === 'POLICY'`), `policy-receipts` (`GET /api/v1/debit-notes/{dnId}/receipts`, only when DN exists).
+- "Debit Note & Finance" card now shows live status badge + paid/outstanding amounts + due date from the real DN; the "Post Receipt" button is disabled when status is SETTLED / CANCELLED / VOID.
+- New "Receipts" card lists posted receipts (number, date, method, amount, postedBy, status). Empty state when none.
+- "Commission" card was already wired to V51 snapshot fields in Slice 84e; this slice adds the live CN status badge + credit-note number + beneficiary + paid/outstanding lines when the CN exists.
+- Removed: the `debitNoteNumber: 'DN-2026-00001'` mock field from `MockPolicy` + the Details tab Premium card now reads `policyDn?.debitNoteNumber` from the real query.
+
+### Side-discoveries logged, not absorbed
+
+Per the Session 93 discipline rule, two side-discoveries surfaced during the wiring that did not get pulled into this slice:
+
+- **`ReceiptStatusSchema` is wrong** — frontend declares `'DRAFT'|'PENDING_APPROVAL'|'APPROVED'|'REVERSED'`; backend `TransactionStatus` is `'POSTED'|'REVERSED'`. Fixing it requires also updating `ReceivablesTab`'s `rcStatusVariant` Record (depends on the wrong keys). I sidestepped by not displaying receipt status as a badge in the Finance tab — used the raw lowercase string instead. Logged as backlog item **F2**.
+- **`ReceivablesTab` queries the wrong URLs** — `/api/v1/finance/debit-notes` and `/api/v1/finance/receipts`. Backend is at `/api/v1/debit-notes` and the nested receipts endpoint. The whole module's queries 404 today. Bundled into the same F2 backlog item since it's the same code area.
+- **DTO drift script doesn't check zod-derived types** — `finance.ts` uses `export type X = z.infer<typeof XSchema>`, which the parser's `export interface` regex doesn't match. DebitNoteDto / ReceiptDto / CreditNoteDto / PaymentDto are never checked. Logged as backlog item **F3**.
+
+### Verification
+
+- `mvn install -DskipTests -pl cia-finance -am` — green.
+- `mvn verify -pl cia-api` (full 274-IT failsafe) — 0 failures, 0 errors, 1 documented benchmark skip. The new `?entityId=` filter on `DebitNoteController` doesn't break any existing IT.
+- `pnpm --filter @cia/back-office exec tsc --noEmit` filtered to `PolicyDetailPage.tsx` + `PostReceiptDialog.tsx` + `api-client/finance.ts` — zero errors. One `string | null | undefined` → `string | undefined` coerce on the Beneficiary row.
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (27 interfaces, 2 skipped)`.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend — controller | `cia-backend/cia-finance/.../DebitNoteController.java` (+ `?entityId=` filter param) |
+| Frontend — types | `cia-frontend/packages/api-client/src/modules/finance.ts` (ReceiptDto extended + PaymentMethodSchema + PostReceiptRequestSchema) |
+| Frontend — UI | `policy/pages/detail/PostReceiptDialog.tsx` (new); `policy/pages/detail/PolicyDetailPage.tsx` (Finance tab rewrite + receipts list + dialog mount) |
+| Docs | `cia-log.md` (this entry + backlog rows C1 removed, F2 + F3 added) |
+
+### Backlog reconciliation
+
+- **Removed**: C1 (Policy detail Finance tab wired to real cia-finance).
+- **Added**: F2 (ReceiptStatusSchema + ReceivablesTab URL mismatch — bundled because they're the same file). F3 (drift script needs zod-derived type detection).
+- **Net**: 16 → 17 rows (net +1). C1 was P1; F2 + F3 are P2/P3. Trading one P1 for one P2 + one P3 = net priority went down.
+
+### Known follow-ups (deliberately deferred)
+
+None beyond what's in the canonical backlog table. F2 + F3 are surfaced there with explicit priorities and notes.
 
 ---
 
