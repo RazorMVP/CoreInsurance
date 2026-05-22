@@ -1,0 +1,119 @@
+{
+  "_doc": [
+    "Configuration for check-dto-drift.mjs.",
+    "",
+    "manualMap: override the default DtoName → ResponseName mapping. The default",
+    "is to strip 'Dto' and append 'Response' (e.g. PolicyDto → PolicyResponse).",
+    "Set the value to '' to mark a Dto as a pure-frontend type with no backend",
+    "counterpart (it'll be reported as 'skipped' in the script output).",
+    "",
+    "ignoreDtos: same as setting manualMap[X] = '' — use whichever feels clearer.",
+    "",
+    "allowList: per-Dto entries declaring intentional asymmetries.",
+    "  - frontendOnly: field names the frontend declares but the backend doesn't.",
+    "    Almost always indicates real drift (Jackson silently drops). Add here",
+    "    only if the field is a UI-only projection that's intentionally never",
+    "    received from the API.",
+    "  - backendOnly: field names the backend ships but the frontend doesn't.",
+    "    Common for fields the UI hasn't surfaced yet but that exist on the entity.",
+    "    Adding here documents the intentional gap; remove when the field is wired.",
+    "  - reason: free-text note that ends up in git blame for future reviewers.",
+    "    The script doesn't enforce its presence but every entry below has one.",
+    "",
+    "The current allowList is a Session 92 baseline — every entry represents",
+    "pre-existing drift that landed BEFORE the check was wired. Drive entries",
+    "down slice-by-slice; don't add new ones without strong justification."
+  ],
+
+  "manualMap": {
+    "ApprovalLevelDto": "ApprovalLevelResponse",
+    "QuoteRiskDto": "QuoteRiskResponse",
+    "CustomerDirectorDto": "CustomerDirectorResponse",
+    "IndividualCustomerDto": "",
+    "CorporateCustomerDto": ""
+  },
+
+  "ignoreDtos": [],
+
+  "allowList": {
+    "CustomerDto": {
+      "frontendOnly": ["displayName", "status", "brokerId", "brokerName"],
+      "backendOnly": [
+        "customerNumber", "customerStatus", "kycProviderRef", "kycFailureReason",
+        "kycVerifiedAt", "firstName", "lastName", "otherNames", "dateOfBirth",
+        "gender", "maritalStatus", "idType", "idNumber", "idDocumentUrl",
+        "idExpiryDate", "companyName", "rcNumber", "cacCertificateUrl",
+        "cacIssuedDate", "incorporationDate", "industry", "contactPerson",
+        "alternatePhone", "address", "city", "state", "country", "directors",
+        "documents"
+      ],
+      "reason": "Session 92 baseline. CustomerDto is a UI display projection (uses displayName + status convenience fields) while CustomerResponse carries the full domain (KYC fields, address breakdown, directors/documents arrays). Real reconciliation slice owed: align names + decide which backend fields to surface."
+    },
+    "CustomerDirectorDto": {
+      "frontendOnly": ["fullName"],
+      "backendOnly": ["firstName", "lastName", "dateOfBirth", "idDocumentUrl", "idExpiryDate", "kycFailureReason"],
+      "reason": "Session 92 baseline. fullName is a UI convenience; backend exposes firstName/lastName separately. Follow-up: drop fullName + reconcile."
+    },
+    "EndorsementDto": {
+      "frontendOnly": ["sumInsured", "premium", "startDate", "endDate", "updatedAt"],
+      "backendOnly": [
+        "customerId", "customerName", "productName", "classOfBusinessName",
+        "brokerId", "brokerName", "effectiveDate", "policyEndDate", "remainingDays",
+        "oldSumInsured", "newSumInsured", "oldNetPremium", "newNetPremium",
+        "premiumAdjustment", "currencyCode", "description", "notes",
+        "approvedBy", "approvedAt", "rejectedBy", "rejectedAt", "rejectionReason",
+        "risks"
+      ],
+      "reason": "Session 92 baseline. EndorsementDto uses single sumInsured/premium fields while EndorsementResponse models the old-vs-new diff (oldSumInsured / newSumInsured / premiumAdjustment). UI doesn't expose the full diff today. Follow-up: redesign EndorsementDto to mirror the record shape."
+    },
+    "QuoteDto": {
+      "frontendOnly": ["sumInsured", "premium", "discount", "netPremium", "startDate", "endDate", "version"],
+      "backendOnly": [
+        "productCode", "productRate", "brokerId", "policyStartDate", "policyEndDate",
+        "totalSumInsured", "totalGrossPremium", "totalNetPremium",
+        "quoteLoadings", "quoteDiscounts", "selectedClauseIds",
+        "inputterName", "approverName", "notes", "workflowId",
+        "approvedBy", "approvedAt", "rejectedBy", "rejectedAt", "rejectionReason",
+        "expiresAt", "risks", "coinsuranceParticipants"
+      ],
+      "reason": "Session 92 baseline. QuoteDto carries single-line totals (sumInsured/premium/discount/netPremium) while QuoteResponse models per-risk + quote-level loadings/discounts + workflow state. Session 91 fixed brokerName but the wider drift remains. Follow-up: full QuoteDto rewrite to mirror QuoteResponse."
+    },
+    "QuoteRiskDto": {
+      "frontendOnly": ["quoteId"],
+      "backendOnly": ["grossPremium", "sectionId", "sectionName", "loadings", "discounts", "orderNo"],
+      "reason": "Session 92 baseline. quoteId is a UI back-reference convenience (server response wraps risks in the quote, no quoteId on each row). Follow-up: surface per-risk loadings/discounts + section info."
+    },
+    "CompanySettingsDto": {
+      "frontendOnly": ["companyName", "logo", "defaultCurrencyCode"],
+      "backendOnly": ["name", "rcNumber", "naicomLicenseNumber", "city", "state", "logoPath"],
+      "reason": "Session 92 baseline. Field-name divergence (companyName vs name, logo vs logoPath) + missing RC/NAICOM/address fields on the frontend. Follow-up: realign + add the missing licence/address fields to the settings UI."
+    },
+    "AccessGroupDto": {
+      "frontendOnly": ["userCount"],
+      "backendOnly": ["createdAt", "updatedAt"],
+      "reason": "Session 92 baseline. userCount is computed UI-side (group's user list length). Backend audit timestamps could be added; not currently shown. Small follow-up."
+    },
+    "ApprovalGroupDto": {
+      "frontendOnly": ["module"],
+      "backendOnly": ["entityType", "createdAt", "updatedAt", "levelOrder", "approverUserId", "approverName", "maxAmount"],
+      "reason": "Session 92 baseline. module is a UI alias for entityType. The level-level fields (levelOrder/approverUserId/approverName/maxAmount) shouldn't be at the top level — they belong on ApprovalLevelDto. Follow-up: ApprovalGroup reshape + alias removal."
+    },
+    "ProductDto": {
+      "backendOnly": ["sections"],
+      "reason": "Session 92 baseline. Multi-risk product sections aren't surfaced in the back-office Products page yet (used by RisksEditorDialog through a separate endpoint). Surface when there's a section-editor UI."
+    },
+    "ClassOfBusinessDto": {
+      "frontendOnly": ["products"],
+      "backendOnly": ["description", "createdAt", "updatedAt"],
+      "reason": "Session 92 baseline. `products` is a frontend-computed count (joined client-side). Backend's description + audit timestamps not shown today. Small follow-up."
+    },
+    "BankDto": {
+      "backendOnly": ["createdAt", "updatedAt"],
+      "reason": "Session 92 baseline. Audit timestamps not shown in the banks list."
+    },
+    "CurrencyDto": {
+      "backendOnly": ["isDefault", "createdAt", "updatedAt"],
+      "reason": "Session 92 baseline. isDefault + audit timestamps not shown in the currencies list."
+    }
+  }
+}

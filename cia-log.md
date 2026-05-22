@@ -8,9 +8,89 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-22. Sessions 79–91 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), the Session 84 PRD §2.1.17 drift remediation slice 84a (ProductDto realignment + CommissionSourceType enum + V50), the Session 85 slice 84b (Product Commission Setup UI + per-policy commission snapshot V51), the Session 86 slice 84c (broker commission JE chain + credit-note generation V52), the Session 87 slice 84e (surface commission snapshot on PolicyResponse + Commission card on policy detail page), the Session 88 slice 84d (per-policy agent attribution + AGENT commission posting V53/V54), the Session 89 Channel picker on CreatePolicySheet, the Session 90 directSchema reconciliation, and the Session 91 FromQuoteForm payload cleanup + QuoteDto brokerName silent-drift fix.
+No open items as of 2026-05-22. Sessions 79–92 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), the Session 84 PRD §2.1.17 drift remediation slice 84a (ProductDto realignment + CommissionSourceType enum + V50), the Session 85 slice 84b (Product Commission Setup UI + per-policy commission snapshot V51), the Session 86 slice 84c (broker commission JE chain + credit-note generation V52), the Session 87 slice 84e (surface commission snapshot on PolicyResponse + Commission card on policy detail page), the Session 88 slice 84d (per-policy agent attribution + AGENT commission posting V53/V54), the Session 89 Channel picker on CreatePolicySheet, the Session 90 directSchema reconciliation, the Session 91 FromQuoteForm payload cleanup + QuoteDto brokerName silent-drift fix, and the Session 92 DTO drift guard (CI check that catches the next silent drift before merge).
 
-Both policy creation paths (Direct + FromQuote) now actually work end-to-end and their UIs only ask the questions the backend actually answers. Remaining queued: Quote-side agent attribution, RM commission via 2520, Policy list page Intermediary column.
+Session 92's baseline captured **12 pre-existing drifts** (CustomerDto, EndorsementDto, QuoteDto, plus 9 smaller cases) into the allow-list. Each one is a future single-slice reconciliation; the allow-list is the to-do list. Remaining queued: drive the allow-list down, Quote-side agent attribution, RM commission via 2520, Policy list page Intermediary column.
+
+---
+
+## 2026-05-22 — Session 92 (`main`): DTO drift guard — automated CI check, rule-of-three closer
+
+Closes the rule-of-three pattern: silent drift between frontend `*Dto` interfaces and backend `*Response` Java DTOs caused three separate fixes — Session 78 (BrokerDto carrying `status` + `contactPerson` Jackson dropped), Slice 84a (ProductDto carrying `status` + `commissionRate` Jackson dropped), Session 91 (QuoteDto missing `brokerName` that backend was serialising). Three instances says automate.
+
+### What landed
+
+**`cia-frontend/scripts/check-dto-drift.mjs`** — Node script (no new dependencies, runs against `node:fs` and `node:path` standard libs):
+
+- **Walks** every `.java` file under `cia-backend/` (skipping `target/`, `build/`, `node_modules/`) and indexes by simple class name.
+- **Parses** two Java DTO shapes:
+  - **Lombok `@Data` classes** — line scanner matches `private TYPE name;` declarations after stripping block + line comments.
+  - **Java records** — the parenthesised header is split on top-level commas (depth-tracking handles `Map<String, Object>` etc.), each component yields its trailing identifier as the field name.
+- **Parses** frontend `export interface XYZDto { ... }` blocks from each `cia-frontend/packages/api-client/src/modules/*.ts` file. Optional markers (`?:`) are honoured, line + block comments stripped.
+- **Compares** field-name sets in both directions and emits violations with file:line refs + the offending field list.
+
+**`cia-frontend/scripts/dto-drift.config.json`** — three sections:
+
+- `manualMap` for irregular Dto → Response pairs (e.g. `IndividualCustomerDto` is a pure-frontend union projection, no backend counterpart; the empty-string sentinel marks it as skipped).
+- `ignoreDtos` for the same purpose as a list (equivalent semantics).
+- `allowList` keyed by Dto name with `frontendOnly` / `backendOnly` arrays + a `reason` field that ends up in `git blame` for future reviewers.
+
+**CI wiring** — added a `DTO drift guard` step in `.github/workflows/ci.yml` between the existing `API-wiring guard` and the TypeScript checks. Same pattern as the API-wiring guard: fails the workflow on any new drift.
+
+**`CLAUDE.md`** — new "DTO drift guard" subsection under the Frontend API wiring rules. Documents the convention for opting out via the allow-list (mirrors the `// allow-mock:` doc for check-api-wiring).
+
+### Baseline drift inventory
+
+The first run surfaced 12 violations beyond the three already-fixed instances. Each has been added to the allow-list with a `reason` flagging it as Session 92 baseline + the natural follow-up slice:
+
+| Dto | Asymmetry shape | Follow-up |
+|---|---|---|
+| `CustomerDto` | Massive drift — `displayName` + `status` + `brokerId`/`brokerName` on frontend; KYC + address + directors/documents arrays on backend | Realign as the natural slice when Customer UI work resumes |
+| `CustomerDirectorDto` | `fullName` UI convenience vs `firstName`/`lastName` separation; missing `dateOfBirth`/`idDocumentUrl`/`idExpiryDate` | Drop fullName + reconcile |
+| `EndorsementDto` | Single `sumInsured`/`premium` vs `oldXxx`/`newXxx`/`premiumAdjustment` diff shape | Redesign EndorsementDto to mirror the record |
+| `QuoteDto` | Single-line totals vs per-risk + quote-level loadings/discounts + workflow state | Full QuoteDto rewrite (the Slice 91 brokerName fix was the tip of this iceberg) |
+| `QuoteRiskDto` | `quoteId` UI back-ref vs missing `grossPremium`/`sectionId`/`sectionName`/`loadings`/`discounts`/`orderNo` | Surface per-risk loadings + section info |
+| `CompanySettingsDto` | Field-name divergence (`companyName` vs `name`, `logo` vs `logoPath`) + missing RC/NAICOM/city/state | Realign + add the missing licence/address fields |
+| `AccessGroupDto` | `userCount` UI-computed; missing audit timestamps | Small cleanup |
+| `ApprovalGroupDto` | `module` alias for `entityType`; level-level fields shouldn't be top-level | Reshape + alias removal |
+| `ProductDto` | Missing `sections` (multi-risk product structure) | Surface when section-editor UI lands |
+| `ClassOfBusinessDto` | `products` count UI-computed; missing description + audit timestamps | Small cleanup |
+| `BankDto` | Missing `createdAt`/`updatedAt` | Add to list view |
+| `CurrencyDto` | Missing `isDefault` + audit timestamps | Add to list view |
+
+The allow-list IS the to-do list. Every new PR that touches one of these Dtos can decrement the entry as a side effect of its content fix.
+
+### Why this shape
+
+Three design calls worth surfacing:
+
+**1. Parse Java DTOs directly instead of using the OpenAPI spec.** The static `docs-site/static/internal-api.json` has 247 paths but **zero** entries in `components.schemas` (only `$ref`s point to it, schemas never inlined). Springdoc's live `/v3/api-docs` 500s in dev (pre-existing auth NPE, flagged in Sessions 80/83). So neither pre-rendered spec is a viable source of truth. Java DTOs are simple Lombok classes or records — regex parsing is the cheapest path. A real Java AST parser (`javaparser`) would be more robust but adds a heavyweight Node dependency for a flat-shape parse.
+
+**2. Bidirectional check, not unidirectional.** Sessions 78 + 84a were `frontendOnly` drift (silent-drop); Session 91 was `backendOnly` drift (missed-surface). Both deserve catching. The risk of `backendOnly` false positives (backend has fields the UI legitimately doesn't need) is handled by the allow-list, not by skipping the direction.
+
+**3. Allow-list with baseline + driven down, not pristine-or-fail.** Same approach as `check-api-wiring`'s `// allow-mock:` opt-out. The check landing green on day one means it can actually be wired into CI; pure mode would have blocked the merge until 12 separate cleanup slices completed. The `reason` field in each allow-list entry prevents the allow-list from becoming a graveyard — every entry has an explicit explanation in git blame.
+
+### Verification
+
+- `node cia-frontend/scripts/check-dto-drift.mjs` (locally, from repo root) — `✓ No DTO drift detected. (2 skipped — IndividualCustomerDto + CorporateCustomerDto)`.
+- The script catches violations even when the field name differs by one character (a `customerSatatus` typo would surface as `customerSatatus` on `frontendOnly` + `customerStatus` on `backendOnly`).
+- Java record parsing exercised by `EndorsementResponse` (record) — verified by the script reporting `EndorsementDto`'s actual asymmetries.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — script | `cia-frontend/scripts/check-dto-drift.mjs` (new) |
+| Frontend — config | `cia-frontend/scripts/dto-drift.config.json` (new) |
+| CI | `.github/workflows/ci.yml` (new step) |
+| Docs — repo | `CLAUDE.md` (DTO drift guard subsection) |
+| Docs — log | `cia-log.md` (this entry) |
+
+### Known follow-ups (deliberately deferred)
+
+- **Drive the allow-list down** — each entry above represents a single-slice reconciliation. CustomerDto + QuoteDto + EndorsementDto are the biggest (each ~20+ field asymmetries); the rest are small.
+- **Server-side date-range validation** on `CommissionSetupRequest` (carried from Slice 84b).
+- **Quote-side agent attribution + RM commission + Policy list Intermediary column** — same queue as prior slices.
 
 ---
 

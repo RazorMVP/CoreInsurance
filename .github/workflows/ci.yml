@@ -73,6 +73,9 @@ jobs:
       - name: API-wiring guard (no mock arrays / console.log / stale TODOs)
         run: bash cia-frontend/scripts/check-api-wiring.sh
 
+      - name: DTO drift guard (frontend Dto vs backend Response)
+        run: node cia-frontend/scripts/check-dto-drift.mjs
+
       - name: TypeScript check — back-office
         working-directory: cia-frontend
         run: pnpm --filter @cia/back-office typecheck

@@ -953,6 +953,25 @@ const create = useMutation({
 bash cia-frontend/scripts/check-api-wiring.sh
 ```
 
+### DTO drift guard
+
+In addition to the API-wiring guard, CI enforces that every `*Dto` interface in `cia-frontend/packages/api-client/src/modules/` matches the field set of its counterpart `*Response.java` (or record) in `cia-backend/`. The check exists because three silent-drift incidents (Session 78 BrokerDto, Slice 84a ProductDto, Session 91 QuoteDto.brokerName) showed that frontend types diverging from backend responses goes unnoticed for months — Jackson silently drops unknown fields, and `useQuery` consumers never notice missing fields they don't render.
+
+**Script:** `cia-frontend/scripts/check-dto-drift.mjs` — parses Lombok `@Data` classes + Java records; parses TS `export interface XYZDto { ... }` blocks. Default mapping: strip `Dto`, append `Response`. Both directions of drift are reported:
+
+- **`frontendOnly`** — fields the frontend declares but the backend doesn't have. Almost always a real bug (Jackson silent-drop).
+- **`backendOnly`** — fields the backend ships but the frontend doesn't declare. Missed-surface gap; future UI work.
+
+**Opting out an intentional asymmetry:** edit `cia-frontend/scripts/dto-drift.config.json`. Each `allowList` entry takes `frontendOnly`, `backendOnly`, and a `reason` field that ends up in git blame. The baseline was set in Session 92 — adding new entries needs strong justification; the goal is to drive the list down to zero slice-by-slice.
+
+**Manual mapping** (`manualMap`) handles Dtos whose default Dto→Response swap doesn't match (e.g. `QuoteRiskDto` → `QuoteRiskResponse` works by default, but pure-frontend types like `IndividualCustomerDto` set the value to `""` so they're skipped).
+
+**Run locally before pushing:**
+
+```bash
+node cia-frontend/scripts/check-dto-drift.mjs
+```
+
 ### API Design
 - RESTful JSON APIs.
 - All endpoints prefixed `/api/v1/`.
