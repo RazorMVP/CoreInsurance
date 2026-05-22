@@ -101,7 +101,8 @@ class SubledgerPostingServiceTest {
             policyId, "POL-001", UUID.randomUUID(), "Acme Corp", null, null,
             "Motor Comprehensive", new BigDecimal("500000.00"), "NGN",
             LocalDate.of(2027, 5, 9), UUID.randomUUID(), UUID.randomUUID(),
-            new BigDecimal("10000000.00"), policyStart));
+            new BigDecimal("10000000.00"), policyStart,
+            null, null));
 
         JournalEntry saved = captureSavedJe();
         assertThat(saved.getBusinessDate()).isEqualTo(policyStart);
@@ -124,7 +125,8 @@ class SubledgerPostingServiceTest {
             UUID.randomUUID(), "POL-FREE", UUID.randomUUID(), "x", null, null,
             "x", BigDecimal.ZERO, "NGN",
             LocalDate.of(2027, 1, 1), UUID.randomUUID(), UUID.randomUUID(),
-            BigDecimal.ZERO, LocalDate.of(2026, 1, 1)));
+            BigDecimal.ZERO, LocalDate.of(2026, 1, 1),
+            null, null));
 
         verify(journalEntryRepository, never()).save(any(JournalEntry.class));
     }
@@ -139,7 +141,8 @@ class SubledgerPostingServiceTest {
             UUID.randomUUID(), "POL-X", UUID.randomUUID(), "x", null, null,
             "x", new BigDecimal("100.00"), "NGN",
             LocalDate.of(2027, 1, 1), UUID.randomUUID(), UUID.randomUUID(),
-            BigDecimal.ZERO, LocalDate.of(2026, 5, 10))))
+            BigDecimal.ZERO, LocalDate.of(2026, 5, 10),
+            null, null)))
             .isInstanceOf(PostingRuleNotFoundException.class)
             .hasMessageContaining(SubledgerPostingService.EVENT_POLICY_APPROVED);
 

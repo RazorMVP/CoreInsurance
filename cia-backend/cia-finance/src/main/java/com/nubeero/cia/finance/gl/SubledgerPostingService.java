@@ -72,6 +72,11 @@ public class SubledgerPostingService {
     static final String EVENT_ENDORSEMENT_PREMIUM_ADDITIONAL = "ENDORSEMENT_PREMIUM_ADDITIONAL";
     static final String EVENT_ENDORSEMENT_PREMIUM_REFUND = "ENDORSEMENT_PREMIUM_REFUND";
     static final String EVENT_FAC_PREMIUM_CEDED = "FAC_PREMIUM_CEDED";
+    // Slice 84c — Broker commission JE chained from POLICY_APPROVED. Agent /
+    // RM equivalents will be added when Open Q#11 unblocks per-policy
+    // attribution for those sources.
+    static final String EVENT_POLICY_COMMISSION_BROKER = "POLICY_COMMISSION_BROKER";
+    static final String SOURCE_BROKER = "BROKER";
 
     // ── Hardcoded COA codes for the compound FAC 3-line posting ──────────────
     private static final String COA_RI_PREMIUM_EXPENSE = "5210";   // Outward reinsurance premium
@@ -130,6 +135,25 @@ public class SubledgerPostingService {
             event.currencyCode(),
             event.classOfBusinessId(),
             event.policyNumber());
+
+        // Slice 84c — chain commission JE when the V51 snapshot is populated.
+        // Distinct idempotency triple from the premium JE: same policyId, same
+        // module, but different event type (POLICY_COMMISSION_BROKER), so the
+        // UNIQUE constraint on (source_module, source_event_type, source_reference)
+        // never collides with line 1's POLICY_APPROVED row.
+        if (SOURCE_BROKER.equals(event.commissionSourceType())
+                && !zeroOrNull(event.commissionAmount())) {
+            postTwoLine(
+                MODULE_POLICY,
+                EVENT_POLICY_COMMISSION_BROKER,
+                event.policyId().toString(),
+                event.commissionAmount(),
+                event.policyStartDate(),
+                event.currencyCode(),
+                event.classOfBusinessId(),
+                event.policyNumber(),
+                event.brokerName());
+        }
     }
 
     /** 2. Claim approved → Dr Incurred claims, Cr LIC OCR. Live path: uses {@code today()}. */

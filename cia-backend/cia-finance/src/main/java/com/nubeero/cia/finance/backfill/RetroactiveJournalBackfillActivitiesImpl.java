@@ -151,12 +151,18 @@ public class RetroactiveJournalBackfillActivitiesImpl implements RetroactiveJour
     // ─── POLICY_APPROVED ──────────────────────────────────────────────────────
     @SuppressWarnings("unchecked")
     private BackfillChunkResult processPolicyApproved(BackfillChunkRequest req, ActivityExecutionContext ctx) {
+        // V51 added commission_source_type + commission_rate. Read them so the
+        // backfill replays the commission JE (Slice 84c) for any policy that has
+        // a snapshot but no posted commission entry yet. Policies approved
+        // before V51 / 84b have null snapshot columns and will skip the
+        // commission JE downstream — same path as the live flow.
         List<Object[]> rows = em.createNativeQuery("""
                 SELECT id, policy_number, customer_id, customer_name,
                        broker_id, broker_name, product_id, product_name,
                        net_premium, currency_code,
                        policy_start_date, policy_end_date,
-                       total_sum_insured, class_of_business_id
+                       total_sum_insured, class_of_business_id,
+                       commission_source_type, commission_rate
                   FROM policies
                  WHERE status = 'APPROVED'
                    AND deleted_at IS NULL
@@ -175,6 +181,14 @@ public class RetroactiveJournalBackfillActivitiesImpl implements RetroactiveJour
         for (Object[] row : rows) {
             attempted++;
             try {
+                java.math.BigDecimal netPremium = bd(row[8]);
+                String  commissionSource = str(row[14]);
+                java.math.BigDecimal commissionRate = bd(row[15]);
+                java.math.BigDecimal commissionAmount = (commissionSource != null && commissionRate != null && netPremium != null)
+                        ? netPremium.multiply(commissionRate)
+                                    .divide(new java.math.BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP)
+                        : null;
+
                 PolicyApprovedEvent event = new PolicyApprovedEvent(
                         uuid(row[0]),
                         str(row[1]),
@@ -183,13 +197,15 @@ public class RetroactiveJournalBackfillActivitiesImpl implements RetroactiveJour
                         uuid(row[4]),
                         str(row[5]),
                         str(row[7]),
-                        bd(row[8]),
+                        netPremium,
                         defaultCurrency(str(row[9])),
                         date(row[11]),
                         uuid(row[6]),
                         uuid(row[13]),
                         bd(row[12]),
-                        date(row[10]));
+                        date(row[10]),
+                        commissionSource,
+                        commissionAmount);
                 if (req.dryRun()) {
                     posted++;
                 } else {

@@ -8,9 +8,103 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-22. Sessions 79–85 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), the Session 84 PRD §2.1.17 drift remediation slice 84a (ProductDto realignment + CommissionSourceType enum + V50), and the Session 85 slice 84b (Product Commission Setup UI + per-policy commission snapshot V51).
+No open items as of 2026-05-22. Sessions 79–86 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), the Session 84 PRD §2.1.17 drift remediation slice 84a (ProductDto realignment + CommissionSourceType enum + V50), the Session 85 slice 84b (Product Commission Setup UI + per-policy commission snapshot V51), and the Session 86 slice 84c (broker commission JE chain + credit-note generation V52).
 
-Slice 84c (commission credit-note JE generation — finding E in the original Session 84 audit) is the natural follow-up. It now has its prerequisite (the V51 snapshot) in place and can be scoped without further drift remediation.
+Slice 84c closes the last of the six PRD §2.1.17 audit findings under the current attribution model. The remaining work is **Open Question #11** in PRD v2.7 (per-policy agent + relationship-manager attribution) — when that lands, an "84d" slice extends the same plumbing with `POLICY_COMMISSION_AGENT` posting rule + listener branch.
+
+---
+
+## 2026-05-22 — Session 86 (`main`): PRD §2.1.17 slice 84c — Broker commission JE chain (V52) + payables credit-note listener
+
+Continues directly from Session 85 (slice 84b — V51 commission snapshot on policies). Closes audit finding E from the §2.1.17 drift report: turn the snapshot into actual GL entries and a payables credit note at policy approval, so commission becomes recognisable expense + payable from the moment a broker-attributed policy goes ACTIVE.
+
+### Architecture
+
+A broker-attributed policy now produces three things at approval, all on the same `PolicyApprovedEvent`:
+
+| Listener | Side | What it produces |
+|---|---|---|
+| `SubledgerPostingService.replayPolicyApproved` (existing) | GL | Dr 1310 Premium receivable / Cr 2110 LRC BEL — the premium JE |
+| `SubledgerPostingService.replayPolicyApproved` (new chain) | GL | Dr 5130 Insurance acquisition expense / Cr 2320 Commission payable - Brokers — the commission JE |
+| `PolicyCommissionCreditNoteListener` (new) | Payables | Credit note against the broker for `commissionAmount`, `FinanceEntityType.POLICY` |
+
+GL and payables document creation are decoupled — both fire on the same event, neither depends on the other's success. That matches the existing pattern for FAC: `SubledgerPostingService.replayFacPremiumCeded` posts the JE, `FacPremiumCededEventListener` creates the CN, both consume `FacPremiumCededEvent`.
+
+### What landed
+
+**`PolicyApprovedEvent` (cia-common):** added two trailing fields — `commissionSourceType: String` (nullable; one of "AGENT" / "BROKER" / "RELATIONSHIP_MANAGER" matching the V50 CHECK) and `commissionAmount: BigDecimal` (nullable). String not enum on purpose — `cia-common` doesn't depend on `cia-setup`, and the rest of the event payload is already plain primitives + UUIDs. The receiver parses back to `CommissionSourceType.valueOf(...)` if it needs the enum form. Null when the V51 snapshot is absent.
+
+**`PolicyService.approve`:** new `computeCommissionAmount(policy)` helper — `netPremium × commissionRate / 100`, rounded HALF_UP to 2dp. Stamps `commissionSourceType` (via `policy.getCommissionSourceType().name()`) + the amount into the event. Both null when no snapshot exists, honouring V51's `ck_policies_commission_pair`.
+
+**V52 migration — `V52__seed_policy_commission_broker_rule.sql`:** one INSERT into `posting_rule`:
+
+```sql
+('POLICY_COMMISSION_BROKER', '5130', '2320',
+ 'Broker commission payable on policy %s for %s', TRUE, 'system-seed')
+```
+
+`ON CONFLICT (source_event_type) DO NOTHING` for idempotency (matches V33). No new COA accounts needed — V32 already seeded `5130 Insurance acquisition expense`, `2320 Commission payable - Brokers`, `2330 Commission payable - Agents`. The 2330 account stays unused until Q#11 lands and an "84d" slice adds the `POLICY_COMMISSION_AGENT` rule.
+
+**`SubledgerPostingService.replayPolicyApproved`:** appends a conditional second JE after the existing premium posting. Guard is `SOURCE_BROKER.equals(event.commissionSourceType()) && !zeroOrNull(event.commissionAmount())`. Distinct idempotency triple `(MODULE_POLICY, EVENT_POLICY_COMMISSION_BROKER, policyId)` — same policyId as the premium JE, different event type, so the `journal_entry` UNIQUE constraint never collides between them. The narrative template's two `%s` slots take `policyNumber` + `brokerName` so review can read "Broker commission payable on policy POL-001 for Acme Brokers Ltd" directly off the row.
+
+**`PolicyCommissionCreditNoteListener` (new) — cia-finance:** Spring `@EventListener` on `PolicyApprovedEvent`. Skip conditions (all silent — never fails policy approval):
+
+- `commissionSourceType == null` or `commissionAmount == null` — no snapshot.
+- `commissionAmount.signum() <= 0` — nothing to record.
+- `!"BROKER".equals(commissionSourceType)` — agent / RM not yet supported (Q#11). Logged at DEBUG.
+- `brokerId == null` — defensive guard for the BROKER + no-broker-id edge case. Logged at WARN; would only happen if a future code path corrupts the event payload.
+
+On the BROKER path: `creditNoteService.create(POLICY, policyId, policyNumber, brokerId, brokerName, "Broker commission for policy …", commissionAmount, ZERO, currencyCode)`. Same shape as `FacPremiumCededEventListener` — `FinanceEntityType.POLICY` for the entity, the broker as beneficiary, zero tax (commission CNs don't carry VAT at this stage).
+
+**Backfill (`RetroactiveJournalBackfillActivitiesImpl`):** added `commission_source_type` + `commission_rate` to the policy SELECT and reconstructed the snapshot fields when building the event. So a backfill run for any policy approved between V51 shipping and V52 shipping (a short window in practice, but the idempotent path matters) replays both the premium JE and the commission JE.
+
+### Why the event ships the String, not the enum
+
+A naive approach would be to add `CommissionSourceType` to `PolicyApprovedEvent` directly. But that creates a `cia-common → cia-setup` dependency for what is purely a transport concern. Every other field on the event is a primitive or UUID. Adding the String and letting consumers `CommissionSourceType.valueOf(...)` keeps the event's contract narrow and matches the prior convention. The cost is a single `String.valueOf(enum)` at publish + `enum.equals(string)` at consume — trivial.
+
+### What is NOT in this slice
+
+- **AGENT commission path** — no `POLICY_COMMISSION_AGENT` posting rule, no agent branch in the listener. V51 doesn't populate agent snapshots today (policies model `broker_id` but not `agent_id`), so wiring the path would be dead code until Q#11 resolves.
+- **RELATIONSHIP_MANAGER commission path** — same reason. RM commission is also semantically different (typically a staff incentive routed through payroll / staff payables `2520`, not a commission CN). When attribution lands, the design call for the RM branch is whether it's a CN or a payroll entry.
+- **Commission amount on `PolicyResponse`** — the V51 snapshot fields aren't exposed on the API response yet. Add when there's a UI consumer (a Policy Details "Commission" tab, the natural Slice 84e).
+
+### Call-site updates (record arity bump)
+
+`PolicyApprovedEvent` is a positional Java record — adding two fields bumps every constructor site. Updated 10 sites:
+
+- 1× production publisher: `PolicyService.approve` (real values)
+- 1× production reconstructor: `RetroactiveJournalBackfillActivitiesImpl.processPolicyApproved` (recomputed from `policies` row)
+- 3× cia-finance unit tests in `SubledgerPostingServiceTest` (trailing `null, null`)
+- 3× cia-api ITs in `SubledgerPostingServiceIT` (trailing `null, null`)
+- 2× cia-api ITs in `ContractGroupingServiceIT` (trailing `null, null`)
+
+A static factory could have preserved the old 14-arg shape (per CLAUDE.md's mention of the `JournalEntryLineRequest` back-compat pattern with 18 callers), but only 10 sites with all-null trailing args is below the threshold where the factory pays for itself.
+
+### Verification
+
+- `mvn install -DskipTests -pl cia-api -am` — green.
+- `mvn test-compile -pl cia-api` — green (caught all 10 call sites cleanly).
+- `mvn verify -pl cia-api` (full failsafe IT suite) — TODO: filling in result on completion. V52 applies cleanly across every per-tenant Flyway run; the existing premium-JE ITs still match because both the snapshot fields default to `null` in the test events and the new commission chain is `null`-guarded.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend — event | `cia-common/.../event/PolicyApprovedEvent.java` (+ 2 fields + Javadoc) |
+| Backend — migration | `cia-api/.../migration/V52__seed_policy_commission_broker_rule.sql` (new) |
+| Backend — GL | `cia-finance/.../gl/SubledgerPostingService.java` (constants + commission chain) |
+| Backend — payables | `cia-finance/.../PolicyCommissionCreditNoteListener.java` (new) |
+| Backend — service | `cia-policy/.../PolicyService.java` (computeCommissionAmount + event publish) |
+| Backend — backfill | `cia-finance/.../backfill/RetroactiveJournalBackfillActivitiesImpl.java` (SELECT + reconstruct) |
+| Tests | `SubledgerPostingServiceTest.java`, `SubledgerPostingServiceIT.java`, `ContractGroupingServiceIT.java` (trailing nulls) |
+| Docs | `cia-log.md` (this entry) |
+
+### Known follow-ups (deliberately deferred — not blockers)
+
+- **Slice 84d — Agent commission path** — extends V52 with `POLICY_COMMISSION_AGENT` (Dr 5130 / Cr 2330) and adds an AGENT branch to `PolicyCommissionCreditNoteListener`. Blocked on Open Question #11 (per-policy agent attribution).
+- **Slice 84e — Policy details "Commission" tab** — surface `commission_source_type` + `commission_rate` + a "Commission payable" line item on the PolicyResponse + a small UI panel on the policy detail page. Useful once there's a real CN to view.
+- **Internal swagger doc** — no path-level changes in this slice (`PolicyApprovedEvent` is an internal Spring event, not an API schema). No `internal-api.json` edit needed.
+- **Springdoc live `/v3/api-docs` 500s** — unchanged pre-existing dev-only NPE.
 
 ---
 

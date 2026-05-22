@@ -350,6 +350,11 @@ public class PolicyService {
             startNiidWorkflow(saved);
         }
 
+        BigDecimal commissionAmount = computeCommissionAmount(saved);
+        String commissionSourceTypeStr = saved.getCommissionSourceType() != null
+                ? saved.getCommissionSourceType().name()
+                : null;
+
         eventPublisher.publishEvent(new PolicyApprovedEvent(
                 saved.getId(), saved.getPolicyNumber(),
                 saved.getCustomerId(), saved.getCustomerName(),
@@ -357,7 +362,8 @@ public class PolicyService {
                 saved.getProductName(), saved.getNetPremium(),
                 "NGN", saved.getPolicyEndDate(),
                 saved.getProductId(), saved.getClassOfBusinessId(),
-                saved.getTotalSumInsured(), saved.getPolicyStartDate()));
+                saved.getTotalSumInsured(), saved.getPolicyStartDate(),
+                commissionSourceTypeStr, commissionAmount));
 
         auditService.log("Policy", id.toString(), AuditAction.UPDATE, null, saved);
         return toResponse(saved);
@@ -842,6 +848,24 @@ public class PolicyService {
 
     private record CommissionSnapshot(CommissionSourceType sourceType, BigDecimal rate) {
         static final CommissionSnapshot EMPTY = new CommissionSnapshot(null, null);
+    }
+
+    /**
+     * Computes commission monetary amount from the V51 snapshot (Slice 84c).
+     * Returns {@code null} when no commission is configured — V51's
+     * {@code ck_policies_commission_pair} keeps {@code commissionRate} and
+     * {@code commissionSourceType} in lockstep, so a null rate means a null
+     * source means no commission JE downstream.
+     *
+     * <p>Formula: {@code netPremium × commissionRate / 100}, rounded to 2dp
+     * HALF_UP — matches the standard money rounding used across the GL.
+     */
+    private BigDecimal computeCommissionAmount(Policy policy) {
+        if (policy.getCommissionRate() == null) return null;
+        if (policy.getNetPremium() == null) return null;
+        return policy.getNetPremium()
+                .multiply(policy.getCommissionRate())
+                .divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP);
     }
 
     Policy findOrThrow(UUID id) {

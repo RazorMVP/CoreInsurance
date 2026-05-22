@@ -100,7 +100,11 @@ class RetroactiveBackfillIT {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.target", () -> "49");
+        // Bumped 49 → 52 in Session 86 / Slice 84c: the policy backfill SELECT
+        // now reads commission_source_type + commission_rate (V51), and V52 adds
+        // the POLICY_COMMISSION_BROKER posting rule that the chained commission
+        // JE depends on.
+        registry.add("spring.flyway.target", () -> "52");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 
