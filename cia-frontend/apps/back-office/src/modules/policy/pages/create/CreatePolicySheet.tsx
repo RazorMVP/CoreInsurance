@@ -8,7 +8,14 @@ import {
 } from '@cia/ui';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type CustomerDto, type ProductDto, type QuoteDto } from '@cia/api-client';
+import {
+  apiClient,
+  type AgentDto,
+  type BrokerDto,
+  type CustomerDto,
+  type ProductDto,
+  type QuoteDto,
+} from '@cia/api-client';
 import { z } from 'zod';
 import { applyApiErrors } from '@/lib/form-errors';
 
@@ -29,18 +36,34 @@ const fromQuoteSchema = z.object({
 type FromQuoteValues = z.infer<typeof fromQuoteSchema>;
 
 // ── Create without quote ──────────────────────────────────────────────────
+// `channel` + `intermediaryId` are UI-only fields. At submit time they map to
+// brokerId / agentId on the backend (V53 enforces XOR at the DB level so the
+// form deliberately renders one picker, not two). RELATIONSHIP_MANAGER is not
+// in the channel picker — RM commission is a payroll incentive and rides on a
+// different document type entirely.
 const directSchema = z.object({
-  customerId:   z.string().min(1, 'Required'),
-  productId:    z.string().min(1, 'Required'),
-  businessType: z.enum(['DIRECT', 'DIRECT_WITH_COINSURANCE', 'INWARD_COINSURANCE']),
-  startDate:    z.string().min(1, 'Required'),
-  endDate:      z.string().min(1, 'Required'),
-  sumInsured:   z.coerce.number().positive(),
-  rate:         z.coerce.number().min(0),
-  discount:     z.coerce.number().min(0),
-  paymentTerms: z.string().min(1, 'Required'),
-});
+  customerId:     z.string().min(1, 'Required'),
+  productId:      z.string().min(1, 'Required'),
+  channel:        z.enum(['DIRECT', 'BROKER', 'AGENT']),
+  intermediaryId: z.string().optional().or(z.literal('')),
+  businessType:   z.enum(['DIRECT', 'DIRECT_WITH_COINSURANCE', 'INWARD_COINSURANCE']),
+  startDate:      z.string().min(1, 'Required'),
+  endDate:        z.string().min(1, 'Required'),
+  sumInsured:     z.coerce.number().positive(),
+  rate:           z.coerce.number().min(0),
+  discount:       z.coerce.number().min(0),
+  paymentTerms:   z.string().min(1, 'Required'),
+}).refine(
+  (v) => v.channel === 'DIRECT' || (v.intermediaryId && v.intermediaryId.length > 0),
+  { message: 'Select an intermediary', path: ['intermediaryId'] },
+);
 type DirectValues = z.infer<typeof directSchema>;
+
+const CHANNELS = [
+  { value: 'DIRECT', label: 'Direct (no intermediary)' },
+  { value: 'BROKER', label: 'Broker' },
+  { value: 'AGENT',  label: 'Agent' },
+] as const;
 
 const BUSINESS_TYPES = [
   { value: 'DIRECT',                   label: 'Direct' },
@@ -168,8 +191,38 @@ function DirectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: 
   const form = useForm<DirectValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(directSchema) as any,
-    defaultValues: { customerId: '', productId: '', businessType: 'DIRECT', startDate: '', endDate: '', sumInsured: 0, rate: 0, discount: 0, paymentTerms: '' },
+    defaultValues: {
+      customerId: '', productId: '', channel: 'DIRECT', intermediaryId: '',
+      businessType: 'DIRECT', startDate: '', endDate: '',
+      sumInsured: 0, rate: 0, discount: 0, paymentTerms: '',
+    },
   });
+
+  // Lazy-load intermediary lists — only fetched when the user picks that channel.
+  const channel = form.watch('channel');
+  const brokersQuery = useQuery<BrokerDto[]>({
+    queryKey: ['setup', 'brokers'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: BrokerDto[] }>('/api/v1/setup/brokers');
+      return res.data.data;
+    },
+    enabled: channel === 'BROKER',
+  });
+  const agentsQuery = useQuery<AgentDto[]>({
+    queryKey: ['setup', 'agents'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: AgentDto[] }>('/api/v1/setup/agents');
+      return res.data.data;
+    },
+    enabled: channel === 'AGENT',
+  });
+  const brokers = brokersQuery.data ?? [];
+  const agents  = agentsQuery.data  ?? [];
+
+  function onChannelChange(value: string, fn: (v: string) => void) {
+    fn(value);
+    form.setValue('intermediaryId', ''); // clear stale selection when switching
+  }
 
   const sumInsured = form.watch('sumInsured') || 0;
   const rate       = form.watch('rate')       || 0;
@@ -184,7 +237,15 @@ function DirectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: 
 
   const create = useMutation({
     mutationFn: async (values: DirectValues) => {
-      const res = await apiClient.post<{ data: { id: string } }>('/api/v1/policies', values);
+      // Map UI channel + intermediaryId → backend brokerId / agentId. V53's
+      // ck_policies_broker_xor_agent rejects both being set, so we send at
+      // most one. PolicyService also validates client-side and returns a
+      // clean BROKER_AGENT_EXCLUSIVE 400 if a misbehaving caller sends both.
+      const { channel: ch, intermediaryId, ...rest } = values;
+      const payload: Record<string, unknown> = { ...rest };
+      if (ch === 'BROKER' && intermediaryId) payload.brokerId = intermediaryId;
+      if (ch === 'AGENT'  && intermediaryId) payload.agentId  = intermediaryId;
+      const res = await apiClient.post<{ data: { id: string } }>('/api/v1/policies', payload);
       return res.data.data;
     },
     onSuccess: () => {
@@ -240,6 +301,42 @@ function DirectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: 
             </FormItem>
           )}
         />
+        <FormRow>
+          <FormField control={form.control} name="channel"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Channel</FormLabel>
+                <Select onValueChange={(v) => onChannelChange(v, field.onChange)} value={field.value}>
+                  <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                  <SelectContent>{CHANNELS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          {channel !== 'DIRECT' && (
+            <FormField control={form.control} name="intermediaryId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{channel === 'BROKER' ? 'Broker' : 'Agent'}</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={channel === 'BROKER' ? 'Select broker' : 'Select agent'} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {channel === 'BROKER'
+                        ? brokers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)
+                        : agents.map(a  => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+        </FormRow>
         <FormRow>
           <FormField control={form.control} name="startDate" render={({ field }) => (<FormItem><FormLabel>Start Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
           <FormField control={form.control} name="endDate"   render={({ field }) => (<FormItem><FormLabel>End Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />

@@ -8,9 +8,73 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-22. Sessions 79–88 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), the Session 84 PRD §2.1.17 drift remediation slice 84a (ProductDto realignment + CommissionSourceType enum + V50), the Session 85 slice 84b (Product Commission Setup UI + per-policy commission snapshot V51), the Session 86 slice 84c (broker commission JE chain + credit-note generation V52), the Session 87 slice 84e (surface commission snapshot on PolicyResponse + Commission card on policy detail page), and the Session 88 slice 84d (per-policy agent attribution + AGENT commission posting V53/V54).
+No open items as of 2026-05-22. Sessions 79–89 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), the Session 84 PRD §2.1.17 drift remediation slice 84a (ProductDto realignment + CommissionSourceType enum + V50), the Session 85 slice 84b (Product Commission Setup UI + per-policy commission snapshot V51), the Session 86 slice 84c (broker commission JE chain + credit-note generation V52), the Session 87 slice 84e (surface commission snapshot on PolicyResponse + Commission card on policy detail page), the Session 88 slice 84d (per-policy agent attribution + AGENT commission posting V53/V54), and the Session 89 Channel picker on CreatePolicySheet (the last remaining commission-arc follow-up).
 
-Slice 84d unblocked Open Question #11. The remaining commission-related work flagged through this arc is a Channel picker in CreatePolicySheet (today neither broker nor agent can be set through the UI on direct-create policies; the API accepts both fields) — that's a UX slice, not a data-model gap.
+Closes the full PRD §2.1.17 commission arc end-to-end for the broker + agent attributions. Open Question #11 is fully resolved at every layer: data model (V53), GL (V54), payables (CN listener), API (PolicyResponse), and now UI (Channel picker on direct create). Quote-side agent attribution and RM staff-payroll commission remain as future slices.
+
+---
+
+## 2026-05-22 — Session 89 (`main`): Channel picker UX on CreatePolicySheet — direct policy form picks Direct / Broker / Agent + intermediary
+
+Slice 84d shipped the agent backend + an "Intermediary" display row on the policy detail page, but `CreatePolicySheet` had no picker for either broker or agent — only the API accepted those fields. Session 89 closes that gap on the direct-create path.
+
+### Scope decisions
+
+The user's slice description called out: "broker + agent select; would need to add the broker picker that doesn't exist yet either." That framing — neither picker exists today — drove the implementation choice. Two options were on the table:
+
+| Option | Shape | Trade-off |
+|---|---|---|
+| A — Two separate optional pickers (Broker / Agent) | Both fields visible. User picks 0 or 1. Form validates exclusivity. | Mirrors the backend's two-field shape directly but exposes the V53 XOR to the user as a constraint to obey, which is the wrong UX framing. |
+| B — Single Channel select gates one Intermediary picker (chosen) | `channel: DIRECT / BROKER / AGENT` + conditional `intermediaryId` picker. Submit-time transform maps to `brokerId` or `agentId`. | Cleaner UX — one decision at a time, only the relevant entity list loaded. Backend's V53 XOR becomes invisible to the user (it's still enforced server-side as a 400 guard for misbehaving callers). |
+
+Option B chosen.
+
+### What landed
+
+**Schema (`directSchema`):** added `channel: 'DIRECT' | 'BROKER' | 'AGENT'` + optional `intermediaryId`. A zod `.refine` requires `intermediaryId` to be set whenever `channel !== 'DIRECT'` — clean field-level error message rather than a generic "Required."
+
+**Lazy intermediary lists:** brokers and agents queries are gated on `channel === 'BROKER'` / `channel === 'AGENT'` respectively. The 80%+ of users who pick Direct never trigger either fetch. Same `['setup', 'brokers']` / `['setup', 'agents']` queryKeys as the Organisations tabs, so cache hits are guaranteed when those tabs were visited earlier in the session.
+
+**Channel switch handler (`onChannelChange`):** clears `intermediaryId` on switch so a stale selection from a previously-chosen channel can't sneak through. Subtle but matters — a user could otherwise pick a Broker, switch to Agent, fail to pick an agent, and submit with the broker UUID still in the form state.
+
+**Render:** Channel + Intermediary live in a `FormRow` after `Business Type`. Intermediary is conditional on `channel !== 'DIRECT'`. Label flips between "Broker" and "Agent" depending on channel; placeholder text and option list follow suit. When Channel is Direct, the row collapses to just the Channel field — no empty right column.
+
+**Payload transform at submit:**
+
+```ts
+const { channel: ch, intermediaryId, ...rest } = values;
+const payload: Record<string, unknown> = { ...rest };
+if (ch === 'BROKER' && intermediaryId) payload.brokerId = intermediaryId;
+if (ch === 'AGENT'  && intermediaryId) payload.agentId  = intermediaryId;
+```
+
+This shape never sends both — V53 enforces the XOR at the DB and `PolicyService` returns a clean `BROKER_AGENT_EXCLUSIVE` 400 if both somehow arrive (defence in depth, but the UI guarantees it never happens).
+
+### What is NOT in this slice
+
+- **`FromQuoteForm`** — Quote entity doesn't yet carry agent attribution (Slice 84d scope cut). Bind-from-quote always rides through the broker path that's already on the quote, so no picker change is required there.
+- **Pre-existing field-name mismatches** in `directSchema` — the form sends `startDate` / `endDate` (no `policy` prefix) and no `risks` array, while backend `PolicyRequest` requires `policyStartDate`, `policyEndDate`, and `@NotEmpty risks: List<PolicyRiskRequest>`. The direct-create path has been broken at the API boundary for some time. Slice 89 deliberately doesn't touch this — the Channel picker just adds the new field shapes without fixing the pre-existing payload-naming bug. Flagged as the next natural follow-up.
+- **Relationship Manager channel option** — RM commission is a staff payroll incentive routed through 2520 (Staff payables), not a commission CN. Different document type, different attribution semantics. The picker only offers the two channels that today produce a commission CN.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` filtered to `CreatePolicySheet.tsx` — zero errors.
+- The pre-existing tsc errors in `AssignSurveyorDialog.tsx` + `CoinsuranceEditorDialog.tsx` (carried since Slice 84a) are unchanged and unrelated.
+- No backend code changed — no failsafe ITs needed.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — UI | `cia-frontend/apps/back-office/src/modules/policy/pages/create/CreatePolicySheet.tsx` |
+| Docs | `cia-log.md` (this entry) |
+
+### Known follow-ups (deliberately deferred)
+
+- **`directSchema` field-name reconciliation + risks array** — the form has been incomplete vs `PolicyRequest` for a while. Direct-create would return a 400 today regardless of channel. Natural next slice.
+- **Quote-side agent attribution** — extends Module 2's Quote entity, form, and bulk-upload CSV. Same as the Slice 84d open item.
+- **RM commission via 2520** — separate design conversation (payroll doc type).
+- **Policy list page Intermediary column** — surface broker/agent on the list view.
 
 ---
 
