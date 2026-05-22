@@ -17,7 +17,7 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | B1 | P2 | Quote-side agent attribution | Quote entity doesn't carry `agentId`. Extends Module 2 form + bulk-upload CSV + quote-document templates. Bind-from-quote currently always produces broker-attributed policies even when an agent was the intermediary. |
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
 | B3 | P2 | Policy list page Intermediary column | Surface broker/agent on PolicyListPage. Small UI surface; mirrors the "Intermediary" row Slice 84e added to the detail page. |
-| F2 | P2 | ReceiptStatusSchema + ReceivablesTab URL mismatch | Frontend ReceiptStatusSchema (`DRAFT/PENDING_APPROVAL/APPROVED/REVERSED`) doesn't match backend TransactionStatus (`POSTED/REVERSED`); ReceivablesTab `rcStatusVariant` Record depends on the wrong enum. Same module also hits `/api/v1/finance/debit-notes` (404; backend is at `/api/v1/debit-notes`) and `/api/v1/finance/receipts` (no such endpoint). Single batch slice: align enum + URLs. |
+| F7 | P3 | Flat receipts + payments inventory view dropped | Session 103 (F2) removed the "Receipts" + "Payments" sub-sections from ReceivablesTab + PayablesTab because backend has no `/api/v1/receipts` or `/api/v1/payments` flat list endpoint — receipts only exist nested under a debit-note (`/api/v1/debit-notes/{dnId}/receipts`), payments only under a credit-note. If a finance-level "show me all approved receipts this week" view is needed, add flat list controllers + ITs on the backend, then re-surface the sub-sections. Alternative: expose receipts + payments inside DebitNoteDetailDialog + CreditNoteDetailDialog so users can drill from the DN/CN inventory. `ReverseTransactionDialog` file kept in-tree (dead until either surface lands). |
 | F3 | P3 | DTO drift script picks up zod-derived types | `finance.ts` uses `export type X = z.infer<typeof XSchema>` (not `export interface X`). The drift parser only matches `export interface`, so DebitNoteDto / ReceiptDto / CreditNoteDto / PaymentDto are never checked. Extend the parser to also detect zod-derived types. |
 | C2 | P3 | Multi-risk on direct create form | `useFieldArray<PolicyRiskRequest>` on CreatePolicySheet. RisksEditorDialog already handles multi-risk post-creation; this is purely a create-time convenience. |
 | C3 | P3 | vehicleRegNumber + sectionId on direct risk row | Backend `PolicyRiskRequest` accepts both as optional; form has neither (filled via RisksEditorDialog on the detail page). |
@@ -29,6 +29,92 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F1 | P2 | Placeholder-onClick row actions across back-office | 6 known: CustomersListPage Update KYC + Blacklist; ProductsPage Activate/Deactivate; QuotationListPage Submit + Convert + Edit + Duplicate. Each is small but adds up. Batch as one slice. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-22 — Session 103 (`main`): Backlog F2 — Finance Receivables + Payables tabs work end-to-end against real backend
+
+Tenth slice under the Session 93 discipline rule. Goal as logged in F2: "align enum + URLs" on ReceivablesTab. Honestly broadened mid-slice (per slice discipline — broaden the goal, don't silently expand): the entanglement reaches PayablesTab + PostReceiptSheet + ProcessPaymentSheet, all of which call non-existent endpoints. New stated goal: **make both finance tabs work end-to-end against the real backend, with no backend changes**.
+
+### What the F2 backlog row had right + what it missed
+
+**Right:** the enum drift (`ReceiptStatusSchema` declared `DRAFT/PENDING_APPROVAL/APPROVED/REVERSED`, backend `TransactionStatus` ships `POSTED/REVERSED`). Same for `PaymentStatusSchema` (`PENDING/APPROVED/PAID/REVERSED` → `POSTED/REVERSED`). The URL prefix drift (`/api/v1/finance/debit-notes` → `/api/v1/debit-notes`, same for credit-notes).
+
+**Missed:** the architectural mismatch. Backend has **no flat list endpoint** for either receipts or payments — `ReceiptController` is mounted at `/api/v1/debit-notes/{debitNoteId}/receipts`, `PaymentController` at `/api/v1/credit-notes/{creditNoteId}/payments`. Both tabs were trying to call non-existent flat endpoints (`/api/v1/finance/receipts`, `/api/v1/finance/payments`). Same for the POST sites — `PostReceiptSheet` posted to `/api/v1/finance/receipts` + `/api/v1/finance/receipts/bulk` (no bulk endpoint exists either); `ProcessPaymentSheet` posted to `/api/v1/finance/payments`.
+
+So the F2 backlog row understated the scope.
+
+### What landed
+
+**1. `finance.ts` schemas:**
+
+- `ReceiptStatusSchema`: 4-value enum → `['POSTED', 'REVERSED']` (matches backend `TransactionStatus`).
+- `PaymentStatusSchema`: 4-value enum → `['POSTED', 'REVERSED']`.
+- Stale "still doesn't match" NOTE comment dropped (was a Session 96 deferred-fix marker; F2 closed it).
+- `PaymentDtoSchema` expanded analogous to S96's `ReceiptDtoSchema`: added `creditNoteNumber` (load-bearing — the old PayablesTab payments table did a cross-list `creditNotes.find(c => c.id === ...)` lookup because the field wasn't declared, even though backend ships it), plus optional `paymentDate / bankId / bankName / bankAccountName / bankAccountNumber / narration / postedBy / reversalReason / reversedAt / reversedBy` for future per-CN detail views.
+- New `PostPaymentRequestSchema` + `PostPaymentRequest` type mirroring backend `PostPaymentRequest` record.
+
+**2. ReceivablesTab.tsx:**
+
+- URL: `/api/v1/finance/debit-notes` → `/api/v1/debit-notes`.
+- "Receipts" PageSection dropped entirely (the 404-ing `/api/v1/finance/receipts` query + its DataTable + `rcStatusVariant` + `rcColumns` + Reverse row action wiring).
+- "Outstanding Debit Notes" PageSection retitled "Debit Notes" — the tab now shows every DN (settled rows included with paid/outstanding amounts as auditable history), not just outstanding ones. The Bulk Receipt button is gated on `OUTSTANDING || PARTIAL` count.
+- The "Post Receipt" row action now also applies to PARTIAL (partially-settled) DNs, not just OUTSTANDING — matches backend's `ReceiptService.post` semantics which allow further payment until `paidAmount == totalAmount`.
+
+**3. PayablesTab.tsx:**
+
+- URL: `/api/v1/finance/credit-notes` → `/api/v1/credit-notes`.
+- "Payments" PageSection dropped entirely (the 404-ing `/api/v1/finance/payments` query + its DataTable + `payStatusVariant` + `payColumns` + Reverse row action wiring).
+- "Outstanding Credit Notes" PageSection retitled "Credit Notes" — same shape as Receivables.
+- "Process Payment" row action gated on `OUTSTANDING || PARTIAL`.
+
+**4. PostReceiptSheet.tsx — full rewrite:**
+
+- Schema now mirrors `PostReceiptRequest`: `amount + paymentDate + paymentMethod + bankId + chequeNumber + narration`. `paymentMethod` is the typed `PaymentMethod` enum (CASH / CHEQUE / BANK_TRANSFER / DIRECT_DEBIT / MOBILE_MONEY / POS), no longer a free-text string.
+- `superRefine` validation gates `bankId` on CHEQUE/BANK_TRANSFER/DIRECT_DEBIT/POS and `chequeNumber` on CHEQUE — same pattern as S96's `PostReceiptDialog` (the canonical reference implementation).
+- Banks list fetched lazily from `/api/v1/setup/banks` when the sheet opens.
+- Single mode: POST `/api/v1/debit-notes/{dnId}/receipts` with the form values.
+- **Bulk mode: amount field hidden** — each DN is settled at its own outstanding amount via `Promise.all` over `selectedNotes`. Backend has no `/bulk` endpoint and faking it client-side at a single amount would be wrong (the amount has to be per-DN). Submit button shows `Post N Receipts` to make the iteration visible.
+- Cache invalidation on success extends to `policy-debit-note` + `policy-receipts` (S96 cache keys) so the PolicyDetailPage Finance tab re-renders if the user has it open.
+
+**5. ProcessPaymentSheet.tsx — full rewrite:**
+
+- Schema mirrors `PostPaymentRequest`: `amount + paymentDate + paymentMethod + bankId + bankName + bankAccountName + bankAccountNumber + narration`. Same `superRefine` for bank-required methods.
+- Banks list fetched from `/api/v1/setup/banks`.
+- POST to `/api/v1/credit-notes/{cnId}/payments` with full payload (bank metadata + account name/number for the beneficiary's account — note this is the *outgoing* payment, so bank+account fields describe where money is being sent).
+
+### What was dropped from UX
+
+Two flat-inventory views ("see every approved receipt", "see every payment") that were 404-ing anyway. Per slice discipline, the right move when a UX surface depends on a backend endpoint that doesn't exist is to (a) build the backend endpoint, or (b) cut the UX surface and log the gap. Chose (b) because the slice was scoped as a frontend fix and the gap is recoverable.
+
+`ReverseTransactionDialog` had its last two consumers dropped today (was used to reverse a receipt or payment from the flat lists). The file is kept in-tree — it's working code well-aligned with the backend reversal endpoints (`POST /api/v1/debit-notes/{dnId}/receipts/{id}/reverse`, `POST /api/v1/credit-notes/{cnId}/payments/{id}/reverse`). Future work that surfaces receipts inside `DebitNoteDetailDialog` (or payments inside `CreditNoteDetailDialog`) will need it. Removing now would be premature.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` — exit 0, zero output. All five rewrites compile.
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (29 interfaces, 2 skipped)` unchanged. The PaymentDto field additions are all optional + backend-counterpart-present, so drift stays clean.
+- `bash cia-frontend/scripts/check-api-wiring.sh` — same two pre-existing F6 violations (`MOCK_QUOTES`, `MOCK_CUSTOMERS`); no new ones from F2 work.
+- `grep -rn "/api/v1/finance/(debit|credit|receipts|payments)"` across finance module — zero matches. All stale URLs cleared.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — schemas | `cia-frontend/packages/api-client/src/modules/finance.ts` |
+| Frontend — UI | `ReceivablesTab.tsx`, `PayablesTab.tsx` (drop sub-sections + fix URL), `PostReceiptSheet.tsx` + `ProcessPaymentSheet.tsx` (full rewrites against nested endpoints) |
+| Docs | `cia-log.md` (this entry + F2 removed + F7 added) |
+
+### Backlog reconciliation
+
+- **Removed**: F2.
+- **Added**: F7 (P3) — flat receipts/payments inventory view dropped; backend has no flat list endpoint. Recovery path is either backend flat controllers or surfacing per-DN/CN receipts inside the detail dialogs. `ReverseTransactionDialog` file kept in tree as the pre-built reversal UI for that future surface.
+- **Net**: 15 → 15 rows (one removed, one added).
+
+### Known follow-ups (deliberately deferred)
+
+- F7 (flat inventory views — see backlog).
+- Approve/Reject placeholder row actions removed from finance tabs alongside the flat lists — already covered by F1's general placeholder sweep.
+- F2 was logged as a single batch slice ("align enum + URLs") but landed as an honest scope-broadening to "make tabs work end-to-end". Per Session 93 rule: broadening mid-slice is legitimate when the stated goal can't ship without also fixing X — recorded here as a reference for future "this is a one-line fix" backlog rows that turn out to be load-bearing on architectural assumptions.
 
 ---
 

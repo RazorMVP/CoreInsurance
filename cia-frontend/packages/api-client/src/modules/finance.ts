@@ -19,8 +19,10 @@ import { z } from 'zod';
 
 export const DebitNoteStatusSchema    = z.enum(['OUTSTANDING', 'PARTIAL', 'SETTLED', 'CANCELLED', 'VOID']);
 export const CreditNoteStatusSchema   = z.enum(['OUTSTANDING', 'PARTIAL', 'SETTLED', 'CANCELLED']);
-export const ReceiptStatusSchema      = z.enum(['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REVERSED']);
-export const PaymentStatusSchema      = z.enum(['PENDING', 'APPROVED', 'PAID', 'REVERSED']);
+// Backend TransactionStatus enum: POSTED on creation; REVERSED on reversal.
+// No approval state — receipt-post is a CREATE operation, not a workflow.
+export const ReceiptStatusSchema      = z.enum(['POSTED', 'REVERSED']);
+export const PaymentStatusSchema      = z.enum(['POSTED', 'REVERSED']);
 export const FinanceEntityTypeSchema  = z.enum(['POLICY', 'ENDORSEMENT', 'CLAIM', 'CLAIM_EXPENSE', 'COMMISSION', 'REINSURANCE']);
 
 export type DebitNoteStatus   = z.infer<typeof DebitNoteStatusSchema>;
@@ -63,10 +65,6 @@ export type DebitNoteDto = z.infer<typeof DebitNoteDtoSchema>;
 // 96 (Backlog C1) so PolicyDetailPage's Finance tab can render the receipts
 // list with real values without breaking the ReceivablesTab consumer that
 // only uses the original narrow set.
-//
-// NOTE: ReceiptStatusSchema still doesn't match the backend's TransactionStatus
-// enum ('POSTED' | 'REVERSED'). Fixing it requires updating ReceivablesTab's
-// `rcStatusVariant` Record at the same time; logged as backlog item F2.
 export const ReceiptDtoSchema = z.object({
   id:               z.string(),
   receiptNumber:    z.string(),
@@ -130,14 +128,47 @@ export type CreditNoteDto = z.infer<typeof CreditNoteDtoSchema>;
 
 // ── Payment ───────────────────────────────────────────────────────────────
 
+// Backend PaymentResponse mirrors ReceiptResponse — full bank-detail block +
+// reversal metadata. Declared optional here so consumers that need the detail
+// (e.g. the per-CN payments tab inside CreditNoteDetailDialog) can render
+// real values; consumers that only need the summary row don't have to touch
+// anything. `creditNoteNumber` is shipped by the backend and used directly
+// instead of cross-list lookups against the CN list.
 export const PaymentDtoSchema = z.object({
-  id:               z.string(),
-  paymentNumber:    z.string(),
-  creditNoteId:     z.string(),
-  amount:           z.number(),
-  paymentMethod:    z.string(),
-  status:           PaymentStatusSchema,
-  createdAt:        z.string(),
+  id:                 z.string(),
+  paymentNumber:      z.string(),
+  creditNoteId:       z.string(),
+  creditNoteNumber:   z.string(),
+  amount:             z.number(),
+  paymentMethod:      z.string(),
+  status:             PaymentStatusSchema,
+  createdAt:          z.string(),
+  // ── Optional details ───────────────────────────────────────────────────
+  paymentDate:        z.string().nullable().optional(),
+  bankId:             z.string().nullable().optional(),
+  bankName:           z.string().nullable().optional(),
+  bankAccountName:    z.string().nullable().optional(),
+  bankAccountNumber:  z.string().nullable().optional(),
+  narration:          z.string().nullable().optional(),
+  postedBy:           z.string().nullable().optional(),
+  reversalReason:     z.string().nullable().optional(),
+  reversedAt:         z.string().nullable().optional(),
+  reversedBy:         z.string().nullable().optional(),
 });
 
 export type PaymentDto = z.infer<typeof PaymentDtoSchema>;
+
+// Request body for POST /api/v1/credit-notes/{cnId}/payments. Mirrors
+// com.nubeero.cia.finance.dto.PostPaymentRequest.
+export const PostPaymentRequestSchema = z.object({
+  amount:             z.number().min(0.01),
+  paymentDate:        z.string().min(1),
+  paymentMethod:      PaymentMethodSchema,
+  bankId:             z.string().nullable().optional(),
+  bankName:           z.string().nullable().optional(),
+  bankAccountName:    z.string().nullable().optional(),
+  bankAccountNumber:  z.string().nullable().optional(),
+  narration:          z.string().nullable().optional(),
+});
+
+export type PostPaymentRequest = z.infer<typeof PostPaymentRequestSchema>;

@@ -1,18 +1,17 @@
 import { useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
-  PageSection, Separator,
+  PageSection,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import {
-  validatedGet, DebitNoteDtoSchema, ReceiptDtoSchema,
-  type DebitNoteDto, type ReceiptDto,
+  validatedGet, DebitNoteDtoSchema,
+  type DebitNoteDto,
 } from '@cia/api-client';
 import PostReceiptSheet         from './PostReceiptSheet';
 import DebitNoteDetailDialog    from './DebitNoteDetailDialog';
-import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
 
 const dnStatusVariant: Record<DebitNoteDto['status'], 'pending' | 'active' | 'draft' | 'rejected'> = {
   OUTSTANDING: 'pending',
@@ -20,13 +19,6 @@ const dnStatusVariant: Record<DebitNoteDto['status'], 'pending' | 'active' | 'dr
   SETTLED:     'active',
   CANCELLED:   'rejected',
   VOID:        'rejected',
-};
-
-const rcStatusVariant: Record<ReceiptDto['status'], 'active' | 'pending' | 'rejected' | 'draft'> = {
-  APPROVED:         'active',
-  PENDING_APPROVAL: 'pending',
-  DRAFT:            'draft',
-  REVERSED:         'rejected',
 };
 
 export default function ReceivablesTab() {
@@ -37,21 +29,12 @@ export default function ReceivablesTab() {
 
   const debitNotesQuery = useQuery<DebitNoteDto[]>({
     queryKey: ['finance', 'debit-notes'],
-    queryFn: () => validatedGet('/api/v1/finance/debit-notes', z.array(DebitNoteDtoSchema)),
+    queryFn: () => validatedGet('/api/v1/debit-notes', z.array(DebitNoteDtoSchema)),
   });
   const debitNotes = debitNotesQuery.data ?? [];
 
-  const receiptsQuery = useQuery<ReceiptDto[]>({
-    queryKey: ['finance', 'receipts'],
-    queryFn: () => validatedGet('/api/v1/finance/receipts', z.array(ReceiptDtoSchema)),
-  });
-  const receipts = receiptsQuery.data ?? [];
-
   // Debit note detail dialog
   const [dnDetail, setDnDetail] = useState<DebitNoteDto | null>(null);
-
-  // Reverse receipt dialog
-  const [reverseTarget, setReverseTarget] = useState<ReverseTarget | null>(null);
 
   function openDetail(dn: DebitNoteDto) {
     setDnDetail(dn);
@@ -121,12 +104,12 @@ export default function ReceivablesTab() {
         <DataTableRowActions
           row={row}
           actions={[
-            ...(row.original.status === 'OUTSTANDING' ? [{
+            ...(row.original.status === 'OUTSTANDING' || row.original.status === 'PARTIAL' ? [{
               label: 'Post Receipt',
               onClick: () => openDetail(row.original),
             }] : []),
             {
-              label: 'View policy',
+              label: 'View detail',
               onClick: () => openDetail(row.original),
             },
           ]}
@@ -135,81 +118,14 @@ export default function ReceivablesTab() {
     },
   ];
 
-  const rcColumns: ColumnDef<ReceiptDto>[] = [
-    {
-      accessorKey: 'receiptNumber',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Receipt No." />,
-      cell: ({ getValue }) => <span className="font-mono text-xs text-primary">{getValue() as string}</span>,
-    },
-    {
-      accessorKey: 'debitNoteNumber',
-      header: 'Debit Note',
-      cell: ({ getValue }) => <span className="font-mono text-xs text-muted-foreground">{getValue() as string}</span>,
-    },
-    {
-      accessorKey: 'amount',
-      header: 'Amount',
-      cell: ({ getValue }) => (
-        <span className="text-sm font-medium tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
-      ),
-    },
-    {
-      accessorKey: 'paymentMethod',
-      header: 'Method',
-      cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{getValue() as string}</span>,
-    },
-    {
-      accessorKey: 'status',
-      header: 'Status',
-      cell: ({ getValue }) => {
-        const s = getValue() as ReceiptDto['status'];
-        return <Badge variant={rcStatusVariant[s]} className="text-[10px]">{s.toLowerCase().replace('_', ' ')}</Badge>;
-      },
-    },
-    {
-      accessorKey: 'createdAt',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Date" />,
-      cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{getValue() as string}</span>,
-    },
-    {
-      id: 'actions',
-      cell: ({ row }) => (
-        <DataTableRowActions
-          row={row}
-          actions={[
-            ...(row.original.status === 'PENDING_APPROVAL' ? [
-              { label: 'Approve receipt', onClick: () => {} },
-              { label: 'Reject',          onClick: () => {} },
-            ] : []),
-            {
-              label:     'Reverse',
-              separator: row.original.status === 'APPROVED',
-              className: 'text-destructive',
-              onClick: () => setReverseTarget({
-                type:      'RECEIPT',
-                id:        row.original.id,
-                parentId:  row.original.debitNoteId,
-                reference: row.original.receiptNumber,
-                linkedRef: row.original.debitNoteNumber,
-                amount:    row.original.amount,
-                method:    row.original.paymentMethod,
-                date:      row.original.createdAt,
-              }),
-            },
-          ]}
-        />
-      ),
-    },
-  ];
-
-  const outstanding = debitNotes.filter(d => d.status === 'OUTSTANDING');
+  const outstanding = debitNotes.filter(d => d.status === 'OUTSTANDING' || d.status === 'PARTIAL');
 
   return (
     <div className="space-y-8">
       {/* Debit Notes */}
       <PageSection
-        title="Outstanding Debit Notes"
-        description="Post receipts against debit notes to record premium payments."
+        title="Debit Notes"
+        description="Premium receivables. Post receipts against a debit note to record collections."
         actions={
           <div className="flex gap-2">
             <Button
@@ -230,17 +146,6 @@ export default function ReceivablesTab() {
         />
       </PageSection>
 
-      <Separator />
-
-      {/* Receipts */}
-      <PageSection title="Receipts" description="Posted receipts awaiting or completed approval.">
-        <DataTable
-          columns={rcColumns}
-          data={receipts}
-          toolbar={{ searchColumn: 'receiptNumber', searchPlaceholder: 'Search receipts…' }}
-        />
-      </PageSection>
-
       {/* Post receipt sheet */}
       <PostReceiptSheet
         open={sheetOpen}
@@ -257,13 +162,6 @@ export default function ReceivablesTab() {
         onOpenChange={(v) => { if (!v) setDnDetail(null); }}
         debitNote={dnDetail}
         onPostReceipt={handlePostReceiptFromDialog}
-      />
-
-      {/* Reverse receipt dialog */}
-      <ReverseTransactionDialog
-        open={reverseTarget !== null}
-        onOpenChange={(v) => { if (!v) setReverseTarget(null); }}
-        target={reverseTarget}
       />
     </div>
   );

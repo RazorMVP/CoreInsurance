@@ -1,23 +1,37 @@
+// ProcessPaymentSheet — posts against
+// /api/v1/credit-notes/{cnId}/payments. Schema mirrors
+// com.nubeero.cia.finance.dto.PostPaymentRequest:
+//   amount, paymentDate, paymentMethod, bankId, bankName,
+//   bankAccountName, bankAccountNumber, narration.
+
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Button, Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormRow,
   Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Separator,
   Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle,
+  Textarea,
 } from '@cia/ui';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import { apiClient, type CreditNoteDto, type FinanceEntityType } from '@cia/api-client';
+import {
+  apiClient,
+  type BankDto, type CreditNoteDto, type FinanceEntityType, type PaymentMethod,
+  type PostPaymentRequest,
+} from '@cia/api-client';
 import { applyApiErrors } from '@/lib/form-errors';
 
-const schema = z.object({
-  amount:        z.coerce.number().positive('Amount must be greater than zero'),
-  paymentMethod: z.enum(['BANK_TRANSFER', 'CHEQUE', 'CASH', 'ONLINE']),
-  bankName:      z.string().min(1, 'Bank name is required'),
-  reference:     z.string().min(1, 'Enter the payment reference or transaction ID'),
-  notes:         z.string().optional(),
-});
-type FormValues = z.infer<typeof schema>;
+const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: 'CASH',          label: 'Cash' },
+  { value: 'CHEQUE',        label: 'Cheque' },
+  { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
+  { value: 'DIRECT_DEBIT',  label: 'Direct Debit' },
+  { value: 'MOBILE_MONEY',  label: 'Mobile Money' },
+  { value: 'POS',           label: 'Point of Sale' },
+];
+
+const METHODS_REQUIRING_BANK = new Set<PaymentMethod>(['CHEQUE', 'BANK_TRANSFER', 'DIRECT_DEBIT', 'POS']);
 
 const ENTITY_LABELS: Record<FinanceEntityType, string> = {
   POLICY:        'Policy',
@@ -28,6 +42,21 @@ const ENTITY_LABELS: Record<FinanceEntityType, string> = {
   REINSURANCE:   'RI FAC',
 };
 
+const schema = z.object({
+  amount:            z.coerce.number().min(0.01, 'Amount must be greater than zero'),
+  paymentDate:       z.string().min(1, 'Required'),
+  paymentMethod:     z.enum(['CASH', 'CHEQUE', 'BANK_TRANSFER', 'DIRECT_DEBIT', 'MOBILE_MONEY', 'POS']),
+  bankId:            z.string().optional().or(z.literal('')),
+  bankAccountName:   z.string().optional(),
+  bankAccountNumber: z.string().optional(),
+  narration:         z.string().optional(),
+}).superRefine((v, ctx) => {
+  if (METHODS_REQUIRING_BANK.has(v.paymentMethod) && !v.bankId) {
+    ctx.addIssue({ code: 'custom', path: ['bankId'], message: 'Required for this payment method' });
+  }
+});
+type FormValues = z.infer<typeof schema>;
+
 interface Props {
   open:         boolean;
   onOpenChange: (v: boolean) => void;
@@ -37,33 +66,72 @@ interface Props {
 
 export default function ProcessPaymentSheet({ open, onOpenChange, creditNote, onSuccess }: Props) {
   const queryClient = useQueryClient();
+
+  const banksQuery = useQuery<BankDto[]>({
+    queryKey: ['setup', 'banks'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: BankDto[] }>('/api/v1/setup/banks');
+      return res.data.data;
+    },
+    enabled: open,
+  });
+  const banks = banksQuery.data ?? [];
+
   const form = useForm<FormValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver:      zodResolver(schema) as any,
-    defaultValues: { amount: creditNote?.outstandingAmount ?? 0, paymentMethod: 'BANK_TRANSFER', bankName: '', reference: '', notes: '' },
-    values:        { amount: creditNote?.outstandingAmount ?? 0, paymentMethod: 'BANK_TRANSFER', bankName: '', reference: '', notes: '' },
+    resolver: zodResolver(schema) as any,
+    defaultValues: {
+      amount:            0,
+      paymentDate:       new Date().toISOString().slice(0, 10),
+      paymentMethod:     'BANK_TRANSFER',
+      bankId:            '',
+      bankAccountName:   '',
+      bankAccountNumber: '',
+      narration:         '',
+    },
   });
+
+  // Default amount to the outstanding balance whenever the sheet re-opens
+  // for a (potentially different) credit note.
+  useEffect(() => {
+    if (open && creditNote) {
+      form.reset({
+        amount:            creditNote.outstandingAmount,
+        paymentDate:       new Date().toISOString().slice(0, 10),
+        paymentMethod:     'BANK_TRANSFER',
+        bankId:            '',
+        bankAccountName:   '',
+        bankAccountNumber: '',
+        narration:         '',
+      });
+    }
+  }, [open, creditNote, form]);
+
+  const paymentMethod = form.watch('paymentMethod');
+  const needsBank     = METHODS_REQUIRING_BANK.has(paymentMethod);
 
   const process = useMutation({
     mutationFn: async (values: FormValues) => {
-      const res = await apiClient.post<{ data: { id: string } }>(
-        '/api/v1/finance/payments',
-        { creditNoteId: creditNote?.id, ...values },
-      );
-      return res.data.data;
+      const bankName = values.bankId ? banks.find(b => b.id === values.bankId)?.name : undefined;
+      const payload: PostPaymentRequest = {
+        amount:            values.amount,
+        paymentDate:       values.paymentDate,
+        paymentMethod:     values.paymentMethod,
+        bankId:            values.bankId            || undefined,
+        bankName,
+        bankAccountName:   values.bankAccountName   || undefined,
+        bankAccountNumber: values.bankAccountNumber || undefined,
+        narration:         values.narration         || undefined,
+      };
+      await apiClient.post(`/api/v1/credit-notes/${creditNote!.id}/payments`, payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['finance', 'credit-notes'] });
-      queryClient.invalidateQueries({ queryKey: ['finance', 'payments'] });
       onSuccess();
       form.reset();
     },
     onError: (e) => applyApiErrors(e, form, { defaultTitle: 'Could not process payment' }),
   });
-
-  function onSubmit(values: FormValues) {
-    process.mutate(values);
-  }
 
   if (!creditNote) return null;
 
@@ -96,69 +164,78 @@ export default function ProcessPaymentSheet({ open, onOpenChange, creditNote, on
         </div>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-4 space-y-4">
+          <form onSubmit={form.handleSubmit((v) => process.mutate(v))} className="mt-4 space-y-4">
             <Separator />
 
-            <FormField control={form.control} name="amount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Payment Amount (₦)</FormLabel>
-                  <FormControl>
-                    <Input type="number" min={0} step={500} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField control={form.control} name="paymentMethod"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Payment Method</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
-                      <SelectItem value="CHEQUE">Cheque</SelectItem>
-                      <SelectItem value="CASH">Cash</SelectItem>
-                      <SelectItem value="ONLINE">Online Payment</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
             <FormRow>
-              <FormField control={form.control} name="bankName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Bank Name</FormLabel>
-                    <FormControl><Input placeholder="e.g. GTBank" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField control={form.control} name="reference"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Reference / Transaction ID</FormLabel>
-                    <FormControl><Input placeholder="e.g. TXN123456789" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <FormField control={form.control} name="amount" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Amount (₦)</FormLabel>
+                  <FormControl><Input type="number" step={0.01} min={0.01} {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="paymentDate" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Payment Date</FormLabel>
+                  <FormControl><Input type="date" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
             </FormRow>
 
-            <FormField control={form.control} name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes (optional)</FormLabel>
-                  <FormControl><Input placeholder="Any additional notes" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <FormField control={form.control} name="paymentMethod" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Payment Method</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    {PAYMENT_METHODS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            {needsBank && (
+              <>
+                <FormField control={form.control} name="bankId" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Bank</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Select bank" /></SelectTrigger></FormControl>
+                      <SelectContent>{banks.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+
+                <FormRow>
+                  <FormField control={form.control} name="bankAccountName" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Account Name <span className="text-muted-foreground">(optional)</span></FormLabel>
+                      <FormControl><Input placeholder="Beneficiary on the account" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="bankAccountNumber" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Account Number <span className="text-muted-foreground">(optional)</span></FormLabel>
+                      <FormControl><Input placeholder="e.g. 0123456789" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                </FormRow>
+              </>
+            )}
+
+            <FormField control={form.control} name="narration" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Narration <span className="text-muted-foreground">(optional)</span></FormLabel>
+                <FormControl><Textarea rows={2} className="resize-none" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
 
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

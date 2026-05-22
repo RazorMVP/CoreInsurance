@@ -1,18 +1,17 @@
 import { useState } from 'react';
 import {
   Badge, DataTable, DataTableColumnHeader, DataTableRowActions,
-  PageSection, Separator,
+  PageSection,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import {
-  validatedGet, CreditNoteDtoSchema, PaymentDtoSchema,
-  type CreditNoteDto, type FinanceEntityType, type PaymentDto,
+  validatedGet, CreditNoteDtoSchema,
+  type CreditNoteDto, type FinanceEntityType,
 } from '@cia/api-client';
 import CreditNoteDetailDialog   from './CreditNoteDetailDialog';
 import ProcessPaymentSheet      from './ProcessPaymentSheet';
-import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
 
 const ENTITY_LABELS: Record<FinanceEntityType, string> = {
   POLICY:        'Policy',
@@ -30,34 +29,18 @@ const cnStatusVariant: Record<CreditNoteDto['status'], 'pending' | 'active' | 'd
   CANCELLED:   'rejected',
 };
 
-const payStatusVariant: Record<PaymentDto['status'], 'active' | 'pending' | 'rejected'> = {
-  APPROVED: 'active',
-  PENDING:  'pending',
-  REVERSED: 'rejected',
-  PAID:     'active',
-};
-
 export default function PayablesTab() {
   const creditNotesQuery = useQuery<CreditNoteDto[]>({
     queryKey: ['finance', 'credit-notes'],
-    queryFn: () => validatedGet('/api/v1/finance/credit-notes', z.array(CreditNoteDtoSchema)),
+    queryFn: () => validatedGet('/api/v1/credit-notes', z.array(CreditNoteDtoSchema)),
   });
   const creditNotes = creditNotesQuery.data ?? [];
-
-  const paymentsQuery = useQuery<PaymentDto[]>({
-    queryKey: ['finance', 'payments'],
-    queryFn: () => validatedGet('/api/v1/finance/payments', z.array(PaymentDtoSchema)),
-  });
-  const payments = paymentsQuery.data ?? [];
 
   // Credit note detail dialog
   const [cnDetail, setCnDetail] = useState<CreditNoteDto | null>(null);
 
   // Process payment sheet
   const [processPayTarget, setProcessPayTarget] = useState<CreditNoteDto | null>(null);
-
-  // Reverse payment dialog
-  const [reverseTarget, setReverseTarget] = useState<ReverseTarget | null>(null);
 
   function handleProcessPaymentFromDialog(cn: CreditNoteDto) {
     setCnDetail(null);
@@ -123,12 +106,12 @@ export default function PayablesTab() {
         <DataTableRowActions
           row={row}
           actions={[
-            ...(row.original.status === 'OUTSTANDING' ? [{
+            ...(row.original.status === 'OUTSTANDING' || row.original.status === 'PARTIAL' ? [{
               label: 'Process Payment',
               onClick: () => setCnDetail(row.original),
             }] : []),
             {
-              label: 'View source',
+              label: 'View detail',
               onClick: () => setCnDetail(row.original),
             },
           ]}
@@ -137,96 +120,17 @@ export default function PayablesTab() {
     },
   ];
 
-  const payColumns: ColumnDef<PaymentDto>[] = [
-    {
-      accessorKey: 'paymentNumber',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Payment No." />,
-      cell: ({ getValue }) => <span className="font-mono text-xs text-primary">{getValue() as string}</span>,
-    },
-    {
-      accessorKey: 'creditNoteId',
-      header: 'Credit Note',
-      cell: ({ getValue }) => {
-        const cn = creditNotes.find(c => c.id === getValue());
-        return <span className="font-mono text-xs text-muted-foreground">{cn?.creditNoteNumber ?? (getValue() as string)}</span>;
-      },
-    },
-    {
-      accessorKey: 'amount',
-      header: 'Amount',
-      cell: ({ getValue }) => (
-        <span className="text-sm font-medium tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
-      ),
-    },
-    {
-      accessorKey: 'paymentMethod',
-      header: 'Method',
-      cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{getValue() as string}</span>,
-    },
-    {
-      accessorKey: 'status',
-      header: 'Status',
-      cell: ({ getValue }) => {
-        const s = getValue() as PaymentDto['status'];
-        return <Badge variant={payStatusVariant[s]} className="text-[10px]">{s.toLowerCase()}</Badge>;
-      },
-    },
-    {
-      id: 'actions',
-      cell: ({ row }) => {
-        const linked = creditNotes.find(c => c.id === row.original.creditNoteId);
-        return (
-          <DataTableRowActions
-            row={row}
-            actions={[
-              ...(row.original.status === 'PENDING' ? [
-                { label: 'Approve payment', onClick: () => {} },
-                { label: 'Reject',          onClick: () => {}, className: 'text-destructive' },
-              ] : []),
-              {
-                label:     'Reverse',
-                separator: row.original.status === 'APPROVED',
-                className: 'text-destructive',
-                onClick: () => setReverseTarget({
-                  type:      'PAYMENT',
-                  id:        row.original.id,
-                  parentId:  row.original.creditNoteId,
-                  reference: row.original.paymentNumber,
-                  linkedRef: linked?.creditNoteNumber ?? row.original.creditNoteId,
-                  amount:    row.original.amount,
-                  method:    row.original.paymentMethod,
-                  date:      row.original.createdAt,
-                }),
-              },
-            ]}
-          />
-        );
-      },
-    },
-  ];
-
   return (
     <div className="space-y-8">
       {/* Credit Notes */}
       <PageSection
-        title="Outstanding Credit Notes"
-        description="Credit notes awaiting payment — claims DVs, commissions, endorsement refunds and RI credits."
+        title="Credit Notes"
+        description="Payables — claims DVs, commissions, endorsement refunds and RI credits. Process a payment against a credit note to settle."
       >
         <DataTable
           columns={cnColumns}
           data={creditNotes}
           toolbar={{ searchColumn: 'creditNoteNumber', searchPlaceholder: 'Search credit notes…' }}
-        />
-      </PageSection>
-
-      <Separator />
-
-      {/* Payments */}
-      <PageSection title="Payments" description="Payments posted against credit notes.">
-        <DataTable
-          columns={payColumns}
-          data={payments}
-          toolbar={{ searchColumn: 'paymentNumber', searchPlaceholder: 'Search payments…' }}
         />
       </PageSection>
 
@@ -244,13 +148,6 @@ export default function PayablesTab() {
         onOpenChange={(v) => { if (!v) setProcessPayTarget(null); }}
         creditNote={processPayTarget}
         onSuccess={() => setProcessPayTarget(null)}
-      />
-
-      {/* Reverse payment dialog */}
-      <ReverseTransactionDialog
-        open={reverseTarget !== null}
-        onOpenChange={(v) => { if (!v) setReverseTarget(null); }}
-        target={reverseTarget}
       />
     </div>
   );
