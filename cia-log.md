@@ -13,7 +13,6 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | ID | P | Item | Notes |
 |---|---|---|---|
 | A1 | P2 | Setup-Dto smalls drift cleanup — batch | BankDto + CurrencyDto + AccessGroupDto + ApprovalGroupDto + ClassOfBusinessDto + ProductDto.sections + CompanySettingsDto. Mostly missing createdAt/updatedAt + small name aliases. Decrement 7 dto-drift allow-list entries in one slice. |
-| A2 | P1 | CustomerDto + CustomerDirectorDto reconciliation | Massive drift — `displayName`/`status`/`brokerId` UI projections vs full KYC + address + directors/documents arrays on backend. Customer page is high-traffic, drift is broad. Single slice covering both Dtos. |
 | A3 | P1 | QuoteDto + QuoteRiskDto rewrite | Single-line totals on frontend vs per-risk + quote-level loadings/discounts + workflow state on backend. Quote pages may be silently misrendering today. Slice 91 fixed brokerName but the wider drift remains. |
 | A4 | P2 | EndorsementDto redesign | Single `sumInsured`/`premium` fields vs `oldXxx`/`newXxx`/`premiumAdjustment` diff shape on EndorsementResponse (Java record). Lower traffic than Customer/Quote but conceptually wrong. |
 | B1 | P2 | Quote-side agent attribution | Quote entity doesn't carry `agentId`. Extends Module 2 form + bulk-upload CSV + quote-document templates. Bind-from-quote currently always produces broker-attributed policies even when an agent was the intermediary. |
@@ -30,6 +29,94 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F1 | P2 | Placeholder-onClick row actions across back-office | 6 known: CustomersListPage Update KYC + Blacklist; ProductsPage Activate/Deactivate; QuotationListPage Submit + Convert + Edit + Duplicate. Each is small but adds up. Batch as one slice. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-22 — Session 94 (`main`): Backlog A2 — CustomerDto + CustomerDirectorDto reconciliation
+
+First slice executed under the Session 93 discipline rule. Goal stated up-front: align `CustomerDto` + `CustomerDirectorDto` with their backend `CustomerResponse` + `CustomerDirectorResponse` shapes 1:1 and remove the two entries from the dto-drift allow-list. Goal didn't expand mid-slice — side-discoveries are listed in the Backlog reconciliation section below, not pulled in.
+
+### What the drift hid
+
+The first careful read of the two types against the backend surfaced three categories of bug:
+
+1. **Field-name aliases** — frontend `status` vs backend `customerStatus`; frontend `displayName` (computed) vs backend's actual `firstName`/`lastName`/`companyName`. Jackson silently dropped the frontend-only names; the actual response fields the backend serialised were never read.
+2. **Field-shape collapse** — `CustomerDto` only carried email/phone/displayName/kycStatus/status as common fields. `CustomerResponse` ships the full KYC trio (kycProviderRef + kycFailureReason + kycVerifiedAt), the individual block (firstName/lastName/otherNames/dateOfBirth/gender/maritalStatus/idType/idNumber/idDocumentUrl/idExpiryDate), the corporate block (companyName/rcNumber/cacCertificateUrl/cacIssuedDate/incorporationDate/industry/contactPerson), the contact block (alternatePhone/address/city/state/country), and the directors + documents arrays. ~29 fields the frontend wasn't aware of.
+3. **Director silent-drop on write** — `CorporateOnboardingSheet`'s zod schema had `fullName: string` for each director, and the multipart submit appended `directors[${i}].fullName` to FormData. Backend `CustomerDirectorRequest` takes `firstName` + `lastName` separately. So directors were being created with NULL names. The drift wasn't visible on read because no UI surface displayed first/last name; users saw the fields they'd entered locally in the form, not what actually persisted.
+
+### What landed
+
+**`cia-frontend/packages/api-client/src/modules/customer.ts`** — full rewrite:
+
+- `CustomerDto` now mirrors `CustomerResponse` 1:1. All ~40 backend fields declared with appropriate nullability; required where backend would always populate (email/phone/customerNumber/customerType/customerStatus/kycStatus/createdAt/updatedAt), nullable elsewhere (KYC trio, individual block, corporate block, contact block, directors, documents).
+- `CustomerDirectorDto` now mirrors `CustomerDirectorResponse` — `firstName` + `lastName` instead of `fullName`; `kycStatus` + `kycFailureReason` + `idDocumentUrl` + `idExpiryDate` + `dateOfBirth` added.
+- `CustomerDocumentDto` added (new type mirroring `CustomerDocumentResponse`).
+- `IdType` declared as the standalone TS union type matching the backend enum.
+- `IndividualCustomerDto` + `CorporateCustomerDto` sub-interfaces **deleted**. They were request-time projections expressed as response-time inheritance — wrong abstraction. The backend returns one unified `CustomerResponse` with type-discriminated fields; sub-types belong in the create-form schemas, not in the response type.
+- New `customerLabel(c)` helper exported from the module — produces the display name string from `firstName`/`lastName` (individual) or `companyName` (corporate). Replaces every prior `displayName` reference.
+
+**`CustomersListPage.tsx`** — drift-fixed:
+
+- Dropped `CustomerRow` local extension type (customerNumber is now native on `CustomerDto`).
+- `displayName` column → uses `accessorFn` returning `customerLabel(row)` so TanStack search still works (search column id changed from `displayName` to `name`).
+- `status` column → `customerStatus` (with the variant map keyed by the new field name).
+- `brokerName` Channel column **removed** entirely. The backend never returned broker on a customer (brokers attach to policies). The column was always rendering "Direct" for every row.
+- The `Channel` row added to PolicyDetailPage by Slice 84e remains the correct surface for broker/agent attribution — it's per-policy, not per-customer.
+
+**`CustomerDetailPage.tsx`** — rewrite around the new shape:
+
+- Local `MockCustomer` type deleted; mocks now satisfy `CustomerDto` directly.
+- All five mock rows realigned (kept synthetic placeholder values; no real PII).
+- `c.displayName` → `customerLabel(c)`.
+- `c.status` → `c.customerStatus`.
+- `c.directorName` (UI concat) → new local `directorSummary(directors)` helper using `CustomerDirectorDto`.
+- `c.occupation` (frontend-only, backend doesn't have it) — removed.
+- `c.brokerName` reads removed — both the "Channel" row in the Summary tab and the prop forwarded to `EditCustomerSheet`.
+- `EditCustomerSheet` now receives the whole `CustomerDto` (no local snapshot construction).
+
+**`EditCustomerSheet.tsx`** — accepts `CustomerDto` directly:
+
+- Local `CustomerSnapshot` + `DirectorSnapshot` projection types deleted.
+- `buildDefaults` consumes `CustomerDto`; nullable fields handled with `?? ''`.
+- The broker picker stays on the form (the backend's `CustomerUpdateRequest` does accept `brokerId` — asymmetry noted as a backend issue, not blocking this slice). It always initialises to the `__none__` sentinel because the response doesn't surface a prior broker.
+
+**`CorporateOnboardingSheet.tsx`** — director field rename:
+
+- `directorSchema`: `fullName` → `firstName` + `lastName`.
+- `defaultValues` + `append` + the FormData multipart submit all updated to use the two-field shape.
+- New `FormRow` in the render block with First Name + Last Name inputs.
+
+**`dto-drift.config.json`** — the A2 cleanup:
+
+- `CustomerDto` allow-list entry removed (was 4 frontendOnly + 29 backendOnly).
+- `CustomerDirectorDto` allow-list entry removed (was 1 frontendOnly + 6 backendOnly).
+- Manual map entries for `CustomerDirectorDto` (was redundant — default mapping handles it), `IndividualCustomerDto`, `CorporateCustomerDto` all removed (the latter two interfaces no longer exist).
+- Allow-list dropped from 12 entries → 10.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` filtered to the customer surface — zero errors.
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (25 interfaces, 2 skipped — Dtos without a *Response counterpart, e.g. SbuDto / UserDto)`.
+- The CustomerDocumentDto addition bumps the script's count from 24 → 25 Dtos.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — types | `cia-frontend/packages/api-client/src/modules/customer.ts` (full rewrite) |
+| Frontend — UI | `customers/pages/CustomersListPage.tsx`, `customers/pages/detail/CustomerDetailPage.tsx`, `customers/pages/detail/EditCustomerSheet.tsx`, `customers/pages/corporate/CorporateOnboardingSheet.tsx` |
+| Tooling — config | `cia-frontend/scripts/dto-drift.config.json` (A2 entries + dead manualMap entries removed) |
+| Docs | `cia-log.md` (this entry + backlog row A2 removed) |
+
+### Backlog reconciliation
+
+- **Removed**: A2 (CustomerDto + CustomerDirectorDto reconciliation).
+- **Added**: none. Three side-discoveries (the broker-on-CustomerUpdateRequest backend asymmetry; the `directorName` UI projection lying about persisted shape; the `occupation` field on IndividualCustomerDto that backend never accepted) were each resolved inside this slice because they fell out naturally from the type rewrite + consumer updates. No deferral.
+- **Net**: backlog shrank by 1; allow-list shrank by 2.
+
+### Known follow-ups (deliberately deferred)
+
+None. The slice's discoveries were all in-scope for "align CustomerDto + CustomerDirectorDto with backend."
 
 ---
 

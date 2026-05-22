@@ -16,8 +16,12 @@ const EXPIRY_TYPES = ['DRIVERS_LICENSE', 'PASSPORT'] as const;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME = ['image/jpeg', 'image/jpg', 'image/png'];
 
+// Backend CustomerDirectorRequest takes firstName + lastName separately
+// (Session 94 fix — earlier `fullName` was a single-field UI projection that
+// the multipart bind silently dropped, leaving directors with NULL names).
 const directorSchema = z.object({
-  fullName:     z.string().min(2, 'Required'),
+  firstName:    z.string().min(1, 'Required'),
+  lastName:     z.string().min(1, 'Required'),
   idType:       z.enum(['NIN', 'VOTERS_CARD', 'DRIVERS_LICENSE', 'PASSPORT']),
   idNumber:     z.string().min(5, 'Required'),
   idExpiryDate: z.string().optional(),
@@ -104,7 +108,7 @@ export default function CorporateOnboardingSheet({ open, onOpenChange, onSuccess
     resolver:      zodResolver(schema),
     defaultValues: {
       companyName: '', rcNumber: '', cacIssuedDate: '', email: '', phone: '', address: '',
-      directors:   [{ fullName: '', idType: 'NIN', idNumber: '', idExpiryDate: '' }],
+      directors:   [{ firstName: '', lastName: '', idType: 'NIN', idNumber: '', idExpiryDate: '' }],
       brokerEnabled: false, brokerId: '',
       relationshipManagerId: '',
     },
@@ -156,9 +160,11 @@ export default function CorporateOnboardingSheet({ open, onOpenChange, onSuccess
       if (values.brokerEnabled && values.brokerId) fd.append('brokerId', values.brokerId);
       fd.append('relationshipManagerId', values.relationshipManagerId);
 
-      // Directors as JSON string (Spring @ModelAttribute will bind list fields)
+      // Spring @ModelAttribute binds list fields by index. The backend's
+      // CustomerDirectorRequest takes firstName + lastName separately.
       values.directors.forEach((d, i) => {
-        fd.append(`directors[${i}].fullName`,    d.fullName);
+        fd.append(`directors[${i}].firstName`,   d.firstName);
+        fd.append(`directors[${i}].lastName`,    d.lastName);
         fd.append(`directors[${i}].idType`,      d.idType);
         fd.append(`directors[${i}].idNumber`,    d.idNumber);
         if (d.idExpiryDate) fd.append(`directors[${i}].idExpiryDate`, d.idExpiryDate);
@@ -195,7 +201,7 @@ export default function CorporateOnboardingSheet({ open, onOpenChange, onSuccess
   }
 
   function addDirector() {
-    append({ fullName: '', idType: 'NIN', idNumber: '', idExpiryDate: '' });
+    append({ firstName: '', lastName: '', idType: 'NIN', idNumber: '', idExpiryDate: '' });
     setDirFiles(prev => [...prev, null]);
     setDirFileErrors(prev => [...prev, '']);
   }
@@ -296,8 +302,12 @@ export default function CorporateOnboardingSheet({ open, onOpenChange, onSuccess
                       )}
                     </div>
 
-                    <FormField control={form.control} name={`directors.${i}.fullName`}
-                      render={({ field }) => (<FormItem><FormLabel>Full Name</FormLabel><FormControl><Input placeholder="Director full name" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormRow>
+                      <FormField control={form.control} name={`directors.${i}.firstName`}
+                        render={({ field }) => (<FormItem><FormLabel>First Name</FormLabel><FormControl><Input placeholder="First name" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name={`directors.${i}.lastName`}
+                        render={({ field }) => (<FormItem><FormLabel>Last Name</FormLabel><FormControl><Input placeholder="Last name" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    </FormRow>
 
                     <FormRow>
                       <FormField control={form.control} name={`directors.${i}.idType`}

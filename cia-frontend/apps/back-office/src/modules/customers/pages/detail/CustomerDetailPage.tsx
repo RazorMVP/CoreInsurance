@@ -5,101 +5,69 @@ import {
   EmptyState, PageHeader, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@cia/ui';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@cia/api-client';
+import { apiClient, customerLabel, type CustomerDto } from '@cia/api-client';
 import EditCustomerSheet from './EditCustomerSheet';
 
 interface PolicyHistoryItem { id: string; policyNumber: string; product: string; status: string; premium: number; startDate: string; endDate: string; }
 interface ClaimHistoryItem  { id: string; claimNumber: string; policyNumber: string; status: string; amount: number; date: string; }
 
-type KycStatus    = 'VERIFIED' | 'PENDING' | 'FAILED' | 'RESUBMIT';
-type CustomerStatus = 'ACTIVE' | 'INACTIVE' | 'BLACKLISTED';
-type CustomerType = 'INDIVIDUAL' | 'CORPORATE';
-
-interface MockCustomer {
-  id: string;
-  customerNumber: string;
-  customerType: CustomerType;
-  displayName: string;
-  kycStatus: KycStatus;
-  status: CustomerStatus;
-  // contact
-  email: string;
-  phone: string;
-  address: string;
-  createdAt: string;
-  brokerName?: string;
-  relationshipManagerId?: string;
-  relationshipManagerName?: string;
-  // individual
-  dateOfBirth?: string;
-  idType?: string;
-  idNumber?: string;
-  idExpiryDate?: string;
-  occupation?: string;
-  // corporate
-  companyName?: string;
-  rcNumber?: string;
-  industry?: string;
-  contactPerson?: string;
-  directorName?: string;
-  directors?: { id: string; firstName: string; lastName: string; dateOfBirth?: string; idType?: string; idNumber?: string; idExpiryDate?: string }[];
-}
-
-// allow-mock: fallback while useQuery is in flight or for unknown ids.
-// Values are synthetic placeholders (not real PII) — keeps the layout
-// visible without shipping data that could be confused for real customers.
-const MOCK_CUSTOMERS: MockCustomer[] = [
+// allow-mock: fallback while useQuery is in flight or for unknown ids. Values
+// are synthetic placeholders (not real PII) — keeps the layout visible without
+// shipping data that could be confused for real customers. Each row mirrors
+// the CustomerDto shape (Session 94 / Backlog A2 reconciliation).
+const MOCK_CUSTOMERS: CustomerDto[] = [
   {
     id: 'c1', customerNumber: 'CUST/2026/IND/00000001', customerType: 'INDIVIDUAL',
-    displayName: 'Sample Individual 1', kycStatus: 'VERIFIED', status: 'ACTIVE',
+    customerStatus: 'ACTIVE', kycStatus: 'VERIFIED',
     email: 'sample-individual-1@example.test', phone: '+000 000 000 0001',
-    address: 'Sample Address 1', createdAt: '2026-01-15',
-    dateOfBirth: '1990-01-01', idType: 'NIN', idNumber: 'SAMPLE-NIN-0001', occupation: 'Sample Occupation',
+    address: 'Sample Address 1', createdAt: '2026-01-15', updatedAt: '2026-01-15',
+    firstName: 'Sample', lastName: 'Individual 1',
+    dateOfBirth: '1990-01-01', idType: 'NIN', idNumber: 'SAMPLE-NIN-0001',
   },
   {
     id: 'c2', customerNumber: 'CUST/2026/CORP/00000001', customerType: 'CORPORATE',
-    displayName: 'Sample Corporate 1', kycStatus: 'VERIFIED', status: 'ACTIVE',
+    customerStatus: 'ACTIVE', kycStatus: 'VERIFIED',
     email: 'sample-corp-1@example.test', phone: '+000 000 000 0002',
-    address: 'Sample Address 2', createdAt: '2026-01-20',
-    brokerName: 'Sample Broker',
+    address: 'Sample Address 2', createdAt: '2026-01-20', updatedAt: '2026-01-20',
     companyName: 'Sample Corporate 1', rcNumber: 'SAMPLE-RC-0001', industry: 'Sample Industry',
-    contactPerson: 'Sample Contact', directorName: 'Sample Director A / Sample Director B',
+    contactPerson: 'Sample Contact',
     directors: [
-      { id: 'd1', firstName: 'Sample', lastName: 'DirectorA', dateOfBirth: '1975-01-01', idType: 'NIN',      idNumber: 'SAMPLE-NIN-0010' },
-      { id: 'd2', firstName: 'Sample', lastName: 'DirectorB', dateOfBirth: '1978-01-01', idType: 'PASSPORT', idNumber: 'SAMPLE-PP-0010', idExpiryDate: '2030-06-15' },
+      { id: 'd1', firstName: 'Sample', lastName: 'DirectorA', dateOfBirth: '1975-01-01', idType: 'NIN',      idNumber: 'SAMPLE-NIN-0010', kycStatus: 'VERIFIED' },
+      { id: 'd2', firstName: 'Sample', lastName: 'DirectorB', dateOfBirth: '1978-01-01', idType: 'PASSPORT', idNumber: 'SAMPLE-PP-0010', idExpiryDate: '2030-06-15', kycStatus: 'VERIFIED' },
     ],
   },
   {
     id: 'c3', customerNumber: 'CUST/2026/IND/00000002', customerType: 'INDIVIDUAL',
-    displayName: 'Sample Individual 2', kycStatus: 'PENDING', status: 'ACTIVE',
+    customerStatus: 'ACTIVE', kycStatus: 'PENDING',
     email: 'sample-individual-2@example.test', phone: '+000 000 000 0003',
-    address: 'Sample Address 3', createdAt: '2026-02-01',
-    dateOfBirth: '1985-01-01', idType: 'PASSPORT', idNumber: 'SAMPLE-PP-0002', idExpiryDate: '2029-03-15', occupation: 'Sample Occupation',
+    address: 'Sample Address 3', createdAt: '2026-02-01', updatedAt: '2026-02-01',
+    firstName: 'Sample', lastName: 'Individual 2',
+    dateOfBirth: '1985-01-01', idType: 'PASSPORT', idNumber: 'SAMPLE-PP-0002', idExpiryDate: '2029-03-15',
   },
   {
     id: 'c4', customerNumber: 'CUST/2026/CORP/00000002', customerType: 'CORPORATE',
-    displayName: 'Sample Corporate 2', kycStatus: 'FAILED', status: 'ACTIVE',
+    customerStatus: 'ACTIVE', kycStatus: 'FAILED',
     email: 'sample-corp-2@example.test', phone: '+000 000 000 0004',
-    address: 'Sample Address 4', createdAt: '2026-02-10',
+    address: 'Sample Address 4', createdAt: '2026-02-10', updatedAt: '2026-02-10',
     companyName: 'Sample Corporate 2 Ltd', rcNumber: 'SAMPLE-RC-0002', industry: 'Sample Industry',
-    contactPerson: 'Sample Contact', directorName: 'Sample Director C',
+    contactPerson: 'Sample Contact',
     directors: [
-      { id: 'd3', firstName: 'Sample', lastName: 'DirectorC', dateOfBirth: '1980-01-01', idType: 'DRIVERS_LICENSE', idNumber: 'SAMPLE-DL-0001', idExpiryDate: '2028-03-20' },
-      { id: 'd4', firstName: 'Sample', lastName: 'DirectorD', dateOfBirth: '1983-01-01', idType: 'NIN',             idNumber: 'SAMPLE-NIN-0011' },
+      { id: 'd3', firstName: 'Sample', lastName: 'DirectorC', dateOfBirth: '1980-01-01', idType: 'DRIVERS_LICENSE', idNumber: 'SAMPLE-DL-0001', idExpiryDate: '2028-03-20', kycStatus: 'FAILED' },
+      { id: 'd4', firstName: 'Sample', lastName: 'DirectorD', dateOfBirth: '1983-01-01', idType: 'NIN',             idNumber: 'SAMPLE-NIN-0011', kycStatus: 'VERIFIED' },
     ],
   },
   {
     id: 'c5', customerNumber: 'CUST/2026/IND/00000003', customerType: 'INDIVIDUAL',
-    displayName: 'Sample Individual 3', kycStatus: 'VERIFIED', status: 'INACTIVE',
+    customerStatus: 'INACTIVE', kycStatus: 'VERIFIED',
     email: 'sample-individual-3@example.test', phone: '+000 000 000 0005',
-    address: 'Sample Address 5', createdAt: '2026-02-15',
-    brokerName: 'Sample Broker',
-    dateOfBirth: '1992-01-01', idType: 'DRIVERS_LICENSE', idNumber: 'SAMPLE-DL-0002', idExpiryDate: '2027-11-30', occupation: 'Sample Occupation',
+    address: 'Sample Address 5', createdAt: '2026-02-15', updatedAt: '2026-02-15',
+    firstName: 'Sample', lastName: 'Individual 3',
+    dateOfBirth: '1992-01-01', idType: 'DRIVERS_LICENSE', idNumber: 'SAMPLE-DL-0002', idExpiryDate: '2027-11-30',
   },
 ];
 
 // allow-mock: fallback for /customers/{id}/policies sub-query
-const mockPoliciesByCustomer: Record<string, { id: string; policyNumber: string; product: string; status: string; premium: number; startDate: string; endDate: string }[]> = {
+const mockPoliciesByCustomer: Record<string, PolicyHistoryItem[]> = {
   c1: [
     { id: 'p1', policyNumber: 'POL-2026-00012', product: 'Private Motor Comprehensive', status: 'ACTIVE',  premium: 285000, startDate: '2026-02-01', endDate: '2027-02-01' },
     { id: 'p2', policyNumber: 'POL-2025-00088', product: 'Fire & Burglary Standard',    status: 'EXPIRED', premium: 120000, startDate: '2025-03-01', endDate: '2026-03-01' },
@@ -111,15 +79,15 @@ const mockPoliciesByCustomer: Record<string, { id: string; policyNumber: string;
 };
 
 // allow-mock: fallback for /customers/{id}/claims sub-query
-const mockClaimsByCustomer: Record<string, { id: string; claimNumber: string; policyNumber: string; status: string; amount: number; date: string }[]> = {
+const mockClaimsByCustomer: Record<string, ClaimHistoryItem[]> = {
   c1: [{ id: 'cl1', claimNumber: 'CLM-2026-00003', policyNumber: 'POL-2026-00012', status: 'PROCESSING', amount: 450000, date: '2026-03-10' }],
   c2: [], c3: [], c4: [], c5: [],
 };
 
-const kycV: Record<string, 'active' | 'pending' | 'rejected'> = { VERIFIED: 'active', PENDING: 'pending', FAILED: 'rejected', RESUBMIT: 'pending' };
-const stV:  Record<string, 'active' | 'draft'   | 'rejected'> = { ACTIVE: 'active', INACTIVE: 'draft', BLACKLISTED: 'rejected' };
+const kycV: Record<CustomerDto['kycStatus'], 'active' | 'pending' | 'rejected'> = { VERIFIED: 'active', PENDING: 'pending', FAILED: 'rejected', RESUBMIT: 'pending' };
+const stV:  Record<CustomerDto['customerStatus'], 'active' | 'draft' | 'rejected'> = { ACTIVE: 'active', INACTIVE: 'draft', BLACKLISTED: 'rejected' };
 
-function Row({ label, value }: { label: string; value?: string }) {
+function Row({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="flex items-start gap-4 py-2.5" style={{ boxShadow: '0 1px 0 var(--border)' }}>
       <p className="w-40 shrink-0 text-sm text-muted-foreground">{label}</p>
@@ -128,15 +96,20 @@ function Row({ label, value }: { label: string; value?: string }) {
   );
 }
 
+function directorSummary(directors?: CustomerDto['directors']): string | undefined {
+  if (!directors || directors.length === 0) return undefined;
+  return directors.map(d => `${d.firstName} ${d.lastName}`.trim()).join(' / ');
+}
+
 export default function CustomerDetailPage() {
   const navigate    = useNavigate();
   const { id }      = useParams<{ id: string }>();
   const [editOpen, setEditOpen] = useState(false);
 
-  const customerQuery = useQuery<MockCustomer>({
+  const customerQuery = useQuery<CustomerDto>({
     queryKey: ['customers', id],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: MockCustomer }>(`/api/v1/customers/${id}`);
+      const res = await apiClient.get<{ data: CustomerDto }>(`/api/v1/customers/${id}`);
       return res.data.data;
     },
     enabled: !!id,
@@ -193,13 +166,13 @@ export default function CustomerDetailPage() {
     <>
     <div className="p-6 space-y-5 max-w-4xl">
       <PageHeader
-        title={c.displayName}
+        title={customerLabel(c)}
         description={`${c.customerType === 'INDIVIDUAL' ? 'Individual' : 'Corporate'} · ${c.customerNumber}`}
         breadcrumb={<button onClick={() => navigate('/customers')} className="text-sm text-muted-foreground hover:text-foreground">← Customers</button>}
         actions={
           <div className="flex gap-2">
             <Badge variant={kycV[c.kycStatus]}>{c.kycStatus.toLowerCase()}</Badge>
-            <Badge variant={stV[c.status]}>{c.status.toLowerCase()}</Badge>
+            <Badge variant={stV[c.customerStatus]}>{c.customerStatus.toLowerCase()}</Badge>
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>Edit Customer</Button>
             <Button size="sm">New Policy</Button>
           </div>
@@ -229,19 +202,15 @@ export default function CustomerDetailPage() {
               <Row label="Phone"         value={c.phone} />
               <Row label="Address"       value={c.address} />
               {c.customerType === 'INDIVIDUAL' ? (
-                <>
-                  <Row label="Date of Birth" value={c.dateOfBirth} />
-                  <Row label="Occupation"    value={c.occupation} />
-                </>
+                <Row label="Date of Birth" value={c.dateOfBirth} />
               ) : (
                 <>
                   <Row label="RC Number"      value={c.rcNumber} />
                   <Row label="Industry"       value={c.industry} />
                   <Row label="Contact Person" value={c.contactPerson} />
-                  <Row label="Directors"      value={c.directorName} />
+                  <Row label="Directors"      value={directorSummary(c.directors)} />
                 </>
               )}
-              <Row label="Channel" value={c.brokerName ?? 'Direct'} />
               <Row label="Relationship Manager" value={c.relationshipManagerName ?? 'Unassigned'} />
               <Row label="Created" value={c.createdAt} />
             </CardContent>
@@ -268,8 +237,7 @@ export default function CustomerDetailPage() {
                 <>
                   <Row label="RC Number"    value={c.rcNumber} />
                   <Row label="Company Name" value={c.companyName} />
-                  <Row label="Directors"    value={c.directorName} />
-                  {c.idNumber && <Row label="Director ID" value={c.idNumber} />}
+                  <Row label="Directors"    value={directorSummary(c.directors)} />
                 </>
               )}
               <div className="mt-4">
@@ -354,22 +322,7 @@ export default function CustomerDetailPage() {
     <EditCustomerSheet
       open={editOpen}
       onOpenChange={setEditOpen}
-      customer={{
-        id:            c.id,
-        customerType:  c.customerType,
-        email:         c.email,
-        phone:         c.phone,
-        address:       c.address,
-        contactPerson: c.contactPerson,
-        brokerName:    c.brokerName,
-        brokerId:      undefined,
-        relationshipManagerId:   c.relationshipManagerId,
-        relationshipManagerName: c.relationshipManagerName,
-        idType:        c.idType,
-        idNumber:      c.idNumber,
-        idExpiryDate:  c.idExpiryDate,
-        directors:     c.directors,
-      }}
+      customer={c}
       onSuccess={() => setEditOpen(false)}
     />
     </>

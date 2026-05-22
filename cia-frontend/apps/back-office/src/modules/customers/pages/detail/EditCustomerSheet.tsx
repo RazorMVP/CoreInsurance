@@ -3,7 +3,7 @@ import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type BrokerDto, type RelationshipManagerDto } from '@cia/api-client';
+import { apiClient, type BrokerDto, type CustomerDirectorDto, type CustomerDto, type RelationshipManagerDto } from '@cia/api-client';
 import {
   Badge, Button, Form, FormControl, FormDescription, FormField, FormItem,
   FormLabel, FormMessage, FormRow, Input,
@@ -39,33 +39,12 @@ const ALLOWED_MIME   = ['image/jpeg', 'image/jpg', 'image/png'];
 const NO_BROKER_OPTION = { id: '__none__', name: 'Direct (no broker)' };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface DirectorSnapshot {
-  id: string;
-  firstName: string;
-  lastName: string;
-  dateOfBirth?: string;
-  idType?: string;
-  idNumber?: string;
-  idExpiryDate?: string;
-}
-
-export interface CustomerSnapshot {
-  id: string;
-  customerType: 'INDIVIDUAL' | 'CORPORATE';
-  email: string;
-  phone: string;
-  address: string;
-  contactPerson?: string;
-  brokerName?: string;
-  brokerId?: string;
-  relationshipManagerId?: string;
-  relationshipManagerName?: string;
-  idType?: string;
-  idNumber?: string;
-  idExpiryDate?: string;
-  directors?: DirectorSnapshot[];
-}
+//
+// Session 94 / Backlog A2 — the sheet accepts CustomerDto directly. The
+// previously-local CustomerSnapshot / DirectorSnapshot projections were
+// removed because they were narrower than the wire shape (made fields
+// required that the backend serialises as nullable). Director rendering uses
+// CustomerDirectorDto from the api-client.
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -120,7 +99,7 @@ type FormValues = z.infer<typeof schema>;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function buildDefaultDirector(snap?: DirectorSnapshot) {
+function buildDefaultDirector(snap?: CustomerDirectorDto) {
   return {
     id:              snap?.id,
     deleted:         false,
@@ -140,7 +119,7 @@ function buildDefaultDirector(snap?: DirectorSnapshot) {
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  customer: CustomerSnapshot;
+  customer: CustomerDto;
   onSuccess: () => void;
 }
 
@@ -225,7 +204,7 @@ export default function EditCustomerSheet({ open, onOpenChange, customer, onSucc
   const tooFewDirectors     = isCorporate && activeDirectorCount < 2;
 
   // Originals keyed by director id for KYC change detection
-  const dirOriginals: Record<string, DirectorSnapshot> = {};
+  const dirOriginals: Record<string, CustomerDirectorDto> = {};
   (customer.directors ?? []).forEach(d => { dirOriginals[d.id] = d; });
 
   function isDirectorKycChanged(dir: (typeof watchedDirs)[number], i: number): boolean {
@@ -648,13 +627,16 @@ export default function EditCustomerSheet({ open, onOpenChange, customer, onSucc
 
 // ─── Helpers (module-level) ───────────────────────────────────────────────────
 
-function buildDefaults(customer: CustomerSnapshot): FormValues {
+function buildDefaults(customer: CustomerDto): FormValues {
   return {
     email:           customer.email,
     phone:           customer.phone,
-    address:         customer.address,
+    address:         customer.address ?? '',
     contactPerson:   customer.contactPerson ?? '',
-    brokerId:        customer.brokerId ?? '__none__',
+    // CustomerResponse doesn't surface broker attribution on a customer (it
+    // attaches per-policy), so the picker always starts at the "Direct"
+    // sentinel. CustomerUpdateRequest still accepts brokerId on the write side.
+    brokerId:        '__none__',
     relationshipManagerId: customer.relationshipManagerId ?? '',
     idType:          customer.idType        ?? '',
     idNumber:        customer.idNumber      ?? '',

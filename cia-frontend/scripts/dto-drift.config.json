@@ -27,33 +27,12 @@
 
   "manualMap": {
     "ApprovalLevelDto": "ApprovalLevelResponse",
-    "QuoteRiskDto": "QuoteRiskResponse",
-    "CustomerDirectorDto": "CustomerDirectorResponse",
-    "IndividualCustomerDto": "",
-    "CorporateCustomerDto": ""
+    "QuoteRiskDto": "QuoteRiskResponse"
   },
 
   "ignoreDtos": [],
 
   "allowList": {
-    "CustomerDto": {
-      "frontendOnly": ["displayName", "status", "brokerId", "brokerName"],
-      "backendOnly": [
-        "customerNumber", "customerStatus", "kycProviderRef", "kycFailureReason",
-        "kycVerifiedAt", "firstName", "lastName", "otherNames", "dateOfBirth",
-        "gender", "maritalStatus", "idType", "idNumber", "idDocumentUrl",
-        "idExpiryDate", "companyName", "rcNumber", "cacCertificateUrl",
-        "cacIssuedDate", "incorporationDate", "industry", "contactPerson",
-        "alternatePhone", "address", "city", "state", "country", "directors",
-        "documents"
-      ],
-      "reason": "Session 92 baseline. CustomerDto is a UI display projection (uses displayName + status convenience fields) while CustomerResponse carries the full domain (KYC fields, address breakdown, directors/documents arrays). Real reconciliation slice owed: align names + decide which backend fields to surface."
-    },
-    "CustomerDirectorDto": {
-      "frontendOnly": ["fullName"],
-      "backendOnly": ["firstName", "lastName", "dateOfBirth", "idDocumentUrl", "idExpiryDate", "kycFailureReason"],
-      "reason": "Session 92 baseline. fullName is a UI convenience; backend exposes firstName/lastName separately. Follow-up: drop fullName + reconcile."
-    },
     "EndorsementDto": {
       "frontendOnly": ["sumInsured", "premium", "startDate", "endDate", "updatedAt"],
       "backendOnly": [

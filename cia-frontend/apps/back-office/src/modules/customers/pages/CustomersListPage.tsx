@@ -7,40 +7,39 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type CustomerDto } from '@cia/api-client';
+import { apiClient, customerLabel, type CustomerDto } from '@cia/api-client';
 import IndividualOnboardingSheet from './individual/IndividualOnboardingSheet';
 import CorporateOnboardingSheet from './corporate/CorporateOnboardingSheet';
 
-type CustomerRow = CustomerDto & { customerNumber?: string };
-
 const kycVariant: Record<CustomerDto['kycStatus'], 'active' | 'pending' | 'rejected'> = { VERIFIED: 'active', PENDING: 'pending', FAILED: 'rejected', RESUBMIT: 'pending' };
-const statusVariant: Record<CustomerDto['status'], 'active' | 'draft' | 'rejected'> = { ACTIVE: 'active', INACTIVE: 'draft', BLACKLISTED: 'rejected' };
+const statusVariant: Record<CustomerDto['customerStatus'], 'active' | 'draft' | 'rejected'> = { ACTIVE: 'active', INACTIVE: 'draft', BLACKLISTED: 'rejected' };
 
 export default function CustomersListPage() {
   const navigate = useNavigate();
   const [indivOpen, setIndivOpen] = useState(false);
   const [corpOpen,  setCorpOpen]  = useState(false);
 
-  const customersQuery = useQuery<CustomerRow[]>({
+  const customersQuery = useQuery<CustomerDto[]>({
     queryKey: ['customers'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: CustomerRow[] }>('/api/v1/customers');
+      const res = await apiClient.get<{ data: CustomerDto[] }>('/api/v1/customers');
       return res.data.data;
     },
   });
   const customers = customersQuery.data ?? [];
 
-  const columns: ColumnDef<CustomerDto & { customerNumber?: string }>[] = [
+  const columns: ColumnDef<CustomerDto>[] = [
     {
-      accessorKey: 'displayName',
+      id: 'name',
+      accessorFn: (row) => customerLabel(row),
       header: ({ column }) => <DataTableColumnHeader column={column} title="Customer" />,
       cell: ({ row }) => (
         <button
           className="text-left hover:underline"
           onClick={() => navigate(`/customers/${row.original.id}`)}
         >
-          <p className="font-medium text-foreground">{row.original.displayName}</p>
-          <p className="text-xs text-muted-foreground font-mono">{row.original.customerNumber ?? row.original.email}</p>
+          <p className="font-medium text-foreground">{customerLabel(row.original)}</p>
+          <p className="text-xs text-muted-foreground font-mono">{row.original.customerNumber}</p>
         </button>
       ),
     },
@@ -55,19 +54,9 @@ export default function CustomersListPage() {
       cell: ({ getValue }) => { const s = getValue() as CustomerDto['kycStatus']; return <Badge variant={kycVariant[s]}>{s.toLowerCase()}</Badge>; },
     },
     {
-      accessorKey: 'status',
+      accessorKey: 'customerStatus',
       header: 'Status',
-      cell: ({ getValue }) => { const s = getValue() as CustomerDto['status']; return <Badge variant={statusVariant[s]}>{s.toLowerCase()}</Badge>; },
-    },
-    {
-      accessorKey: 'brokerName',
-      header: 'Channel',
-      cell: ({ getValue }) => {
-        const name = getValue() as string | undefined;
-        return name
-          ? <span className="text-sm text-foreground">{name}</span>
-          : <Badge variant="outline" className="text-[10px] font-medium text-muted-foreground border-muted-foreground/30">Direct</Badge>;
-      },
+      cell: ({ getValue }) => { const s = getValue() as CustomerDto['customerStatus']; return <Badge variant={statusVariant[s]}>{s.toLowerCase()}</Badge>; },
     },
     {
       accessorKey: 'createdAt',
@@ -108,7 +97,7 @@ export default function CustomersListPage() {
       ) : customers.length === 0 ? (
         <EmptyState title="No customers yet" description="Onboard your first customer." action={<Button onClick={() => setIndivOpen(true)}>Onboard Customer</Button>} />
       ) : (
-        <DataTable columns={columns} data={customers} toolbar={{ searchColumn: 'displayName', searchPlaceholder: 'Search customers…' }} />
+        <DataTable columns={columns} data={customers} toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search customers…' }} />
       )}
       <IndividualOnboardingSheet open={indivOpen} onOpenChange={setIndivOpen} onSuccess={() => setIndivOpen(false)} />
       <CorporateOnboardingSheet  open={corpOpen}  onOpenChange={setCorpOpen}  onSuccess={() => setCorpOpen(false)}  />
