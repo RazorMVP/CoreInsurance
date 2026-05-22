@@ -8,9 +8,58 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-22. Sessions 79–90 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), the Session 84 PRD §2.1.17 drift remediation slice 84a (ProductDto realignment + CommissionSourceType enum + V50), the Session 85 slice 84b (Product Commission Setup UI + per-policy commission snapshot V51), the Session 86 slice 84c (broker commission JE chain + credit-note generation V52), the Session 87 slice 84e (surface commission snapshot on PolicyResponse + Commission card on policy detail page), the Session 88 slice 84d (per-policy agent attribution + AGENT commission posting V53/V54), the Session 89 Channel picker on CreatePolicySheet, and the Session 90 directSchema reconciliation that closes the long-standing direct-create 400.
+No open items as of 2026-05-22. Sessions 79–91 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), the Session 84 PRD §2.1.17 drift remediation slice 84a (ProductDto realignment + CommissionSourceType enum + V50), the Session 85 slice 84b (Product Commission Setup UI + per-policy commission snapshot V51), the Session 86 slice 84c (broker commission JE chain + credit-note generation V52), the Session 87 slice 84e (surface commission snapshot on PolicyResponse + Commission card on policy detail page), the Session 88 slice 84d (per-policy agent attribution + AGENT commission posting V53/V54), the Session 89 Channel picker on CreatePolicySheet, the Session 90 directSchema reconciliation, and the Session 91 FromQuoteForm payload cleanup + QuoteDto brokerName silent-drift fix.
 
-The PRD §2.1.17 commission arc is fully shipped, and the direct-policy create path now actually works end-to-end through the UI for the first time. FromQuote-side cleanup, Quote agent attribution, and RM commission via 2520 remain.
+Both policy creation paths (Direct + FromQuote) now actually work end-to-end and their UIs only ask the questions the backend actually answers. Remaining queued: Quote-side agent attribution, RM commission via 2520, Policy list page Intermediary column.
+
+---
+
+## 2026-05-22 — Session 91 (`main`): FromQuoteForm payload cleanup + QuoteDto brokerName silent-drift fix
+
+`POST /api/v1/policies/bind-from-quote/{quoteId}` is a **path-param-only** endpoint — the backend copies businessType, customer, broker, dates, risks, and premium directly off the source quote. The frontend was capturing `{ businessType, paymentTerms, notes }` in a body that Jackson silently dropped. The UI was lying about what was being captured. Slice 91 strips the theatre.
+
+Three small changes wrapped together:
+
+1. **Schema shrunk to `{ quoteId }`** — only the input the operation actually needs.
+2. **POST body removed** — `apiClient.post('/api/v1/policies/bind-from-quote/{id}')` with no second argument.
+3. **Select label enriched** — the Approved Quote picker now surfaces the quote's businessType + brokerName inline, so users see what they're about to bind into a policy at picker time, in place of the editable-but-ignored fields that used to live below.
+
+### `QuoteDto.brokerName` — silent-drift fix (third instance of the pattern)
+
+Adding the broker to the select label surfaced that `QuoteDto` (in `cia-frontend/packages/api-client/src/modules/quotation.ts`) was missing `brokerName` entirely — Jackson serialised it on the response, the frontend type didn't declare it, and no consumer noticed because no UI surfaced broker on a quote. Same failure mode as:
+
+- Session 78 `BrokerDto` — was carrying `status` + `contactPerson` that the backend never accepted.
+- Slice 84a `ProductDto` — was carrying `status` + `commissionRate` that didn't exist on the backend.
+
+Single-line additive fix: `brokerName?: string | null`. No behaviour change for any other consumer of `QuoteDto` because the field is optional. Added the same comment block referencing the prior two incidents — if this happens a fourth time, the right move is the automated drift-check tooling flagged as a follow-up in Session 84a's insight notes.
+
+### Other cleanup that fell out
+
+- **`PAYMENT_TERMS` const removed** — Session 90 dropped the only DirectForm reference; Session 91 dropped the FromQuoteForm reference; the const had no callers.
+
+### What is NOT in this slice
+
+- **Quote-side agent attribution** — Quote entity still doesn't carry `agentId`. Bind-from-quote always produces broker-attributed policies. Same deferral note as Slice 84d.
+- **Quote-side `notes` capture** — if "additional notes at issuance" is a real product requirement, it needs a `policies.notes` mechanism that doesn't go through bind-from-quote (because bind ignores the body). Out of scope.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` filtered to `CreatePolicySheet.tsx` + `api-client/quotation.ts` — zero errors.
+- Pre-existing unrelated tsc errors in `AssignSurveyorDialog.tsx` + `CoinsuranceEditorDialog.tsx` (carried since Slice 84a) unchanged.
+- No backend code changed — no failsafe needed.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — UI | `cia-frontend/apps/back-office/src/modules/policy/pages/create/CreatePolicySheet.tsx` |
+| Frontend — types | `cia-frontend/packages/api-client/src/modules/quotation.ts` (QuoteDto +brokerName) |
+| Docs | `cia-log.md` (this entry) |
+
+### Known follow-ups (deliberately deferred)
+
+- **Automated DTO drift check** — three silent-drift instances (Sessions 78, 84a, 91) is the rule-of-three. A script that parses the OpenAPI spec and asserts every frontend DTO field has a matching backend property would catch the next one before merge.
+- **Quote-side agent attribution + RM commission + Policy list Intermediary column** — same queue as the prior slices.
 
 ---
 

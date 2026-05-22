@@ -27,11 +27,14 @@ function customerLabel(c: CustomerSummary): string {
 type ProductWithRate = ProductDto & { productRate?: number };
 
 // ── Convert from quote ─────────────────────────────────────────────────────
+// The bind-from-quote endpoint takes a path parameter only — no body. Every
+// field on the bound policy (businessType, broker, dates, risks, premium)
+// comes from the source quote. Earlier versions of this form captured a
+// businessType / paymentTerms / notes triple in a body that the backend
+// silently dropped, which was a UX lie. Slice 91 trims the schema to the
+// single input the operation actually needs.
 const fromQuoteSchema = z.object({
-  quoteId:      z.string().min(1, 'Select an approved quote'),
-  businessType: z.enum(['DIRECT', 'DIRECT_WITH_COINSURANCE', 'INWARD_COINSURANCE']),
-  paymentTerms: z.string().min(1, 'Required'),
-  notes:        z.string().optional(),
+  quoteId: z.string().min(1, 'Select an approved quote'),
 });
 type FromQuoteValues = z.infer<typeof fromQuoteSchema>;
 
@@ -72,8 +75,6 @@ const BUSINESS_TYPES = [
   { value: 'DIRECT_WITH_COINSURANCE',  label: 'Direct with Coinsurance' },
   { value: 'INWARD_COINSURANCE',       label: 'Inward Coinsurance' },
 ];
-const PAYMENT_TERMS = ['Immediate', '30 days', '60 days', 'Quarterly', 'Annual'];
-
 interface Props { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void; }
 
 function FromQuoteForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
@@ -87,22 +88,33 @@ function FromQuoteForm({ onSuccess, onCancel }: { onSuccess: () => void; onCance
       return res.data.data;
     },
   });
-  const approvedQuotes = (quotesQuery.data ?? []).map(q => ({
-    id:    q.id,
-    label: `${q.quoteNumber} — ${q.customerName} · ${q.productName} · ₦${(q.netPremium ?? 0).toLocaleString()}`,
-  }));
+  const approvedQuotes = (quotesQuery.data ?? []).map(q => {
+    // Surface the quote's businessType + brokerName (when set) in the option
+    // label so the bind confirmation step is visible at picker time. Earlier
+    // versions duplicated businessType as an editable form field; the bind
+    // endpoint takes nothing but the quote ID, so showing it as inline
+    // confirmation here matches what's actually about to happen.
+    const businessLabel = q.businessType.replace(/_/g, ' ').toLowerCase();
+    const extras = [`₦${(q.netPremium ?? 0).toLocaleString()}`, businessLabel];
+    if (q.brokerName) extras.push(`Broker: ${q.brokerName}`);
+    return {
+      id:    q.id,
+      label: `${q.quoteNumber} — ${q.customerName} · ${q.productName} · ${extras.join(' · ')}`,
+    };
+  });
 
   const form = useForm<FromQuoteValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(fromQuoteSchema) as any,
-    defaultValues: { quoteId: '', businessType: 'DIRECT', paymentTerms: '', notes: '' },
+    defaultValues: { quoteId: '' },
   });
 
   const bind = useMutation({
     mutationFn: async (values: FromQuoteValues) => {
+      // POST takes no body — the bind copies everything off the quote
+      // (businessType, customer, broker, dates, risks, premium).
       const res = await apiClient.post<{ data: { id: string } }>(
         `/api/v1/policies/bind-from-quote/${values.quoteId}`,
-        { businessType: values.businessType, paymentTerms: values.paymentTerms, notes: values.notes },
       );
       return res.data.data;
     },
@@ -133,32 +145,10 @@ function FromQuoteForm({ onSuccess, onCancel }: { onSuccess: () => void; onCance
             </FormItem>
           )}
         />
-        <FormRow>
-          <FormField control={form.control} name="businessType"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Business Type</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                  <SelectContent>{BUSINESS_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField control={form.control} name="paymentTerms"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Payment Terms</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl><SelectTrigger><SelectValue placeholder="Select terms" /></SelectTrigger></FormControl>
-                  <SelectContent>{PAYMENT_TERMS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </FormRow>
+        <p className="text-xs text-muted-foreground">
+          Business type, broker attribution, period, risks, and premium are copied from the selected quote.
+          Use the policy detail page to refine the schedule after the policy is issued.
+        </p>
         <SheetFooter className="pt-2">
           <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
           <Button type="submit" disabled={bind.isPending}>

@@ -15,6 +15,11 @@ export interface QuoteDto {
   classOfBusinessId: string;
   classOfBusinessName: string;
   businessType:     BusinessType;
+  // Backend `Quote.brokerName` (cia-quotation entity). Frontend was previously
+  // missing this field — Jackson serialised it but `QuoteDto` didn't declare
+  // it, same silent-drift pattern as Session 78 BrokerDto and Slice 84a
+  // ProductDto. Added Session 91 to support the bind-from-quote select label.
+  brokerName?:      string | null;
   status:           QuoteStatus;
   sumInsured:       number;
   premium:          number;
