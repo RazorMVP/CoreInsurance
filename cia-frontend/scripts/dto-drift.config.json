@@ -47,34 +47,12 @@
     "CompanySettingsDto": {
       "frontendOnly": ["companyName", "logo", "defaultCurrencyCode"],
       "backendOnly": ["name", "rcNumber", "naicomLicenseNumber", "city", "state", "logoPath"],
-      "reason": "Session 92 baseline. Field-name divergence (companyName vs name, logo vs logoPath) + missing RC/NAICOM/address fields on the frontend. Follow-up: realign + add the missing licence/address fields to the settings UI."
-    },
-    "AccessGroupDto": {
-      "frontendOnly": ["userCount"],
-      "backendOnly": ["createdAt", "updatedAt"],
-      "reason": "Session 92 baseline. userCount is computed UI-side (group's user list length). Backend audit timestamps could be added; not currently shown. Small follow-up."
+      "reason": "Session 92 baseline. Field-name divergence (companyName vs name, logo vs logoPath) + missing RC/NAICOM/address fields on the frontend. Follow-up: realign + add the missing licence/address fields to the settings UI (backlog A1c)."
     },
     "ApprovalGroupDto": {
       "frontendOnly": ["module"],
       "backendOnly": ["entityType", "createdAt", "updatedAt", "levelOrder", "approverUserId", "approverName", "maxAmount"],
-      "reason": "Session 92 baseline. module is a UI alias for entityType. The level-level fields (levelOrder/approverUserId/approverName/maxAmount) shouldn't be at the top level — they belong on ApprovalLevelDto. Follow-up: ApprovalGroup reshape + alias removal."
-    },
-    "ProductDto": {
-      "backendOnly": ["sections"],
-      "reason": "Session 92 baseline. Multi-risk product sections aren't surfaced in the back-office Products page yet (used by RisksEditorDialog through a separate endpoint). Surface when there's a section-editor UI."
-    },
-    "ClassOfBusinessDto": {
-      "frontendOnly": ["products"],
-      "backendOnly": ["description", "createdAt", "updatedAt"],
-      "reason": "Session 92 baseline. `products` is a frontend-computed count (joined client-side). Backend's description + audit timestamps not shown today. Small follow-up."
-    },
-    "BankDto": {
-      "backendOnly": ["createdAt", "updatedAt"],
-      "reason": "Session 92 baseline. Audit timestamps not shown in the banks list."
-    },
-    "CurrencyDto": {
-      "backendOnly": ["isDefault", "createdAt", "updatedAt"],
-      "reason": "Session 92 baseline. isDefault + audit timestamps not shown in the currencies list."
+      "reason": "Session 92 baseline. module is a UI alias for entityType. The level-level fields (levelOrder/approverUserId/approverName/maxAmount) shouldn't be at the top level — they belong on ApprovalLevelDto. Follow-up: ApprovalGroup reshape + alias removal (backlog A1b)."
     }
   }
 }

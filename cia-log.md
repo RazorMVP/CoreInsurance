@@ -12,7 +12,8 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 | ID | P | Item | Notes |
 |---|---|---|---|
-| A1 | P2 | Setup-Dto smalls drift cleanup — batch | BankDto + CurrencyDto + AccessGroupDto + ApprovalGroupDto + ClassOfBusinessDto + ProductDto.sections + CompanySettingsDto. Mostly missing createdAt/updatedAt + small name aliases. Decrement 7 dto-drift allow-list entries in one slice. |
+| A1b | P2 | ApprovalGroupDto + ApprovalLevelDto reshape | Backend models ONE approver per level (`approverUserId` + `approverName` + `maxAmount` + `levelOrder`); frontend models multiple per level with arrays (`approverIds`/`approverNames`) + a `minAmount` that doesn't exist on backend. Also `module` alias for `entityType`. Affects ApprovalGroupSheet form schema + ApprovalGroupsPage rendering + AccessGroupSheet display. UX-level change, not a simple rename. |
+| A1c | P2 | CompanySettingsDto reshape | Field renames (`companyName` → `name`, `logo` → `logoPath`) + `defaultCurrencyCode` removal (no backend field) + add `rcNumber`/`naicomLicenseNumber`/`city`/`state`. Affects CompanySettingsPage form schema + defaults + render. |
 | A3b | P2 | QuoteDetailPage MockQuote → QuoteDto alignment | Session 95 rewrote `QuoteDto` to mirror `QuoteResponse`, but `QuoteDetailPage`'s local `MockQuote` still carries the old field names (`startDate`/`endDate`/`version`/`issueDate`) and types its API query as `useQuery<MockQuote>`. Page renders + PDF preview + `computeQuoteSummary` operate on the local shape. Single focused slice: replace `MockQuote` with `QuoteDto`, rename references, drop `version` UI (backend doesn't ship it). |
 | A4 | P2 | EndorsementDto redesign | Single `sumInsured`/`premium` fields vs `oldXxx`/`newXxx`/`premiumAdjustment` diff shape on EndorsementResponse (Java record). Lower traffic than Customer/Quote but conceptually wrong. |
 | B1 | P2 | Quote-side agent attribution | Quote entity doesn't carry `agentId`. Extends Module 2 form + bulk-upload CSV + quote-document templates. Bind-from-quote currently always produces broker-attributed policies even when an agent was the intermediary. |
@@ -30,6 +31,61 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F1 | P2 | Placeholder-onClick row actions across back-office | 6 known: CustomersListPage Update KYC + Blacklist; ProductsPage Activate/Deactivate; QuotationListPage Submit + Convert + Edit + Duplicate. Each is small but adds up. Batch as one slice. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-22 — Session 97 (`main`): Backlog A1 — Setup-Dto smalls drift cleanup batch (5 of 7 — 2 reshapes spun out)
+
+Fourth slice under the Session 93 discipline rule. Goal: clean up the genuinely small drift entries from the dto-drift baseline — additive `createdAt`/`updatedAt` adds, removals of unused UI projections, and the missing `ProductDto.sections` field.
+
+### Re-scoping at slice start
+
+The canonical backlog row described A1 as "BankDto + CurrencyDto + AccessGroupDto + ApprovalGroupDto + ClassOfBusinessDto + ProductDto.sections + CompanySettingsDto. Mostly missing createdAt/updatedAt + small name aliases." On inspection at slice start, 2 of those 7 were not actually "smalls":
+
+- **ApprovalGroupDto + ApprovalLevelDto** is a fundamental data-model reshape. Backend models ONE approver per level (`approverUserId` + `approverName` + `maxAmount` + `levelOrder`); frontend models multiple approvers per level with arrays (`approverIds`/`approverNames`) and a `minAmount` that doesn't exist on backend at all. Affects ApprovalGroupSheet form schema + ApprovalGroupsPage rendering + AccessGroupSheet display.
+- **CompanySettingsDto** has field renames (`companyName` → `name`, `logo` → `logoPath`), a fully missing field on backend (`defaultCurrencyCode`), and 4 backend fields the frontend doesn't surface (`rcNumber`, `naicomLicenseNumber`, `city`, `state`). The form schema + defaults + render block on CompanySettingsPage all consume the old shape.
+
+Both deserve dedicated slices, not a "smalls" batch. Carved out as **A1b** and **A1c** in the canonical backlog table. The 5 that remain are genuine smalls.
+
+### What landed
+
+**`api-client/setup.ts`** — 5 drift fixes:
+
+1. **`BankDto`** — added `createdAt` + `updatedAt`. Pure addition.
+2. **`CurrencyDto`** — added `isDefault` + `createdAt` + `updatedAt`. Pure addition.
+3. **`AccessGroupDto`** — added `createdAt` + `updatedAt`. Removed `userCount` (frontend-only count that backend never shipped; zero consumers referenced it).
+4. **`ClassOfBusinessDto`** — added `description` + `createdAt` + `updatedAt`. Removed `products` (frontend-only count; zero consumers referenced it).
+5. **`ProductDto`** — added `sections?: ProductSectionDto[] | null` + new `ProductSectionDto` type (mirroring `ProductSectionResponse`).
+
+All 5 entries removed from `dto-drift.config.json` allow-list. Reasoning is in each Dto's new docblock comment so future readers see the alignment rationale in `git blame`.
+
+### Why no consumer updates were needed
+
+The grep for consumer references to the removed fields (`.userCount`, `.products` on the dto types) returned zero hits. Both were declared on the type but never used in any UI component — a stronger case of silent drift than the cases where the field had at least one consumer rendering `undefined`. Removing them was purely additive in effect because the type system had been declaring them all along but no code reached for the value.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` filtered to `setup.ts` + setup-pages — zero errors. The removal of `userCount` + `products` didn't surface any consumer.
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (28 interfaces, 2 skipped)`. Up from 27 because `ProductSectionDto` is a new type that matches its backend `ProductSectionResponse`.
+- Allow-list shrank from 8 entries → 3 (EndorsementDto, CompanySettingsDto, ApprovalGroupDto).
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — types | `cia-frontend/packages/api-client/src/modules/setup.ts` (5 Dtos + 1 new type) |
+| Tooling — config | `cia-frontend/scripts/dto-drift.config.json` (5 allow-list entries removed; CompanySettings reason updated to point at A1c) |
+| Docs | `cia-log.md` (this entry + backlog row A1 removed, A1b + A1c added) |
+
+### Backlog reconciliation
+
+- **Removed**: A1 (Setup-Dto smalls drift cleanup).
+- **Added**: A1b (ApprovalGroup reshape, P2), A1c (CompanySettings reshape, P2).
+- **Net**: 17 → 18 rows (one removed, two added). The split is honest accounting — A1 was billed as "7 smalls" but actually contained 5 smalls + 2 disguised reshapes. The discipline rule's value is making this split visible at the row level.
+
+### Known follow-ups (deliberately deferred)
+
+None beyond what's in the canonical backlog. A1b and A1c are visible there with explicit notes about why they need dedicated slices.
 
 ---
 

@@ -24,12 +24,18 @@ export interface UserDto {
   createdAt:       string;
 }
 
+// Mirrors com.nubeero.cia.setup.access.dto.AccessGroupResponse 1:1.
+// `userCount` was previously declared on the frontend but the backend never
+// shipped it — no UI consumer referenced it either, so it's just removed
+// rather than promoted to a computed-from-elsewhere field. Audit timestamps
+// added in Session 97 / Backlog A1.
 export interface AccessGroupDto {
-  id:          string;
-  name:        string;
-  description?: string;
-  permissions: string[];
-  userCount:   number;
+  id:           string;
+  name:         string;
+  description?: string | null;
+  permissions:  string[];
+  createdAt:    string;
+  updatedAt:    string;
 }
 
 export interface ApprovalGroupDto {
@@ -47,12 +53,24 @@ export interface ApprovalLevelDto {
   approverNames: string[];
 }
 
+// Mirrors com.nubeero.cia.setup.product.dto.ProductSectionResponse 1:1.
+// Used for multi-risk products that have multiple coverage sections each
+// with their own rate. Surfaced on ProductDto.sections in Session 97 /
+// Backlog A1.
+export interface ProductSectionDto {
+  id:      string;
+  name:    string;
+  code:    string;
+  rate:    number;
+  orderNo: number;
+}
+
 // Mirrors com.nubeero.cia.setup.product.dto.ProductResponse 1:1.
 // Earlier carried `status: ACTIVE|INACTIVE` (backend exposes `active: boolean`)
 // and a flat `commissionRate` (commissions live in `commission_setups` keyed by
 // CommissionSourceType — never on the Product row). Jackson silently dropped
 // both fields on the way in; renderers showed `undefined%` once products
-// existed. Aligned in Session 84.
+// existed. Aligned in Session 84. `sections` added in Session 97 / Backlog A1.
 export interface ProductDto {
   id:                  string;
   name:                string;
@@ -63,15 +81,22 @@ export interface ProductDto {
   rate:                number;
   minPremium:          number;
   active:              boolean;
+  sections?:           ProductSectionDto[] | null;
   createdAt:           string;
   updatedAt?:          string | null;
 }
 
+// Mirrors com.nubeero.cia.setup.product.dto.ClassOfBusinessResponse 1:1.
+// `products` was previously a UI-side product count that the backend never
+// shipped; removed because no consumer referenced it. Description + audit
+// timestamps added in Session 97 / Backlog A1.
 export interface ClassOfBusinessDto {
-  id:       string;
-  name:     string;
-  code:     string;
-  products: number;
+  id:           string;
+  name:         string;
+  code:         string;
+  description?: string | null;
+  createdAt:    string;
+  updatedAt:    string;
 }
 
 // Mirrors com.nubeero.cia.setup.product.CommissionSourceType (Session 84 / V50).
@@ -196,17 +221,26 @@ export interface AgentDto {
   updatedAt?:     string | null;
 }
 
+// Mirrors com.nubeero.cia.setup.finance.dto.BankResponse 1:1.
+// Audit timestamps added in Session 97 / Backlog A1.
 export interface BankDto {
-  id:   string;
-  name: string;
-  code: string;
+  id:        string;
+  name:      string;
+  code:      string;
+  createdAt: string;
+  updatedAt: string;
 }
 
+// Mirrors com.nubeero.cia.setup.finance.dto.CurrencyResponse 1:1.
+// isDefault + audit timestamps added in Session 97 / Backlog A1.
 export interface CurrencyDto {
-  id:     string;
-  name:   string;
-  code:   string;
-  symbol: string;
+  id:        string;
+  name:      string;
+  code:      string;
+  symbol:    string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Used by claims/inspection + policy/survey for the surveyor picker.
