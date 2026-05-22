@@ -1,16 +1,24 @@
 // ── Setup & Administration — DTOs ─────────────────────────────────────────
 
+// Mirrors com.nubeero.cia.setup.company.dto.CompanySettingsResponse 1:1.
+// Earlier shape carried `companyName` (vs backend `name`), `logo` (vs backend
+// `logoPath`), and `defaultCurrencyCode` (no backend field at all). The
+// rcNumber / naicomLicenseNumber / city / state fields the backend ships
+// were missing entirely. Realigned in Session 98 / Backlog A1c.
 export interface CompanySettingsDto {
-  id:               string;
-  companyName:      string;
-  logo?:            string;
-  address:          string;
-  email:            string;
-  phone:            string;
-  website?:         string;
-  defaultCurrencyCode: string;
-  createdAt:        string;
-  updatedAt:        string;
+  id:                  string;
+  name:                string;
+  rcNumber?:           string | null;
+  naicomLicenseNumber?: string | null;
+  address?:            string | null;
+  city?:               string | null;
+  state?:              string | null;
+  email?:              string | null;
+  phone?:              string | null;
+  logoPath?:           string | null;
+  website?:            string | null;
+  createdAt:           string;
+  updatedAt:           string;
 }
 
 export interface UserDto {

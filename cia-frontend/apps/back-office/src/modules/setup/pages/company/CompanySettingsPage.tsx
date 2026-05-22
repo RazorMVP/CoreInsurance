@@ -11,42 +11,47 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { applyApiErrors } from '@/lib/form-errors';
 
+// Mirrors com.nubeero.cia.setup.company.dto.CompanySettingsRequest 1:1.
+// Aligned with backend in Session 98 / Backlog A1c — previously sent
+// `companyName` (backend silently dropped it; backend takes `name`) and a
+// `defaultCurrencyCode` field that doesn't exist on the request at all.
+// The "Password Policy" card was also captured but never sent — logged as
+// backlog F4 for when there's a real password-policy endpoint to wire.
 const schema = z.object({
-  companyName:         z.string().min(2, 'Required'),
-  address:             z.string().min(5, 'Required'),
-  email:               z.string().email('Invalid email'),
-  phone:               z.string().min(7, 'Required'),
+  name:                z.string().min(2, 'Required'),
+  rcNumber:            z.string().optional().or(z.literal('')),
+  naicomLicenseNumber: z.string().optional().or(z.literal('')),
+  address:             z.string().optional().or(z.literal('')),
+  city:                z.string().optional().or(z.literal('')),
+  state:               z.string().optional().or(z.literal('')),
+  email:               z.string().email('Invalid email').optional().or(z.literal('')),
+  phone:               z.string().optional().or(z.literal('')),
+  logoPath:            z.string().optional().or(z.literal('')),
   website:             z.string().url('Invalid URL').optional().or(z.literal('')),
-  defaultCurrencyCode: z.string().length(3, 'Must be a 3-letter currency code'),
-  minPasswordLength:   z.coerce.number().min(8).max(32),
-  passwordExpireDays:  z.coerce.number().min(0).max(365),
 });
 
 type FormValues = z.infer<typeof schema>;
 
-interface CompanySettingsResponse extends CompanySettingsDto {
-  minPasswordLength?:  number;
-  passwordExpireDays?: number;
-}
-
 const FALLBACK_DEFAULTS: FormValues = {
-  companyName:         '',
+  name:                '',
+  rcNumber:            '',
+  naicomLicenseNumber: '',
   address:             '',
+  city:                '',
+  state:               '',
   email:               '',
   phone:               '',
+  logoPath:            '',
   website:             '',
-  defaultCurrencyCode: 'NGN',
-  minPasswordLength:   8,
-  passwordExpireDays:  90,
 };
 
 export default function CompanySettingsPage() {
   const queryClient = useQueryClient();
 
-  const settingsQuery = useQuery<CompanySettingsResponse>({
+  const settingsQuery = useQuery<CompanySettingsDto>({
     queryKey: ['setup', 'company-settings'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: CompanySettingsResponse }>(
+      const res = await apiClient.get<{ data: CompanySettingsDto }>(
         '/api/v1/setup/company-settings',
       );
       return res.data.data;
@@ -64,20 +69,22 @@ export default function CompanySettingsPage() {
     const s = settingsQuery.data;
     if (!s) return;
     form.reset({
-      companyName:         s.companyName,
-      address:             s.address,
-      email:               s.email,
-      phone:               s.phone,
+      name:                s.name,
+      rcNumber:            s.rcNumber ?? '',
+      naicomLicenseNumber: s.naicomLicenseNumber ?? '',
+      address:             s.address ?? '',
+      city:                s.city ?? '',
+      state:               s.state ?? '',
+      email:               s.email ?? '',
+      phone:               s.phone ?? '',
+      logoPath:            s.logoPath ?? '',
       website:             s.website ?? '',
-      defaultCurrencyCode: s.defaultCurrencyCode,
-      minPasswordLength:   s.minPasswordLength ?? 8,
-      passwordExpireDays:  s.passwordExpireDays ?? 90,
     });
   }, [settingsQuery.data, form]);
 
   const save = useMutation({
     mutationFn: async (values: FormValues) => {
-      const res = await apiClient.put<{ data: CompanySettingsResponse }>(
+      const res = await apiClient.put<{ data: CompanySettingsDto }>(
         '/api/v1/setup/company-settings', values,
       );
       return res.data.data;
@@ -105,7 +112,7 @@ export default function CompanySettingsPage() {
     <div className="p-6 space-y-6 max-w-3xl">
       <PageHeader
         title="Company Settings"
-        description="Manage your insurance company profile and system defaults."
+        description="Manage your insurance company profile."
       />
 
       <Form {...form}>
@@ -120,7 +127,7 @@ export default function CompanySettingsPage() {
               <FormSection>
                 <FormField
                   control={form.control}
-                  name="companyName"
+                  name="name"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Company Name</FormLabel>
@@ -129,6 +136,30 @@ export default function CompanySettingsPage() {
                     </FormItem>
                   )}
                 />
+                <FormRow>
+                  <FormField
+                    control={form.control}
+                    name="rcNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>RC Number</FormLabel>
+                        <FormControl><Input placeholder="e.g. RC123456" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="naicomLicenseNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>NAICOM Licence</FormLabel>
+                        <FormControl><Input placeholder="e.g. RIC/AB/00000/2026" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </FormRow>
                 <FormRow>
                   <FormField
                     control={form.control}
@@ -159,11 +190,35 @@ export default function CompanySettingsPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Address</FormLabel>
-                      <FormControl><Textarea rows={3} placeholder="Full postal address" {...field} /></FormControl>
+                      <FormControl><Textarea rows={2} placeholder="Street address" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+                <FormRow>
+                  <FormField
+                    control={form.control}
+                    name="city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>City</FormLabel>
+                        <FormControl><Input placeholder="e.g. Lagos" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="state"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>State</FormLabel>
+                        <FormControl><Input placeholder="e.g. Lagos" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </FormRow>
                 <FormRow>
                   <FormField
                     control={form.control}
@@ -178,51 +233,17 @@ export default function CompanySettingsPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="defaultCurrencyCode"
+                    name="logoPath"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Default Currency</FormLabel>
-                        <FormControl><Input placeholder="NGN" maxLength={3} className="uppercase" {...field} /></FormControl>
+                        <FormLabel>Logo Path (optional)</FormLabel>
+                        <FormControl><Input placeholder="/uploads/logo.png" {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </FormRow>
               </FormSection>
-            </CardContent>
-          </Card>
-
-          {/* Password policy */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Password Policy</CardTitle>
-              <CardDescription>Minimum requirements enforced for all user passwords.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <FormRow>
-                <FormField
-                  control={form.control}
-                  name="minPasswordLength"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Minimum Length</FormLabel>
-                      <FormControl><Input type="number" min={8} max={32} {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="passwordExpireDays"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Expiry (days, 0 = never)</FormLabel>
-                      <FormControl><Input type="number" min={0} max={365} {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </FormRow>
             </CardContent>
           </Card>
 

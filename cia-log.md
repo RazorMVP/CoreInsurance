@@ -13,7 +13,7 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | ID | P | Item | Notes |
 |---|---|---|---|
 | A1b | P2 | ApprovalGroupDto + ApprovalLevelDto reshape | Backend models ONE approver per level (`approverUserId` + `approverName` + `maxAmount` + `levelOrder`); frontend models multiple per level with arrays (`approverIds`/`approverNames`) + a `minAmount` that doesn't exist on backend. Also `module` alias for `entityType`. Affects ApprovalGroupSheet form schema + ApprovalGroupsPage rendering + AccessGroupSheet display. UX-level change, not a simple rename. |
-| A1c | P2 | CompanySettingsDto reshape | Field renames (`companyName` → `name`, `logo` → `logoPath`) + `defaultCurrencyCode` removal (no backend field) + add `rcNumber`/`naicomLicenseNumber`/`city`/`state`. Affects CompanySettingsPage form schema + defaults + render. |
+| F4 | P3 | Password Policy UI needs real backend endpoint | CompanySettingsPage's Password Policy card was sending `minPasswordLength` + `passwordExpireDays` in the company-settings PUT body — backend `CompanySettingsRequest` doesn't accept either field. Session 98 removed the card from the form (was pure theatre). When a real password-policy endpoint exists, surface those settings under a separate `/setup/password-policy` page or a dedicated card with a real PUT target. |
 | A3b | P2 | QuoteDetailPage MockQuote → QuoteDto alignment | Session 95 rewrote `QuoteDto` to mirror `QuoteResponse`, but `QuoteDetailPage`'s local `MockQuote` still carries the old field names (`startDate`/`endDate`/`version`/`issueDate`) and types its API query as `useQuery<MockQuote>`. Page renders + PDF preview + `computeQuoteSummary` operate on the local shape. Single focused slice: replace `MockQuote` with `QuoteDto`, rename references, drop `version` UI (backend doesn't ship it). |
 | A4 | P2 | EndorsementDto redesign | Single `sumInsured`/`premium` fields vs `oldXxx`/`newXxx`/`premiumAdjustment` diff shape on EndorsementResponse (Java record). Lower traffic than Customer/Quote but conceptually wrong. |
 | B1 | P2 | Quote-side agent attribution | Quote entity doesn't carry `agentId`. Extends Module 2 form + bulk-upload CSV + quote-document templates. Bind-from-quote currently always produces broker-attributed policies even when an agent was the intermediary. |
@@ -31,6 +31,63 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F1 | P2 | Placeholder-onClick row actions across back-office | 6 known: CustomersListPage Update KYC + Blacklist; ProductsPage Activate/Deactivate; QuotationListPage Submit + Convert + Edit + Duplicate. Each is small but adds up. Batch as one slice. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-22 — Session 98 (`main`): Backlog A1c — CompanySettingsDto reshape
+
+Fifth slice under the Session 93 discipline rule. Goal: align `CompanySettingsDto` with the backend `CompanySettingsResponse` shape + update `CompanySettingsPage` to use the right field names + drop the theatre fields the backend never accepted.
+
+### What the drift hid
+
+`CompanySettingsDto` had three categories of drift:
+
+1. **Field renames** — frontend `companyName` (backend `name`), frontend `logo` (backend `logoPath`). Jackson silently dropped the wrong names; the form was sending `companyName` to a backend that needed `name` and the company name was never persisted.
+2. **Phantom field** — `defaultCurrencyCode` is on neither `CompanySettingsResponse` nor `CompanySettingsRequest`. Sending it in the PUT was pure theatre; receiving it was a Jackson silent-drop of `undefined`. The field's "default" value `NGN` was always rendered because the value never came from anywhere.
+3. **Missing fields** — `rcNumber`, `naicomLicenseNumber`, `city`, `state`. Backend ships them; frontend didn't declare them. The NAICOM licence in particular is regulatory metadata that should appear on every policy document — losing it on the settings page is a real gap.
+
+A side-discovery surfaced during the rewrite: the "Password Policy" card on `CompanySettingsPage` captured `minPasswordLength` + `passwordExpireDays` and sent them in the company-settings PUT body. Backend `CompanySettingsRequest` doesn't accept either field. Pure theatre — the card has been there since the original Build 2 (Slice 6 in the Module 1 series) but never actually persisted anything.
+
+### What landed
+
+**`api-client/setup.ts`** — `CompanySettingsDto` rewrite:
+
+- Rename: `companyName` → `name`; `logo` → `logoPath`.
+- Removed: `defaultCurrencyCode`.
+- Added: `rcNumber`, `naicomLicenseNumber`, `city`, `state` (all nullable optional).
+
+**`CompanySettingsPage.tsx`** — form schema + render rewrite:
+
+- Form schema mirrors `com.nubeero.cia.setup.company.dto.CompanySettingsRequest` 1:1: `name` (required) + `rcNumber`, `naicomLicenseNumber`, `address`, `city`, `state`, `email`, `phone`, `logoPath`, `website` all optional.
+- Defaults reset block uses new field names with `?? ''` for the nullable returns.
+- Render block adds the RC Number + NAICOM Licence row (paired), the City + State row (paired with address), the Website + Logo Path row (Logo Path is currently a free-text field for the storage path — image upload UI is a future polish).
+- **Password Policy card removed entirely.** Was theatre; flagged as backlog F4 for when a real password-policy endpoint exists.
+
+**`dto-drift.config.json`** — `CompanySettingsDto` allow-list entry removed. Allow-list shrank from 3 entries → 2 (Endorsement + ApprovalGroup).
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` filtered to `CompanySettingsPage.tsx` + `setup.ts` — zero errors. The two zod deprecation hints (`.email()` and `.url()`) are pre-existing — same usage pattern in `EditCustomerSheet`, `CorporateOnboardingSheet`, etc.
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (28 interfaces, 2 skipped)`.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — types | `cia-frontend/packages/api-client/src/modules/setup.ts` (CompanySettingsDto rewrite) |
+| Frontend — UI | `setup/pages/company/CompanySettingsPage.tsx` (form schema + defaults + reset + render rewrite; Password Policy card removed) |
+| Tooling — config | `cia-frontend/scripts/dto-drift.config.json` (CompanySettings entry removed) |
+| Docs | `cia-log.md` (this entry + backlog row A1c removed, F4 added) |
+
+### Backlog reconciliation
+
+- **Removed**: A1c (CompanySettingsDto reshape).
+- **Added**: F4 (P3): Password Policy UI needs real backend endpoint.
+- **Net**: 18 → 18 rows (one removed, one added). Honest accounting — the Password Policy card was a real piece of UX that just wasn't wired; logging it preserves the work it would take to restore it properly.
+
+### Known follow-ups (deliberately deferred)
+
+- The `logoPath` field on the form is a free-text path input — when there's a backing storage upload endpoint, replace with a real file-upload UI. Not a separate backlog row because it's part of F4-adjacent UX polish.
 
 ---
 
