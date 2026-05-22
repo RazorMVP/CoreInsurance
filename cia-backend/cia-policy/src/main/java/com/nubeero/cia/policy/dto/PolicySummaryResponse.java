@@ -21,6 +21,8 @@ public class PolicySummaryResponse {
     private String productName;
     private String classOfBusinessName;
     private String brokerName;
+    /** Per-policy agent attribution (Slice 84d). Mutually exclusive with brokerName via V53 CHECK. */
+    private String agentName;
     private BusinessType businessType;
     private LocalDate policyStartDate;
     private LocalDate policyEndDate;

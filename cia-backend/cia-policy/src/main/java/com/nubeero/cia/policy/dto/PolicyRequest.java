@@ -23,6 +23,13 @@ public class PolicyRequest {
 
     private UUID brokerId;
 
+    /**
+     * Per-policy agent attribution (Slice 84d). Mutually exclusive with
+     * {@code brokerId} — V53 enforces this at the DB level. PolicyService
+     * validates client-side before persisting and emits a clearer 400.
+     */
+    private UUID agentId;
+
     @NotNull
     private BusinessType businessType;
 

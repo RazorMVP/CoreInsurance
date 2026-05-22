@@ -120,7 +120,7 @@ class SubledgerPostingServiceIT {
             "Motor", new BigDecimal("500000.00"), "NGN",
             LocalDate.of(2027, 5, 14), UUID.randomUUID(), UUID.randomUUID(),
             new BigDecimal("10000000.00"), businessDate,
-            null, null));
+            null, null, null, null));
         entityManager.flush();
 
         Map<String, Object> je = loadJe("policy", "POLICY_APPROVED", policyId.toString());
@@ -278,7 +278,7 @@ class SubledgerPostingServiceIT {
             "x", new BigDecimal("100.00"), "NGN",
             LocalDate.of(2027, 5, 14), UUID.randomUUID(), UUID.randomUUID(),
             BigDecimal.ZERO, businessDate,
-            null, null)))
+            null, null, null, null)))
             .isInstanceOf(PostingRuleNotFoundException.class)
             .hasMessageContaining("POLICY_APPROVED");
 
@@ -299,7 +299,7 @@ class SubledgerPostingServiceIT {
             "x", new BigDecimal("100.00"), "NGN",
             LocalDate.of(2027, 5, 14), UUID.randomUUID(), UUID.randomUUID(),
             BigDecimal.ZERO, businessDate,
-            null, null);
+            null, null, null, null);
         service.onPolicyApproved(event);
         entityManager.flush();
 

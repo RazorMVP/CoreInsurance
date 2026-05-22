@@ -74,6 +74,15 @@ public class Policy extends BaseEntity {
     @Column(name = "broker_name", length = 100)
     private String brokerName;
 
+    // ── Agent (V53 — Slice 84d) ──────────────────────────────────────────
+    // Mutually exclusive with broker_id via the V53 CHECK constraint
+    // ck_policies_broker_xor_agent. Nullable like broker_id.
+    @Column(name = "agent_id")
+    private UUID agentId;
+
+    @Column(name = "agent_name", length = 100)
+    private String agentName;
+
     // ── Commission snapshot (V51) ────────────────────────────────────────
     // Frozen at policy creation / quote binding from the active CommissionSetup
     // row keyed by (productId, source, today). Null when no source is

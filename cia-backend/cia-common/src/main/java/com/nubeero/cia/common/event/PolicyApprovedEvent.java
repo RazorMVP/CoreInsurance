@@ -44,5 +44,9 @@ public record PolicyApprovedEvent(
         LocalDate policyStartDate,
         // Commission snapshot (Slice 84c). Both fields null when V51 snapshot is absent.
         String commissionSourceType,
-        BigDecimal commissionAmount
+        BigDecimal commissionAmount,
+        // Agent attribution (Slice 84d / V53). Mutually exclusive with brokerId.
+        // Both fields null on broker-attributed or non-attributed policies.
+        UUID agentId,
+        String agentName
 ) {}

@@ -270,6 +270,16 @@ export default function PolicyDetailPage() {
                 <Row label="Gross Premium"  value={`₦${p.totalPremium.toLocaleString()}`} />
                 <Row label="Net Premium"    value={`₦${p.netPremium.toLocaleString()}`} />
                 <Row
+                  label="Intermediary"
+                  value={
+                    p.brokerName
+                      ? `Broker · ${p.brokerName}`
+                      : p.agentName
+                        ? `Agent · ${p.agentName}`
+                        : 'Direct'
+                  }
+                />
+                <Row
                   label="Commission"
                   value={
                     p.commissionAmount != null

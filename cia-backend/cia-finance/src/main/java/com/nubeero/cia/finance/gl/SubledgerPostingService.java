@@ -77,6 +77,10 @@ public class SubledgerPostingService {
     // attribution for those sources.
     static final String EVENT_POLICY_COMMISSION_BROKER = "POLICY_COMMISSION_BROKER";
     static final String SOURCE_BROKER = "BROKER";
+    // Slice 84d — AGENT branch mirrors BROKER, distinct rule key + Cr account
+    // (V54 → 2330 Commission payable - Agents).
+    static final String EVENT_POLICY_COMMISSION_AGENT = "POLICY_COMMISSION_AGENT";
+    static final String SOURCE_AGENT = "AGENT";
 
     // ── Hardcoded COA codes for the compound FAC 3-line posting ──────────────
     private static final String COA_RI_PREMIUM_EXPENSE = "5210";   // Outward reinsurance premium
@@ -138,21 +142,36 @@ public class SubledgerPostingService {
 
         // Slice 84c — chain commission JE when the V51 snapshot is populated.
         // Distinct idempotency triple from the premium JE: same policyId, same
-        // module, but different event type (POLICY_COMMISSION_BROKER), so the
+        // module, but different event type (POLICY_COMMISSION_*), so the
         // UNIQUE constraint on (source_module, source_event_type, source_reference)
         // never collides with line 1's POLICY_APPROVED row.
-        if (SOURCE_BROKER.equals(event.commissionSourceType())
-                && !zeroOrNull(event.commissionAmount())) {
-            postTwoLine(
-                MODULE_POLICY,
-                EVENT_POLICY_COMMISSION_BROKER,
-                event.policyId().toString(),
-                event.commissionAmount(),
-                event.policyStartDate(),
-                event.currencyCode(),
-                event.classOfBusinessId(),
-                event.policyNumber(),
-                event.brokerName());
+        if (!zeroOrNull(event.commissionAmount())) {
+            if (SOURCE_BROKER.equals(event.commissionSourceType())) {
+                postTwoLine(
+                    MODULE_POLICY,
+                    EVENT_POLICY_COMMISSION_BROKER,
+                    event.policyId().toString(),
+                    event.commissionAmount(),
+                    event.policyStartDate(),
+                    event.currencyCode(),
+                    event.classOfBusinessId(),
+                    event.policyNumber(),
+                    event.brokerName());
+            } else if (SOURCE_AGENT.equals(event.commissionSourceType())) {
+                // Slice 84d — AGENT branch routes to V54's POLICY_COMMISSION_AGENT
+                // rule (Cr 2330 Commission payable - Agents). Narrative uses
+                // agentName, which V53 / Slice 84d puts on the event.
+                postTwoLine(
+                    MODULE_POLICY,
+                    EVENT_POLICY_COMMISSION_AGENT,
+                    event.policyId().toString(),
+                    event.commissionAmount(),
+                    event.policyStartDate(),
+                    event.currencyCode(),
+                    event.classOfBusinessId(),
+                    event.policyNumber(),
+                    event.agentName());
+            }
         }
     }
 

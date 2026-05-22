@@ -151,18 +151,20 @@ public class RetroactiveJournalBackfillActivitiesImpl implements RetroactiveJour
     // ─── POLICY_APPROVED ──────────────────────────────────────────────────────
     @SuppressWarnings("unchecked")
     private BackfillChunkResult processPolicyApproved(BackfillChunkRequest req, ActivityExecutionContext ctx) {
-        // V51 added commission_source_type + commission_rate. Read them so the
-        // backfill replays the commission JE (Slice 84c) for any policy that has
-        // a snapshot but no posted commission entry yet. Policies approved
-        // before V51 / 84b have null snapshot columns and will skip the
-        // commission JE downstream — same path as the live flow.
+        // V51 added commission_source_type + commission_rate so the backfill
+        // replays the commission JE for any policy with a snapshot. V53 added
+        // agent_id + agent_name (Slice 84d); the backfill reads them too so
+        // agent-attributed policies (and the AGENT branch of the credit-note
+        // listener) replay correctly. Policies approved before each migration
+        // shipped have null columns and skip the relevant chain.
         List<Object[]> rows = em.createNativeQuery("""
                 SELECT id, policy_number, customer_id, customer_name,
                        broker_id, broker_name, product_id, product_name,
                        net_premium, currency_code,
                        policy_start_date, policy_end_date,
                        total_sum_insured, class_of_business_id,
-                       commission_source_type, commission_rate
+                       commission_source_type, commission_rate,
+                       agent_id, agent_name
                   FROM policies
                  WHERE status = 'APPROVED'
                    AND deleted_at IS NULL
@@ -205,7 +207,9 @@ public class RetroactiveJournalBackfillActivitiesImpl implements RetroactiveJour
                         bd(row[12]),
                         date(row[10]),
                         commissionSource,
-                        commissionAmount);
+                        commissionAmount,
+                        uuid(row[16]),
+                        str(row[17]));
                 if (req.dryRun()) {
                     posted++;
                 } else {

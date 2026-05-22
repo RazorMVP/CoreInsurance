@@ -37,6 +37,11 @@ public class PolicyResponse {
     private UUID brokerId;
     private String brokerName;
 
+    // ── Agent (V53 — Slice 84d) ──────────────────────────────────────────
+    // Mutually exclusive with brokerId via the V53 CHECK constraint.
+    private UUID agentId;
+    private String agentName;
+
     private BusinessType businessType;
     private boolean niidRequired;
 

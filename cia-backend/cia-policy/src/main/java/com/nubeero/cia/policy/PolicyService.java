@@ -17,6 +17,8 @@ import com.nubeero.cia.quotation.BusinessType;
 import com.nubeero.cia.quotation.Quote;
 import com.nubeero.cia.quotation.QuoteService;
 import com.nubeero.cia.quotation.QuoteStatus;
+import com.nubeero.cia.setup.org.Agent;
+import com.nubeero.cia.setup.org.AgentRepository;
 import com.nubeero.cia.setup.org.Broker;
 import com.nubeero.cia.setup.org.BrokerRepository;
 import com.nubeero.cia.setup.org.InsuranceCompany;
@@ -63,6 +65,7 @@ public class PolicyService {
     private final ProductRepository productRepository;
     private final CommissionSetupRepository commissionSetupRepository;
     private final BrokerRepository brokerRepository;
+    private final AgentRepository agentRepository;
     private final InsuranceCompanyRepository insuranceCompanyRepository;
     private final com.nubeero.cia.setup.product.ClassOfBusinessRepository classOfBusinessRepository;
     private final AuditService auditService;
@@ -111,8 +114,11 @@ public class PolicyService {
                     "A policy already exists for quote: " + quoteId);
         }
 
+        // Quote does not yet carry agent attribution — Slice 84d v1 ships
+        // agent only on direct-create policies. Quote-side support is a
+        // follow-up slice that extends the Quote entity + DTOs in parallel.
         CommissionSnapshot commission = resolveCommissionSnapshot(
-                quote.getProductId(), quote.getBrokerId(), quote.getPolicyStartDate());
+                quote.getProductId(), quote.getBrokerId(), null, quote.getPolicyStartDate());
 
         Policy policy = Policy.builder()
                 .quoteId(quote.getId())
@@ -182,6 +188,11 @@ public class PolicyService {
                 .filter(p -> p.getDeletedAt() == null && p.isActive())
                 .orElseThrow(() -> new ResourceNotFoundException("Product", request.getProductId()));
 
+        if (request.getBrokerId() != null && request.getAgentId() != null) {
+            throw new BusinessRuleException("BROKER_AGENT_EXCLUSIVE",
+                    "A policy can carry a broker OR an agent, not both (V53 ck_policies_broker_xor_agent).");
+        }
+
         String brokerName = null;
         if (request.getBrokerId() != null) {
             Broker broker = brokerRepository.findById(request.getBrokerId())
@@ -190,11 +201,19 @@ public class PolicyService {
             brokerName = broker.getName();
         }
 
+        String agentName = null;
+        if (request.getAgentId() != null) {
+            Agent agent = agentRepository.findById(request.getAgentId())
+                    .filter(a -> a.getDeletedAt() == null)
+                    .orElseThrow(() -> new ResourceNotFoundException("Agent", request.getAgentId()));
+            agentName = agent.getName();
+        }
+
         validateDates(request.getPolicyStartDate(), request.getPolicyEndDate());
         BigDecimal discount = request.getDiscount() != null ? request.getDiscount() : BigDecimal.ZERO;
 
         CommissionSnapshot commission = resolveCommissionSnapshot(
-                product.getId(), request.getBrokerId(), request.getPolicyStartDate());
+                product.getId(), request.getBrokerId(), request.getAgentId(), request.getPolicyStartDate());
 
         Policy policy = Policy.builder()
                 .customerId(customer.getId())
@@ -208,6 +227,8 @@ public class PolicyService {
                 .classOfBusinessCode(product.getClassOfBusiness().getCode())
                 .brokerId(request.getBrokerId())
                 .brokerName(brokerName)
+                .agentId(request.getAgentId())
+                .agentName(agentName)
                 .commissionSourceType(commission.sourceType())
                 .commissionRate(commission.rate())
                 .businessType(request.getBusinessType())
@@ -235,12 +256,29 @@ public class PolicyService {
         Policy policy = findOrThrow(id);
         requireDraftStatus(policy, "update");
 
+        if (request.getBrokerId() != null && request.getAgentId() != null) {
+            throw new BusinessRuleException("BROKER_AGENT_EXCLUSIVE",
+                    "A policy can carry a broker OR an agent, not both (V53 ck_policies_broker_xor_agent).");
+        }
         if (request.getBrokerId() != null) {
             Broker broker = brokerRepository.findById(request.getBrokerId())
                     .filter(b -> b.getDeletedAt() == null)
                     .orElseThrow(() -> new ResourceNotFoundException("Broker", request.getBrokerId()));
             policy.setBrokerId(request.getBrokerId());
             policy.setBrokerName(broker.getName());
+            // Clear the other side to honour the XOR — request can switch a
+            // policy from agent-attributed to broker-attributed.
+            policy.setAgentId(null);
+            policy.setAgentName(null);
+        }
+        if (request.getAgentId() != null) {
+            Agent agent = agentRepository.findById(request.getAgentId())
+                    .filter(a -> a.getDeletedAt() == null)
+                    .orElseThrow(() -> new ResourceNotFoundException("Agent", request.getAgentId()));
+            policy.setAgentId(request.getAgentId());
+            policy.setAgentName(agent.getName());
+            policy.setBrokerId(null);
+            policy.setBrokerName(null);
         }
         if (request.getBusinessType() != null)    policy.setBusinessType(request.getBusinessType());
         if (request.getNiidRequired() != null)    policy.setNiidRequired(request.getNiidRequired());
@@ -363,7 +401,8 @@ public class PolicyService {
                 "NGN", saved.getPolicyEndDate(),
                 saved.getProductId(), saved.getClassOfBusinessId(),
                 saved.getTotalSumInsured(), saved.getPolicyStartDate(),
-                commissionSourceTypeStr, commissionAmount));
+                commissionSourceTypeStr, commissionAmount,
+                saved.getAgentId(), saved.getAgentName()));
 
         auditService.log("Policy", id.toString(), AuditAction.UPDATE, null, saved);
         return toResponse(saved);
@@ -820,30 +859,39 @@ public class PolicyService {
     }
 
     /**
-     * Resolve the commission snapshot for a policy at issuance (Slice 84b — finding 6
-     * in the Session 84 audit against PRD §2.1.17).
+     * Resolve the commission snapshot for a policy at issuance.
      *
-     * <p>Today only the BROKER case is resolvable — {@code policies} carries
-     * {@code broker_id} but neither {@code agent_id} nor
-     * {@code relationship_manager_id} (Open Question #11 in PRD v2.7). So we
-     * snapshot only when the policy is broker-attributed AND an active
-     * {@link CommissionSetup} row exists for (product, BROKER, policyStartDate).
-     * Anything else yields an empty snapshot — the V51 CHECK constraint requires
-     * both columns to be null together, never one without the other.
+     * <p>BROKER attribution takes precedence if {@code brokerId} is set
+     * (mutual exclusivity is also enforced at the DB level by V53's
+     * {@code ck_policies_broker_xor_agent}, so in practice only one of the two
+     * ever non-null per policy). Falls back to AGENT when only {@code agentId}
+     * is set (Slice 84d). Returns EMPTY when neither external counterparty is
+     * attributed, OR when no active {@link CommissionSetup} row exists for the
+     * resolved source — an empty snapshot is silent, never fails policy
+     * creation, matching the v1 contract from Slice 84b.
      *
-     * <p>Empty snapshot is silent — never fails the policy creation. A missing
-     * commission row simply means commission is configured later or paid at a
-     * negotiated rate; failing here would make every greenfield tenant unable
-     * to bind a policy until a commission row was inserted.
+     * <p>Relationship-manager attribution is intentionally not modelled —
+     * policies do not yet carry {@code relationship_manager_id}, and RM
+     * commission has different document semantics (staff payable, not
+     * commission CN) that warrant their own slice.
      */
     private CommissionSnapshot resolveCommissionSnapshot(UUID productId,
                                                           UUID brokerId,
+                                                          UUID agentId,
                                                           java.time.LocalDate on) {
-        if (brokerId == null) return CommissionSnapshot.EMPTY;
-        return commissionSetupRepository
-                .findActiveForProduct(productId, CommissionSourceType.BROKER, on)
-                .map(cs -> new CommissionSnapshot(CommissionSourceType.BROKER, cs.getRate()))
-                .orElse(CommissionSnapshot.EMPTY);
+        if (brokerId != null) {
+            return commissionSetupRepository
+                    .findActiveForProduct(productId, CommissionSourceType.BROKER, on)
+                    .map(cs -> new CommissionSnapshot(CommissionSourceType.BROKER, cs.getRate()))
+                    .orElse(CommissionSnapshot.EMPTY);
+        }
+        if (agentId != null) {
+            return commissionSetupRepository
+                    .findActiveForProduct(productId, CommissionSourceType.AGENT, on)
+                    .map(cs -> new CommissionSnapshot(CommissionSourceType.AGENT, cs.getRate()))
+                    .orElse(CommissionSnapshot.EMPTY);
+        }
+        return CommissionSnapshot.EMPTY;
     }
 
     private record CommissionSnapshot(CommissionSourceType sourceType, BigDecimal rate) {
@@ -889,7 +937,8 @@ public class PolicyService {
                 .id(p.getId()).policyNumber(p.getPolicyNumber()).status(p.getStatus())
                 .customerId(p.getCustomerId()).customerName(p.getCustomerName())
                 .productName(p.getProductName()).classOfBusinessName(p.getClassOfBusinessName())
-                .brokerName(p.getBrokerName()).businessType(p.getBusinessType())
+                .brokerName(p.getBrokerName()).agentName(p.getAgentName())
+                .businessType(p.getBusinessType())
                 .policyStartDate(p.getPolicyStartDate()).policyEndDate(p.getPolicyEndDate())
                 .netPremium(p.getNetPremium()).naicomUid(p.getNaicomUid()).createdAt(p.getCreatedAt())
                 .build();
@@ -929,6 +978,7 @@ public class PolicyService {
                 .classOfBusinessId(p.getClassOfBusinessId()).classOfBusinessName(p.getClassOfBusinessName())
                 .classOfBusinessCode(p.getClassOfBusinessCode())
                 .brokerId(p.getBrokerId()).brokerName(p.getBrokerName())
+                .agentId(p.getAgentId()).agentName(p.getAgentName())
                 .businessType(p.getBusinessType()).niidRequired(p.isNiidRequired())
                 .policyStartDate(p.getPolicyStartDate()).policyEndDate(p.getPolicyEndDate())
                 .totalSumInsured(p.getTotalSumInsured()).totalPremium(p.getTotalPremium())

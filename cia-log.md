@@ -8,9 +8,133 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-22. Sessions 79–87 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), the Session 84 PRD §2.1.17 drift remediation slice 84a (ProductDto realignment + CommissionSourceType enum + V50), the Session 85 slice 84b (Product Commission Setup UI + per-policy commission snapshot V51), the Session 86 slice 84c (broker commission JE chain + credit-note generation V52), and the Session 87 slice 84e (surface commission snapshot on PolicyResponse + Commission card on policy detail page).
+No open items as of 2026-05-22. Sessions 79–88 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), the Session 84 PRD §2.1.17 drift remediation slice 84a (ProductDto realignment + CommissionSourceType enum + V50), the Session 85 slice 84b (Product Commission Setup UI + per-policy commission snapshot V51), the Session 86 slice 84c (broker commission JE chain + credit-note generation V52), the Session 87 slice 84e (surface commission snapshot on PolicyResponse + Commission card on policy detail page), and the Session 88 slice 84d (per-policy agent attribution + AGENT commission posting V53/V54).
 
-The Slice 84d AGENT path remains queued behind **Open Question #11** (per-policy agent + RM attribution). User explicitly picked 84e over 84d in Session 87 — visible-to-user completion of the broker flow before opening the next data-model conversation.
+Slice 84d unblocked Open Question #11. The remaining commission-related work flagged through this arc is a Channel picker in CreatePolicySheet (today neither broker nor agent can be set through the UI on direct-create policies; the API accepts both fields) — that's a UX slice, not a data-model gap.
+
+---
+
+## 2026-05-22 — Session 88 (`main`): PRD §2.1.17 slice 84d — Per-policy agent attribution + AGENT commission JE chain (V53/V54)
+
+User picked option A from the slice-84d scoping table: mirror the broker model exactly. Agents represent the insurer; brokers represent the insured; per Nigerian general insurance practice a policy carries one external intermediary or the other, never both. V53 makes that mutual exclusivity a DB CHECK rather than a convention. V54 adds the AGENT posting rule mirroring V52's BROKER rule with a different Cr account (2330 vs 2320). The chained commission JE in `SubledgerPostingService` and the credit-note listener gain symmetric AGENT branches. Closes Open Question #11 from PRD v2.7.
+
+### V53 — agent columns on `policies`
+
+```sql
+ALTER TABLE policies
+  ADD COLUMN agent_id   UUID,
+  ADD COLUMN agent_name VARCHAR(100);
+
+ALTER TABLE policies
+  ADD CONSTRAINT ck_policies_broker_xor_agent
+  CHECK (broker_id IS NULL OR agent_id IS NULL);
+
+CREATE INDEX idx_policies_agent_id ON policies (agent_id) WHERE deleted_at IS NULL;
+```
+
+Both columns nullable like `broker_id`. The CHECK enforces "at most one" — both null is a Direct policy, neither broker nor agent. Index mirrors `idx_policies_broker_id` for the natural "policies for this agent" access path.
+
+### Service-layer mutual exclusivity guard
+
+The V53 CHECK already blocks insertion of both ids, but a raw constraint violation surfaces as a 500. PolicyService now validates client-side first and throws a clearer 400-equivalent `BusinessRuleException("BROKER_AGENT_EXCLUSIVE", …)`. Done in both `create` and `update` paths. The `update` path additionally clears the other side when one is set — so a user can transition a policy from broker-attributed to agent-attributed (and vice versa) without first nulling the previous attribution manually.
+
+### `resolveCommissionSnapshot` precedence
+
+Slice 84b's resolver took only `brokerId`; 84d's takes `brokerId` and `agentId`. Precedence: BROKER if `brokerId != null`, else AGENT if `agentId != null`, else EMPTY. The V53 CHECK guarantees only one is set in practice — the precedence ordering matters only for code clarity. Each branch hits `commissionSetupRepository.findActiveForProduct(productId, source, on)` for its own `CommissionSourceType` — Setup → Products can configure separate rates for BROKER and AGENT sources on the same product.
+
+`bindFromQuote` passes `null` for `agentId` because the Quote entity doesn't carry agent attribution yet — that's a deliberate scope cut. Slice 84d v1 ships agent attribution on direct-create policies only; quote-side support is a follow-up that requires expanding the Quote entity + Module 2 form + bulk-upload CSV in parallel.
+
+### V54 — AGENT posting rule
+
+```sql
+INSERT INTO posting_rule VALUES
+    ('POLICY_COMMISSION_AGENT',
+     '5130', '2330',
+     'Agent commission payable on policy %s for %s',
+     TRUE, 'system-seed');
+```
+
+Mirror of V52's BROKER rule with the Cr account swapped to 2330 (Commission payable - Agents, from V32 COA seed). Same idempotent `ON CONFLICT (source_event_type) DO NOTHING`.
+
+### `SubledgerPostingService` AGENT branch
+
+Refactored the commission chain from a single guarded BROKER if-block into a switch on `event.commissionSourceType()`:
+
+```java
+if (!zeroOrNull(event.commissionAmount())) {
+    if (SOURCE_BROKER.equals(event.commissionSourceType())) {
+        postTwoLine(..., EVENT_POLICY_COMMISSION_BROKER, ..., event.brokerName());
+    } else if (SOURCE_AGENT.equals(event.commissionSourceType())) {
+        postTwoLine(..., EVENT_POLICY_COMMISSION_AGENT, ..., event.agentName());
+    }
+}
+```
+
+Both branches share the same idempotency-triple shape — same policyId, different event-type slot, so no collision between premium / broker-commission / agent-commission JEs for the same policy.
+
+### `PolicyCommissionCreditNoteListener` AGENT branch
+
+Replaced the `if (!"BROKER".equals(…)) skip` with a `switch` over `commissionSourceType()` that resolves the beneficiary trio (`beneficiaryId`, `beneficiaryName`, `label`) per source. Both BROKER and AGENT paths call `creditNoteService.create(FinanceEntityType.POLICY, …)` with the resolved beneficiary. RELATIONSHIP_MANAGER stays in the default branch — explicitly logged + skipped because it's a payroll incentive, not a commission CN.
+
+### `PolicyApprovedEvent` arity bump
+
+Added `agentId: UUID` + `agentName: String` after the slice-84c commission fields. Same arity-bump shape as 84c — 10 constructor call sites updated:
+
+- 1 production publisher: `PolicyService.approve` (real values from `saved`)
+- 1 production reconstructor: `RetroactiveJournalBackfillActivitiesImpl.processPolicyApproved` (reads `agent_id` + `agent_name` from the policy row's columns 16/17)
+- 3 cia-finance unit tests (trailing `null, null` for agent)
+- 3 cia-api ITs in `SubledgerPostingServiceIT` (trailing `null, null`)
+- 2 cia-api ITs in `ContractGroupingServiceIT` (trailing `null, null`)
+
+### Backfill SELECT update + Flyway-target bump
+
+`RetroactiveJournalBackfillActivitiesImpl` SELECT now reads `agent_id` + `agent_name` so backfilled agent-attributed policies replay the AGENT commission chain idempotently. `RetroactiveBackfillIT` Flyway target bumped 52 → 54 — only IT that actually reads V53 columns. Other 33 target-49 ITs stay green because their test events pass `null, null, null, null` for the commission + agent fields and both chain guards short-circuit.
+
+### Frontend
+
+Surface area is narrower than the backend: `CreatePolicySheet` doesn't have a broker picker either today, so "mirror broker exactly" on the frontend means the API contract carries the field but the UI doesn't compose it. Slice 84d ships:
+
+- `PolicyDto` + `PolicySummaryDto` (zod) gain `agentId` + `agentName` (both nullable, optional).
+- New "Intermediary" row on `PolicyDetailPage`'s Premium & Payment card — `"Broker · {brokerName}"`, `"Agent · {agentName}"`, or `"Direct"` based on which (if any) is set. The Commission card's existing source badge already renders the Agent label correctly via the `COMMISSION_SOURCE_LABEL` map seeded in Slice 84e.
+
+A Channel picker in CreatePolicySheet (radio: Direct / Broker / Agent + conditional entity picker) is flagged as a follow-up; it's UX work beyond this slice's audit-finding scope.
+
+### What's NOT in this slice
+
+- **Quote-side agent attribution** — Quote entity doesn't carry `agentId`; `bindFromQuote` produces broker-attributed policies only. Adding agent to Quote requires Module 2 form + bulk-upload CSV + quote-document templates; deliberately deferred.
+- **Channel picker UX in CreatePolicySheet** — would also need to add the broker picker that doesn't exist yet. Separate UX slice.
+- **`RELATIONSHIP_MANAGER` path** — RM commission is a payroll incentive routing through staff payables (2520), not a commission CN. Different document type, needs its own design conversation.
+
+### Verification
+
+- `mvn install -DskipTests -pl cia-api -am` — green.
+- `mvn test-compile -pl cia-api` — green (caught all 10 PolicyApprovedEvent call sites).
+- `mvn verify -pl cia-api` (full failsafe IT suite) — 0 failures, 0 errors, 1 documented benchmark skip. V53 + V54 apply cleanly across every per-tenant Flyway run; the `RetroactiveBackfillIT` pin bump (52 → 54) caught the test that actually exercises the V53 columns.
+- `pnpm --filter @cia/back-office exec tsc --noEmit` filtered to PolicyDetailPage + api-client/policy.ts — zero errors.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend — migrations | `V53__add_agent_to_policies.sql`, `V54__seed_policy_commission_agent_rule.sql` |
+| Backend — common | `cia-common/.../event/PolicyApprovedEvent.java` (+ 2 fields) |
+| Backend — entity | `cia-policy/.../Policy.java` (+ agentId/agentName) |
+| Backend — DTOs | `PolicyRequest.java`, `PolicyUpdateRequest.java`, `PolicyResponse.java`, `PolicySummaryResponse.java` |
+| Backend — service | `cia-policy/.../PolicyService.java` (create, update, toResponse, resolveCommissionSnapshot, approve) |
+| Backend — GL | `cia-finance/.../gl/SubledgerPostingService.java` (AGENT constants + branch) |
+| Backend — payables | `cia-finance/.../PolicyCommissionCreditNoteListener.java` (switch over source) |
+| Backend — backfill | `cia-finance/.../backfill/RetroactiveJournalBackfillActivitiesImpl.java` (SELECT + reconstruct) |
+| Tests | `SubledgerPostingServiceTest.java`, `SubledgerPostingServiceIT.java`, `ContractGroupingServiceIT.java`, `RetroactiveBackfillIT.java` (flyway target bump) |
+| Frontend — types | `cia-frontend/packages/api-client/src/modules/policy.ts` (PolicyDto + PolicySummaryDto +2 fields each) |
+| Frontend — UI | `cia-frontend/apps/back-office/src/modules/policy/pages/detail/PolicyDetailPage.tsx` (Intermediary row) |
+| Docs | `cia-log.md` (this entry) |
+
+### Known follow-ups (deliberately deferred)
+
+- **Channel picker on CreatePolicySheet + broker/agent select** — UX slice covering both intermediary types together.
+- **Quote-side agent attribution** — needs Module 2 form / CSV / template changes.
+- **RM commission path** — staff payroll routing, separate document type.
+- **Policy list page Intermediary column** — natural follow-up to surface broker/agent on the list view.
 
 ---
 

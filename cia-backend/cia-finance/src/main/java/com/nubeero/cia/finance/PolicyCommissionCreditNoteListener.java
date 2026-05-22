@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 /**
  * Slice 84c — generates the payables credit note for broker commission when
@@ -46,24 +47,48 @@ public class PolicyCommissionCreditNoteListener {
         if (event.commissionSourceType() == null) return;
         if (event.commissionAmount() == null) return;
         if (event.commissionAmount().signum() <= 0) return;
-        if (!"BROKER".equals(event.commissionSourceType())) {
-            log.debug("Skipping commission CN for policy {} — source {} not yet supported (Open Q#11)",
-                    event.policyNumber(), event.commissionSourceType());
-            return;
-        }
-        if (event.brokerId() == null) {
-            log.warn("Skipping broker commission CN for policy {} — BROKER snapshot without brokerId",
-                    event.policyNumber());
-            return;
+
+        // Resolve the beneficiary from the source. RELATIONSHIP_MANAGER stays
+        // out — RM commission is a staff payroll incentive, not a commission
+        // CN. When that path lands it'll be a separate listener/document.
+        UUID beneficiaryId;
+        String beneficiaryName;
+        String label;
+        switch (event.commissionSourceType()) {
+            case "BROKER" -> {
+                if (event.brokerId() == null) {
+                    log.warn("Skipping broker commission CN for policy {} — BROKER snapshot without brokerId",
+                            event.policyNumber());
+                    return;
+                }
+                beneficiaryId = event.brokerId();
+                beneficiaryName = event.brokerName();
+                label = "Broker";
+            }
+            case "AGENT" -> {
+                if (event.agentId() == null) {
+                    log.warn("Skipping agent commission CN for policy {} — AGENT snapshot without agentId",
+                            event.policyNumber());
+                    return;
+                }
+                beneficiaryId = event.agentId();
+                beneficiaryName = event.agentName();
+                label = "Agent";
+            }
+            default -> {
+                log.debug("Skipping commission CN for policy {} — source {} not supported",
+                        event.policyNumber(), event.commissionSourceType());
+                return;
+            }
         }
 
         creditNoteService.create(
                 FinanceEntityType.POLICY,
                 event.policyId(),
                 event.policyNumber(),
-                event.brokerId(),
-                event.brokerName(),
-                "Broker commission for policy " + event.policyNumber(),
+                beneficiaryId,
+                beneficiaryName,
+                label + " commission for policy " + event.policyNumber(),
                 event.commissionAmount(),
                 BigDecimal.ZERO,
                 event.currencyCode()

@@ -100,11 +100,11 @@ class RetroactiveBackfillIT {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        // Bumped 49 → 52 in Session 86 / Slice 84c: the policy backfill SELECT
-        // now reads commission_source_type + commission_rate (V51), and V52 adds
-        // the POLICY_COMMISSION_BROKER posting rule that the chained commission
-        // JE depends on.
-        registry.add("spring.flyway.target", () -> "52");
+        // Bumped 49 → 52 (Slice 84c — V51 commission columns + V52 broker
+        // posting rule) and 52 → 54 (Slice 84d — V53 agent columns read by
+        // the policy SELECT + V54 agent posting rule for the chained commission
+        // JE under the AGENT branch).
+        registry.add("spring.flyway.target", () -> "54");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 

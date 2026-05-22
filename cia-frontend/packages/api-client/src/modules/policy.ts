@@ -120,6 +120,11 @@ export const PolicyDtoSchema = z.object({
   brokerId:                 z.string().nullable().optional(),
   brokerName:               z.string().nullable().optional(),
 
+  // Per-policy agent attribution (Slice 84d / V53). Mutually exclusive with
+  // brokerId at the DB level (ck_policies_broker_xor_agent).
+  agentId:                  z.string().nullable().optional(),
+  agentName:                z.string().nullable().optional(),
+
   businessType:             BusinessTypeSchema,
   niidRequired:             z.boolean(),
 
@@ -186,6 +191,8 @@ export const PolicySummaryDtoSchema = z.object({
   productName:         z.string(),
   classOfBusinessName: z.string(),
   brokerName:          z.string().nullable().optional(),
+  /** Per-policy agent attribution (Slice 84d). Mutually exclusive with brokerName via V53 CHECK. */
+  agentName:           z.string().nullable().optional(),
   businessType:        BusinessTypeSchema,
   policyStartDate:     z.string(),
   policyEndDate:       z.string(),

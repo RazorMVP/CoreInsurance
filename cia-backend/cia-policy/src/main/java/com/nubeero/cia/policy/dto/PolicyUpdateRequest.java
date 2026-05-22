@@ -14,6 +14,8 @@ import java.util.UUID;
 public class PolicyUpdateRequest {
 
     private UUID brokerId;
+    /** Per-policy agent attribution (Slice 84d). Mutually exclusive with brokerId. */
+    private UUID agentId;
     private BusinessType businessType;
     private Boolean niidRequired;
     private LocalDate policyStartDate;
