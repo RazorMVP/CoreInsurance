@@ -2,6 +2,7 @@ package com.nubeero.cia.policy;
 
 import com.nubeero.cia.common.entity.BaseEntity;
 import com.nubeero.cia.quotation.BusinessType;
+import com.nubeero.cia.setup.product.CommissionSourceType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -72,6 +73,18 @@ public class Policy extends BaseEntity {
 
     @Column(name = "broker_name", length = 100)
     private String brokerName;
+
+    // ── Commission snapshot (V51) ────────────────────────────────────────
+    // Frozen at policy creation / quote binding from the active CommissionSetup
+    // row keyed by (productId, source, today). Null when no source is
+    // resolvable at issuance (today: any non-broker-attributed policy — see
+    // V51 migration comment + Open Question #11 in PRD v2.7).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "commission_source_type", length = 30)
+    private CommissionSourceType commissionSourceType;
+
+    @Column(name = "commission_rate", precision = 6, scale = 4)
+    private BigDecimal commissionRate;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "business_type", nullable = false, length = 30)

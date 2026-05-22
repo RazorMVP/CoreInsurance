@@ -8,6 +8,7 @@ import com.nubeero.cia.documents.DocumentGenerationService;
 import com.nubeero.cia.policy.dto.PolicyApprovalRequest;
 import com.nubeero.cia.quotation.QuoteService;
 import com.nubeero.cia.setup.org.BrokerRepository;
+import com.nubeero.cia.setup.product.CommissionSetupRepository;
 import com.nubeero.cia.setup.org.InsuranceCompanyRepository;
 import com.nubeero.cia.setup.product.ClassOfBusinessRepository;
 import com.nubeero.cia.setup.product.PolicyNumberFormatService;
@@ -68,6 +69,7 @@ class PolicyApprovedEventContractTest {
     @Mock private CustomerService customerService;
     @Mock private QuoteService quoteService;
     @Mock private ProductRepository productRepository;
+    @Mock private CommissionSetupRepository commissionSetupRepository;
     @Mock private BrokerRepository brokerRepository;
     @Mock private InsuranceCompanyRepository insuranceCompanyRepository;
     @Mock private ClassOfBusinessRepository classOfBusinessRepository;
@@ -84,7 +86,7 @@ class PolicyApprovedEventContractTest {
     void setUp() {
         service = new PolicyService(
                 repository, policyNumberFormatService, customerService, quoteService,
-                productRepository, brokerRepository, insuranceCompanyRepository,
+                productRepository, commissionSetupRepository, brokerRepository, insuranceCompanyRepository,
                 classOfBusinessRepository, auditService, workflowClient, eventPublisher,
                 documentGenerationService, documentStorageService, policySurveyService);
     }

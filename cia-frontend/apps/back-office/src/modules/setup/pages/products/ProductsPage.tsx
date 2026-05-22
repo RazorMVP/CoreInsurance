@@ -7,10 +7,12 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, type ProductDto } from '@cia/api-client';
 import ProductSheet from './ProductSheet';
+import CommissionSetupsSheet from './CommissionSetupsSheet';
 
 export default function ProductsPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing,   setEditing]   = useState<ProductDto | null>(null);
+  const [commissionsFor, setCommissionsFor] = useState<ProductDto | null>(null);
 
   const productsQuery = useQuery<ProductDto[]>({
     queryKey: ['setup', 'products'],
@@ -67,7 +69,8 @@ export default function ProductsPage() {
         <DataTableRowActions
           row={row}
           actions={[
-            { label: 'Edit',   onClick: (r) => openEdit(r.original) },
+            { label: 'Edit',               onClick: (r) => openEdit(r.original) },
+            { label: 'Manage Commissions', onClick: (r) => setCommissionsFor(r.original) },
             { label: row.original.active ? 'Deactivate' : 'Activate', onClick: () => {} },
           ]}
         />
@@ -91,6 +94,11 @@ export default function ProductsPage() {
           toolbar={{ searchColumn: 'name', searchPlaceholder: 'Search products…' }} />
       )}
       <ProductSheet open={sheetOpen} onOpenChange={setSheetOpen} product={editing} onSuccess={() => setSheetOpen(false)} />
+      <CommissionSetupsSheet
+        open={!!commissionsFor}
+        onOpenChange={(v) => { if (!v) setCommissionsFor(null); }}
+        product={commissionsFor}
+      />
     </div>
   );
 }

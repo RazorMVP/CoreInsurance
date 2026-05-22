@@ -8,9 +8,103 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-22. Sessions 79–84 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), and the Session 84 PRD §2.1.17 drift remediation (ProductDto realignment + CommissionSourceType enum + V50).
+No open items as of 2026-05-22. Sessions 79–85 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), the Session 84 PRD §2.1.17 drift remediation slice 84a (ProductDto realignment + CommissionSourceType enum + V50), and the Session 85 slice 84b (Product Commission Setup UI + per-policy commission snapshot V51).
 
-The Session 84 audit also surfaced two larger remediation items still pending: a Product Commission Setup UI (no list endpoint UI exists today) and wiring commission into Policy creation as a per-policy snapshot. Both are scoped as a single follow-up slice under the working title "Slice 84b — Commission UI + policy snapshot."
+Slice 84c (commission credit-note JE generation — finding E in the original Session 84 audit) is the natural follow-up. It now has its prerequisite (the V51 snapshot) in place and can be scoped without further drift remediation.
+
+---
+
+## 2026-05-22 — Session 85 (`main`): PRD §2.1.17 slice 84b — Product Commission Setup UI + V51 per-policy commission snapshot
+
+Continues directly from Session 84 (slice 84a). Closes audit findings 5 + 6 from the §2.1.17 drift audit: build the missing back-office UI for per-product commission rules, and snapshot the active rule onto every newly-issued policy so credit-note generation can later read from a frozen value instead of re-resolving at settlement time.
+
+### Half 1 — `CommissionSetupsSheet` + ProductsPage row action
+
+The CommissionSetupController endpoints have existed since the schema landed but no UI surfaced them — System Admins had no way to configure commission rates per product short of direct SQL. Building a fresh page route would have meant adding `/setup/products/:id/commissions` to the router and a detail-page chrome; instead we land the UI as a Sheet that opens from a ProductsPage row action ("Manage Commissions"). One file, one entry point, deferrable to a full Product Details page later without UI rework.
+
+**New file:** `cia-frontend/apps/back-office/src/modules/setup/pages/products/CommissionSetupsSheet.tsx`. Composition:
+
+- Sheet body lists the per-source rules in a DataTable (Source badge + Rate + Effective From / To + row actions Edit / Delete).
+- Inner `CommissionSetupFormDialog` (defined in the same file) carries the RHF + zod form. Source select gates on the three `CommissionSourceType` values seeded in Slice 84a's V50 (AGENT / BROKER / RELATIONSHIP_MANAGER). Rate `z.coerce.number().min(0).max(100)` matches the backend's `@DecimalMin("0.0") @DecimalMax("100.0")` constraint added in Slice 84a / Item 3.
+- Delete flows through the standard `useDeleteWithReason` hook — the 12th setup entity to join the V47 reasoned-soft-delete pattern after Slice 84a wired the backend.
+- Empty state when the product has no commission rules yet, with a primary Add Rule CTA.
+- Date-range refinement: zod `refine` requires `effectiveTo >= effectiveFrom` (server has no equivalent guard yet; flagged as future polish).
+
+**`ProductsPage.tsx`:** added a row action "Manage Commissions" that opens the sheet keyed by the row product. Sheet mounted conditionally on `commissionsFor` state so it tears down between products and React Query's queryKey reflects the active product id.
+
+**`packages/api-client/src/modules/setup.ts`:** added `CommissionSourceType` literal type + `CommissionSetupDto` mirroring the backend `CommissionSetupResponse` 1:1. Same convention as every other Setup DTO in the file — comment block points readers at the backend file + PRD section so future drift surfaces immediately.
+
+### Half 2 — V51 policy commission snapshot
+
+The §2.1.17 audit finding asked for `commission_source_type` + `commission_rate` snapshot columns on `policies` so the credit-note generator (Slice 84c) reads from a frozen value at issuance instead of re-resolving the active `CommissionSetup` row at settlement time. The latter would silently leak post-issuance rate changes into in-force contracts — exactly the IFRS 17 §B5.5.39 / NAICOM compliance noise we don't want.
+
+**V51 migration (`V51__add_commission_snapshot_to_policies.sql`):**
+
+```sql
+ALTER TABLE policies
+  ADD COLUMN commission_source_type VARCHAR(30),
+  ADD COLUMN commission_rate        DECIMAL(6, 4);
+
+ALTER TABLE policies
+  ADD CONSTRAINT ck_policies_commission_source_type
+  CHECK (commission_source_type IS NULL
+         OR commission_source_type IN ('AGENT', 'BROKER', 'RELATIONSHIP_MANAGER'));
+
+ALTER TABLE policies
+  ADD CONSTRAINT ck_policies_commission_pair
+  CHECK ((commission_source_type IS NULL AND commission_rate IS NULL)
+         OR (commission_source_type IS NOT NULL AND commission_rate IS NOT NULL));
+```
+
+Both columns are nullable. The pair-CHECK enforces both-null-or-both-set semantics — there's no meaningful state where one is set without the other. The source-CHECK pins the enum.
+
+**Why the snapshot is only partial today:** PRD §2.1.17 names three commission sources, but `policies` only models `broker_id`. Agent and Relationship Manager attribution at the policy level remains **Open Question #11** in PRD v2.7 (per-policy agent attribution). Until that lands, only broker-attributed policies populate the snapshot; agent / RM policies leave both columns null and fall back to settlement-time resolution. This is the right v1: a partial snapshot today beats no snapshot at all, and the rest unblocks naturally once Q#11 resolves the attribution gap.
+
+**Java side:**
+
+- `Policy` entity: 2 new fields with `@Enumerated(STRING)` + `@Column(precision = 6, scale = 4)`. Lombok `@Builder` carries them through; no constructor changes needed.
+- `CommissionSetupRepository`: new `findActiveForProduct(productId, source, on)` default-method query — JPQL filters by product, source, and `effectiveFrom <= on AND (effectiveTo IS NULL OR effectiveTo >= on)`. Returns `Optional<CommissionSetup>`. The implementation defends against the data-quality edge case of multiple effective rows by ordering by `createdAt` and taking the first — the empty case becomes "no commission configured" and skips the snapshot without failing the policy creation.
+- `PolicyService`: injected `CommissionSetupRepository`. New private `resolveCommissionSnapshot(productId, brokerId, on)` helper + private `CommissionSnapshot` record. Helper short-circuits to `EMPTY` when `brokerId == null` (preserves the agent/RM gap above). Wired into both creation paths — `bindFromQuote` resolves against the quote's broker + start date; direct `create` resolves against the request's broker + start date.
+
+**Test fix:** `PolicyApprovedEventContractTest` constructed `PolicyService` manually; added `@Mock CommissionSetupRepository commissionSetupRepository` + threaded into the constructor. The new arg slots between `productRepository` and `brokerRepository` — same order as the service-class field declarations.
+
+### What's intentionally NOT in this slice
+
+- **Credit-note JE generation** — Slice 84c. Now unblocked: a future `SubledgerPostingService.onPolicyApproved` change can read `policy.commissionSourceType` + `policy.commissionRate` directly without consulting `commission_setups`, route to the right CN-payee account based on source type, and never silently re-resolve.
+- **Per-policy agent / RM attribution** — Open Question #11. Requires product input on whether `policies.agent_id` / `policies.relationship_manager_id` are the right model, and what happens when the customer's relationship manager changes mid-policy.
+- **Policy detail page surfacing the snapshot** — the entity has the fields but the API response and UI don't expose them yet. Add when there's a concrete consumer (likely the same slice as Slice 84c).
+
+### Verification
+
+- `mvn install -DskipTests -pl cia-policy -am` — green (after test ctor fix).
+- `mvn install -DskipTests -pl cia-api -am` — green.
+- `mvn verify -pl cia-api` (full 274-IT failsafe) — 0 failures, 0 errors, 1 documented benchmark skip. V51 applies cleanly across every per-tenant Flyway run.
+- `pnpm --filter @cia/back-office exec tsc --noEmit` filtered to `products/` + `api-client/setup.ts` — zero errors. The `zodResolver(schema) as any` cast is the same RHF v7 input/output inference workaround already used by `ProductSheet`.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend — migration | `cia-backend/cia-api/src/main/resources/db/migration/V51__add_commission_snapshot_to_policies.sql` (new) |
+| Backend — entity | `cia-backend/cia-policy/.../Policy.java` (+ 2 fields + import) |
+| Backend — repository | `cia-backend/cia-setup/.../CommissionSetupRepository.java` (+ findActiveForProduct) |
+| Backend — service | `cia-backend/cia-policy/.../PolicyService.java` (CommissionSnapshot resolver + two creation paths) |
+| Backend — test | `cia-backend/cia-policy/.../PolicyApprovedEventContractTest.java` (mock + ctor arg) |
+| Frontend — types | `cia-frontend/packages/api-client/src/modules/setup.ts` |
+| Frontend — UI | `cia-frontend/apps/back-office/src/modules/setup/pages/products/CommissionSetupsSheet.tsx` (new) |
+| Frontend — wiring | `cia-frontend/apps/back-office/src/modules/setup/pages/products/ProductsPage.tsx` (row action + sheet mount) |
+| Docs | `cia-log.md` (this entry) |
+
+### Why this shape (and why not bigger)
+
+Slice 84a tightened the data model so the UI could safely rely on the enum + CHECK; Slice 84b is the smallest delta that puts a usable UI on top and starts populating the snapshot column. Putting the credit-note JE wiring (finding E) into this same slice would have meant editing `SubledgerPostingService`, the GL `posting_rule` table, and the credit-note generation contract — material risk surface against the already-stable V31–V40 finance substrate. Better to ship 84b green and tackle 84c with its own focused failsafe pass.
+
+### Known follow-ups (deliberately deferred — not blockers)
+
+- **Slice 84c — Commission credit-note JE generation** — wire `SubledgerPostingService.onPolicyApproved` to read the snapshot and emit a credit note + JE for broker commission payable. Requires a new `commission_payable_account` mapping in `posting_rule` (V52) and adding a non-RI commission flow to `CreditNoteController`.
+- **Open Question #11** — per-policy agent / RM attribution. Captured in PRD v2.7; agent / RM commission snapshots stay null until resolved.
+- **Server-side date-range validation** — `CommissionSetupRequest` does not validate `effectiveTo >= effectiveFrom`. Frontend has the guard via zod refine; backend should mirror it. Trivial bean validation follow-up.
+- **Policy detail page commission tab** — surface the snapshot fields once Slice 84c has a consumer.
 
 ---
 

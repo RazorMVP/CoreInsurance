@@ -21,6 +21,9 @@ import com.nubeero.cia.setup.org.Broker;
 import com.nubeero.cia.setup.org.BrokerRepository;
 import com.nubeero.cia.setup.org.InsuranceCompany;
 import com.nubeero.cia.setup.org.InsuranceCompanyRepository;
+import com.nubeero.cia.setup.product.CommissionSetup;
+import com.nubeero.cia.setup.product.CommissionSetupRepository;
+import com.nubeero.cia.setup.product.CommissionSourceType;
 import com.nubeero.cia.setup.product.Product;
 import com.nubeero.cia.setup.product.ProductRepository;
 import com.nubeero.cia.setup.product.ProductSection;
@@ -58,6 +61,7 @@ public class PolicyService {
     private final CustomerService customerService;
     private final QuoteService quoteService;
     private final ProductRepository productRepository;
+    private final CommissionSetupRepository commissionSetupRepository;
     private final BrokerRepository brokerRepository;
     private final InsuranceCompanyRepository insuranceCompanyRepository;
     private final com.nubeero.cia.setup.product.ClassOfBusinessRepository classOfBusinessRepository;
@@ -107,6 +111,9 @@ public class PolicyService {
                     "A policy already exists for quote: " + quoteId);
         }
 
+        CommissionSnapshot commission = resolveCommissionSnapshot(
+                quote.getProductId(), quote.getBrokerId(), quote.getPolicyStartDate());
+
         Policy policy = Policy.builder()
                 .quoteId(quote.getId())
                 .quoteNumber(quote.getQuoteNumber())
@@ -121,6 +128,8 @@ public class PolicyService {
                 .classOfBusinessCode(resolveClassCode(quote.getClassOfBusinessId()))
                 .brokerId(quote.getBrokerId())
                 .brokerName(quote.getBrokerName())
+                .commissionSourceType(commission.sourceType())
+                .commissionRate(commission.rate())
                 .businessType(quote.getBusinessType())
                 .niidRequired(isNiidProduct(quote.getClassOfBusinessName()))
                 .policyStartDate(quote.getPolicyStartDate())
@@ -184,6 +193,9 @@ public class PolicyService {
         validateDates(request.getPolicyStartDate(), request.getPolicyEndDate());
         BigDecimal discount = request.getDiscount() != null ? request.getDiscount() : BigDecimal.ZERO;
 
+        CommissionSnapshot commission = resolveCommissionSnapshot(
+                product.getId(), request.getBrokerId(), request.getPolicyStartDate());
+
         Policy policy = Policy.builder()
                 .customerId(customer.getId())
                 .customerName(resolveCustomerName(customer))
@@ -196,6 +208,8 @@ public class PolicyService {
                 .classOfBusinessCode(product.getClassOfBusiness().getCode())
                 .brokerId(request.getBrokerId())
                 .brokerName(brokerName)
+                .commissionSourceType(commission.sourceType())
+                .commissionRate(commission.rate())
                 .businessType(request.getBusinessType())
                 .niidRequired(request.isNiidRequired())
                 .policyStartDate(request.getPolicyStartDate())
@@ -797,6 +811,37 @@ public class PolicyService {
         if (classOfBusinessName == null) return false;
         String lower = classOfBusinessName.toLowerCase();
         return lower.contains("motor") || lower.contains("marine");
+    }
+
+    /**
+     * Resolve the commission snapshot for a policy at issuance (Slice 84b — finding 6
+     * in the Session 84 audit against PRD §2.1.17).
+     *
+     * <p>Today only the BROKER case is resolvable — {@code policies} carries
+     * {@code broker_id} but neither {@code agent_id} nor
+     * {@code relationship_manager_id} (Open Question #11 in PRD v2.7). So we
+     * snapshot only when the policy is broker-attributed AND an active
+     * {@link CommissionSetup} row exists for (product, BROKER, policyStartDate).
+     * Anything else yields an empty snapshot — the V51 CHECK constraint requires
+     * both columns to be null together, never one without the other.
+     *
+     * <p>Empty snapshot is silent — never fails the policy creation. A missing
+     * commission row simply means commission is configured later or paid at a
+     * negotiated rate; failing here would make every greenfield tenant unable
+     * to bind a policy until a commission row was inserted.
+     */
+    private CommissionSnapshot resolveCommissionSnapshot(UUID productId,
+                                                          UUID brokerId,
+                                                          java.time.LocalDate on) {
+        if (brokerId == null) return CommissionSnapshot.EMPTY;
+        return commissionSetupRepository
+                .findActiveForProduct(productId, CommissionSourceType.BROKER, on)
+                .map(cs -> new CommissionSnapshot(CommissionSourceType.BROKER, cs.getRate()))
+                .orElse(CommissionSnapshot.EMPTY);
+    }
+
+    private record CommissionSnapshot(CommissionSourceType sourceType, BigDecimal rate) {
+        static final CommissionSnapshot EMPTY = new CommissionSnapshot(null, null);
     }
 
     Policy findOrThrow(UUID id) {

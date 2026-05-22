@@ -74,6 +74,26 @@ export interface ClassOfBusinessDto {
   products: number;
 }
 
+// Mirrors com.nubeero.cia.setup.product.CommissionSourceType (Session 84 / V50).
+// AGENT — NAICOM-licensed agent representing the insurer.
+// BROKER — NAICOM-licensed broker representing the insured.
+// RELATIONSHIP_MANAGER — insurer staff owning the customer relationship.
+export type CommissionSourceType = 'AGENT' | 'BROKER' | 'RELATIONSHIP_MANAGER';
+
+// Mirrors com.nubeero.cia.setup.product.dto.CommissionSetupResponse.
+// Per-product commission rule keyed by source + date range. See PRD §2.1.17.
+export interface CommissionSetupDto {
+  id:               string;
+  productId:        string;
+  commissionSource: CommissionSourceType;
+  /** Percent, 0–100 inclusive. */
+  rate:             number;
+  effectiveFrom:    string;
+  effectiveTo?:     string | null;
+  createdAt:        string;
+  updatedAt?:       string | null;
+}
+
 // Mirrors com.nubeero.cia.setup.org.dto.BrokerResponse.
 // Previously carried `status` + `contactPerson` which the backend never accepted
 // (Jackson silently dropped them on the way in). Now matches the entity 1:1.
