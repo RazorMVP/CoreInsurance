@@ -124,6 +124,28 @@ function extractJavaFields(filePath) {
     return fields;
   }
 
+  // ── Lombok @Value class support ───────────────────────────────────────────
+  // @Value makes every field private+final but the field declaration in
+  // source omits the `private` keyword. Detect @Value on the file and parse
+  // the class body lines with a permissive `TYPE name;` pattern. Limited to
+  // the class body so we don't pick up `import` / `package` declarations.
+  if (/@Value\b/.test(stripped)) {
+    const classBody = stripped.match(/\bclass\s+\w+\s*\{([\s\S]*?)\n\}/);
+    if (classBody) {
+      for (const rawLine of classBody[1].split('\n')) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith('//') || line.startsWith('@')) continue;
+        if (line.startsWith('*')) continue;
+        // Skip method signatures + control-flow lines (anything with
+        // unbalanced parens/braces ahead of the identifier).
+        if (/[(){]/.test(line.replace(/^[^=]*=[^=].*$/, ''))) continue;
+        const m = line.match(/^(?:public\s+|protected\s+|private\s+)?(?:static\s+)?(?:final\s+)?[\w<>?,.\s]+?\s+(\w+)\s*(?:=\s*[^;]+)?;\s*$/);
+        if (m) fields.add(m[1]);
+      }
+      return fields;
+    }
+  }
+
   // ── Lombok @Data / @Builder class support ─────────────────────────────────
   for (const rawLine of stripped.split('\n')) {
     const line = rawLine.trim();

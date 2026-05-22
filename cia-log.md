@@ -13,7 +13,7 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | ID | P | Item | Notes |
 |---|---|---|---|
 | A1 | P2 | Setup-Dto smalls drift cleanup — batch | BankDto + CurrencyDto + AccessGroupDto + ApprovalGroupDto + ClassOfBusinessDto + ProductDto.sections + CompanySettingsDto. Mostly missing createdAt/updatedAt + small name aliases. Decrement 7 dto-drift allow-list entries in one slice. |
-| A3 | P1 | QuoteDto + QuoteRiskDto rewrite | Single-line totals on frontend vs per-risk + quote-level loadings/discounts + workflow state on backend. Quote pages may be silently misrendering today. Slice 91 fixed brokerName but the wider drift remains. |
+| A3b | P2 | QuoteDetailPage MockQuote → QuoteDto alignment | Session 95 rewrote `QuoteDto` to mirror `QuoteResponse`, but `QuoteDetailPage`'s local `MockQuote` still carries the old field names (`startDate`/`endDate`/`version`/`issueDate`) and types its API query as `useQuery<MockQuote>`. Page renders + PDF preview + `computeQuoteSummary` operate on the local shape. Single focused slice: replace `MockQuote` with `QuoteDto`, rename references, drop `version` UI (backend doesn't ship it). |
 | A4 | P2 | EndorsementDto redesign | Single `sumInsured`/`premium` fields vs `oldXxx`/`newXxx`/`premiumAdjustment` diff shape on EndorsementResponse (Java record). Lower traffic than Customer/Quote but conceptually wrong. |
 | B1 | P2 | Quote-side agent attribution | Quote entity doesn't carry `agentId`. Extends Module 2 form + bulk-upload CSV + quote-document templates. Bind-from-quote currently always produces broker-attributed policies even when an agent was the intermediary. |
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
@@ -29,6 +29,81 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F1 | P2 | Placeholder-onClick row actions across back-office | 6 known: CustomersListPage Update KYC + Blacklist; ProductsPage Activate/Deactivate; QuotationListPage Submit + Convert + Edit + Duplicate. Each is small but adds up. Batch as one slice. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-22 — Session 95 (`main`): Backlog A3 — QuoteDto + QuoteRiskDto rewrite
+
+Second slice under the Session 93 discipline rule. Goal: align `QuoteDto` + `QuoteRiskDto` with their backend `QuoteResponse` + `QuoteRiskResponse` shapes 1:1; remove A3 from the dto-drift allow-list.
+
+### What the drift hid
+
+`QuoteDto` was an old-shape projection — single-line totals (`sumInsured` / `premium` / `discount` / `netPremium`) and an old period naming (`startDate` / `endDate` / `version`). `QuoteResponse` models the actual shape today: per-risk loadings + discounts, quote-level adjustments, totalSumInsured + totalGrossPremium + totalNetPremium, policyStartDate + policyEndDate, plus workflow state (approvedBy/approvedAt/rejectedBy/rejectedAt/rejectionReason/expiresAt/inputterName/approverName/notes/workflowId), risks array, coinsuranceParticipants array, selectedClauseIds. ~23 backend fields the frontend never declared.
+
+`QuoteRiskDto` similarly carried an unwanted `quoteId` back-reference + missed the per-risk `grossPremium` / `sectionId` / `sectionName` / `loadings` / `discounts` / `orderNo`.
+
+Concrete consumer impact: the `QuotationListPage`'s "Sum Insured" + "Net Premium" + "Ver." columns referenced `sumInsured` / `netPremium` / `version` accessor keys that don't exist on the wire. The cells were rendering as `undefined.toLocaleString()` — empty strings or runtime errors depending on TanStack's tolerance.
+
+### What landed
+
+**`api-client/quotation.ts`** — full rewrite:
+
+- `QuoteDto` mirrors `QuoteResponse` 1:1. Rename map: `sumInsured` → `totalSumInsured`; `premium` → `totalGrossPremium`; `netPremium` → `totalNetPremium`; `startDate` → `policyStartDate`; `endDate` → `policyEndDate`. Removed: `discount` (lives in `quoteDiscounts[]` now), `version` (not on backend response).
+- Added: `productCode`, `productRate`, `brokerId`, `inputterName`, `approverName`, `notes`, `workflowId`, `approvedBy`, `approvedAt`, `rejectedBy`, `rejectedAt`, `rejectionReason`, `expiresAt`, `quoteLoadings[]`, `quoteDiscounts[]`, `selectedClauseIds[]`, `risks[]`, `coinsuranceParticipants[]`.
+- `QuoteRiskDto`: removed `quoteId`; added `grossPremium`, `sectionId`, `sectionName`, `loadings[]`, `discounts[]`, `orderNo`.
+- New supporting types: `AdjustmentFormat` enum (`'PERCENT' | 'FLAT'`), `AdjustmentEntryDto`, `QuoteCoinsuranceParticipantDto`.
+
+**`QuotationListPage.tsx`** — column accessorKeys realigned:
+
+- `'sumInsured'` → `'totalSumInsured'`
+- `'netPremium'` → `'totalNetPremium'`
+- `'version'` column **removed** entirely (backend doesn't ship a version field on QuoteResponse; the previous column was rendering "v undefined" for every row).
+
+**`CreatePolicySheet.tsx`** — FromQuoteForm label fix:
+
+- `q.netPremium` → `q.totalNetPremium` in the Approved Quote select label (the only tsc error after the type rewrite).
+
+**`scripts/check-dto-drift.mjs`** — Lombok `@Value` class support:
+
+- The first run of the rewritten script reported `AdjustmentEntryDto` as drift because its backend counterpart (`AdjustmentEntryResponse`) is a `@Value` class — fields declared without `private` (Lombok emits `private final` automatically). The parser's `@Data`/`@Builder` path required the `private` prefix and reported zero backend fields. Added a `@Value`-detection branch that scopes parsing to the class body and accepts field declarations without visibility modifiers. Multiple `@Value` Response classes exist (PolicySurveyResponse, ClaimInspectionResponse, dashboard DTOs, report DTOs) — they'll now parse correctly when they're surfaced by future drift cleanups.
+
+**`scripts/dto-drift.config.json`** — A3 cleanup:
+
+- `QuoteDto` + `QuoteRiskDto` allow-list entries removed.
+- Dead `QuoteRiskDto` manualMap entry removed (default Dto → Response mapping handles it).
+- Allow-list shrank from 10 → 8 entries.
+
+### What is NOT in this slice
+
+- **`QuoteDetailPage.tsx` MockQuote alignment** — the page declares a local `MockQuote` type with diverged field names (`startDate`/`endDate`/`version`/`issueDate`) and types its API query as `useQuery<MockQuote>`. That's a page-local divergence from the wire shape — a separate cleanup. The page doesn't import the renamed fields from QuoteDto at the type level (only `QuoteDto['status']` which is unchanged), so it compiles. Flagged in backlog reconciliation below.
+- **`SingleRiskQuoteSheet.tsx` + `MultiRiskQuoteSheet.tsx`** — write-side forms with their own local zod schemas. They POST `policyStartDate` / `policyEndDate` (already correct backend names) and don't consume `QuoteDto`. Untouched.
+- **Conversion of the page's compute-summary helpers (`computeQuoteSummary`, `resolveAdjustmentNames`) to operate on QuoteDto** — same MockQuote concern, same future-slice scope.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` filtered to quotation surface + CreatePolicySheet — zero errors.
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (27 interfaces, 2 skipped)`. Up from 25 because `AdjustmentEntryDto` + `QuoteCoinsuranceParticipantDto` are new types that match their backend counterparts.
+- Pre-existing unrelated tsc errors in claims/policy detail dialogs (AssignInspectorDialog, ClaimDetailPage, AssignSurveyorDialog, CoinsuranceEditorDialog) are unchanged — those have been failing since Slice 84a and aren't part of A3.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — types | `cia-frontend/packages/api-client/src/modules/quotation.ts` (full rewrite + 3 new types) |
+| Frontend — UI | `quotation/pages/QuotationListPage.tsx` (column accessors + removed Version column); `policy/pages/create/CreatePolicySheet.tsx` (label fix) |
+| Tooling — script | `cia-frontend/scripts/check-dto-drift.mjs` (`@Value` class parser branch) |
+| Tooling — config | `cia-frontend/scripts/dto-drift.config.json` (A3 entries + dead QuoteRiskDto manualMap removed) |
+| Docs | `cia-log.md` (this entry + backlog row A3 removed) |
+
+### Backlog reconciliation
+
+- **Removed**: A3 (QuoteDto + QuoteRiskDto rewrite).
+- **Added**: 1 row to the canonical backlog — `A3b` (P2): QuoteDetailPage MockQuote → QuoteDto alignment. The page's local MockQuote diverges from the wire shape; consumers like `computeQuoteSummary` operate on the local shape. Replacing MockQuote with `QuoteDto` and threading the rename through the page's render + PDF preview is a focused cleanup that doesn't belong in A3 (per slice discipline — A3 was the type rewrite, A3b is the consumer alignment).
+- **Net**: backlog stayed at 16 (one removed, one added). Allow-list shrank by 2.
+
+### Known follow-ups (deliberately deferred)
+
+None. The slice's discoveries are surfaced as the new A3b row in the canonical backlog table.
 
 ---
 

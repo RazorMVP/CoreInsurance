@@ -26,8 +26,7 @@
   ],
 
   "manualMap": {
-    "ApprovalLevelDto": "ApprovalLevelResponse",
-    "QuoteRiskDto": "QuoteRiskResponse"
+    "ApprovalLevelDto": "ApprovalLevelResponse"
   },
 
   "ignoreDtos": [],
@@ -44,23 +43,6 @@
         "risks"
       ],
       "reason": "Session 92 baseline. EndorsementDto uses single sumInsured/premium fields while EndorsementResponse models the old-vs-new diff (oldSumInsured / newSumInsured / premiumAdjustment). UI doesn't expose the full diff today. Follow-up: redesign EndorsementDto to mirror the record shape."
-    },
-    "QuoteDto": {
-      "frontendOnly": ["sumInsured", "premium", "discount", "netPremium", "startDate", "endDate", "version"],
-      "backendOnly": [
-        "productCode", "productRate", "brokerId", "policyStartDate", "policyEndDate",
-        "totalSumInsured", "totalGrossPremium", "totalNetPremium",
-        "quoteLoadings", "quoteDiscounts", "selectedClauseIds",
-        "inputterName", "approverName", "notes", "workflowId",
-        "approvedBy", "approvedAt", "rejectedBy", "rejectedAt", "rejectionReason",
-        "expiresAt", "risks", "coinsuranceParticipants"
-      ],
-      "reason": "Session 92 baseline. QuoteDto carries single-line totals (sumInsured/premium/discount/netPremium) while QuoteResponse models per-risk + quote-level loadings/discounts + workflow state. Session 91 fixed brokerName but the wider drift remains. Follow-up: full QuoteDto rewrite to mirror QuoteResponse."
-    },
-    "QuoteRiskDto": {
-      "frontendOnly": ["quoteId"],
-      "backendOnly": ["grossPremium", "sectionId", "sectionName", "loadings", "discounts", "orderNo"],
-      "reason": "Session 92 baseline. quoteId is a UI back-reference convenience (server response wraps risks in the quote, no quoteId on each row). Follow-up: surface per-risk loadings/discounts + section info."
     },
     "CompanySettingsDto": {
       "frontendOnly": ["companyName", "logo", "defaultCurrencyCode"],

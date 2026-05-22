@@ -95,7 +95,7 @@ function FromQuoteForm({ onSuccess, onCancel }: { onSuccess: () => void; onCance
     // endpoint takes nothing but the quote ID, so showing it as inline
     // confirmation here matches what's actually about to happen.
     const businessLabel = q.businessType.replace(/_/g, ' ').toLowerCase();
-    const extras = [`₦${(q.netPremium ?? 0).toLocaleString()}`, businessLabel];
+    const extras = [`₦${(q.totalNetPremium ?? 0).toLocaleString()}`, businessLabel];
     if (q.brokerName) extras.push(`Broker: ${q.brokerName}`);
     return {
       id:    q.id,

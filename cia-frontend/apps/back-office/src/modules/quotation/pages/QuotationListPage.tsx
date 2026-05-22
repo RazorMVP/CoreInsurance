@@ -96,14 +96,14 @@ export default function QuotationListPage() {
       ),
     },
     {
-      accessorKey: 'sumInsured',
+      accessorKey: 'totalSumInsured',
       header: 'Sum Insured',
       cell: ({ getValue }) => (
         <span className="text-sm tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
       ),
     },
     {
-      accessorKey: 'netPremium',
+      accessorKey: 'totalNetPremium',
       header: 'Net Premium',
       cell: ({ getValue }) => (
         <span className="text-sm font-medium tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
@@ -116,13 +116,6 @@ export default function QuotationListPage() {
         const s = getValue() as QuoteDto['status'];
         return <Badge variant={statusVariant[s]}>{s.toLowerCase()}</Badge>;
       },
-    },
-    {
-      accessorKey: 'version',
-      header: 'Ver.',
-      cell: ({ getValue }) => (
-        <span className="text-xs text-muted-foreground">v{getValue() as number}</span>
-      ),
     },
     {
       accessorKey: 'createdAt',
