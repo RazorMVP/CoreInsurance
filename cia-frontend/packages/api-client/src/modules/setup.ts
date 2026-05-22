@@ -46,19 +46,31 @@ export interface AccessGroupDto {
   updatedAt:    string;
 }
 
+// Mirrors com.nubeero.cia.setup.approval.dto.ApprovalGroupResponse 1:1.
+// Earlier carried `module` as a UI alias for backend `entityType`, plus a
+// per-level shape that modelled multiple approvers with a `minAmount` range
+// — neither matches the backend, which models ONE approver per level keyed
+// by `levelOrder` + `approverUserId` + `maxAmount`. Realigned in Session 99 /
+// Backlog A1b.
 export interface ApprovalGroupDto {
-  id:          string;
-  name:        string;
-  module:      string;
-  levels:      ApprovalLevelDto[];
+  id:        string;
+  name:      string;
+  entityType: string;
+  levels:    ApprovalLevelDto[];
+  createdAt: string;
+  updatedAt: string;
 }
 
+// Mirrors com.nubeero.cia.setup.approval.dto.ApprovalGroupResponse.ApprovalLevelResponse.
+// One approver per level (not an array). Backend infers the min-amount band
+// for each level from the previous level's maxAmount, so only maxAmount is
+// stored per row.
 export interface ApprovalLevelDto {
-  level:         number;
-  minAmount:     number;
-  maxAmount:     number;
-  approverIds:   string[];
-  approverNames: string[];
+  id:             string;
+  levelOrder:     number;
+  approverUserId: string;
+  approverName:   string;
+  maxAmount:      number;
 }
 
 // Mirrors com.nubeero.cia.setup.product.dto.ProductSectionResponse 1:1.

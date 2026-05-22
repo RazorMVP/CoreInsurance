@@ -12,21 +12,30 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { applyApiErrors } from '@/lib/form-errors';
 
+// Mirrors com.nubeero.cia.setup.approval.dto.ApprovalGroupRequest 1:1.
+// Aligned with backend in Session 99 / Backlog A1b:
+//   - `module` (UI alias) → `entityType`
+//   - Per-level shape moved from multi-approver + min/max range to single
+//     approver + maxAmount, keyed by levelOrder. Backend infers each level's
+//     min-amount band from the previous level's maxAmount.
 const levelSchema = z.object({
-  minAmount:    z.coerce.number().min(0),
-  maxAmount:    z.coerce.number().min(1),
-  approverIds:  z.array(z.string()).min(1),
+  levelOrder:     z.coerce.number().min(1),
+  approverUserId: z.string().min(1, 'Required'),
+  approverName:   z.string().optional(),
+  maxAmount:      z.coerce.number().min(0),
 });
 
 const schema = z.object({
-  name:   z.string().min(2, 'Required'),
-  module: z.string().min(1, 'Required'),
-  levels: z.array(levelSchema).min(1, 'At least one level required'),
+  name:       z.string().min(2, 'Required'),
+  entityType: z.string().min(1, 'Required'),
+  levels:     z.array(levelSchema).min(1, 'At least one level required'),
 });
 
 type FormValues = z.infer<typeof schema>;
 
-const MODULES = ['UNDERWRITING','CLAIMS','FINANCE','ENDORSEMENT','QUOTATION'];
+// Entity types that have an approval-group flow. Same vocabulary the backend
+// uses in approval-group records. UI labels live in ApprovalGroupsPage.
+const ENTITY_TYPES = ['POLICY', 'CLAIM', 'ENDORSEMENT', 'QUOTE', 'FINANCE_RECEIPT', 'FINANCE_PAYMENT'];
 
 interface Props {
   open: boolean; onOpenChange: (v: boolean) => void;
@@ -52,7 +61,11 @@ export default function ApprovalGroupSheet({ open, onOpenChange, group, onSucces
   const form = useForm<FormValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver:      zodResolver(schema) as any,
-    defaultValues: { name: '', module: '', levels: [{ minAmount: 0, maxAmount: 10_000_000, approverIds: [] }] },
+    defaultValues: {
+      name:       '',
+      entityType: '',
+      levels:     [{ levelOrder: 1, approverUserId: '', approverName: '', maxAmount: 10_000_000 }],
+    },
   });
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: 'levels' });
@@ -60,25 +73,45 @@ export default function ApprovalGroupSheet({ open, onOpenChange, group, onSucces
   useEffect(() => {
     if (group) {
       form.reset({
-        name:   group.name,
-        module: group.module,
-        levels: group.levels.map((l) => ({ minAmount: l.minAmount, maxAmount: l.maxAmount, approverIds: l.approverIds })),
+        name:       group.name,
+        entityType: group.entityType,
+        levels:     group.levels.map((l) => ({
+          levelOrder:     l.levelOrder,
+          approverUserId: l.approverUserId,
+          approverName:   l.approverName,
+          maxAmount:      l.maxAmount,
+        })),
       });
     } else {
-      form.reset({ name: '', module: '', levels: [{ minAmount: 0, maxAmount: 10_000_000, approverIds: [] }] });
+      form.reset({
+        name:       '',
+        entityType: '',
+        levels:     [{ levelOrder: 1, approverUserId: '', approverName: '', maxAmount: 10_000_000 }],
+      });
     }
   }, [group, form]);
 
   const save = useMutation({
     mutationFn: async (values: FormValues) => {
+      // Resolve approverName per level from the loaded users list so the
+      // backend doesn't have to denormalise on every PUT. (Backend will
+      // resolve from approverUserId regardless, but sending the name keeps
+      // the request payload self-describing for audit logs.)
+      const payload: FormValues = {
+        ...values,
+        levels: values.levels.map((l) => ({
+          ...l,
+          approverName: approvers.find((a) => a.id === l.approverUserId)?.name ?? l.approverName ?? '',
+        })),
+      };
       if (group) {
         const res = await apiClient.put<{ data: ApprovalGroupDto }>(
-          `/api/v1/setup/approval-groups/${group.id}`, values,
+          `/api/v1/setup/approval-groups/${group.id}`, payload,
         );
         return res.data.data;
       }
       const res = await apiClient.post<{ data: ApprovalGroupDto }>(
-        '/api/v1/setup/approval-groups', values,
+        '/api/v1/setup/approval-groups', payload,
       );
       return res.data.data;
     },
@@ -98,7 +131,7 @@ export default function ApprovalGroupSheet({ open, onOpenChange, group, onSucces
       <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{group ? 'Edit Approval Group' : 'New Approval Group'}</SheetTitle>
-          <SheetDescription>Configure which module this applies to and the approval levels.</SheetDescription>
+          <SheetDescription>Configure which entity type this applies to and the approval ladder.</SheetDescription>
         </SheetHeader>
 
         <Form {...form}>
@@ -113,13 +146,13 @@ export default function ApprovalGroupSheet({ open, onOpenChange, group, onSucces
                   </FormItem>
                 )}
               />
-              <FormField control={form.control} name="module"
+              <FormField control={form.control} name="entityType"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Module</FormLabel>
+                    <FormLabel>Entity Type</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl><SelectTrigger><SelectValue placeholder="Select module" /></SelectTrigger></FormControl>
-                      <SelectContent>{MODULES.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Select entity type" /></SelectTrigger></FormControl>
+                      <SelectContent>{ENTITY_TYPES.map((m) => <SelectItem key={m} value={m}>{m.replace(/_/g, ' ')}</SelectItem>)}</SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
@@ -129,6 +162,9 @@ export default function ApprovalGroupSheet({ open, onOpenChange, group, onSucces
 
             <div className="space-y-3">
               <p className="text-sm font-semibold text-foreground">Approval Levels</p>
+              <p className="text-xs text-muted-foreground">
+                Each level escalates from the previous: level 1 covers amounts up to its max; level 2 picks up beyond that, and so on.
+              </p>
               {fields.map((f, i) => (
                 <div key={f.id} className="rounded-lg border p-4 space-y-3">
                   <div className="flex items-center justify-between">
@@ -140,11 +176,11 @@ export default function ApprovalGroupSheet({ open, onOpenChange, group, onSucces
                     )}
                   </div>
                   <FormRow>
-                    <FormField control={form.control} name={`levels.${i}.minAmount`}
+                    <FormField control={form.control} name={`levels.${i}.levelOrder`}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Min Amount (₦)</FormLabel>
-                          <FormControl><Input type="number" {...field} /></FormControl>
+                          <FormLabel>Order</FormLabel>
+                          <FormControl><Input type="number" min={1} {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -159,14 +195,11 @@ export default function ApprovalGroupSheet({ open, onOpenChange, group, onSucces
                       )}
                     />
                   </FormRow>
-                  <FormField control={form.control} name={`levels.${i}.approverIds`}
+                  <FormField control={form.control} name={`levels.${i}.approverUserId`}
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Approver</FormLabel>
-                        <Select
-                          onValueChange={(v) => field.onChange([v])}
-                          value={field.value[0] ?? ''}
-                        >
+                        <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl><SelectTrigger><SelectValue placeholder="Select approver" /></SelectTrigger></FormControl>
                           <SelectContent>
                             {approvers.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
@@ -179,7 +212,12 @@ export default function ApprovalGroupSheet({ open, onOpenChange, group, onSucces
                 </div>
               ))}
               <Button type="button" variant="outline" size="sm"
-                onClick={() => append({ minAmount: 0, maxAmount: 50_000_000, approverIds: [] })}>
+                onClick={() => append({
+                  levelOrder:     fields.length + 1,
+                  approverUserId: '',
+                  approverName:   '',
+                  maxAmount:      50_000_000,
+                })}>
                 + Add Level
               </Button>
             </div>

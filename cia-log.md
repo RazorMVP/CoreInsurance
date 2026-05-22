@@ -12,7 +12,6 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 | ID | P | Item | Notes |
 |---|---|---|---|
-| A1b | P2 | ApprovalGroupDto + ApprovalLevelDto reshape | Backend models ONE approver per level (`approverUserId` + `approverName` + `maxAmount` + `levelOrder`); frontend models multiple per level with arrays (`approverIds`/`approverNames`) + a `minAmount` that doesn't exist on backend. Also `module` alias for `entityType`. Affects ApprovalGroupSheet form schema + ApprovalGroupsPage rendering + AccessGroupSheet display. UX-level change, not a simple rename. |
 | F4 | P3 | Password Policy UI needs real backend endpoint | CompanySettingsPage's Password Policy card was sending `minPasswordLength` + `passwordExpireDays` in the company-settings PUT body — backend `CompanySettingsRequest` doesn't accept either field. Session 98 removed the card from the form (was pure theatre). When a real password-policy endpoint exists, surface those settings under a separate `/setup/password-policy` page or a dedicated card with a real PUT target. |
 | A3b | P2 | QuoteDetailPage MockQuote → QuoteDto alignment | Session 95 rewrote `QuoteDto` to mirror `QuoteResponse`, but `QuoteDetailPage`'s local `MockQuote` still carries the old field names (`startDate`/`endDate`/`version`/`issueDate`) and types its API query as `useQuery<MockQuote>`. Page renders + PDF preview + `computeQuoteSummary` operate on the local shape. Single focused slice: replace `MockQuote` with `QuoteDto`, rename references, drop `version` UI (backend doesn't ship it). |
 | A4 | P2 | EndorsementDto redesign | Single `sumInsured`/`premium` fields vs `oldXxx`/`newXxx`/`premiumAdjustment` diff shape on EndorsementResponse (Java record). Lower traffic than Customer/Quote but conceptually wrong. |
@@ -31,6 +30,80 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F1 | P2 | Placeholder-onClick row actions across back-office | 6 known: CustomersListPage Update KYC + Blacklist; ProductsPage Activate/Deactivate; QuotationListPage Submit + Convert + Edit + Duplicate. Each is small but adds up. Batch as one slice. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-22 — Session 99 (`main`): Backlog A1b — ApprovalGroupDto + ApprovalLevelDto reshape (+ parser nested-class fix)
+
+Sixth slice under the Session 93 discipline rule. Goal: align `ApprovalGroupDto` + `ApprovalLevelDto` with their backend response shapes — backend models ONE approver per level keyed by `levelOrder` + `approverUserId` + `maxAmount`; frontend was modelling multiple approvers per level with arrays + a `minAmount` that doesn't exist on backend.
+
+### What the drift hid
+
+`ApprovalGroupDto` had three categories of drift:
+
+1. **Field alias** — frontend `module` (backend `entityType`). Jackson silently dropped `module` on write; `entityType` was the actual key. The display badge on `ApprovalGroupsPage` read `group.module` which would render `undefined` against any real backend response.
+2. **Level shape collapse** — frontend `ApprovalLevelDto` modelled `level + minAmount + maxAmount + approverIds[] + approverNames[]` (a band of amounts with multiple approvers). Backend `ApprovalLevelResponse` models `levelOrder + approverUserId + approverName + maxAmount` (one approver, no min). Different mental models.
+3. **Missing audit fields** — `createdAt` + `updatedAt` not declared on the frontend type.
+
+### What landed
+
+**`api-client/setup.ts`** — `ApprovalGroupDto` + `ApprovalLevelDto` rewrites:
+
+- `ApprovalGroupDto`: `module` → `entityType`; added `createdAt` + `updatedAt`.
+- `ApprovalLevelDto`: removed `level` + `minAmount` + `approverIds[]` + `approverNames[]`; added `id` + `levelOrder` + `approverUserId` + `approverName` + `maxAmount`.
+
+**`ApprovalGroupSheet.tsx`** — form schema + render rewrite:
+
+- Schema mirrors `com.nubeero.cia.setup.approval.dto.ApprovalGroupRequest`: `name` (required) + `entityType` (required) + `levels: [{ levelOrder, approverUserId, approverName?, maxAmount }]`.
+- `module` select replaced with `entityType` select. Constants list aligned with backend vocabulary (`POLICY`, `CLAIM`, `ENDORSEMENT`, `QUOTE`, `FINANCE_RECEIPT`, `FINANCE_PAYMENT`). UI labels live in the page-side `ENTITY_TYPE_LABELS` map.
+- Per-level rows: dropped Min Amount input; kept Max Amount; replaced the approver multi-select with a single approver Select (the form previously rendered as a multi-select but immediately wrapped the value in `[v]` to satisfy the array schema — confirmed the original was a workaround, not a real multi-approver UX). Added Order input.
+- Submit-time `approverName` resolved from the loaded users list per level. Backend will resolve from `approverUserId` regardless, but sending the name keeps the payload self-describing in audit logs.
+- Add Level default `levelOrder` is `fields.length + 1` so each new row gets the next ordinal automatically.
+
+**`ApprovalGroupsPage.tsx`** — rendering update:
+
+- `MODULE_LABELS` → `ENTITY_TYPE_LABELS` with the new vocabulary.
+- Group badge reads `group.entityType` instead of `group.module`.
+- Each level row: `key={lvl.id}`, "Level {levelOrder}", approver name singular (was joined array), amount string "up to ₦N" (was a "₦X – ₦Y" range).
+
+### Parser side-discovery — resolved inside the slice
+
+The first drift-check after the type rewrites flagged `ApprovalGroupDto ↔ ApprovalGroupResponse` with `backendOnly: [levelOrder, approverUserId, approverName, maxAmount]`. Those fields are on the **nested static class** `ApprovalGroupResponse.ApprovalLevelResponse`, not on the outer class. The parser was scanning every `private TYPE name;` line in the file and conflating outer + nested class fields.
+
+Fix: extended the `@Data` parser branch in `check-dto-drift.mjs` to track brace depth as it scans lines, only counting fields at `depth === 1` (inside the outermost class body). Nested static classes, anonymous classes, and method bodies are now skipped. Same kind of structural improvement as the Slice 95 `@Value` class branch — closes another parser gap surfaced by completing a real reshape.
+
+This is in-slice because the parser bug was blocking verification of the A1b alignment. Per the Session 93 rule, when a side-discovery blocks the slice's stated goal, the right move is to resolve it in-slice rather than allow-list it indefinitely.
+
+### dto-drift.config.json — collateral cleanup
+
+Allow-list dropped from 2 → 1 entry. `ApprovalLevelDto` manualMap entry removed (was no longer needed — `ApprovalLevelDto` resolves to the non-existent `ApprovalLevelResponse` standalone file, but the script skips Dtos with no backend counterpart, and Endorsement-only is now the lone remaining entry). The `EndorsementDto` reason updated to reference its dedicated backlog row A4.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` filtered to `ApprovalGroupSheet.tsx` + `ApprovalGroupsPage.tsx` + `setup.ts` — zero errors.
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (28 interfaces, 2 skipped)`. The nested-class parser fix also tightens the check for the 12+ other `*Response.java` files in the codebase that have nested static classes (PolicySurveyResponse, ClaimInspectionResponse, dashboard DTOs, etc.).
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — types | `cia-frontend/packages/api-client/src/modules/setup.ts` (ApprovalGroupDto + ApprovalLevelDto rewrite) |
+| Frontend — UI | `setup/pages/approval-groups/ApprovalGroupSheet.tsx` (form schema + entity-type select + per-level fields rewrite); `setup/pages/approval-groups/ApprovalGroupsPage.tsx` (label map + render) |
+| Tooling — script | `cia-frontend/scripts/check-dto-drift.mjs` (nested-class brace-depth tracking in @Data branch) |
+| Tooling — config | `cia-frontend/scripts/dto-drift.config.json` (ApprovalGroup entry removed; ApprovalLevel manualMap cleaned up) |
+| Docs | `cia-log.md` (this entry + backlog row A1b removed) |
+
+### Backlog reconciliation
+
+- **Removed**: A1b (ApprovalGroupDto + ApprovalLevelDto reshape).
+- **Added**: none. The parser side-discovery resolved in-slice (a 20-line script change that unblocks future drift checks against any Response class with nested static records). Not adding to backlog because it's done.
+- **Net**: 18 → 17 rows.
+
+The dto-drift allow-list is now down to **1 entry** (EndorsementDto — that's A4). From 12 at Session 92 baseline → 0 by the time A4 ships. Six slices to drain all 12 baseline entries.
+
+### Known follow-ups (deliberately deferred)
+
+None beyond A4 (already in canonical backlog).
 
 ---
 

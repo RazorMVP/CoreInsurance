@@ -25,9 +25,7 @@
     "down slice-by-slice; don't add new ones without strong justification."
   ],
 
-  "manualMap": {
-    "ApprovalLevelDto": "ApprovalLevelResponse"
-  },
+  "manualMap": {},
 
   "ignoreDtos": [],
 
@@ -42,12 +40,7 @@
         "approvedBy", "approvedAt", "rejectedBy", "rejectedAt", "rejectionReason",
         "risks"
       ],
-      "reason": "Session 92 baseline. EndorsementDto uses single sumInsured/premium fields while EndorsementResponse models the old-vs-new diff (oldSumInsured / newSumInsured / premiumAdjustment). UI doesn't expose the full diff today. Follow-up: redesign EndorsementDto to mirror the record shape."
-    },
-    "ApprovalGroupDto": {
-      "frontendOnly": ["module"],
-      "backendOnly": ["entityType", "createdAt", "updatedAt", "levelOrder", "approverUserId", "approverName", "maxAmount"],
-      "reason": "Session 92 baseline. module is a UI alias for entityType. The level-level fields (levelOrder/approverUserId/approverName/maxAmount) shouldn't be at the top level — they belong on ApprovalLevelDto. Follow-up: ApprovalGroup reshape + alias removal (backlog A1b)."
+      "reason": "Session 92 baseline. EndorsementDto uses single sumInsured/premium fields while EndorsementResponse models the old-vs-new diff (oldSumInsured / newSumInsured / premiumAdjustment). UI doesn't expose the full diff today. Follow-up: redesign EndorsementDto to mirror the record shape (backlog A4)."
     }
   }
 }

@@ -147,14 +147,35 @@ function extractJavaFields(filePath) {
   }
 
   // ── Lombok @Data / @Builder class support ─────────────────────────────────
+  // Track brace depth so fields inside nested static classes (e.g.
+  // ApprovalGroupResponse.ApprovalLevelResponse) don't leak up to the outer
+  // class. We count fields at depth === 1 (inside the outermost class body
+  // only). Depth 0 is the file's top level (imports / annotations / class
+  // declaration); depth ≥ 2 is a nested class / method body.
+  let depth = 0;
   for (const rawLine of stripped.split('\n')) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('//') || line.startsWith('@')) continue;
-    if (line.startsWith('*')) continue; // leftover Javadoc orphan after strip
-    if (/\bstatic\b/.test(line) && !line.startsWith('private ')) continue;
+    const trimmed = rawLine.trim();
+
+    // Update depth based on net brace count on this line. We do this BEFORE
+    // matching so the line containing the outer `class X {` itself transitions
+    // depth 0 → 1, and the matching closing `}` transitions back to 0.
+    // Order matters: a single-line block like `class X {}` cancels out.
+    const opens  = (rawLine.match(/\{/g) ?? []).length;
+    const closes = (rawLine.match(/\}/g) ?? []).length;
+    const depthBefore = depth;
+    depth += opens - closes;
+
+    if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('@')) continue;
+    if (trimmed.startsWith('*')) continue; // leftover Javadoc orphan after strip
+    if (/\bstatic\b/.test(trimmed) && !trimmed.startsWith('private ')) continue;
+
+    // Use depthBefore for the field check — a line like `private X y;` inside
+    // the outer class is at depth 1 (the depth at the START of the line).
+    if (depthBefore !== 1) continue;
+
     // Match `private` (optionally with `static`/`final` modifiers we skip),
     // then a type (possibly with generics), then an identifier ending with `;`.
-    const m = line.match(/^private\s+(?:static\s+)?(?:final\s+)?[\w<>?,.\s]+?\s+(\w+)\s*(?:=\s*[^;]+)?;\s*$/);
+    const m = trimmed.match(/^private\s+(?:static\s+)?(?:final\s+)?[\w<>?,.\s]+?\s+(\w+)\s*(?:=\s*[^;]+)?;\s*$/);
     if (m) fields.add(m[1]);
   }
   return fields;

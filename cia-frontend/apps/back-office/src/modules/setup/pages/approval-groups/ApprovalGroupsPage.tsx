@@ -9,9 +9,15 @@ import { type Row } from '@tanstack/react-table';
 import { useDeleteWithReason } from '@/lib/use-delete-with-reason';
 import ApprovalGroupSheet from './ApprovalGroupSheet';
 
-const MODULE_LABELS: Record<string, string> = {
-  UNDERWRITING: 'Underwriting', CLAIMS: 'Claims', FINANCE: 'Finance',
-  ENDORSEMENT: 'Endorsements', QUOTATION: 'Quotation',
+// Display labels for the backend entityType values. Vocabulary matches what
+// ApprovalGroupSheet exposes via its entity-type select.
+const ENTITY_TYPE_LABELS: Record<string, string> = {
+  POLICY:           'Policy',
+  CLAIM:            'Claim',
+  ENDORSEMENT:      'Endorsement',
+  QUOTE:            'Quote',
+  FINANCE_RECEIPT:  'Finance — Receipt',
+  FINANCE_PAYMENT:  'Finance — Payment',
 };
 
 export default function ApprovalGroupsPage() {
@@ -60,7 +66,7 @@ export default function ApprovalGroupsPage() {
                 <div className="flex items-start justify-between">
                   <div className="space-y-0.5">
                     <p className="font-display text-sm font-semibold text-foreground">{group.name}</p>
-                    <Badge variant="default" className="text-[10px]">{MODULE_LABELS[group.module] ?? group.module}</Badge>
+                    <Badge variant="default" className="text-[10px]">{ENTITY_TYPE_LABELS[group.entityType] ?? group.entityType}</Badge>
                   </div>
                   <DataTableRowActions
                     row={{ original: group } as Row<ApprovalGroupDto>}
@@ -76,13 +82,13 @@ export default function ApprovalGroupsPage() {
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Approval Levels</p>
                   {group.levels.map((lvl) => (
-                    <div key={lvl.level} className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">
+                    <div key={lvl.id} className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">
                       <div>
-                        <p className="text-xs font-medium text-foreground">Level {lvl.level}</p>
-                        <p className="text-xs text-muted-foreground">{lvl.approverNames.join(', ')}</p>
+                        <p className="text-xs font-medium text-foreground">Level {lvl.levelOrder}</p>
+                        <p className="text-xs text-muted-foreground">{lvl.approverName}</p>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        ₦{lvl.minAmount.toLocaleString()} – {lvl.maxAmount >= 1e12 ? '∞' : `₦${lvl.maxAmount.toLocaleString()}`}
+                        up to {lvl.maxAmount >= 1e12 ? '∞' : `₦${lvl.maxAmount.toLocaleString()}`}
                       </p>
                     </div>
                   ))}
