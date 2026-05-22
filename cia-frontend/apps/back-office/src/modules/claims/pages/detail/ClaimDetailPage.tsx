@@ -138,7 +138,7 @@ export default function ClaimDetailPage() {
   const surveyDocsQuery = useQuery<ClaimDocumentDto[]>({
     queryKey: ['claims', id, 'documents', 'SURVEY_REPORT'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: { content: ClaimDocumentDto[] } }>(
+      const res = await apiClient.get<{ data: ClaimDocumentDto[] }>(
         `/api/v1/claims/${id}/documents`,
         { params: { documentType: 'SURVEY_REPORT', size: 100 } },
       );
@@ -265,7 +265,7 @@ export default function ClaimDetailPage() {
   const documentsQuery = useQuery<ClaimDocumentDto[]>({
     queryKey: ['claims', id, 'documents'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: { content: ClaimDocumentDto[] } }>(
+      const res = await apiClient.get<{ data: ClaimDocumentDto[] }>(
         `/api/v1/claims/${id}/documents`,
         { params: { size: 100 } },
       );
@@ -278,7 +278,7 @@ export default function ClaimDetailPage() {
   const commentsQuery = useQuery<ClaimCommentDto[]>({
     queryKey: ['claims', id, 'comments'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: { content: ClaimCommentDto[] } }>(
+      const res = await apiClient.get<{ data: ClaimCommentDto[] }>(
         `/api/v1/claims/${id}/comments`,
         { params: { size: 100 } },
       );

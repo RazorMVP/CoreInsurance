@@ -13,7 +13,7 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | ID | P | Item | Notes |
 |---|---|---|---|
 | F4 | P3 | Password Policy UI needs real backend endpoint | CompanySettingsPage's Password Policy card was sending `minPasswordLength` + `passwordExpireDays` in the company-settings PUT body — backend `CompanySettingsRequest` doesn't accept either field. Session 98 removed the card from the form (was pure theatre). When a real password-policy endpoint exists, surface those settings under a separate `/setup/password-policy` page or a dedicated card with a real PUT target. |
-| F5 | P1 | Page-wrapped list responses crash `.map`/`.find`/`.filter` consumers | `AssignSurveyorDialog` + `CoinsuranceEditorDialog` queries unwrap `res.data.data` and expect an array, but the surveyors + insurance-companies list endpoints return `{ content: SurveyorDto[] }` / `{ content: InsuranceCompanyDto[] }` (Spring `Page<T>` shape). Errors visible on `pnpm tsc --noEmit` (CoinsuranceEditorDialog:147 + AssignSurveyorDialog:51). Per CLAUDE.md API design: list endpoints must put the array in `data` + pagination in `meta`. Backend fix on the two `SurveyorController` + `InsuranceCompanyController` list methods. Predates A4 (visible on HEAD). |
+| F6 | P3 | Two `// allow-mock:` opt-outs missing | `cia-frontend/scripts/check-api-wiring.sh` flags `MOCK_QUOTES` in QuoteDetailPage:26 (added Session 100) and `MOCK_CUSTOMERS` in CustomerDetailPage:18 (added Session 94). Both are decorative fallbacks-while-useQuery-is-in-flight (same pattern as `mockEndorsement` in EndorsementDetailPage which IS labelled). Two one-line comment fixes. Not a runtime issue — wiring script isn't a CI gate today, only informational locally. |
 | B1 | P2 | Quote-side agent attribution | Quote entity doesn't carry `agentId`. Extends Module 2 form + bulk-upload CSV + quote-document templates. Bind-from-quote currently always produces broker-attributed policies even when an agent was the intermediary. |
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
 | B3 | P2 | Policy list page Intermediary column | Surface broker/agent on PolicyListPage. Small UI surface; mirrors the "Intermediary" row Slice 84e added to the detail page. |
@@ -29,6 +29,85 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F1 | P2 | Placeholder-onClick row actions across back-office | 6 known: CustomersListPage Update KYC + Blacklist; ProductsPage Activate/Deactivate; QuotationListPage Submit + Convert + Edit + Duplicate. Each is small but adds up. Batch as one slice. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-22 — Session 102 (`main`): Backlog F5 — page-wrapped list-query types corrected (6 sites, 4 files)
+
+Ninth slice under the Session 93 discipline rule. Goal: clear the typecheck errors surfaced (but not absorbed) in Session 101 / A4. The errors lived in two files on the policy detail page and two on the claim detail page — `AssignSurveyorDialog`, `CoinsuranceEditorDialog`, `AssignInspectorDialog`, and `ClaimDetailPage`.
+
+### What I expected vs. what landed
+
+Backlog F5 hypothesised this was a **backend** bug — list endpoints returning `{ content: T[] }` (Spring `Page<T>` shape leaking) instead of putting the array directly in `data` per CLAUDE.md. Read both `SurveyorController.list` and `InsuranceCompanyController.list` to write the fix, and discovered the backend is already correct:
+
+```java
+public ResponseEntity<ApiResponse<List<SurveyorResponse>>> list(...) {
+    Page<SurveyorResponse> page = service.list(pageable);
+    ApiMeta meta = ApiMeta.builder().total(...).page(...).size(...).build();
+    return ResponseEntity.ok(ApiResponse.success(page.getContent(), meta));
+}
+```
+
+`page.getContent()` (a `List<T>`) is what lands in `data`. Pagination in `meta`. Verified for all four involved controllers — `SurveyorController`, `InsuranceCompanyController`, `ClaimDocumentController`, `ClaimCommentController`. F5 was misdiagnosed: the bug was purely in the frontend type annotations.
+
+### What the frontend was actually doing
+
+Six query-fn declarations across four files used this pattern:
+
+```ts
+const res = await apiClient.get<{ data: { content: SurveyorDto[] } }>(
+  '/api/v1/setup/surveyors',
+  { params: { size: 200 } },
+);
+return res.data.data ?? [];
+```
+
+`apiClient.get<{ data: { content: T[] } }>` made TypeScript believe `res.data.data` was `{ content: T[] }`. The queryFn was then declared as `useQuery<T[]>` — a mismatch tsc immediately caught. At **runtime** `res.data.data` was actually the array (because the backend ships an array), and `?? []` only fires on null/undefined, so the consumer got the array's prototype methods. But every type-level access (`.filter`, `.find`, `.map`) was a tsc error.
+
+Other queries in the same files (e.g. `ClaimDetailPage` line 190 reading `reserves`) used the correct shape `{ data: T[] }`. So this was inconsistent at the file level too — copy-paste drift, not a project-wide assumption.
+
+### The fix
+
+Six identical changes — remove the `{ content: ... }` wrapper:
+
+| File | Line | Endpoint |
+|---|---|---|
+| `policy/.../AssignSurveyorDialog.tsx` | 42 | `/api/v1/setup/surveyors` |
+| `policy/.../CoinsuranceEditorDialog.tsx` | 62 | `/api/v1/setup/insurance-companies` |
+| `claims/.../AssignInspectorDialog.tsx` | 42 | `/api/v1/setup/surveyors` |
+| `claims/.../ClaimDetailPage.tsx` | 141 | `/api/v1/claims/{id}/documents?documentType=SURVEY_REPORT` |
+| `claims/.../ClaimDetailPage.tsx` | 268 | `/api/v1/claims/{id}/documents` |
+| `claims/.../ClaimDetailPage.tsx` | 281 | `/api/v1/claims/{id}/comments` |
+
+Kept the `?? []` defensive fallback — it's a no-op against a non-nullish array but cheap insurance against a backend bug.
+
+### Why no backend change
+
+The backend was correct. Misdiagnosing F5 as a backend problem was the kind of mistake the slice discipline rule is supposed to catch — when the backlog entry asserts a cause without verification. The right move here was to read both ends before writing the fix, which is what landed.
+
+### Verification
+
+- `grep -rn "data: { content:" cia-frontend/apps/back-office/src/` — zero matches.
+- `pnpm --filter @cia/back-office exec tsc --noEmit` — exit 0, zero output (down from ~16 errors that block the build).
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (29 interfaces, 2 skipped)` unchanged.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — UI | `AssignSurveyorDialog.tsx`, `CoinsuranceEditorDialog.tsx`, `AssignInspectorDialog.tsx`, `ClaimDetailPage.tsx` (6 lines total) |
+| Docs | `cia-log.md` (this entry + backlog F5 removed + F6 added) |
+
+### Backlog reconciliation
+
+- **Removed**: F5.
+- **Added**: F6 (P3) — `check-api-wiring.sh` surfaces 2 missing `// allow-mock:` comments on `MOCK_QUOTES` (QuoteDetailPage, added S100) and `MOCK_CUSTOMERS` (CustomerDetailPage, added S94). Both pre-existed F5 (verified by stash + re-run). Two one-line comment additions. Logged P3 because the wiring script is not a CI gate today — only informational locally — so these aren't actually blocking anything.
+- **Net**: 15 → 15 rows.
+
+### Known follow-ups (deliberately deferred)
+
+- F6 (allow-mock opt-out lines — see backlog).
+- The `?? []` defensive fallback is now inconsistent across the file (`ClaimDetailPage` line 194 has none; line 272 keeps `?? []`). Cosmetic; not worth a slice on its own.
 
 ---
 

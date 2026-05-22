@@ -59,7 +59,7 @@ export default function CoinsuranceEditorDialog({
   const companiesQuery = useQuery<InsuranceCompanyDto[]>({
     queryKey: ['setup', 'insurance-companies'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: { content: InsuranceCompanyDto[] } }>(
+      const res = await apiClient.get<{ data: InsuranceCompanyDto[] }>(
         '/api/v1/setup/insurance-companies',
         { params: { size: 200 } },
       );

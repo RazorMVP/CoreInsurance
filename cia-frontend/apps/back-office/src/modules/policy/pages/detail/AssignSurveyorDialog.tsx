@@ -39,7 +39,7 @@ export default function AssignSurveyorDialog({ open, onOpenChange, policyId, pol
   const surveyorsQuery = useQuery<SurveyorDto[]>({
     queryKey: ['setup', 'surveyors'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: { content: SurveyorDto[] } }>(
+      const res = await apiClient.get<{ data: SurveyorDto[] }>(
         '/api/v1/setup/surveyors',
         { params: { size: 200 } },
       );
