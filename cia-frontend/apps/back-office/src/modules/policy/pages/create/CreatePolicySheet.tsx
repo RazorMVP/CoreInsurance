@@ -36,23 +36,25 @@ const fromQuoteSchema = z.object({
 type FromQuoteValues = z.infer<typeof fromQuoteSchema>;
 
 // ── Create without quote ──────────────────────────────────────────────────
-// `channel` + `intermediaryId` are UI-only fields. At submit time they map to
-// brokerId / agentId on the backend (V53 enforces XOR at the DB level so the
-// form deliberately renders one picker, not two). RELATIONSHIP_MANAGER is not
-// in the channel picker — RM commission is a payroll incentive and rides on a
-// different document type entirely.
+// Schema fields map 1:1 to com.nubeero.cia.policy.dto.PolicyRequest with two
+// UI-only exceptions:
+//   - `channel` + `intermediaryId` → resolved at submit to brokerId / agentId.
+//   - `rate` is preview-only — backend computes premium server-side from
+//     product.rate × risk.sumInsured. Sent value would be ignored.
+// At submit we also compose a single-row risks array (description from the
+// selected product, sumInsured from the form). Users refine the risk schedule
+// via RisksEditorDialog on the policy detail page once the policy exists.
 const directSchema = z.object({
-  customerId:     z.string().min(1, 'Required'),
-  productId:      z.string().min(1, 'Required'),
-  channel:        z.enum(['DIRECT', 'BROKER', 'AGENT']),
-  intermediaryId: z.string().optional().or(z.literal('')),
-  businessType:   z.enum(['DIRECT', 'DIRECT_WITH_COINSURANCE', 'INWARD_COINSURANCE']),
-  startDate:      z.string().min(1, 'Required'),
-  endDate:        z.string().min(1, 'Required'),
-  sumInsured:     z.coerce.number().positive(),
-  rate:           z.coerce.number().min(0),
-  discount:       z.coerce.number().min(0),
-  paymentTerms:   z.string().min(1, 'Required'),
+  customerId:        z.string().min(1, 'Required'),
+  productId:         z.string().min(1, 'Required'),
+  channel:           z.enum(['DIRECT', 'BROKER', 'AGENT']),
+  intermediaryId:    z.string().optional().or(z.literal('')),
+  businessType:      z.enum(['DIRECT', 'DIRECT_WITH_COINSURANCE', 'INWARD_COINSURANCE']),
+  policyStartDate:   z.string().min(1, 'Required'),
+  policyEndDate:     z.string().min(1, 'Required'),
+  sumInsured:        z.coerce.number().positive(),
+  rate:              z.coerce.number().min(0),
+  discount:          z.coerce.number().min(0),
 }).refine(
   (v) => v.channel === 'DIRECT' || (v.intermediaryId && v.intermediaryId.length > 0),
   { message: 'Select an intermediary', path: ['intermediaryId'] },
@@ -193,8 +195,8 @@ function DirectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: 
     resolver:      zodResolver(directSchema) as any,
     defaultValues: {
       customerId: '', productId: '', channel: 'DIRECT', intermediaryId: '',
-      businessType: 'DIRECT', startDate: '', endDate: '',
-      sumInsured: 0, rate: 0, discount: 0, paymentTerms: '',
+      businessType: 'DIRECT', policyStartDate: '', policyEndDate: '',
+      sumInsured: 0, rate: 0, discount: 0,
     },
   });
 
@@ -237,12 +239,24 @@ function DirectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: 
 
   const create = useMutation({
     mutationFn: async (values: DirectValues) => {
-      // Map UI channel + intermediaryId → backend brokerId / agentId. V53's
-      // ck_policies_broker_xor_agent rejects both being set, so we send at
-      // most one. PolicyService also validates client-side and returns a
-      // clean BROKER_AGENT_EXCLUSIVE 400 if a misbehaving caller sends both.
-      const { channel: ch, intermediaryId, ...rest } = values;
-      const payload: Record<string, unknown> = { ...rest };
+      // Compose a payload matching com.nubeero.cia.policy.dto.PolicyRequest.
+      // Transform handles three concerns:
+      //   1. channel + intermediaryId → brokerId / agentId (Slice 89 UX,
+      //      backed by V53 XOR + service-layer BROKER_AGENT_EXCLUSIVE guard).
+      //   2. Strip rate (UI preview only — backend computes premium server-side
+      //      from product.rate × risk.sumInsured, never reads the request rate).
+      //   3. Compose a single-row risks array — backend @NotEmpty requires it,
+      //      and PolicyRiskRequest.description is NotBlank. Description
+      //      auto-fills from the selected product so users can issue the policy
+      //      with one click and refine the schedule via RisksEditorDialog on
+      //      the detail page after creation.
+      const { channel: ch, intermediaryId, rate: _previewRate, sumInsured, ...rest } = values;
+      const product = products.find(p => p.id === values.productId);
+      const riskDescription = product?.name ?? 'Risk';
+      const payload: Record<string, unknown> = {
+        ...rest,
+        risks: [{ description: riskDescription, sumInsured }],
+      };
       if (ch === 'BROKER' && intermediaryId) payload.brokerId = intermediaryId;
       if (ch === 'AGENT'  && intermediaryId) payload.agentId  = intermediaryId;
       const res = await apiClient.post<{ data: { id: string } }>('/api/v1/policies', payload);
@@ -338,8 +352,8 @@ function DirectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: 
           )}
         </FormRow>
         <FormRow>
-          <FormField control={form.control} name="startDate" render={({ field }) => (<FormItem><FormLabel>Start Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
-          <FormField control={form.control} name="endDate"   render={({ field }) => (<FormItem><FormLabel>End Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
+          <FormField control={form.control} name="policyStartDate" render={({ field }) => (<FormItem><FormLabel>Start Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
+          <FormField control={form.control} name="policyEndDate"   render={({ field }) => (<FormItem><FormLabel>End Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
         </FormRow>
         <FormRow>
           <FormField control={form.control} name="sumInsured"   render={({ field }) => (<FormItem><FormLabel>Sum Insured (₦)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
@@ -347,18 +361,6 @@ function DirectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: 
         </FormRow>
         <FormRow>
           <FormField control={form.control} name="discount"     render={({ field }) => (<FormItem><FormLabel>Discount (₦)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
-          <FormField control={form.control} name="paymentTerms"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Payment Terms</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger></FormControl>
-                  <SelectContent>{PAYMENT_TERMS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
         </FormRow>
         {sumInsured > 0 && rate > 0 && (
           <div className="rounded-lg border bg-muted/40 p-3 space-y-1">

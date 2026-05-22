@@ -8,9 +8,81 @@ All changes, decisions, and configurations made during the development of the Co
 
 Backlog of scoped but not-yet-executed slices. Each entry is self-contained enough to pick up cold — scope, rationale, acceptance criteria, and recommended execution timing. Move entries into a session log when shipped.
 
-No open items as of 2026-05-22. Sessions 79–89 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), the Session 84 PRD §2.1.17 drift remediation slice 84a (ProductDto realignment + CommissionSourceType enum + V50), the Session 85 slice 84b (Product Commission Setup UI + per-policy commission snapshot V51), the Session 86 slice 84c (broker commission JE chain + credit-note generation V52), the Session 87 slice 84e (surface commission snapshot on PolicyResponse + Commission card on policy detail page), the Session 88 slice 84d (per-policy agent attribution + AGENT commission posting V53/V54), and the Session 89 Channel picker on CreatePolicySheet (the last remaining commission-arc follow-up).
+No open items as of 2026-05-22. Sessions 79–90 below ship the Relationship Manager end-to-end integration, the delete-with-reason audit pattern across 10 setup endpoints, the Session 80 doc-sync wrap-up (api-client + internal-api.json swagger doc), the Session 81 Agent master-data feature (V48 — NAICOM-licensed insurance agents as the 9th Setup → Organisations tab), the Session 82 Broker NAICOM licence field (V49 — closes the broker licence consistency gap with every other NAICOM-regulated organisation), the Session 83 doc-sync wrap-up (internal-api.json + PRD v2.7 reconcile for V48/V49), the Session 84 PRD §2.1.17 drift remediation slice 84a (ProductDto realignment + CommissionSourceType enum + V50), the Session 85 slice 84b (Product Commission Setup UI + per-policy commission snapshot V51), the Session 86 slice 84c (broker commission JE chain + credit-note generation V52), the Session 87 slice 84e (surface commission snapshot on PolicyResponse + Commission card on policy detail page), the Session 88 slice 84d (per-policy agent attribution + AGENT commission posting V53/V54), the Session 89 Channel picker on CreatePolicySheet, and the Session 90 directSchema reconciliation that closes the long-standing direct-create 400.
 
-Closes the full PRD §2.1.17 commission arc end-to-end for the broker + agent attributions. Open Question #11 is fully resolved at every layer: data model (V53), GL (V54), payables (CN listener), API (PolicyResponse), and now UI (Channel picker on direct create). Quote-side agent attribution and RM staff-payroll commission remain as future slices.
+The PRD §2.1.17 commission arc is fully shipped, and the direct-policy create path now actually works end-to-end through the UI for the first time. FromQuote-side cleanup, Quote agent attribution, and RM commission via 2520 remain.
+
+---
+
+## 2026-05-22 — Session 90 (`main`): `directSchema` reconciliation — make CreatePolicySheet direct-create payload match `PolicyRequest`
+
+The Slice 89 Channel picker landed atop a form that, on inspection, had been broken at the API boundary for some time. Three mismatches between the frontend `directSchema` and the backend `com.nubeero.cia.policy.dto.PolicyRequest`:
+
+1. **Date field names** — form sent `startDate` / `endDate`; backend expects `policyStartDate` / `policyEndDate`. Jackson silently dropped both → JSR-303 `@NotNull` failed → 400.
+2. **No risks array** — backend declares `@NotEmpty @Valid List<PolicyRiskRequest> risks` (description NotBlank, sumInsured ≥ 0.01). Form sent neither risks key nor any risk fields → 400.
+3. **Cosmetic fields with no backing column** — form's `paymentTerms` had no field on `PolicyRequest` at all, and `rate` was only ever used for the live premium preview (backend computes premium server-side from `product.rate × risk.sumInsured`, never reads the request rate).
+
+Direct-create returned 400 regardless of channel as a result. Closing the gap.
+
+### What landed
+
+**Schema renames:**
+
+```ts
+// before
+startDate: z.string()...
+endDate:   z.string()...
+paymentTerms: z.string()...
+
+// after
+policyStartDate: z.string()...
+policyEndDate:   z.string()...
+// paymentTerms dropped (no backend field)
+```
+
+Form fields renamed to match in the render block. `paymentTerms` row removed from the form entirely — capturing it was a UX lie (the field showed as required but the value flowed nowhere).
+
+**Submit-time risk composition:**
+
+```ts
+const product = products.find(p => p.id === values.productId);
+const riskDescription = product?.name ?? 'Risk';
+const payload = {
+  ...rest,
+  risks: [{ description: riskDescription, sumInsured }],
+};
+```
+
+Single auto-generated risk row at create time — description defaults to the selected product's name, sumInsured from the form's top-level input. Backend's `applyRisks` then computes premium as `sumInsured × product.rate` server-side. Users refine the risk schedule (add rows, set vehicle reg numbers, override descriptions) via `RisksEditorDialog` on the policy detail page once the policy exists. The CreatePolicySheet's job is "issue a policy with one risk"; the detail page owns "compose the full schedule."
+
+**Preview-only `rate` field kept:** the live "Net Premium" preview at the bottom of the form still uses the rate × sumInsured math. The field auto-populates from `product.productRate` when a product is selected. The value is **dropped from the payload** at submit time — it was always read-only as far as the backend was concerned.
+
+### What is NOT in this slice
+
+- **FromQuoteForm cleanup** — turns out `POST /api/v1/policies/bind-from-quote/{quoteId}` takes only a path parameter, no body. The frontend's `{ businessType, paymentTerms, notes }` body is silently dropped. The form's pickers are theatrical — the bind uses whatever is already on the quote. Real fix: drop the body composition from the FromQuote mutation + drop the cosmetic fields from `fromQuoteSchema` to match. Out of scope here because the Slice 90 framing was specifically the direct-create reconciliation.
+- **Multi-risk on the create form** — Direct create still issues a single-risk policy at submit; multi-risk goes through `RisksEditorDialog`. If multi-risk creation becomes a real UX need, a `useFieldArray<PolicyRiskRequest>` on the form is the natural extension.
+- **`vehicleRegNumber` / `sectionId` on the risk row** — `PolicyRiskRequest` accepts both as optional but the form has no fields for them. Refining via the detail page after creation is the v1 path.
+- **`niidRequired` / `notes` / `coinsuranceParticipants` on the direct payload** — also accepted-but-not-on-form on `PolicyRequest`. The detail page owns the editing of all of those post-creation.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` filtered to `CreatePolicySheet.tsx` — zero errors.
+- The pre-existing unrelated errors in `AssignSurveyorDialog.tsx` + `CoinsuranceEditorDialog.tsx` (carried since Slice 84a) are unchanged.
+- No backend code changed — no failsafe needed.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — UI | `cia-frontend/apps/back-office/src/modules/policy/pages/create/CreatePolicySheet.tsx` |
+| Docs | `cia-log.md` (this entry) |
+
+### Known follow-ups (deliberately deferred)
+
+- **FromQuote form payload reconciliation** — drop the body composition that the backend ignores, drop the cosmetic fields from the schema. Two-line surface, separate commit so it doesn't bundle with this one.
+- **Quote-side agent attribution** — Quote entity doesn't yet carry `agentId`; bind-from-quote always produces broker-attributed policies. Slice deferred since Slice 84d.
+- **RM commission via 2520** — separate document type (staff payroll, not commission CN).
+- **Policy list page Intermediary column** — surface broker/agent on the list view.
 
 ---
 
