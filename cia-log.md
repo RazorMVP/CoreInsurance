@@ -13,7 +13,7 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | ID | P | Item | Notes |
 |---|---|---|---|
 | F4 | P3 | Password Policy UI needs real backend endpoint | CompanySettingsPage's Password Policy card was sending `minPasswordLength` + `passwordExpireDays` in the company-settings PUT body — backend `CompanySettingsRequest` doesn't accept either field. Session 98 removed the card from the form (was pure theatre). When a real password-policy endpoint exists, surface those settings under a separate `/setup/password-policy` page or a dedicated card with a real PUT target. |
-| A4 | P2 | EndorsementDto redesign | Single `sumInsured`/`premium` fields vs `oldXxx`/`newXxx`/`premiumAdjustment` diff shape on EndorsementResponse (Java record). Lower traffic than Customer/Quote but conceptually wrong. |
+| F5 | P1 | Page-wrapped list responses crash `.map`/`.find`/`.filter` consumers | `AssignSurveyorDialog` + `CoinsuranceEditorDialog` queries unwrap `res.data.data` and expect an array, but the surveyors + insurance-companies list endpoints return `{ content: SurveyorDto[] }` / `{ content: InsuranceCompanyDto[] }` (Spring `Page<T>` shape). Errors visible on `pnpm tsc --noEmit` (CoinsuranceEditorDialog:147 + AssignSurveyorDialog:51). Per CLAUDE.md API design: list endpoints must put the array in `data` + pagination in `meta`. Backend fix on the two `SurveyorController` + `InsuranceCompanyController` list methods. Predates A4 (visible on HEAD). |
 | B1 | P2 | Quote-side agent attribution | Quote entity doesn't carry `agentId`. Extends Module 2 form + bulk-upload CSV + quote-document templates. Bind-from-quote currently always produces broker-attributed policies even when an agent was the intermediary. |
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
 | B3 | P2 | Policy list page Intermediary column | Surface broker/agent on PolicyListPage. Small UI surface; mirrors the "Intermediary" row Slice 84e added to the detail page. |
@@ -29,6 +29,70 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F1 | P2 | Placeholder-onClick row actions across back-office | 6 known: CustomersListPage Update KYC + Blacklist; ProductsPage Activate/Deactivate; QuotationListPage Submit + Convert + Edit + Duplicate. Each is small but adds up. Batch as one slice. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-22 — Session 101 (`main`): Backlog A4 — EndorsementDto redesign (drift allow-list → empty)
+
+Eighth slice under the Session 93 discipline rule. Goal: realign `EndorsementDto` 1:1 with `EndorsementResponse` (the Java record on the backend) and drain the last entry from `dto-drift.config.json` `allowList`. This is the rule-of-three closer for the allow-list itself — after this slice the drift script reports a fully clean surface for the first time since it was wired in Session 92.
+
+### What the drift hid
+
+`EndorsementDto` was a 12-field hand-rolled projection from the Session 92 baseline. The backend `EndorsementResponse` is a 30-field record (29 scalars + `risks: List<EndorsementRiskResponse>`). Two structural mismatches:
+
+1. **Single value vs old-vs-new diff.** Frontend declared `sumInsured` + `premium` + `startDate` + `endDate` (treating an endorsement as a snapshot). Backend models the actual semantic — `oldSumInsured` + `newSumInsured` + `oldNetPremium` + `newNetPremium` + `premiumAdjustment` (a signed delta) — plus `effectiveDate` + `policyEndDate`. Jackson silently dropped the frontend's old field names on the wire.
+2. **Phantom `updatedAt`.** Frontend declared `updatedAt`; backend response has no such field (only `createdAt` + `approvedAt` + `rejectedAt`). The detail page was rendering `e.updatedAt` for the "Submitted" timeline row, which would always be `undefined` against a real backend payload.
+
+22 backend-only fields were unsurfaced: `customerId`, `customerName`, `productName`, `classOfBusinessName`, `brokerId`, `brokerName`, `remainingDays`, `currencyCode`, `description`, `notes`, `approvedBy`, `approvedAt`, `rejectedBy`, `rejectedAt`, `rejectionReason`, `risks`, plus the diff fields above.
+
+### What landed
+
+**`api-client/endorsement.ts`** — full rewrite:
+
+- `EndorsementDto` now mirrors `EndorsementResponse` 1:1 — 29 scalars + `risks: EndorsementRiskDto[]`. All nullable backend fields are typed `string | null` / `number | null` so the consumer is forced to handle absent data explicitly rather than crashing on `.toLocaleString()`.
+- New `EndorsementRiskDto` mirroring `EndorsementRiskResponse` (`id` + `description` + `sumInsured` + `premium` + `sectionId?` + `sectionName?` + `riskDetails?` + `vehicleRegNumber?` + `orderNo`).
+- New `ENDORSEMENT_TYPE_LABELS` exported constant — lifted from `EndorsementsListPage` because both pages now need the label map (the detail page lost its `endorsementTypeName` synthetic field and needs the same derivation). Single source of truth for the 10 type labels.
+
+**`EndorsementsListPage.tsx`** — three column accessors swapped:
+
+- `sumInsured` → `newSumInsured` (column already labelled "New Sum Insured" — the old name was just wrong)
+- `premium` → `premiumAdjustment` (the signed delta the column was actually trying to show)
+- `startDate` → `effectiveDate`
+- Local `TYPE_LABELS` map deleted, import switched to `ENDORSEMENT_TYPE_LABELS`.
+
+**`EndorsementDetailPage.tsx`** — full rewrite, the `MockEndorsement` extension type removed:
+
+- `MockEndorsement = Omit<EndorsementDto, 'updatedAt'> & {...}` was hiding ten synthetic UI-only fields (`policyCustomer`, `endorsementTypeName`, `originalSumInsured`, `newSumInsured`, `originalPremium`, `proRataPremium`, `debitNoteNumber`, `reason`, `updatedAt`). Each one mapped to a real backend field except `debitNoteNumber` (no source — block deleted).
+- Mock fallback now satisfies `EndorsementDto` directly: `originalSumInsured` → `oldSumInsured`, `originalPremium` → `oldNetPremium`, `proRataPremium` → `premiumAdjustment`, `policyCustomer` → `customerName`, `endorsementTypeName` → derived from `ENDORSEMENT_TYPE_LABELS[e.endorsementType]`, `reason` → `description ?? notes ?? '—'`, `startDate` → `effectiveDate`, `endDate` → `policyEndDate`.
+- Endorsement Details card gains `Product` + `Class of Business` rows (newly available from the response). Premium Impact card gains `New Net Premium` row alongside the existing `Original Net Premium` and the bottom adjustment delta.
+- Approval timeline collapsed from 3 fixed rows to 2 status-derived rows. The second row's title flips on status (`Approved` / `Rejected` / `Approval pending` / `Awaiting submission`); date + actor pulled from `approvedAt`/`approvedBy` or `rejectedAt`/`rejectedBy` when present. Rejection reason rendered below the timeline when `rejectionReason !== null`. This is a real semantic improvement — the old fixed-3 timeline always rendered the same "Approval pending" row even on REJECTED endorsements.
+- `debitNoteNumber` block deleted entirely. The backend response doesn't carry the FK; surfacing it would need a separate `/api/v1/finance/credit-notes?source=ENDORSEMENT&sourceRef={id}` query. Logged as side-discovery? No — this is a feature gap, not drift. Detail page just loses the Debit Note row for now; if a user needs it, they can navigate via the policy's Financial tab.
+
+### Verification
+
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (29 interfaces, 2 skipped)`. `allowList` is now `{}`.
+- `pnpm --filter @cia/back-office exec tsc --noEmit` — the two pre-existing errors in `policy/pages/detail/AssignSurveyorDialog.tsx` + `CoinsuranceEditorDialog.tsx` are unchanged. Verified by stashing the working tree and running tsc on HEAD (d824322): same errors. No new errors introduced by A4.
+- Final consumer grep on stale field names (`policyCustomer`, `endorsementTypeName`, `originalSumInsured`, `proRataPremium`, `.sumInsured`, `.premium`, `.startDate`, `.endDate`, `.updatedAt`) within `modules/endorsements/` returns zero matches outside of intended uses.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — DTOs | `cia-frontend/packages/api-client/src/modules/endorsement.ts` (full rewrite) |
+| Frontend — UI | `cia-frontend/apps/back-office/src/modules/endorsements/pages/EndorsementsListPage.tsx`, `.../detail/EndorsementDetailPage.tsx` (full rewrite) |
+| CI gate | `cia-frontend/scripts/dto-drift.config.json` (allowList drained to `{}`) |
+| Docs | `cia-log.md` (this entry + backlog A4 removed + F5 added) |
+
+### Backlog reconciliation
+
+- **Removed**: A4.
+- **Added**: F5 (P1) — pre-existing typecheck errors on `AssignSurveyorDialog` + `CoinsuranceEditorDialog` caused by Spring `Page<T>` shape leaking into list-endpoint responses. Confirmed on HEAD before A4. Per slice discipline, this is a side-discovery the slice surfaced but does not absorb. P1 because typecheck errors gate the build; backend fix is one-line per controller.
+- **Net**: 15 → 15 rows (one removed, one added).
+
+### Known follow-ups (deliberately deferred)
+
+- F5 (pre-existing Spring Page leakage — see backlog).
+- The Endorsement detail page no longer surfaces the linked debit/credit note number. Feature gap, not drift. Not backlog-worthy on its own — comes back as a real ticket when a user asks for it.
 
 ---
 

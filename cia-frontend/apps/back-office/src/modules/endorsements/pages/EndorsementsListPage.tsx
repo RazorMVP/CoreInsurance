@@ -6,21 +6,8 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type EndorsementDto } from '@cia/api-client';
+import { apiClient, ENDORSEMENT_TYPE_LABELS, type EndorsementDto } from '@cia/api-client';
 import CreateEndorsementSheet from './create/CreateEndorsementSheet';
-
-const TYPE_LABELS: Record<EndorsementDto['endorsementType'], string> = {
-  RENEWAL:       'Renewal',
-  EXTENSION:     'Extension of Period',
-  CANCELLATION:  'Cancellation',
-  REVERSAL:      'Reversal',
-  REDUCTION:     'Reduction in Period',
-  CHANGE_PERIOD: 'Change in Period',
-  INCREASE_SI:   'Increase Sum Insured',
-  DECREASE_SI:   'Decrease Sum Insured',
-  ADD_ITEMS:     'Add Insured Items',
-  DELETE_ITEMS:  'Delete Insured Items',
-};
 
 const statusVariant: Record<EndorsementDto['status'], 'active' | 'pending' | 'draft' | 'rejected'> = {
   APPROVED:  'active',
@@ -65,19 +52,19 @@ export default function EndorsementsListPage() {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
       cell: ({ getValue }) => (
         <Badge variant="outline" className="text-xs whitespace-nowrap">
-          {TYPE_LABELS[getValue() as EndorsementDto['endorsementType']]}
+          {ENDORSEMENT_TYPE_LABELS[getValue() as EndorsementDto['endorsementType']]}
         </Badge>
       ),
     },
     {
-      accessorKey: 'sumInsured',
+      accessorKey: 'newSumInsured',
       header: 'New Sum Insured',
       cell: ({ getValue }) => (
         <span className="text-sm tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
       ),
     },
     {
-      accessorKey: 'premium',
+      accessorKey: 'premiumAdjustment',
       header: 'Pro-rata Premium',
       cell: ({ getValue }) => {
         const v = getValue() as number;
@@ -97,7 +84,7 @@ export default function EndorsementsListPage() {
       },
     },
     {
-      accessorKey: 'startDate',
+      accessorKey: 'effectiveDate',
       header: 'Effective Date',
       cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{getValue() as string}</span>,
     },

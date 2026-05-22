@@ -29,18 +29,5 @@
 
   "ignoreDtos": [],
 
-  "allowList": {
-    "EndorsementDto": {
-      "frontendOnly": ["sumInsured", "premium", "startDate", "endDate", "updatedAt"],
-      "backendOnly": [
-        "customerId", "customerName", "productName", "classOfBusinessName",
-        "brokerId", "brokerName", "effectiveDate", "policyEndDate", "remainingDays",
-        "oldSumInsured", "newSumInsured", "oldNetPremium", "newNetPremium",
-        "premiumAdjustment", "currencyCode", "description", "notes",
-        "approvedBy", "approvedAt", "rejectedBy", "rejectedAt", "rejectionReason",
-        "risks"
-      ],
-      "reason": "Session 92 baseline. EndorsementDto uses single sumInsured/premium fields while EndorsementResponse models the old-vs-new diff (oldSumInsured / newSumInsured / premiumAdjustment). UI doesn't expose the full diff today. Follow-up: redesign EndorsementDto to mirror the record shape (backlog A4)."
-    }
-  }
+  "allowList": {}
 }
