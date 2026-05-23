@@ -16,9 +16,56 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
 | F7 | P3 | Flat receipts + payments inventory view dropped | Session 103 (F2) removed the "Receipts" + "Payments" sub-sections from ReceivablesTab + PayablesTab because backend has no `/api/v1/receipts` or `/api/v1/payments` flat list endpoint — receipts only exist nested under a debit-note (`/api/v1/debit-notes/{dnId}/receipts`), payments only under a credit-note. If a finance-level "show me all approved receipts this week" view is needed, add flat list controllers + ITs on the backend, then re-surface the sub-sections. Alternative: expose receipts + payments inside DebitNoteDetailDialog + CreditNoteDetailDialog so users can drill from the DN/CN inventory. `ReverseTransactionDialog` file kept in-tree (dead until either surface lands). |
 | E3 | P3 | RelationshipManager.branch FK-cascade-awareness | Branch deletion doesn't 409 if RMs reference it; listing then shows soft-deleted branch name. Defensive only. |
-| E1-test | P3 | MockMvc IT for `GlobalExceptionHandler` no-handler / no-resource branches | Session 115 added `NoHandlerFoundException` + `NoResourceFoundException` handlers to `GlobalExceptionHandler` (both return 404 with structured `ApiResponse.error("NOT_FOUND", ...)`). The handlers have no test today — `cia-common` has no MockMvc / `@WebMvcTest` scaffolding. A future slice should add one IT class exercising both branches (assert 404 on an unmapped path; assert response body shape matches `ApiResponse.error`). |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-23 — Session 121 (`main`): Backlog E1-test — `@WebMvcTest` slice for `GlobalExceptionHandler` no-handler / no-resource branches
+
+Twenty-seventh slice under the Session 93 discipline rule. Closes the test gap S115 opened when it added the `NoHandlerFoundException` + `NoResourceFoundException` handlers without IT coverage — the row was rated P3 because the handlers are tiny and the failure mode (any unmapped path 500s instead of 404s) is loud enough that drift would surface quickly, but the gap was real. Also stands up the first Spring web-slice test in `cia-common`, which is where every future controller-advice / filter / converter test in the shared module belongs.
+
+### What landed
+
+`cia-common/src/test/.../exception/GlobalExceptionHandlerMvcTest.java` (new — 3 tests, ~1s).
+
+`@WebMvcTest(controllers = FakeController.class) + @Import({GlobalExceptionHandler.class, FakeController.class})` — minimal web slice. `@AutoConfigureMockMvc(addFilters = false)` skips the security filter chain (cia-common pulls in `spring-boot-starter-oauth2-resource-server` which would otherwise demand a `JwtDecoder`). The slice carries an inner `@SpringBootConfiguration @EnableAutoConfiguration TestApp` stub because cia-common is a library module with no `@SpringBootApplication` on the production classpath; without it the slice's upward configuration search throws `IllegalStateException`.
+
+`FakeController` exposes two endpoints that explicitly `throw new NoHandlerFoundException("GET", "/intentional-unmapped", new HttpHeaders())` and `throw new NoResourceFoundException(HttpMethod.GET, "intentional-missing.html")`. `@ExceptionHandler` resolution is type-based, not dispatch-source-based, so a hand-thrown exception routes through the advice identically to one produced by the framework. This keeps the test stable across the Spring 6.0 → 6.1 split (Boot 3.2+ throws `NoResourceFoundException` for unmapped paths by default; older versions throw `NoHandlerFoundException`).
+
+Three tests:
+1. `noHandlerBranch` — hit `/test/throw-no-handler` → assert 404 + `errors[0].code == "NOT_FOUND"` + `errors[0].message` contains `"/intentional-unmapped"`.
+2. `noResourceBranch` — hit `/test/throw-no-resource` → assert 404 + `errors[0].code == "NOT_FOUND"` + `errors[0].message` contains `"intentional-missing.html"`.
+3. `genuinelyUnmappedPath` — hit a real unmapped path → assert 404 + `errors[0].code == "NOT_FOUND"` (no message assertion, since which exception the framework picks is a Spring version detail and shouldn't break the test).
+
+### Two iterative fixes the slice surfaced
+
+1. **`@WebMvcTest` upward-config-search fails in library modules.** First run threw `IllegalStateException: Unable to find a @SpringBootConfiguration`. cia-common has no `@SpringBootApplication`. Fix: inner `@SpringBootConfiguration @EnableAutoConfiguration` stub. Documented inline as the rationale for any future cia-common web-slice test.
+2. **Inner static `@RestController` not registered by `controllers = X.class`.** Second run: tests 1 and 2 failed because `/test/throw-no-handler` and `/test/throw-no-resource` were treated as unmapped paths (the advice's `NoResourceFoundException` branch fired with message `"No resource: test/throw-no-handler"`). `@WebMvcTest(controllers = X.class)` filters but doesn't *register* the inner class as a bean. Fix: explicit `@Import({GlobalExceptionHandler.class, FakeController.class})`. Test 3 passed throughout because it never relied on FakeController routing.
+
+### Verification
+
+- `mvn -pl cia-common test -Dtest=GlobalExceptionHandlerMvcTest` — 3/3 in 1.079s.
+- `mvn -pl cia-common test` — 20/20 (17 pre-existing + 3 new), zero regression.
+- Test-only change ⇒ Session 119's failsafe baseline (288/0/0/1) is untouched.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Tests — cia-common web slice | `cia-common/src/test/.../exception/GlobalExceptionHandlerMvcTest.java` (new) |
+| Docs | `cia-log.md` (this entry + E1-test drained) |
+
+### Backlog reconciliation
+
+- **Removed**: E1-test.
+- **Added**: none. The two in-flight fixes were small enough to absorb directly (one configuration stub, one annotation correction) — no follow-ups surfaced.
+- **Net**: 5 → 4 rows.
+
+### Known follow-ups (deliberately deferred)
+
+- **Generalise the `TestApp` stub for other cia-common web-slice tests.** When the second web-slice test lands (e.g. for `TenantContextFilter`, `ApiResponse` serialization, or a future `@RestControllerAdvice` branch), promote the inner `TestApp` to a shared `cia-common/src/test/.../WebSliceTestApp.java` and reuse via `@ContextConfiguration(classes = WebSliceTestApp.class)`. Single-use today doesn't justify extraction — rule of three pending.
+- **MVC-slice coverage for the other GlobalExceptionHandler branches.** `handleCiaException`, `handleValidation`, and `handleUnexpected` are all untested at the slice level too. They have more indirect coverage (every business-exception IT exercises `handleCiaException` end-to-end through `cia-api`'s Testcontainers ITs), so the cost/benefit doesn't justify a dedicated slice today. If a regression ever shows up, the harness from S121 is the obvious starting point.
 
 ---
 
