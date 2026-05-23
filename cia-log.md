@@ -18,8 +18,6 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F4-sync-tests | P3 | Mock-Keycloak IT for `KeycloakRealmRoleSyncer` + `KeycloakPasswordPolicySyncer` | Session 114 shipped a pure-function unit test of `KeycloakPolicyDsl` (6 assertions, runs in single-millisecond range). The two syncer classes themselves have no test coverage because exercising them requires a Keycloak server or a full admin-client mock — same blocker as F1e-IT. When F1e-IT lands (Testcontainers Keycloak with bumped startup timeout), extend it to cover both syncers in a single integration test class. Mockito-only tests would have to mock `RolesResource`, `RealmResource`, `UserResource` chains, which is brittle and adds the exact Keycloak-admin-client class graph in the test JVM that S112 showed was hazardous — defer in favour of Testcontainers. |
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
 | F7 | P3 | Flat receipts + payments inventory view dropped | Session 103 (F2) removed the "Receipts" + "Payments" sub-sections from ReceivablesTab + PayablesTab because backend has no `/api/v1/receipts` or `/api/v1/payments` flat list endpoint — receipts only exist nested under a debit-note (`/api/v1/debit-notes/{dnId}/receipts`), payments only under a credit-note. If a finance-level "show me all approved receipts this week" view is needed, add flat list controllers + ITs on the backend, then re-surface the sub-sections. Alternative: expose receipts + payments inside DebitNoteDetailDialog + CreditNoteDetailDialog so users can drill from the DN/CN inventory. `ReverseTransactionDialog` file kept in-tree (dead until either surface lands). |
-| C2 | P3 | Multi-risk on direct create form | `useFieldArray<PolicyRiskRequest>` on CreatePolicySheet. RisksEditorDialog already handles multi-risk post-creation; this is purely a create-time convenience. |
-| C3 | P3 | vehicleRegNumber + sectionId on direct risk row | Backend `PolicyRiskRequest` accepts both as optional; form has neither (filled via RisksEditorDialog on the detail page). |
 | D1 | P3 | Server-side date-range validation on CommissionSetupRequest | `@Future` / cross-field bean validation that effectiveTo ≥ effectiveFrom. Frontend zod refine covers the UX; server-side is correctness defence. |
 | D2 | P3 | internal-api.json `components.schemas` backfill | Static doc has 247 paths but zero inline schemas (only `$ref`s). Auto-generate from Springdoc live `/v3/api-docs` rather than maintain by hand. Larger slice; depends on E1 fix first. |
 | E2 | P3 | docs-site/build/internal-api.json stale | Build copy regenerates on next Docusaurus deploy. Cosmetic. |
@@ -27,6 +25,66 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | E1-test | P3 | MockMvc IT for `GlobalExceptionHandler` no-handler / no-resource branches | Session 115 added `NoHandlerFoundException` + `NoResourceFoundException` handlers to `GlobalExceptionHandler` (both return 404 with structured `ApiResponse.error("NOT_FOUND", ...)`). The handlers have no test today — `cia-common` has no MockMvc / `@WebMvcTest` scaffolding. A future slice should add one IT class exercising both branches (assert 404 on an unmapped path; assert response body shape matches `ApiResponse.error`). |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-23 — Session 117 (`main`): Backlog C2 + C3 — Multi-risk on create form + per-row vehicleRegNumber + sectionId
+
+Twenty-third slice under the Session 93 discipline rule. The C2 + C3 pair both target the same form (`CreatePolicySheet`'s "Direct Entry" tab) and the same data model (`PolicyRiskRequest`). Bundling was natural — single field-array refactor satisfies both rows.
+
+### What landed
+
+`CreatePolicySheet.tsx` Direct Entry tab refactored from one-row-implicit to N-row-explicit risk schedule:
+
+- Schema swap: removed top-level `sumInsured` field; added `risks: z.array(riskRowSchema).min(1)` field-array. `riskRowSchema` covers `description` (required), `sumInsured` (positive), `vehicleRegNumber` (optional string), `sectionId` (optional string).
+- `useFieldArray` wires the array — initial state `[{...EMPTY_RISK}]` preserves the previous single-risk default; "+ Add Risk" appends; per-row Remove button (hidden when only one row remains).
+- `selectedProduct` derived from the watched `productId`:
+  - `isMotor = classOfBusinessName.toLowerCase().includes('motor')` — same heuristic as `RisksEditorDialog` (consistent create-time + post-create UX).
+  - `isMultiRisk = product.type === 'MULTI_RISK'` — gates the per-row sectionId select.
+  - `sections = product.sections ?? []` — feeds the section select; renders `{section.name} ({section.rate}%)` so the per-section rate is visible at pick time.
+- Per-row conditional UI:
+  - `vehicleRegNumber` input visible only when `isMotor`.
+  - `sectionId` select visible only when `isMultiRisk && sections.length > 0`.
+- `onProductChange` now also clears stale `sectionId` on every existing row — sections belong to the previous product and won't match a new product's sections (or sections may not apply at all if the new product is `SINGLE_RISK`). Auto-fills the first row's description from the product name only when the row is still empty (don't clobber user input).
+- Premium preview reads `totalSi = Σ row.sumInsured` instead of a single field. Footer line clarifies the preview is approximate ("Backend recomputes from product / section rate × sum insured") which is especially true for MULTI_RISK products where each section has its own rate.
+- Submit composes `risks: risks.map(r => ({description, sumInsured, vehicleRegNumber: null|str, sectionId: null|str}))`. Empty-string optional fields are normalised to `null` so backend validators see absent values rather than `""` (`PolicyRiskRequest` treats both `vehicleRegNumber` and `sectionId` as optional).
+
+### Scope-adjacent fix — dead `productRate` reference
+
+While in the file I noticed `type ProductWithRate = ProductDto & { productRate?: number }` and `if (p?.productRate != null) form.setValue('rate', p.productRate)`. The API response carries `rate`, not `productRate` — so the auto-fill never fired. Pre-existing bug from an earlier API shape; the dead type alias was the smoking gun. Fixed inline: dropped `ProductWithRate`, use `ProductDto` directly, reference `p.rate`. Picking a product now actually fills the rate field, which is the intended UX.
+
+This is an explicit broaden of the slice's scope (per CLAUDE.md → Slice discipline). Justification: the file's `productRate` type would have become dead-code clutter the moment I touched the form, and fixing a one-character bug while the file's open is cheaper than back-and-forth.
+
+### What was deliberately NOT touched
+
+- **Premium preview accuracy for MULTI_RISK products** — today the preview applies the single `rate` field uniformly to all rows. For MULTI_RISK, each section has its own rate, so a per-row preview using `section.rate` would be more accurate. Not gating today; the preview is documented as approximate and the backend recomputes correctly. Could be a tiny future polish.
+- **RisksEditorDialog `sectionId` support** — `RisksEditorDialog` doesn't surface `sectionId` either (it only handles description + sumInsured + vehicleRegNumber). The backlog row C3 mentioned "filled via RisksEditorDialog on the detail page" but that was inaccurate — `sectionId` has been unsurfaced everywhere until this slice. Cleanly outside the C2 + C3 scope: this slice closes the create-time gap; if `sectionId` editing post-creation matters, that's a separate `RisksEditorDialog` refresh.
+- **Section rate auto-fill** — when a user picks a section on a row, we could auto-fill the headline `rate` to that section's rate. Felt too cute (rate is a single global field, picking different sections on different rows would race). Left.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` — clean (no output).
+- `node check-dto-drift.mjs` — `✓ No DTO drift detected. (93 interfaces, 25 skipped)`. Unchanged — `PolicyRiskRequest` is a request DTO, not a response DTO, so it's not in the drift check's scope.
+- `bash check-api-wiring.sh` — `✓ No API-wiring violations.`
+- No backend changes ⇒ failsafe IT baseline (274/0/0/1 from S115) is untouched.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — form refactor | `cia-frontend/apps/back-office/src/modules/policy/pages/create/CreatePolicySheet.tsx` (Direct Entry tab — `useFieldArray` swap; per-row vehicleRegNumber + sectionId; dead `ProductWithRate` removed) |
+| Docs | `cia-log.md` (this entry + C2 drained + C3 drained) |
+
+### Backlog reconciliation
+
+- **Removed**: C2, C3.
+- **Added**: none. The `productRate` fix was an explicit scope-adjacent broaden (justified above), not a separate finding. No new follow-ups surfaced.
+- **Net**: 13 → 11 rows. Second two-row decrement in the run (after Session 116's F3 + F6).
+
+### Known follow-ups (deliberately deferred)
+
+- **Per-row preview using `section.rate`** (above) — small UX polish; not gating.
+- **`RisksEditorDialog` section editing** (above) — separate dialog refresh; not part of the create-time C2 + C3 scope. No backlog row added since the row would just say "extend the dialog to edit sectionId" which the dialog already conspicuously doesn't do.
 
 ---
 
