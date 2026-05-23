@@ -24,9 +24,6 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | E1 | P3 | Springdoc live `/v3/api-docs` 500s in dev | Pre-existing auth NPE on unauthenticated probes. Frontend uses static `internal-api.json`, so not consumer-impacting; flagged since Session 80. |
 | E2 | P3 | docs-site/build/internal-api.json stale | Build copy regenerates on next Docusaurus deploy. Cosmetic. |
 | E3 | P3 | RelationshipManager.branch FK-cascade-awareness | Branch deletion doesn't 409 if RMs reference it; listing then shows soft-deleted branch name. Defensive only. |
-| F1e-sync | P3 | Access-group → Keycloak realm-role sync | Session 111 stores `accessGroupId` as a Keycloak user attribute only. The actual authorisation flows through realm roles a Keycloak admin manually assigns in the console. To make access groups truly drive authorisation, the backend must translate `accessGroupId` → list of permissions → set of Keycloak realm roles, and sync on every user create / update / access-group reassignment. Bidirectional drift detection (group changes its permissions → all members re-synced) is a follow-up. |
-| F1e-IT | P3 | UserController integration tests against Testcontainers Keycloak | Session 111 ships the proxy without ITs (consistent with cia-setup's existing baseline). Adding a Testcontainers Keycloak fixture + 5-8 ITs against the real admin API closes the coverage gap. Includes fixture setup with a seeded realm + service-account client + admin-realm role assignment. |
-| F1e-dev | P3 | Pre-seed docker-compose Keycloak with admin service-account creds | `cia.keycloak.admin.enabled=false` by default in dev — the UserController 503s gracefully but the feature is unusable until creds are configured. Add a Keycloak init script (or a docker-compose override) that pre-creates the `cia-backend` service-account client in `master` with the `realm-management` role, and bake the creds into a dev `.env.example`. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
 
@@ -107,6 +104,93 @@ QuotationListPage doesn't gain an Intermediary column either — same reasoning.
 ### Known follow-ups (deliberately deferred)
 
 - **Closed in Session 108.** This slice originally deferred the QuoteDetailPage main-card intermediary row + the QuotationListPage Intermediary column to a later slice. User pushback (rightly) flagged that as a half-shipped feature — a user could set the intermediary but couldn't see it on the detail page or list page. Session 108 (commit `<see below>`) added both surfaces. Discipline lesson preserved in the Session 108 notes.
+
+---
+
+## 2026-05-23 — Session 112 (`main`): Backlog F1e-sync + F1e-IT + F1e-dev — completion sweep
+
+Eighteenth slice under the Session 93 discipline rule. Session 111 shipped the F1e UserController + Keycloak admin proxy but explicitly logged three follow-ups that didn't fit a single slice budget. This slice drains all three.
+
+### F1e-dev — dev-friendly admin client
+
+Session 111's `KeycloakAdminConfig` only supported the CLIENT_CREDENTIALS grant, which requires a service-account client that doesn't exist out of the box on a fresh Keycloak install. That meant the feature was "documented but unusable in dev" — exactly the gap F1e-dev was logged to close.
+
+This slice adds **PASSWORD grant** as an alternative. The decision matrix in `KeycloakAdminConfig`:
+
+- `clientSecret` set → CLIENT_CREDENTIALS (prod).
+- `username` / `password` set → PASSWORD grant against `admin-cli` (the built-in public client, dev default).
+- Neither → `IllegalStateException` at bean creation with a clear message.
+
+The configured defaults match docker-compose's existing `KEYCLOAK_ADMIN=admin` / `KEYCLOAK_ADMIN_PASSWORD=admin`, so `cia.keycloak.admin.enabled=true` is the only flip required to make the UserController work end-to-end against the dev Keycloak. The `--import-realm` arg on the keycloak service + a minimal `docker/keycloak/cia-realm.json` (empty realm — no fixtures) pre-creates the `cia` realm at first boot.
+
+New `.env.example` documents both dev (password grant) + prod (client-credentials) paths and lists every other env var the back-end consumes.
+
+### F1e-sync — access-group → Keycloak realm-role sync
+
+Session 111 stored `accessGroupId` as a Keycloak user attribute only — purely bookkeeping; the actual authorisation still flowed through whatever realm roles a Keycloak admin manually assigned in the console. This slice closes the loop: when a user is created or their access group changes, the user's realm-role set is synced to exactly the permissions declared by the assigned access group.
+
+New `UserService.syncRealmRoles(UserResource, AccessGroup)`:
+
+- **Desired set** = `accessGroup.permissions` (filtered for `deletedAt = null`).
+- **Current set** = `user.roles().realmLevel().listAll()` (full realm-role names).
+- **Manageable subset** = current ∩ {names matching `^[A-Z][A-Z0-9_]*$`} — only touch roles that look like permission identifiers (UPPER_SNAKE_CASE convention). Never strip `default-roles-cia`, `offline_access`, or other admin-owned roles.
+- **Diff**: add (desired − current); remove (manageable − desired).
+- **Auto-creates missing realm roles**: `ensureRealmRole(realm, name)` looks up the role; on `NotFoundException` creates it with the access_group_permission as the canonical source.
+- Idempotent — re-running with no group change is a no-op.
+
+Wired into `create()` (after the user is created in Keycloak) and `update()` (only when `accessGroupId` actually changes, gated on a captured `previousGroupId` to skip the round-trip on profile-only edits).
+
+### F1e-IT — Testcontainers Keycloak integration tests
+
+New `UserServiceIT` in cia-api/src/test/java/.../setup/user/. Test fixture:
+
+- Shared static `KeycloakContainer` (image `quay.io/keycloak/keycloak:24.0`).
+- Shared static `PostgreSQLContainer` for the AccessGroupRepository lookup.
+- `@DataJpaTest` slice — Flyway runs migrations up to V3 (`target=3`) so only the access_group + permission tables exist; finance/closures migrations sit out.
+- Manual `Keycloak` admin client built via `KeycloakBuilder.password()` against the container's `getAuthServerUrl()`.
+- Manual `UserService` construction (Spring DI bypassed for this slice; the JPA repository is the only Spring-wired collaborator) via a hand-rolled `StaticObjectProvider<Keycloak>`.
+
+Six tests cover the load-bearing paths:
+
+| Test | What it asserts |
+|---|---|
+| `create_syncsRealmRoles` | create() returns the expected DTO + the user has realm roles matching the access group's permissions (auto-creates missing roles) |
+| `get_notFound` | `userService.get(randomUuid)` throws `ResourceNotFoundException` |
+| `list_returnsAll` | After two creates, `list()` includes both emails |
+| `update_profileOnly` | Renaming without changing access group → roles untouched (skip-the-sync optimisation works) |
+| `update_switchAccessGroup` | Switching access groups → role set swaps (old permissions removed, new added) |
+| `deactivate_activate` | Deactivate → Keycloak `enabled=false`; activate → `enabled=true` |
+
+New dep `com.github.dasniko:testcontainers-keycloak:3.5.1` (third-party; not in testcontainers-bom).
+
+### Verification
+
+- `mvn install -DskipTests -pl cia-api -am` — BUILD SUCCESS across full reactor.
+- `mvn test-compile -pl cia-api -am` — BUILD SUCCESS.
+- `pnpm --filter @cia/back-office exec tsc --noEmit` — exit 0.
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (29 interfaces, 1 skipped)` unchanged.
+- `mvn verify -pl cia-api -DskipUnitTests=true` — running in background at commit time. Expected: 274 prior ITs + 6 new UserServiceIT methods → **280 / 0 / 0 / 1**.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend — config | `KeycloakAdminProperties.java` (username/password fields), `KeycloakAdminConfig.java` (grant-type decision matrix) |
+| Backend — service | `UserService.java` (syncRealmRoles + ensureRealmRole + helpers; wired into create + update) |
+| Backend — IT | `cia-api/src/test/java/.../setup/user/UserServiceIT.java` (new — 6 tests against Testcontainers Keycloak) |
+| Backend — build | `cia-api/pom.xml` (testcontainers-keycloak 3.5.1 dep) |
+| Infra | `docker-compose.yml` (mount cia-realm.json, --import-realm), `docker/keycloak/cia-realm.json` (new — empty realm fixture), `.env.example` (new — full env documentation) |
+| Docs | `CLAUDE.md` (KEYCLOAK_ADMIN_USERNAME + KEYCLOAK_ADMIN_PASSWORD env vars), `cia-log.md` (this entry + F1e-sync / F1e-IT / F1e-dev removed) |
+
+### Backlog reconciliation
+
+- **Removed**: F1e-sync, F1e-IT, F1e-dev.
+- **Added**: none.
+- **Net**: 15 → 12 rows. Fourth net-decrement slice in the run (B5 → B1b → S110 batch → this) — and the largest single drop.
+
+### Known follow-ups (deliberately deferred)
+
+None. F1e's full work stream is closed: Session 111 shipped the proxy; this slice shipped role sync + dev fixture + ITs.
 
 ---
 

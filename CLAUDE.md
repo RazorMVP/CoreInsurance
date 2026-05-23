@@ -1073,8 +1073,10 @@ node cia-frontend/scripts/check-dto-drift.mjs
 | `WEBHOOK_SIGNING_SECRET` | Default HMAC-SHA256 key for webhook payloads | env / vault |
 | `PII_ENCRYPTION_KEY` | pgcrypto symmetric key for NDPR PII encryption (`id_number`, `id_document_url`, `address` on customers + directors). Loss = unrecoverable customer PII. Recommended: 32+ random bytes, base64-encoded. | env / vault |
 | `KEYCLOAK_ADMIN_ENABLED` | Master switch for the Module 1 UserController Keycloak admin proxy. `false` in dev when no Keycloak is running — UserController returns 503 with a clear message. Set `true` in prod. | env |
-| `KEYCLOAK_ADMIN_CLIENT_ID` | Service-account client id used by the admin proxy (must have the `realm-management` composite role on the target realm). | env / vault |
-| `KEYCLOAK_ADMIN_CLIENT_SECRET` | Service-account client secret. Pair with `KEYCLOAK_ADMIN_CLIENT_ID`. | env / vault |
+| `KEYCLOAK_ADMIN_CLIENT_ID` | Client id used by the admin proxy. Defaults to `admin-cli` (Keycloak's built-in public client — paired with USERNAME/PASSWORD for dev). For prod, set to a confidential service-account client id with `realm-management` composite role. | env |
+| `KEYCLOAK_ADMIN_CLIENT_SECRET` | Service-account client secret (prod client-credentials grant). When set, the admin client uses CLIENT_CREDENTIALS grant; when unset, it falls back to PASSWORD grant against USERNAME/PASSWORD. | env / vault |
+| `KEYCLOAK_ADMIN_USERNAME` | Admin username (dev password grant). Matches docker-compose's `KEYCLOAK_ADMIN`. Defaults to unset; if set, the admin client uses PASSWORD grant. | env |
+| `KEYCLOAK_ADMIN_PASSWORD` | Admin password (dev password grant). Pair with `KEYCLOAK_ADMIN_USERNAME`. | env / vault |
 | `KEYCLOAK_ADMIN_REALM` | Realm the admin client authenticates against. Defaults to `master` — that's where service accounts typically live. | env |
 
 **Frontend environment variables (Vite — prefix `VITE_`):**

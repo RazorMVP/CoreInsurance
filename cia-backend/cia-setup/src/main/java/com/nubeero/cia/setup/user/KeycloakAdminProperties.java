@@ -30,11 +30,28 @@ public class KeycloakAdminProperties {
      */
     private String adminRealm = "master";
 
-    /** Service account client id with {@code realm-management} composite role. */
-    private String clientId;
+    /**
+     * Client id used by the admin client. Two modes:
+     * <ul>
+     *   <li><b>Client-credentials (prod):</b> a confidential service-account
+     *       client with the {@code realm-management} composite role. Set
+     *       {@link #clientSecret} too.</li>
+     *   <li><b>Password (dev):</b> Keycloak's built-in public {@code admin-cli}
+     *       client. Set {@link #username} + {@link #password} to the master
+     *       realm admin (defaults match docker-compose's
+     *       KEYCLOAK_ADMIN/KEYCLOAK_ADMIN_PASSWORD = admin/admin).</li>
+     * </ul>
+     */
+    private String clientId = "admin-cli";
 
-    /** Service account client secret. */
+    /** Service-account client secret (client-credentials grant). */
     private String clientSecret;
+
+    /** Admin username (password grant — dev). */
+    private String username;
+
+    /** Admin password (password grant — dev). */
+    private String password;
 
     /**
      * Realm whose users are managed by this admin client. Today mirrors

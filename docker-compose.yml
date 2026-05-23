@@ -19,7 +19,13 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
-    command: start-dev
+    # `start-dev --import-realm` boots Keycloak in dev mode and reads every
+    # `*.json` file in /opt/keycloak/data/import/. We mount a minimal `cia`
+    # realm there so the UserController works against a known realm out of
+    # the box — see docker/keycloak/cia-realm.json. The master admin
+    # (admin/admin) drives the UserService admin client via password grant
+    # against admin-cli; no service-account client setup needed in dev.
+    command: start-dev --import-realm
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
@@ -29,6 +35,8 @@ services:
       KC_DB_PASSWORD: cia_dev
     ports:
       - "8280:8080"
+    volumes:
+      - ./docker/keycloak/cia-realm.json:/opt/keycloak/data/import/cia-realm.json:ro
     depends_on:
       postgres:
         condition: service_healthy

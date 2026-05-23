@@ -28,14 +28,31 @@ public class KeycloakAdminConfig {
 
     @Bean(destroyMethod = "close")
     public Keycloak keycloakAdmin() {
-        log.info("Initializing Keycloak admin client → server={}, adminRealm={}, targetRealm={}",
-                props.getServerUrl(), props.getAdminRealm(), props.getTargetRealm());
-        return KeycloakBuilder.builder()
+        KeycloakBuilder b = KeycloakBuilder.builder()
                 .serverUrl(props.getServerUrl())
                 .realm(props.getAdminRealm())
-                .grantType(org.keycloak.OAuth2Constants.CLIENT_CREDENTIALS)
-                .clientId(props.getClientId())
-                .clientSecret(props.getClientSecret())
-                .build();
+                .clientId(props.getClientId());
+
+        // Decision matrix: clientSecret present → client-credentials (prod);
+        // username/password present → password grant (dev, against admin-cli).
+        // Exactly one of the two MUST be configured at startup.
+        if (props.getClientSecret() != null && !props.getClientSecret().isBlank()) {
+            log.info("Initializing Keycloak admin client (client-credentials) → server={}, adminRealm={}, targetRealm={}, clientId={}",
+                    props.getServerUrl(), props.getAdminRealm(), props.getTargetRealm(), props.getClientId());
+            b.grantType(org.keycloak.OAuth2Constants.CLIENT_CREDENTIALS)
+             .clientSecret(props.getClientSecret());
+        } else if (props.getUsername() != null && !props.getUsername().isBlank()) {
+            log.info("Initializing Keycloak admin client (password grant) → server={}, adminRealm={}, targetRealm={}, clientId={}, username={}",
+                    props.getServerUrl(), props.getAdminRealm(), props.getTargetRealm(), props.getClientId(), props.getUsername());
+            b.grantType(org.keycloak.OAuth2Constants.PASSWORD)
+             .username(props.getUsername())
+             .password(props.getPassword());
+        } else {
+            throw new IllegalStateException(
+                    "cia.keycloak.admin.enabled=true but neither client-secret nor username/password is configured. " +
+                    "Set KEYCLOAK_ADMIN_CLIENT_SECRET (prod) or KEYCLOAK_ADMIN_USERNAME/KEYCLOAK_ADMIN_PASSWORD (dev).");
+        }
+
+        return b.build();
     }
 }
