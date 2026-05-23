@@ -13,7 +13,7 @@ import { applyApiErrors } from '@/lib/form-errors';
 
 const schema = z.object({
   name:     z.string().min(2, 'Required'),
-  email:    z.string().email().optional().or(z.literal('')),
+  email:    z.email().optional().or(z.literal('')),
   phone:    z.string().optional(),
   branchId: z.string().optional(),
 });

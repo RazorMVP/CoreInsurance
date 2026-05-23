@@ -17,7 +17,7 @@ const schema = z.object({
   code:          z.string().min(2, 'Required').max(20),
   type:          z.enum(['INTERNAL', 'EXTERNAL']),
   licenseNumber: z.string().optional(),
-  email:         z.string().email().optional().or(z.literal('')),
+  email:         z.email().optional().or(z.literal('')),
   phone:         z.string().optional(),
   address:       z.string().optional(),
 });

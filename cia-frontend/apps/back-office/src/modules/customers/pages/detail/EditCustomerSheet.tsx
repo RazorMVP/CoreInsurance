@@ -62,7 +62,7 @@ const directorSchema = z.object({
 });
 
 const schema = z.object({
-  email:         z.string().email('Invalid email').or(z.literal('')),
+  email:         z.email('Invalid email').or(z.literal('')),
   phone:         z.string().min(7, 'Required').or(z.literal('')),
   address:       z.string().min(5, 'Required').or(z.literal('')),
   contactPerson: z.string().optional(),

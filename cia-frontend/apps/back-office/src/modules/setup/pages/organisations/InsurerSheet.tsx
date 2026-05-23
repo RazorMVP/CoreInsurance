@@ -16,7 +16,7 @@ const schema = z.object({
   rcNumber:      z.string().optional(),
   naicomLicense: z.string().optional(),
   address:       z.string().optional(),
-  email:         z.string().email().optional().or(z.literal('')),
+  email:         z.email().optional().or(z.literal('')),
   phone:         z.string().optional(),
 });
 type FormValues = z.infer<typeof schema>;

@@ -15,7 +15,7 @@ import { applyApiErrors } from '@/lib/form-errors';
 const schema = z.object({
   firstName:     z.string().min(1, 'Required'),
   lastName:      z.string().min(1, 'Required'),
-  email:         z.string().email('Invalid email'),
+  email:         z.email('Invalid email'),
   accessGroupId: z.string().min(1, 'Required'),
   status:        z.enum(['ACTIVE', 'INACTIVE']),
 });

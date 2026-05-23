@@ -43,7 +43,7 @@ const schema = z.object({
   companyName:   z.string().min(2, 'Required'),
   rcNumber:      z.string().min(6, 'Required'),
   cacIssuedDate: z.string().min(1, 'CAC issued date is required'),
-  email:         z.string().email('Invalid email'),
+  email:         z.email('Invalid email'),
   phone:         z.string().min(7, 'Required'),
   address:       z.string().min(10, 'Required'),
   directors:     z.array(directorSchema).min(1, 'At least one director required'),

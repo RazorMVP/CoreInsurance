@@ -19,7 +19,7 @@ const ALLOWED_MIME = ['image/jpeg', 'image/jpg', 'image/png'];
 const schema = z.object({
   firstName:     z.string().min(2, 'Required'),
   lastName:      z.string().min(2, 'Required'),
-  email:         z.string().email('Invalid email'),
+  email:         z.email('Invalid email'),
   phone:         z.string().min(7, 'Required'),
   dateOfBirth:   z.string().min(1, 'Required'),
   idType:        z.enum(['NIN', 'VOTERS_CARD', 'DRIVERS_LICENSE', 'PASSPORT']),

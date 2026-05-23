@@ -27,7 +27,7 @@ const schema = z.object({
   startDate:         z.string().min(1, 'Required'),
   endDate:           z.string().min(1, 'Required'),
   contactName:       z.string().min(2, 'Required'),
-  contactEmail:      z.string().email('Invalid email').optional().or(z.literal('')),
+  contactEmail:      z.email('Invalid email').optional().or(z.literal('')),
 });
 type FormValues = z.infer<typeof schema>;
 

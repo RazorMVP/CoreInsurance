@@ -23,10 +23,10 @@ const schema = z.object({
   address:             z.string().optional().or(z.literal('')),
   city:                z.string().optional().or(z.literal('')),
   state:               z.string().optional().or(z.literal('')),
-  email:               z.string().email('Invalid email').optional().or(z.literal('')),
+  email:               z.email('Invalid email').optional().or(z.literal('')),
   phone:               z.string().optional().or(z.literal('')),
   logoPath:            z.string().optional().or(z.literal('')),
-  website:             z.string().url('Invalid URL').optional().or(z.literal('')),
+  website:             z.url('Invalid URL').optional().or(z.literal('')),
 });
 
 type FormValues = z.infer<typeof schema>;
