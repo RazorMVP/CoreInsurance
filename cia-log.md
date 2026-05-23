@@ -24,7 +24,10 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | E1 | P3 | Springdoc live `/v3/api-docs` 500s in dev | Pre-existing auth NPE on unauthenticated probes. Frontend uses static `internal-api.json`, so not consumer-impacting; flagged since Session 80. |
 | E2 | P3 | docs-site/build/internal-api.json stale | Build copy regenerates on next Docusaurus deploy. Cosmetic. |
 | E3 | P3 | RelationshipManager.branch FK-cascade-awareness | Branch deletion doesn't 409 if RMs reference it; listing then shows soft-deleted branch name. Defensive only. |
-| F1 | P2 | Placeholder-onClick row actions across back-office | 6 known: CustomersListPage Update KYC + Blacklist; ProductsPage Activate/Deactivate; QuotationListPage Submit + Convert + Edit + Duplicate. Each is small but adds up. Batch as one slice. |
+| F1c | P3 | Quote Duplicate mutation | Removed from QuotationListPage in Session 109 (no backend endpoint). When a `POST /api/v1/quotes/{id}/duplicate` (or `clone`) is added, restore the row action. Simple deep-copy clone — risks, loadings, discounts, clauses; status → DRAFT. |
+| F1d | P3 | AccessGroupController.delete should accept `?reason=` | Setup convention (V47 reasoned-delete) — every other Setup DELETE endpoint accepts `?reason=` and writes it to audit_log. AccessGroupController.delete currently ignores the param. Session 109 wired the frontend useDeleteWithReason against it anyway; reason gets sent but silently dropped. Add the param + audit-log write. |
+| F1e | P2 | Users page has no backend — missing UserController entirely | `/api/v1/setup/users` returns 404. UsersPage gracefully degrades to "No users yet" empty state. Reset password + Deactivate placeholder row actions removed in Session 109. Full user CRUD + Keycloak admin proxy needed. Larger slice — out of F1's frontend-sweep scope. |
+| F1f | P3 | AccessGroupsPage `permissions` + `userCount` accessor drift | Both column `accessorKey`s are stale — AccessGroupDto was reshaped in S97 (`userCount` removed) and never carried `permissions`. Both columns silently render undefined. Same drift pattern as B5 (PolicyListPage); fix is two accessor renames + maybe a backend addition for userCount. Surfaced in Session 109 sweep, kept out per discipline. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
 
@@ -105,6 +108,80 @@ QuotationListPage doesn't gain an Intermediary column either — same reasoning.
 ### Known follow-ups (deliberately deferred)
 
 - **Closed in Session 108.** This slice originally deferred the QuoteDetailPage main-card intermediary row + the QuotationListPage Intermediary column to a later slice. User pushback (rightly) flagged that as a half-shipped feature — a user could set the intermediary but couldn't see it on the detail page or list page. Session 108 (commit `<see below>`) added both surfaces. Discipline lesson preserved in the Session 108 notes.
+
+---
+
+## 2026-05-23 — Session 109 (`main`): Backlog F1 — full sweep of placeholder row actions (23 sites across 8 modules)
+
+Fifteenth slice under the Session 93 discipline rule. F1 was logged as "6 placeholder row actions, batchable". The pre-flight sweep found **23**, not 6 — the original count was off by nearly 4×. User chose option A (full sweep) when presented with strict/split/full options, partially driven by the B1b lesson that under-scoping produces half-features.
+
+### What landed — from 23 placeholders to 0
+
+Counted by `grep -rn "onClick: () => {}" cia-frontend/apps/back-office/src/modules/` before + after — went from 23 hits → 0.
+
+**Navigate-to-detail-page shortcuts (17 sites).** The detail page already runs the workflow; the list-row "shortcut" was just a deceptive label until today. All converted to a single `goDetail` callback per page:
+
+| Page | Actions converted |
+|---|---|
+| `CustomersListPage` | Update KYC → `/customers/{id}` |
+| `QuotationListPage` | Submit / Convert / Edit → `/quotation/{id}` |
+| `EndorsementsListPage` | Submit / Approve / Reject / Download → `/endorsements/{id}` |
+| `PolicyListPage` | Submit / Approve / Download → `/policies/{id}`; Add endorsement → `/endorsements`; Register claim → `/claims` |
+| `ClaimsListPage` | Start investigation / Approve / Reject / Generate DV → `/claims/{id}` |
+| `AlertsTab` | View details → new in-place detail Dialog (read-only inspection of severity / description / metadata / triggered+acknowledged timestamps) |
+
+**Real mutations wired (3 sites).** Backend endpoints already existed:
+
+- `CustomersListPage` Blacklist → `POST /api/v1/customers/{id}/blacklist` with mandatory reason. Re-used `ConfirmDeleteDialog` (the reason-required shape is identical even though the action isn't a delete). Row action hidden for already-blacklisted customers.
+- `ProductsPage` Activate/Deactivate → `PUT /api/v1/setup/products/{id}` with the full ProductRequest body, `active` flipped. ProductDto and ProductRequest share the editable shape; the re-send pattern avoids needing a new PATCH endpoint.
+- `AccessGroupsPage` Delete → `useDeleteWithReason` hook against `DELETE /api/v1/setup/access-groups/{id}`. The backend currently ignores the `?reason=` query param (F1d backlog row); the frontend sends it anyway so the audit-trail story lands once F1d closes.
+
+**Removed entirely (2 sites).** No backend endpoint and no near-term plan:
+
+- `QuotationListPage` Duplicate — no `POST /api/v1/quotes/{id}/duplicate`. Removed the row action (cleaner than a lying placeholder); F1c logs the feature.
+- `UsersPage` Reset password + Deactivate — discovered there's no `UserController` at all on the backend; the entire `/api/v1/setup/users` endpoint 404s. The page gracefully degrades to the "No users yet" empty state. F1e logs the full UserController gap. Both row actions removed.
+
+### Side-discoveries logged
+
+| Row | Severity |
+|---|---|
+| F1c | P3 — Quote Duplicate mutation (no endpoint today) |
+| F1d | P3 — `AccessGroupController.delete` should accept `?reason=` per V47 convention |
+| F1e | P2 — Missing `UserController` entirely; the whole Users page is non-functional |
+| F1f | P3 — `AccessGroupsPage` `permissions` + `userCount` accessor drift (same pattern as B5; surfaced during the sweep) |
+
+The user chose the full-sweep option *because* of the B1b lesson, and the slice honoured that by closing every removable lie even when it meant deleting row actions outright. The four new backlog rows reflect work the sweep *uncovered* but couldn't ship — backend additions and a column-accessor fix. None of them block the F1 stated goal ("no row action lies to the user"), but all of them stand on their own as future slices.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` — exit 0, zero output.
+- `grep -rn "onClick: () => {}" cia-frontend/apps/back-office/src/modules/` — 0 matches. Down from 23.
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected.` unchanged.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Customer | `CustomersListPage.tsx` (Update KYC navigation + Blacklist mutation + ConfirmDeleteDialog) |
+| Quotation | `QuotationListPage.tsx` (Submit / Convert / Edit navigate; Duplicate removed) |
+| Endorsement | `EndorsementsListPage.tsx` (all workflow actions → navigate) |
+| Policy | `PolicyListPage.tsx` (all workflow actions → navigate; Add endorsement + Register claim → module landings) |
+| Claims | `ClaimsListPage.tsx` (Investigation / Approve / Reject / Generate DV → navigate) |
+| Audit | `AlertsTab.tsx` (View details → new in-place Dialog) |
+| Setup | `AccessGroupsPage.tsx` (Delete → useDeleteWithReason), `ProductsPage.tsx` (Activate/Deactivate → re-send PUT), `UsersPage.tsx` (placeholders removed) |
+| Docs | `cia-log.md` (this entry + F1 removed + F1c/d/e/f added) |
+
+### Backlog reconciliation
+
+- **Removed**: F1.
+- **Added**: F1c (P3), F1d (P3), F1e (P2), F1f (P3).
+- **Net**: 13 → 16 rows. First net-increase slice in 6 attempts.
+
+The net-increase is a feature, not a bug — the sweep surfaced four real gaps that the original F1 row hid behind a single line. Each new row is independently shippable and accurately scoped, where the old F1 was a 6-count that turned out to be 23.
+
+### Known follow-ups (deliberately deferred)
+
+All four new backlog rows. F1e is P2 because the entire Users surface is non-functional; the rest are P3.
 
 ---
 

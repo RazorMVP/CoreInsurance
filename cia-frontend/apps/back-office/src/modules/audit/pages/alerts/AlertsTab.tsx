@@ -82,6 +82,10 @@ export default function AlertsTab() {
   const alerts = alertsQuery.data ?? mockAlerts;
   const [configOpen,         setConfigOpen]         = useState(false);
   const [acknowledgeTarget,  setAcknowledgeTarget]  = useState<AuditAlertDto | null>(null);
+  // "View details" — read-only inspection of the alert. Backend stores
+  // additional context in `metadata` as a JSON string; we surface it raw so
+  // the on-call engineer can copy/paste into a ticket without losing fidelity.
+  const [detailTarget,       setDetailTarget]       = useState<AuditAlertDto | null>(null);
 
   const acknowledge = useMutation({
     mutationFn: async (id: string) => {
@@ -168,7 +172,7 @@ export default function AlertsTab() {
               label: 'Acknowledge',
               onClick: (r: Row<AuditAlertDto>) => setAcknowledgeTarget(r.original),
             }] : []),
-            { label: 'View details', onClick: () => {} },
+            { label: 'View details', onClick: (r: Row<AuditAlertDto>) => setDetailTarget(r.original) },
           ]}
         />
       ),
@@ -265,6 +269,68 @@ export default function AlertsTab() {
             >
               {acknowledge.isPending ? 'Acknowledging…' : 'Acknowledge'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View details — read-only inspection */}
+      <Dialog open={detailTarget !== null} onOpenChange={(v) => { if (!v) setDetailTarget(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Alert Details</DialogTitle>
+            <DialogDescription>
+              {detailTarget && (
+                <>
+                  <span className="font-medium text-foreground">{ALERT_TYPE_LABEL[detailTarget.alertType] ?? detailTarget.alertType}</span>
+                  {' · '}
+                  <Badge variant={SEVERITY_VARIANT[detailTarget.severity] ?? 'draft'} className="text-[10px]">
+                    {detailTarget.severity.toLowerCase()}
+                  </Badge>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {detailTarget && (
+            <div className="space-y-3 text-sm">
+              <div className="rounded-lg bg-muted/40 px-4 py-3">
+                <p className="text-foreground leading-relaxed">{detailTarget.description}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <p className="text-muted-foreground">Triggered at</p>
+                  <p className="text-foreground font-mono">{detailTarget.triggeredAt}</p>
+                </div>
+                {detailTarget.userName && (
+                  <div>
+                    <p className="text-muted-foreground">User</p>
+                    <p className="text-foreground">{detailTarget.userName}</p>
+                  </div>
+                )}
+                {detailTarget.acknowledged && (
+                  <>
+                    <div>
+                      <p className="text-muted-foreground">Acknowledged at</p>
+                      <p className="text-foreground font-mono">{detailTarget.acknowledgedAt ?? '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Acknowledged by</p>
+                      <p className="text-foreground">{detailTarget.acknowledgedBy ?? '—'}</p>
+                    </div>
+                  </>
+                )}
+              </div>
+              {detailTarget.metadata && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Metadata</p>
+                  <pre className="rounded-md bg-muted/40 px-3 py-2 text-xs overflow-x-auto">
+                    {detailTarget.metadata}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailTarget(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

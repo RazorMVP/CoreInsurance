@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
+  Badge, Button, ConfirmDeleteDialog, DataTable, DataTableColumnHeader, DataTableRowActions,
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-  EmptyState, PageHeader, Skeleton,
+  EmptyState, PageHeader, Skeleton, toast,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, customerLabel, type CustomerDto } from '@cia/api-client';
 import IndividualOnboardingSheet from './individual/IndividualOnboardingSheet';
 import CorporateOnboardingSheet from './corporate/CorporateOnboardingSheet';
@@ -16,8 +16,13 @@ const statusVariant: Record<CustomerDto['customerStatus'], 'active' | 'draft' | 
 
 export default function CustomersListPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [indivOpen, setIndivOpen] = useState(false);
   const [corpOpen,  setCorpOpen]  = useState(false);
+  // Blacklist confirmation — POST /api/v1/customers/{id}/blacklist with a
+  // mandatory reason. Re-uses ConfirmDeleteDialog because the reason-required
+  // shape is identical; the action is destructive even though it's not a delete.
+  const [blacklistTarget, setBlacklistTarget] = useState<CustomerDto | null>(null);
 
   const customersQuery = useQuery<CustomerDto[]>({
     queryKey: ['customers'],
@@ -27,6 +32,20 @@ export default function CustomersListPage() {
     },
   });
   const customers = customersQuery.data ?? [];
+
+  const blacklist = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      await apiClient.post(`/api/v1/customers/${id}/blacklist`, { reason });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      toast({ title: 'Customer blacklisted' });
+      setBlacklistTarget(null);
+    },
+    onError: () => {
+      toast({ variant: 'destructive', title: 'Could not blacklist customer' });
+    },
+  });
 
   const columns: ColumnDef<CustomerDto>[] = [
     {
@@ -65,13 +84,24 @@ export default function CustomersListPage() {
     },
     {
       id: 'actions',
-      cell: ({ row }) => (
-        <DataTableRowActions row={row} actions={[
-          { label: 'View details', onClick: (r) => navigate(`/customers/${r.original.id}`) },
-          { label: 'Update KYC',   onClick: () => {} },
-          { label: 'Blacklist',    onClick: () => {}, separator: true, className: 'text-destructive' },
-        ]} />
-      ),
+      cell: ({ row }) => {
+        const isBlacklisted = row.original.customerStatus === 'BLACKLISTED';
+        return (
+          <DataTableRowActions row={row} actions={[
+            { label: 'View details', onClick: (r) => navigate(`/customers/${r.original.id}`) },
+            // Update KYC lives on the customer detail page (EditCustomerSheet
+            // handles the reason-required KYC update flow). The list-row entry
+            // is a shortcut that drops the user there.
+            { label: 'Update KYC',   onClick: (r) => navigate(`/customers/${r.original.id}`) },
+            ...(isBlacklisted ? [] : [{
+              label: 'Blacklist',
+              onClick: (r: { original: CustomerDto }) => setBlacklistTarget(r.original),
+              separator: true,
+              className: 'text-destructive',
+            }]),
+          ]} />
+        );
+      },
     },
   ];
 
@@ -101,6 +131,14 @@ export default function CustomersListPage() {
       )}
       <IndividualOnboardingSheet open={indivOpen} onOpenChange={setIndivOpen} onSuccess={() => setIndivOpen(false)} />
       <CorporateOnboardingSheet  open={corpOpen}  onOpenChange={setCorpOpen}  onSuccess={() => setCorpOpen(false)}  />
+      <ConfirmDeleteDialog
+        open={blacklistTarget !== null}
+        onOpenChange={(v) => { if (!v) setBlacklistTarget(null); }}
+        entityLabel="Blacklist customer"
+        entityName={blacklistTarget ? customerLabel(blacklistTarget) : undefined}
+        busy={blacklist.isPending}
+        onConfirm={(reason) => { if (blacklistTarget) blacklist.mutate({ id: blacklistTarget.id, reason }); }}
+      />
     </div>
   );
 }

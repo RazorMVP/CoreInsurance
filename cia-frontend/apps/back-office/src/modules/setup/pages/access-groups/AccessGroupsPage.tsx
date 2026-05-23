@@ -6,11 +6,21 @@ import {
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, type AccessGroupDto } from '@cia/api-client';
+import { useDeleteWithReason } from '@/lib/use-delete-with-reason';
 import AccessGroupSheet from './AccessGroupSheet';
 
 export default function AccessGroupsPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing,   setEditing]   = useState<AccessGroupDto | null>(null);
+  // Soft-delete with reason — same pattern as the other Setup pages. The
+  // backend (AccessGroupController.delete) currently ignores the ?reason=
+  // query param; the audit-trail completion is logged as backlog F1d.
+  const { setTarget: setDeleteTarget, dialog: deleteDialog } = useDeleteWithReason<AccessGroupDto>({
+    endpoint: (id) => `/api/v1/setup/access-groups/${id}`,
+    invalidateKey: ['setup', 'access-groups'],
+    entityLabel: 'Access Group',
+    entityName: (g) => g.name,
+  });
 
   const groupsQuery = useQuery<AccessGroupDto[]>({
     queryKey: ['setup', 'access-groups'],
@@ -59,7 +69,7 @@ export default function AccessGroupsPage() {
           row={row}
           actions={[
             { label: 'Edit',   onClick: (r) => openEdit(r.original) },
-            { label: 'Delete', onClick: () => {}, separator: true, className: 'text-destructive' },
+            { label: 'Delete', onClick: (r) => setDeleteTarget(r.original), separator: true, className: 'text-destructive' },
           ]}
         />
       ),
@@ -85,6 +95,7 @@ export default function AccessGroupsPage() {
         />
       )}
       <AccessGroupSheet open={sheetOpen} onOpenChange={setSheetOpen} group={editing} onSuccess={() => setSheetOpen(false)} />
+      {deleteDialog}
     </div>
   );
 }

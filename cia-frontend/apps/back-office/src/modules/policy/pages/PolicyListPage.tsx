@@ -132,16 +132,20 @@ export default function PolicyListPage() {
       id: 'actions',
       cell: ({ row }) => {
         const { status, id } = row.original;
+        // Submit / Approve / Download all live on PolicyDetailPage — route there.
+        // Add endorsement and Register claim route to their module landings,
+        // which is where the create flows actually live.
+        const goDetail = () => navigate(`/policies/${id}`);
         return (
           <DataTableRowActions
             row={row}
             actions={[
-              { label: 'View details',         onClick: () => navigate(`/policies/${id}`) },
-              ...(status === 'DRAFT'            ? [{ label: 'Submit for approval', onClick: () => {} }] : []),
-              ...(status === 'ACTIVE'           ? [{ label: 'Add endorsement',     onClick: () => {} }] : []),
-              ...(status === 'ACTIVE'           ? [{ label: 'Register claim',      onClick: () => {} }] : []),
-              ...(status === 'PENDING_APPROVAL' ? [{ label: 'Approve policy',      onClick: () => {} }] : []),
-              { label: 'Download document',    onClick: () => {}, separator: status !== 'DRAFT' },
+              { label: 'View details',         onClick: goDetail },
+              ...(status === 'DRAFT'            ? [{ label: 'Submit for approval', onClick: goDetail }] : []),
+              ...(status === 'ACTIVE'           ? [{ label: 'Add endorsement',     onClick: () => navigate('/endorsements') }] : []),
+              ...(status === 'ACTIVE'           ? [{ label: 'Register claim',      onClick: () => navigate('/claims') }] : []),
+              ...(status === 'PENDING_APPROVAL' ? [{ label: 'Approve policy',      onClick: goDetail }] : []),
+              { label: 'Download document',    onClick: goDetail, separator: status !== 'DRAFT' },
             ].filter(Boolean)}
           />
         );

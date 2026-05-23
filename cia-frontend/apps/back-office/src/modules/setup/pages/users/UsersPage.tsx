@@ -65,9 +65,11 @@ export default function UsersPage() {
         <DataTableRowActions
           row={row}
           actions={[
-            { label: 'Edit',           onClick: (r) => openEdit(r.original) },
-            { label: 'Reset password', onClick: () => {} },
-            { label: 'Deactivate',     onClick: () => {}, separator: true, className: 'text-destructive' },
+            { label: 'Edit', onClick: (r) => openEdit(r.original) },
+            // Reset password + Deactivate require backend endpoints that don't
+            // exist yet — no UserController in cia-setup. Backlog F1e tracks
+            // the full UserController gap (the whole UsersPage 404s today;
+            // page degrades to "No users yet" empty state).
           ]}
         />
       ),

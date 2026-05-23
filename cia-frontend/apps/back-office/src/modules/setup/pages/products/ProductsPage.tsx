@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
-  EmptyState, PageHeader, Skeleton,
+  EmptyState, PageHeader, Skeleton, toast,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type ProductDto } from '@cia/api-client';
 import ProductSheet from './ProductSheet';
 import CommissionSetupsSheet from './CommissionSetupsSheet';
 
 export default function ProductsPage() {
+  const queryClient = useQueryClient();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing,   setEditing]   = useState<ProductDto | null>(null);
   const [commissionsFor, setCommissionsFor] = useState<ProductDto | null>(null);
@@ -22,6 +23,33 @@ export default function ProductsPage() {
     },
   });
   const products = productsQuery.data ?? [];
+
+  // Activate/Deactivate — backend has no dedicated PATCH route, so we re-send
+  // the full ProductRequest with `active` flipped. ProductDto and
+  // ProductRequest share the editable shape (everything minus id +
+  // classOfBusinessName which is a server-side denormalisation).
+  const toggleActive = useMutation({
+    mutationFn: async (p: ProductDto) => {
+      const body = {
+        name:              p.name,
+        code:              p.code,
+        classOfBusinessId: p.classOfBusinessId,
+        type:              p.type,
+        rate:              p.rate,
+        minPremium:        p.minPremium,
+        active:            !p.active,
+        sections:          p.sections ?? [],
+      };
+      await apiClient.put(`/api/v1/setup/products/${p.id}`, body);
+    },
+    onSuccess: (_, p) => {
+      queryClient.invalidateQueries({ queryKey: ['setup', 'products'] });
+      toast({ title: p.active ? 'Product deactivated' : 'Product activated' });
+    },
+    onError: () => {
+      toast({ variant: 'destructive', title: 'Could not toggle product status' });
+    },
+  });
 
   function openCreate() { setEditing(null); setSheetOpen(true); }
   function openEdit(p: ProductDto) { setEditing(p); setSheetOpen(true); }
@@ -71,7 +99,7 @@ export default function ProductsPage() {
           actions={[
             { label: 'Edit',               onClick: (r) => openEdit(r.original) },
             { label: 'Manage Commissions', onClick: (r) => setCommissionsFor(r.original) },
-            { label: row.original.active ? 'Deactivate' : 'Activate', onClick: () => {} },
+            { label: row.original.active ? 'Deactivate' : 'Activate', onClick: (r) => toggleActive.mutate(r.original) },
           ]}
         />
       ),

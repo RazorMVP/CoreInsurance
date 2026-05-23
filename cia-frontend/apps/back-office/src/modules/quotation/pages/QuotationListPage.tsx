@@ -161,13 +161,14 @@ export default function QuotationListPage() {
             row={row}
             actions={[
               { label: 'View details', onClick: (r) => navigate(`/quotation/${r.original.id}`) },
-              ...(status === 'DRAFT'     ? [{ label: 'Submit for approval', onClick: () => {} }] : []),
-              ...(status === 'APPROVED'  ? [{ label: 'Convert to policy',   onClick: () => {} }] : []),
-              ...(status !== 'CONVERTED' ? [{ label: 'Edit quote',          onClick: () => {} }] : []),
+              // Submit / Convert / Edit all live on the detail page — route there
+              // rather than duplicating the workflow logic on the list row.
+              ...(status === 'DRAFT'     ? [{ label: 'Submit for approval', onClick: (r: { original: QuoteDto }) => navigate(`/quotation/${r.original.id}`) }] : []),
+              ...(status === 'APPROVED'  ? [{ label: 'Convert to policy',   onClick: (r: { original: QuoteDto }) => navigate(`/quotation/${r.original.id}`) }] : []),
+              ...(status !== 'CONVERTED' ? [{ label: 'Edit quote',          onClick: (r: { original: QuoteDto }) => navigate(`/quotation/${r.original.id}`) }] : []),
               ...((status === 'APPROVED' || status === 'CONVERTED') && mockQuotePdfData[row.original.id]
                 ? [{ label: 'Download PDF', onClick: (r: any) => setPdfData(mockQuotePdfData[r.original.id] ?? null) }]
                 : []),
-              { label: 'Duplicate', onClick: () => {} },
             ]}
           />
         );

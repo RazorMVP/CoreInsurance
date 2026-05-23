@@ -107,15 +107,18 @@ export default function ClaimsListPage() {
       id: 'actions',
       cell: ({ row }) => {
         const { status, id } = row.original;
+        // Investigation / Approve / Reject / Generate DV all live on the
+        // claim detail page — route there rather than duplicating workflows.
+        const goDetail = () => navigate(`/claims/${id}`);
         return (
           <DataTableRowActions
             row={row}
             actions={[
-              { label: 'View claim',          onClick: () => navigate(`/claims/${id}`) },
-              ...(status === 'REGISTERED'                            ? [{ label: 'Start investigation', onClick: () => {} }] : []),
+              { label: 'View claim',          onClick: goDetail },
+              ...(status === 'REGISTERED'                            ? [{ label: 'Start investigation', onClick: goDetail }] : []),
               ...(status === 'UNDER_INVESTIGATION' || status === 'RESERVED' ? [{ label: 'Submit for approval', onClick: () => setSubmitTarget(row.original) }] : []),
-              ...(status === 'PENDING_APPROVAL'                      ? [{ label: 'Approve', onClick: () => {} }, { label: 'Reject', onClick: () => {}, className: 'text-destructive' }] : []),
-              ...(status === 'APPROVED'                              ? [{ label: 'Generate DV', onClick: () => {} }] : []),
+              ...(status === 'PENDING_APPROVAL'                      ? [{ label: 'Approve', onClick: goDetail }, { label: 'Reject', onClick: goDetail, className: 'text-destructive' }] : []),
+              ...(status === 'APPROVED'                              ? [{ label: 'Generate DV', onClick: goDetail }] : []),
               ...(status !== 'SETTLED' && status !== 'WITHDRAWN' && status !== 'REJECTED'
                 ? [{ label: 'Cancel claim', onClick: () => setCancelTarget(row.original), separator: true, className: 'text-destructive' }]
                 : []),

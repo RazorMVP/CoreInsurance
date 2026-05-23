@@ -92,14 +92,16 @@ export default function EndorsementsListPage() {
       id: 'actions',
       cell: ({ row }) => {
         const { status, id } = row.original;
+        // All workflow actions live on the detail page — list rows route there.
+        const goDetail = () => navigate(`/endorsements/${id}`);
         return (
           <DataTableRowActions
             row={row}
             actions={[
-              { label: 'View details',      onClick: () => navigate(`/endorsements/${id}`) },
-              ...(status === 'DRAFT'     ? [{ label: 'Submit for approval', onClick: () => {} }] : []),
-              ...(status === 'SUBMITTED' ? [{ label: 'Approve',             onClick: () => {} }, { label: 'Reject', onClick: () => {}, className: 'text-destructive' }] : []),
-              ...(status === 'APPROVED'  ? [{ label: 'Download document',   onClick: () => {} }] : []),
+              { label: 'View details',      onClick: goDetail },
+              ...(status === 'DRAFT'     ? [{ label: 'Submit for approval', onClick: goDetail }] : []),
+              ...(status === 'SUBMITTED' ? [{ label: 'Approve',             onClick: goDetail }, { label: 'Reject', onClick: goDetail, className: 'text-destructive' }] : []),
+              ...(status === 'APPROVED'  ? [{ label: 'Download document',   onClick: goDetail }] : []),
             ]}
           />
         );
