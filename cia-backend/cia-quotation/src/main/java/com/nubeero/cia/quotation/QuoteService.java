@@ -9,6 +9,8 @@ import com.nubeero.cia.customer.Customer;
 import com.nubeero.cia.customer.CustomerService;
 import com.nubeero.cia.customer.CustomerType;
 import com.nubeero.cia.quotation.dto.*;
+import com.nubeero.cia.setup.org.Agent;
+import com.nubeero.cia.setup.org.AgentRepository;
 import com.nubeero.cia.setup.org.Broker;
 import com.nubeero.cia.setup.org.BrokerRepository;
 import com.nubeero.cia.setup.org.InsuranceCompany;
@@ -54,6 +56,7 @@ public class QuoteService {
     private final CustomerService           customerService;
     private final ProductRepository         productRepository;
     private final BrokerRepository          brokerRepository;
+    private final AgentRepository           agentRepository;
     private final InsuranceCompanyRepository insuranceCompanyRepository;
     private final AuditService              auditService;
     private final WorkflowClient            workflowClient;
@@ -95,12 +98,25 @@ public class QuoteService {
                 .filter(p -> p.getDeletedAt() == null && p.isActive())
                 .orElseThrow(() -> new ResourceNotFoundException("Product", request.getProductId()));
 
+        if (request.getBrokerId() != null && request.getAgentId() != null) {
+            throw new BusinessRuleException("BROKER_AGENT_EXCLUSIVE",
+                    "A quote can carry a broker OR an agent, not both (V55 ck_quotes_broker_xor_agent).");
+        }
+
         String brokerName = null;
         if (request.getBrokerId() != null) {
             Broker broker = brokerRepository.findById(request.getBrokerId())
                     .filter(b -> b.getDeletedAt() == null)
                     .orElseThrow(() -> new ResourceNotFoundException("Broker", request.getBrokerId()));
             brokerName = broker.getName();
+        }
+
+        String agentName = null;
+        if (request.getAgentId() != null) {
+            Agent agent = agentRepository.findById(request.getAgentId())
+                    .filter(a -> a.getDeletedAt() == null)
+                    .orElseThrow(() -> new ResourceNotFoundException("Agent", request.getAgentId()));
+            agentName = agent.getName();
         }
 
         validateDates(request.getPolicyStartDate(), request.getPolicyEndDate());
@@ -120,6 +136,8 @@ public class QuoteService {
                 .classOfBusinessName(product.getClassOfBusiness().getName())
                 .brokerId(request.getBrokerId())
                 .brokerName(brokerName)
+                .agentId(request.getAgentId())
+                .agentName(agentName)
                 .businessType(request.getBusinessType())
                 .policyStartDate(request.getPolicyStartDate())
                 .policyEndDate(request.getPolicyEndDate())
@@ -148,12 +166,29 @@ public class QuoteService {
         Quote quote = findOrThrow(id);
         requireStatus(quote, QuoteStatus.DRAFT, "update");
 
+        if (request.getBrokerId() != null && request.getAgentId() != null) {
+            throw new BusinessRuleException("BROKER_AGENT_EXCLUSIVE",
+                    "A quote can carry a broker OR an agent, not both (V55 ck_quotes_broker_xor_agent).");
+        }
         if (request.getBrokerId() != null) {
             Broker broker = brokerRepository.findById(request.getBrokerId())
                     .filter(b -> b.getDeletedAt() == null)
                     .orElseThrow(() -> new ResourceNotFoundException("Broker", request.getBrokerId()));
             quote.setBrokerId(request.getBrokerId());
             quote.setBrokerName(broker.getName());
+            // Honour the XOR — a request that switches from agent to broker
+            // must clear the other side so the CHECK constraint passes.
+            quote.setAgentId(null);
+            quote.setAgentName(null);
+        }
+        if (request.getAgentId() != null) {
+            Agent agent = agentRepository.findById(request.getAgentId())
+                    .filter(a -> a.getDeletedAt() == null)
+                    .orElseThrow(() -> new ResourceNotFoundException("Agent", request.getAgentId()));
+            quote.setAgentId(request.getAgentId());
+            quote.setAgentName(agent.getName());
+            quote.setBrokerId(null);
+            quote.setBrokerName(null);
         }
         if (request.getBusinessType() != null)    quote.setBusinessType(request.getBusinessType());
         if (request.getPolicyStartDate() != null) quote.setPolicyStartDate(request.getPolicyStartDate());
@@ -507,7 +542,9 @@ public class QuoteService {
                 .id(q.getId()).quoteNumber(q.getQuoteNumber()).status(q.getStatus())
                 .customerId(q.getCustomerId()).customerName(q.getCustomerName())
                 .productName(q.getProductName()).classOfBusinessName(q.getClassOfBusinessName())
-                .brokerName(q.getBrokerName()).businessType(q.getBusinessType())
+                .brokerName(q.getBrokerName())
+                .agentName(q.getAgentName())
+                .businessType(q.getBusinessType())
                 .policyStartDate(q.getPolicyStartDate()).policyEndDate(q.getPolicyEndDate())
                 .netPremium(q.getNetPremium()).expiresAt(q.getExpiresAt())
                 .createdAt(q.getCreatedAt())
@@ -556,6 +593,7 @@ public class QuoteService {
                 .productCode(q.getProductCode()).productRate(q.getProductRate())
                 .classOfBusinessId(q.getClassOfBusinessId()).classOfBusinessName(q.getClassOfBusinessName())
                 .brokerId(q.getBrokerId()).brokerName(q.getBrokerName())
+                .agentId(q.getAgentId()).agentName(q.getAgentName())
                 .businessType(q.getBusinessType())
                 .policyStartDate(q.getPolicyStartDate()).policyEndDate(q.getPolicyEndDate())
                 .totalSumInsured(q.getTotalSumInsured())

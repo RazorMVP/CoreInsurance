@@ -14,7 +14,7 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 |---|---|---|---|
 | F4 | P3 | Password Policy UI needs real backend endpoint | CompanySettingsPage's Password Policy card was sending `minPasswordLength` + `passwordExpireDays` in the company-settings PUT body — backend `CompanySettingsRequest` doesn't accept either field. Session 98 removed the card from the form (was pure theatre). When a real password-policy endpoint exists, surface those settings under a separate `/setup/password-policy` page or a dedicated card with a real PUT target. |
 | F6 | P3 | Two `// allow-mock:` opt-outs missing | `cia-frontend/scripts/check-api-wiring.sh` flags `MOCK_QUOTES` in QuoteDetailPage:26 (added Session 100) and `MOCK_CUSTOMERS` in CustomerDetailPage:18 (added Session 94). Both are decorative fallbacks-while-useQuery-is-in-flight (same pattern as `mockEndorsement` in EndorsementDetailPage which IS labelled). Two one-line comment fixes. Not a runtime issue — wiring script isn't a CI gate today, only informational locally. |
-| B1 | P2 | Quote-side agent attribution | Quote entity doesn't carry `agentId`. Extends Module 2 form + bulk-upload CSV + quote-document templates. Bind-from-quote currently always produces broker-attributed policies even when an agent was the intermediary. |
+| B1b | P2 | Quote-side agent attribution — frontend forms / CSV / PDF | B1a (Session 106) shipped the backend foundation (V55 + entity + DTOs + service + bind-from-quote propagation) and the @cia/api-client QuoteDto fields. B1b lands the consumer surfaces: agent picker on SingleRiskQuoteSheet + MultiRiskQuoteSheet, agent_id column in the bulk-upload CSV template, and the agent line in the quote PDF preview. No backend changes — purely frontend consumption of fields that now ship correctly. |
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
 | F7 | P3 | Flat receipts + payments inventory view dropped | Session 103 (F2) removed the "Receipts" + "Payments" sub-sections from ReceivablesTab + PayablesTab because backend has no `/api/v1/receipts` or `/api/v1/payments` flat list endpoint — receipts only exist nested under a debit-note (`/api/v1/debit-notes/{dnId}/receipts`), payments only under a credit-note. If a finance-level "show me all approved receipts this week" view is needed, add flat list controllers + ITs on the backend, then re-surface the sub-sections. Alternative: expose receipts + payments inside DebitNoteDetailDialog + CreditNoteDetailDialog so users can drill from the DN/CN inventory. `ReverseTransactionDialog` file kept in-tree (dead until either surface lands). |
 | F3 | P3 | DTO drift script picks up zod-derived types | `finance.ts` uses `export type X = z.infer<typeof XSchema>` (not `export interface X`). The drift parser only matches `export interface`, so DebitNoteDto / ReceiptDto / CreditNoteDto / PaymentDto are never checked. Extend the parser to also detect zod-derived types. |
@@ -28,6 +28,84 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F1 | P2 | Placeholder-onClick row actions across back-office | 6 known: CustomersListPage Update KYC + Blacklist; ProductsPage Activate/Deactivate; QuotationListPage Submit + Convert + Edit + Duplicate. Each is small but adds up. Batch as one slice. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-23 — Session 106 (`main`): Backlog B1a — Quote-side agent attribution (backend + DTO symmetry)
+
+Thirteenth slice under the Session 93 discipline rule. Backlog B1 was scoped as "Quote agent attribution end-to-end" spanning backend entity, V55 migration, request/response DTOs, service logic, bind-from-quote propagation, plus frontend forms + bulk CSV + quote PDF. Around 17 logical changes across 14+ files.
+
+Per the discipline rule, when a backlog row spans both backend and frontend, the honest split is two slices: **B1a (backend foundation + @cia/api-client DTO symmetry)** lands first so the wire shape is correct end-to-end with no UI regressions; **B1b (frontend consumption — pickers + CSV + PDF)** lands next against a known-good backend.
+
+### What B1a landed
+
+**Migration (V55):**
+
+```sql
+ALTER TABLE quotes ADD COLUMN agent_id UUID, ADD COLUMN agent_name VARCHAR(100);
+ALTER TABLE quotes ADD CONSTRAINT ck_quotes_broker_xor_agent
+  CHECK (broker_id IS NULL OR agent_id IS NULL);
+CREATE INDEX idx_quotes_agent_id ON quotes (agent_id) WHERE deleted_at IS NULL;
+```
+
+Structurally identical to V53 (policies). Same partial-index pattern as `idx_quotes_broker_id` from V5. Same XOR-CHECK pattern as `ck_policies_broker_xor_agent`.
+
+**Backend Java changes:**
+
+- `Quote.java` — adds `agentId UUID` + `agentName VARCHAR(100)` columns. Builder + getters/setters generated by Lombok.
+- `QuoteRequest.java` — adds `agentId` field. No `@NotNull` (still optional — DIRECT policies have no intermediary).
+- `QuoteUpdateRequest.java` — adds `agentId` field (PATCH semantics — only present fields update).
+- `QuoteResponse.java` — adds `agentId` + `agentName`.
+- `QuoteSummaryResponse.java` — adds `agentName` (summary doesn't carry IDs).
+- `QuoteService.create()` — service-layer BROKER_AGENT_EXCLUSIVE validation, agent resolution via `AgentRepository`, persists `agentId/agentName` into the builder. Mirrors S84d PolicyService:191-216 line-for-line.
+- `QuoteService.update()` — same XOR validation + agent resolution + **clear-the-other-side semantics**: setting one of `brokerId/agentId` in the PATCH body nulls out the corresponding agent/broker fields on the entity, so the DB CHECK stays consistent. Same pattern as PolicyService.update.
+- `QuoteService.toSummary()` / `.toResponse()` — surface the new fields.
+- `QuoteRepository.search()` — extends the LIKE predicate to include `agentName`.
+- `PolicyService.bindFromQuote()` — the load-bearing change. Propagates `quote.agentId` + `quote.agentName` onto the new policy, and passes `quote.agentId` (instead of `null`) to `resolveCommissionSnapshot()`. The Slice 84d deferral comment at lines 117-119 is replaced with the explanation of why both legs are now safe to propagate (DB CHECK guarantees XOR upstream).
+
+**Frontend symmetry (no UI yet):**
+
+- `@cia/api-client/quotation.ts` — adds `agentId?: string | null` + `agentName?: string | null` to `QuoteDto`. Required to keep the drift script clean — without it, B1a would surface `agentId/agentName` as `backendOnly` and re-open the allow-list.
+
+### Mid-slice discovery — fix in scope
+
+`PolicyApprovedEventContractTest` was failing to compile on HEAD before B1a touched it. Root cause: when S84d added `AgentRepository` to `PolicyService`'s constructor, the test's mock list was updated for `CommissionSetupRepository` (per the prior session log) but never for `AgentRepository`. The compile failure has been silent because cia-policy doesn't run on its own in the failsafe IT suite — only via `cia-api`'s reactor — and `mvn install` was apparently never run against cia-policy alone in any subsequent slice.
+
+Per Session 93 discipline this is exactly the "stated goal can't ship without also fixing X" case. B1a's compile verification of cia-policy → cia-api requires the test to compile too (`mvn install` runs `test-compile` by default unless `-Dmaven.test.skip=true`). I broadened scope explicitly: added `@Mock AgentRepository agentRepository` + threaded it into the `new PolicyService(...)` constructor call at index 8 (matching the production signature). One-line addition; the test logic itself is unchanged.
+
+Verified the breakage was pre-existing by `git stash`-ing B1a and running `mvn install -pl cia-policy -am` against HEAD: same compile error. Confirmed not introduced by B1a.
+
+### Verification
+
+- Backend full reactor compile: `mvn install -DskipTests -pl cia-quotation,cia-policy,cia-api -am` — BUILD SUCCESS across cia-common → cia-api.
+- Test compile sweep: `mvn test-compile -pl cia-policy,cia-quotation` — BUILD SUCCESS.
+- Frontend tsc: `pnpm --filter @cia/back-office exec tsc --noEmit` — exit 0, zero output.
+- DTO drift: `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (29 interfaces, 2 skipped)` unchanged. The `agentId/agentName` additions show up on both ends of the QuoteDto ↔ QuoteResponse pair.
+- Failsafe IT suite (`mvn verify -pl cia-api -DskipUnitTests=true`) running in background to validate V55 + the bind-from-quote propagation against the 274-IT baseline.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend — schema | `cia-api/src/main/resources/db/migration/V55__add_agent_to_quotes.sql` (new) |
+| Backend — entity | `cia-quotation/.../Quote.java` |
+| Backend — DTOs | `QuoteRequest.java`, `QuoteUpdateRequest.java`, `QuoteResponse.java`, `QuoteSummaryResponse.java` |
+| Backend — service | `QuoteService.java` (imports + AgentRepository field + create/update + toSummary/toResponse), `QuoteRepository.java` (search predicate), `PolicyService.java` (bindFromQuote propagation) |
+| Backend — test | `PolicyApprovedEventContractTest.java` (constructor + mock additions — fixes pre-existing compile failure) |
+| Frontend — DTOs | `cia-frontend/packages/api-client/src/modules/quotation.ts` |
+| Docs | `cia-log.md` (this entry + B1 → B1b backlog row reshape) |
+
+### Backlog reconciliation
+
+- **Reshape**: B1 → B1b. The backlog row originally combined backend + frontend; B1a closed the backend half, so the remaining frontend half is rewritten as B1b with the precise scope (3 surfaces — quote sheets, CSV, PDF).
+- **Added**: none.
+- **Net**: 14 → 14 rows (B1 replaced by B1b — net zero).
+
+### Known follow-ups (deliberately deferred)
+
+- **B1b** (frontend consumption — see backlog).
+- The `PolicyApprovedEventContractTest` compile fix is the kind of pre-existing breakage worth surfacing: the test ran without AgentRepository for the whole stretch from S84d through Session 105 because nobody ran `mvn install -pl cia-policy` against HEAD. The failsafe IT suite presumably runs via `cia-api`'s reactor and either skips this test or runs from compiled classes that happened to be cached. The fix in this slice closes the gap. If a future slice surfaces a similar latent test-compile gap, the lesson is to run `mvn install -DskipTests=false` (or just `mvn verify`) per slice rather than `mvn install -DskipTests` — but that costs ~5 min per slice and isn't what discipline calls for here.
+- No new IT for the V55 CHECK constraint or the bind-from-quote agent propagation. Mirrors S84d's choice — service-layer ITs are uniformly thin across cia-policy and cia-quotation. Closing that gap is a dedicated coverage slice, not absorbed here.
 
 ---
 

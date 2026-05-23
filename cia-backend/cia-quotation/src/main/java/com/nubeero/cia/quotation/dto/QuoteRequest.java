@@ -22,6 +22,10 @@ public class QuoteRequest {
 
     private UUID brokerId;
 
+    // Mutually exclusive with brokerId (V55 ck_quotes_broker_xor_agent).
+    // Enforced at the service layer too; DB CHECK is the truth.
+    private UUID agentId;
+
     @NotNull
     private BusinessType businessType;
 

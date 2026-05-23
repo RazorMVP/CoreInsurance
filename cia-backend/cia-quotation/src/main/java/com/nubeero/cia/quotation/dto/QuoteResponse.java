@@ -32,6 +32,10 @@ public class QuoteResponse {
     private UUID brokerId;
     private String brokerName;
 
+    // Per-quote agent attribution (V55). Mutually exclusive with brokerId.
+    private UUID agentId;
+    private String agentName;
+
     private BusinessType businessType;
 
     private LocalDate policyStartDate;

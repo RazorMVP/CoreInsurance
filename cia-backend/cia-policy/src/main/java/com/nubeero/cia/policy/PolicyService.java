@@ -114,11 +114,11 @@ public class PolicyService {
                     "A policy already exists for quote: " + quoteId);
         }
 
-        // Quote does not yet carry agent attribution — Slice 84d v1 ships
-        // agent only on direct-create policies. Quote-side support is a
-        // follow-up slice that extends the Quote entity + DTOs in parallel.
+        // Quote-side agent attribution shipped in V55 (Slice B1a); propagate
+        // both legs of broker XOR agent. The DB CHECK on quotes
+        // (ck_quotes_broker_xor_agent) guarantees at most one is non-null.
         CommissionSnapshot commission = resolveCommissionSnapshot(
-                quote.getProductId(), quote.getBrokerId(), null, quote.getPolicyStartDate());
+                quote.getProductId(), quote.getBrokerId(), quote.getAgentId(), quote.getPolicyStartDate());
 
         Policy policy = Policy.builder()
                 .quoteId(quote.getId())
@@ -134,6 +134,8 @@ public class PolicyService {
                 .classOfBusinessCode(resolveClassCode(quote.getClassOfBusinessId()))
                 .brokerId(quote.getBrokerId())
                 .brokerName(quote.getBrokerName())
+                .agentId(quote.getAgentId())
+                .agentName(quote.getAgentName())
                 .commissionSourceType(commission.sourceType())
                 .commissionRate(commission.rate())
                 .businessType(quote.getBusinessType())

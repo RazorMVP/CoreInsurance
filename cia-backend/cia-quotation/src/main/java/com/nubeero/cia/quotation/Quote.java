@@ -65,6 +65,13 @@ public class Quote extends BaseEntity {
     @Column(name = "broker_name", length = 100)
     private String brokerName;
 
+    // ── Agent (nullable; mutually exclusive with broker via V55 CHECK) ───
+    @Column(name = "agent_id")
+    private UUID agentId;
+
+    @Column(name = "agent_name", length = 100)
+    private String agentName;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "business_type", nullable = false, length = 30)
     @Builder.Default

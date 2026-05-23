@@ -25,7 +25,8 @@ public interface QuoteRepository extends JpaRepository<Quote, UUID> {
               AND (LOWER(q.quoteNumber)    LIKE LOWER(CONCAT('%', :q, '%'))
                 OR LOWER(q.customerName)  LIKE LOWER(CONCAT('%', :q, '%'))
                 OR LOWER(q.productName)   LIKE LOWER(CONCAT('%', :q, '%'))
-                OR LOWER(q.brokerName)    LIKE LOWER(CONCAT('%', :q, '%')))
+                OR LOWER(q.brokerName)    LIKE LOWER(CONCAT('%', :q, '%'))
+                OR LOWER(q.agentName)     LIKE LOWER(CONCAT('%', :q, '%')))
             """)
     Page<Quote> search(@Param("q") String query, Pageable pageable);
 }

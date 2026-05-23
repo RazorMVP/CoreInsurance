@@ -12,6 +12,7 @@ import java.util.UUID;
 public class QuoteUpdateRequest {
 
     private UUID         brokerId;
+    private UUID         agentId;
     private BusinessType businessType;
     private LocalDate    policyStartDate;
     private LocalDate    policyEndDate;

@@ -84,6 +84,12 @@ export interface QuoteDto {
   brokerId?:                string | null;
   brokerName?:              string | null;
 
+  // Per-quote agent attribution (Slice B1a / V55). Mutually exclusive with
+  // brokerId via ck_quotes_broker_xor_agent — frontend can render either
+  // (Broker · name) or (Agent · name), never both.
+  agentId?:                 string | null;
+  agentName?:               string | null;
+
   businessType:             BusinessType;
 
   policyStartDate:          string;

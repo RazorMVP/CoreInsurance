@@ -21,6 +21,8 @@ public class QuoteSummaryResponse {
     private String productName;
     private String classOfBusinessName;
     private String brokerName;
+    // Per-quote agent attribution (V55). Mutually exclusive with brokerName.
+    private String agentName;
     private BusinessType businessType;
     private LocalDate policyStartDate;
     private LocalDate policyEndDate;
