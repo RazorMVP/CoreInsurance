@@ -81,8 +81,13 @@ export default function BulkUploadPage() {
           <p className="text-sm font-semibold text-foreground mb-2">CSV Template</p>
           <p className="text-xs text-muted-foreground mb-3">Download the template and fill in your quote data. Required columns are marked *.</p>
           <code className="block rounded bg-muted px-3 py-2 text-xs font-mono text-muted-foreground">
-            customer_id*, product_id*, start_date*, end_date*, sum_insured*, rate*, discount, risk_description*
+            customer_id*, product_id*, start_date*, end_date*, sum_insured*, rate*, discount, risk_description*, broker_id, agent_id
           </code>
+          <p className="mt-2 text-xs text-muted-foreground">
+            <span className="font-medium">Intermediary:</span> exactly one of <code className="text-foreground">broker_id</code> or
+            <code className="text-foreground"> agent_id</code> may be set per row — both empty means a direct sale. The backend rejects rows
+            that set both (V55 <code className="text-foreground">ck_quotes_broker_xor_agent</code>).
+          </p>
           <Button variant="outline" size="sm" className="mt-3">Download Template</Button>
         </CardContent>
       </Card>

@@ -14,7 +14,6 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 |---|---|---|---|
 | F4 | P3 | Password Policy UI needs real backend endpoint | CompanySettingsPage's Password Policy card was sending `minPasswordLength` + `passwordExpireDays` in the company-settings PUT body — backend `CompanySettingsRequest` doesn't accept either field. Session 98 removed the card from the form (was pure theatre). When a real password-policy endpoint exists, surface those settings under a separate `/setup/password-policy` page or a dedicated card with a real PUT target. |
 | F6 | P3 | Two `// allow-mock:` opt-outs missing | `cia-frontend/scripts/check-api-wiring.sh` flags `MOCK_QUOTES` in QuoteDetailPage:26 (added Session 100) and `MOCK_CUSTOMERS` in CustomerDetailPage:18 (added Session 94). Both are decorative fallbacks-while-useQuery-is-in-flight (same pattern as `mockEndorsement` in EndorsementDetailPage which IS labelled). Two one-line comment fixes. Not a runtime issue — wiring script isn't a CI gate today, only informational locally. |
-| B1b | P2 | Quote-side agent attribution — frontend forms / CSV / PDF | B1a (Session 106) shipped the backend foundation (V55 + entity + DTOs + service + bind-from-quote propagation) and the @cia/api-client QuoteDto fields. B1b lands the consumer surfaces: agent picker on SingleRiskQuoteSheet + MultiRiskQuoteSheet, agent_id column in the bulk-upload CSV template, and the agent line in the quote PDF preview. No backend changes — purely frontend consumption of fields that now ship correctly. |
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
 | F7 | P3 | Flat receipts + payments inventory view dropped | Session 103 (F2) removed the "Receipts" + "Payments" sub-sections from ReceivablesTab + PayablesTab because backend has no `/api/v1/receipts` or `/api/v1/payments` flat list endpoint — receipts only exist nested under a debit-note (`/api/v1/debit-notes/{dnId}/receipts`), payments only under a credit-note. If a finance-level "show me all approved receipts this week" view is needed, add flat list controllers + ITs on the backend, then re-surface the sub-sections. Alternative: expose receipts + payments inside DebitNoteDetailDialog + CreditNoteDetailDialog so users can drill from the DN/CN inventory. `ReverseTransactionDialog` file kept in-tree (dead until either surface lands). |
 | F3 | P3 | DTO drift script picks up zod-derived types | `finance.ts` uses `export type X = z.infer<typeof XSchema>` (not `export interface X`). The drift parser only matches `export interface`, so DebitNoteDto / ReceiptDto / CreditNoteDto / PaymentDto are never checked. Extend the parser to also detect zod-derived types. |
@@ -28,6 +27,85 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F1 | P2 | Placeholder-onClick row actions across back-office | 6 known: CustomersListPage Update KYC + Blacklist; ProductsPage Activate/Deactivate; QuotationListPage Submit + Convert + Edit + Duplicate. Each is small but adds up. Batch as one slice. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-23 — Session 107 (`main`): Backlog B1b — Quote-side intermediary picker (UI consumption, honestly broadened)
+
+Fourteenth slice under the Session 93 discipline rule. B1b was logged as "agent picker on quote sheets + agent_id in bulk CSV + agent line in PDF" — purely an agent surfacing slice consuming the V55 fields B1a added.
+
+### Discovery that broadened the slice
+
+Before writing any code I swept the whole quotation module for existing broker references:
+
+```sh
+grep -rni "broker\|intermediary" cia-frontend/apps/back-office/src/modules/quotation/
+# → zero matches
+```
+
+No broker picker existed on either quote sheet. No broker name was shown on the detail page or the PDF preview. Backend `QuoteRequest.brokerId` has been there since V5 (the original schema), but the frontend has never surfaced intermediary attribution at all. Two paths:
+
+- **A — Strict B1b**: add only an Agent picker. Ships a half-feature (still no broker UI), asymmetric with the backend XOR model.
+- **B — Honest broaden**: add a single Intermediary picker (Broker / Agent / Direct) to both quote sheets. Mirrors the policy CreatePolicySheet pattern from S89 (Slice 84d UX). Closes the pre-existing broker gap alongside the new agent attribution.
+- **C — Two slices**: defer entirely; split into broker-first (B1b1) and agent-second (B1b2).
+
+User picked **B** — option markdown table presented; one decision per the user's question-style memory.
+
+### What landed
+
+**Both quote sheets** (`SingleRiskQuoteSheet.tsx`, `MultiRiskQuoteSheet.tsx`) now follow the canonical CreatePolicySheet pattern line-for-line:
+
+- Schema additions: `channel: z.enum(['DIRECT', 'BROKER', 'AGENT'])` + `intermediaryId: z.string().optional().or(z.literal(''))`, with a `.refine` enforcing intermediaryId-required when channel ≠ DIRECT.
+- Module-level `CHANNELS` constant for the select options.
+- Two lazy-loaded queries (`brokersQuery` enabled when `channel === 'BROKER'`, `agentsQuery` when `channel === 'AGENT'`) — no fetch happens until the user actively picks a channel.
+- `onChannelChange` callback that clears `intermediaryId` whenever channel switches, preventing stale selections from crossing channel boundaries.
+- Picker UI rendered as a `FormRow` with the channel select + conditional intermediary select (label flips between "Broker" / "Agent").
+- Submit transform appends `brokerId` or `agentId` to the QuoteRequest payload based on channel. The DB CHECK (`ck_quotes_broker_xor_agent`) + service-layer `BROKER_AGENT_EXCLUSIVE` are the two guards.
+
+Position-wise: SingleRisk inserts the picker after Product (above Policy Period); MultiRisk inserts it after Policy Period (matches the visual hierarchy of each sheet).
+
+**PDF preview** (`QuotePdfPreview.tsx`):
+
+- `QuotePdfData` interface extended with optional `brokerName?: string | null` + `agentName?: string | null`.
+- On-screen preview gets a new "Intermediary" row in the left column of the header grid, rendering "Broker · Name" / "Agent · Name" / "Direct" with the same label/value split the detail page uses (S84e pattern).
+- The print-HTML branch (`buildPrintHtml`) gets the same row using `&middot;` instead of `·` to match the surrounding HTML-entity convention.
+
+**Quote detail page** (`QuoteDetailPage.tsx`): one-line addition — projects `q.brokerName` + `q.agentName` into the new `QuotePdfData` fields. Required for the PDF block to actually render real data; not scope creep.
+
+**Bulk-upload CSV template** (`BulkUploadPage.tsx`): the template string gains `broker_id` and `agent_id` columns. The whole page is still a static skeleton (drop zone is a mock, validation is fake), so this is a pure documentation change pointing future implementers at the canonical column names. Added a one-line explanatory note that exactly one of broker_id/agent_id may be set per row.
+
+### What was deliberately NOT touched
+
+The QuoteDetailPage's main "Quote Details" card doesn't render the broker/agent on screen — only the PDF carries it. The detail page's per-row inventory surfacing is a separate UI decision (mirrors B3 for policies); explicitly excluded from B1b's scope and not added today. If a user wants the row inline on the detail page, that's a new backlog row.
+
+QuotationListPage doesn't gain an Intermediary column either — same reasoning. The B3 analog for quotes can be a follow-up slice.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` — exit 0, zero output across the full back-office tree.
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (29 interfaces, 2 skipped)` unchanged. B1a already added the QuoteDto symmetry; B1b doesn't change DTOs.
+- `bash cia-frontend/scripts/check-api-wiring.sh` — same two pre-existing F6 violations (MOCK_QUOTES / MOCK_CUSTOMERS); zero new ones from B1b.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — quote forms | `SingleRiskQuoteSheet.tsx`, `MultiRiskQuoteSheet.tsx` (channel + intermediaryId schema additions + picker UI + submit transform) |
+| Frontend — PDF preview | `QuotePdfPreview.tsx` (QuotePdfData interface + on-screen + print-HTML render) |
+| Frontend — quote detail | `QuoteDetailPage.tsx` (PDF projection — brokerName + agentName fields) |
+| Frontend — bulk skeleton | `BulkUploadPage.tsx` (CSV template + intermediary note) |
+| Docs | `cia-log.md` (this entry + B1b removed) |
+
+### Backlog reconciliation
+
+- **Removed**: B1b.
+- **Added**: none. The slice goal was honest-broadened up-front (user chose option B knowing the broker gap existed); the broaden is recorded here in the slice notes, not as a new backlog row.
+- **Net**: 14 → 13 rows. Second net-decrement slice in the run (B5 was the first).
+
+### Known follow-ups (deliberately deferred)
+
+- QuoteDetailPage main card doesn't show intermediary inline — out of scope for B1b; comes back as its own slice if a user asks.
+- QuotationListPage doesn't have an Intermediary column — the B3 analog for quotes. Skip until a real consumer asks.
 
 ---
 

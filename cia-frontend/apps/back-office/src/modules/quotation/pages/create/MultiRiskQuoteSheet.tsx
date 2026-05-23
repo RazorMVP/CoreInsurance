@@ -14,6 +14,8 @@ import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   apiClient,
+  type AgentDto,
+  type BrokerDto,
   type CustomerDto,
   type ProductDto,
 } from '@cia/api-client';
@@ -42,17 +44,32 @@ const riskSchema = z.object({
   discounts:   z.array(adjustmentSchema),
 });
 
+// Intermediary picker mirrors the policy CreatePolicySheet pattern (S89,
+// Slice 84d UX). `channel` + `intermediaryId` are UI-only — at submit they
+// resolve to QuoteRequest.brokerId / agentId, backed by V55 XOR + the
+// service-layer BROKER_AGENT_EXCLUSIVE guard.
 const schema = z.object({
   customerId:       z.string().min(1, 'Required'),
   productId:        z.string().min(1, 'Required'),
+  channel:          z.enum(['DIRECT', 'BROKER', 'AGENT']),
+  intermediaryId:   z.string().optional().or(z.literal('')),
   startDate:        z.string().min(1, 'Required'),
   endDate:          z.string().min(1, 'Required'),
   risks:            z.array(riskSchema).min(1),
   quoteLoadings:    z.array(adjustmentSchema),
   quoteDiscounts:   z.array(adjustmentSchema),
   selectedClauseIds: z.array(z.string()),
-});
+}).refine(
+  (v) => v.channel === 'DIRECT' || (v.intermediaryId && v.intermediaryId.length > 0),
+  { message: 'Select an intermediary', path: ['intermediaryId'] },
+);
 export type MultiRiskFormValues = z.infer<typeof schema>;
+
+const CHANNELS = [
+  { value: 'DIRECT', label: 'Direct (no intermediary)' },
+  { value: 'BROKER', label: 'Broker' },
+  { value: 'AGENT',  label: 'Agent' },
+] as const;
 
 function computeItemNet(si: number, rate: number, loadings: { format: string; value: number }[], discounts: { format: string; value: number }[]) {
   const gross = (si * rate) / 100;
@@ -305,11 +322,38 @@ export default function MultiRiskQuoteSheet({ open, onOpenChange, onSuccess }: P
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(schema) as any,
     defaultValues: {
-      customerId: '', productId: '', startDate: '', endDate: '',
+      customerId: '', productId: '', channel: 'DIRECT', intermediaryId: '',
+      startDate: '', endDate: '',
       risks: [{ description: '', sumInsured: 0, rate: 0, loadings: [], discounts: [] }],
       quoteLoadings: [], quoteDiscounts: [], selectedClauseIds: [],
     },
   });
+
+  // Lazy-load intermediary lists — only fetched when the user picks that channel.
+  const channel = form.watch('channel');
+  const brokersQuery = useQuery<BrokerDto[]>({
+    queryKey: ['setup', 'brokers'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: BrokerDto[] }>('/api/v1/setup/brokers');
+      return res.data.data;
+    },
+    enabled: open && channel === 'BROKER',
+  });
+  const agentsQuery = useQuery<AgentDto[]>({
+    queryKey: ['setup', 'agents'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: AgentDto[] }>('/api/v1/setup/agents');
+      return res.data.data;
+    },
+    enabled: open && channel === 'AGENT',
+  });
+  const brokers = brokersQuery.data ?? [];
+  const agents  = agentsQuery.data  ?? [];
+
+  function onChannelChange(value: string, fn: (v: string) => void) {
+    fn(value);
+    form.setValue('intermediaryId', ''); // clear stale selection when switching
+  }
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: 'risks' });
 
@@ -342,7 +386,10 @@ export default function MultiRiskQuoteSheet({ open, onOpenChange, onSuccess }: P
 
   const createQuote = useMutation({
     mutationFn: async (values: MultiRiskFormValues) => {
-      const payload = {
+      // Resolve channel + intermediaryId → brokerId / agentId. V55
+      // ck_quotes_broker_xor_agent + service-layer BROKER_AGENT_EXCLUSIVE
+      // are the two guards behind this.
+      const payload: Record<string, unknown> = {
         customerId:      values.customerId,
         productId:       values.productId,
         businessType:    'DIRECT',
@@ -359,6 +406,8 @@ export default function MultiRiskQuoteSheet({ open, onOpenChange, onSuccess }: P
         quoteDiscounts:   values.quoteDiscounts.map(d => ({ ...d, typeName: resolveTypeName(d.typeId, 'discount') })),
         selectedClauseIds: values.selectedClauseIds,
       };
+      if (values.channel === 'BROKER' && values.intermediaryId) payload.brokerId = values.intermediaryId;
+      if (values.channel === 'AGENT'  && values.intermediaryId) payload.agentId  = values.intermediaryId;
       const res = await apiClient.post<{ data: { id: string } }>('/api/v1/quotes', payload);
       return res.data.data;
     },
@@ -420,6 +469,44 @@ export default function MultiRiskQuoteSheet({ open, onOpenChange, onSuccess }: P
                 render={({ field }) => (<FormItem><FormLabel>Start Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="endDate"
                 render={({ field }) => (<FormItem><FormLabel>End Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)} />
+            </FormRow>
+
+            {/* Intermediary — channel + (broker | agent) */}
+            <FormRow>
+              <FormField control={form.control} name="channel"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Channel</FormLabel>
+                    <Select onValueChange={(v) => onChannelChange(v, field.onChange)} value={field.value}>
+                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>{CHANNELS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {channel !== 'DIRECT' && (
+                <FormField control={form.control} name="intermediaryId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{channel === 'BROKER' ? 'Broker' : 'Agent'}</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={channel === 'BROKER' ? 'Select broker' : 'Select agent'} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {channel === 'BROKER'
+                            ? brokers.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)
+                            : agents.map(a  => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </FormRow>
 
             <Separator />

@@ -28,6 +28,10 @@ export interface QuotePdfData {
   customerName:      string;
   productName:       string;
   classOfBusiness:   string;
+  /** Per-quote intermediary attribution (V55). Exactly one of brokerName /
+   *  agentName is non-null when an intermediary is set; both null = Direct. */
+  brokerName?:       string | null;
+  agentName?:        string | null;
   startDate:         string;
   endDate:           string;
   risks:             RiskItemData[];
@@ -152,6 +156,16 @@ export function PrintContent({ data }: { data: QuotePdfData }) {
           <div>
             <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Class of Business</p>
             <p className="text-sm font-semibold text-gray-900">{data.classOfBusiness}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Intermediary</p>
+            <p className="text-sm font-semibold text-gray-900">
+              {data.brokerName
+                ? `Broker · ${data.brokerName}`
+                : data.agentName
+                  ? `Agent · ${data.agentName}`
+                  : 'Direct'}
+            </p>
           </div>
         </div>
         <div className="space-y-3">
@@ -465,6 +479,13 @@ function buildPrintHtml(data: QuotePdfData): string {
     <div><p class="lbl">Product</p><p class="val">${data.productName}</p></div>
     <div><p class="lbl">Quote Validity</p><p class="val">Valid ${data.validityDays} days (expires ${summary.expiryDate})</p></div>
     <div><p class="lbl">Class of Business</p><p class="val">${data.classOfBusiness}</p></div>
+    <div><p class="lbl">Intermediary</p><p class="val">${
+      data.brokerName
+        ? `Broker &middot; ${data.brokerName}`
+        : data.agentName
+          ? `Agent &middot; ${data.agentName}`
+          : 'Direct'
+    }</p></div>
   </div><hr/>
   <h2>Risk Details &amp; Premium Breakdown</h2>
   ${risksHtml}${adjHtml}

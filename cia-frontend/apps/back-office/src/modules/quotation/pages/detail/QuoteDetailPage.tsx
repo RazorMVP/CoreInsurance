@@ -220,6 +220,9 @@ export default function QuoteDetailPage() {
     customerName:      q.customerName,
     productName:       q.productName,
     classOfBusiness:   q.classOfBusinessName,
+    // Per-quote intermediary (Slice B1a / V55). DB CHECK guarantees XOR.
+    brokerName:        q.brokerName,
+    agentName:         q.agentName,
     startDate:         q.policyStartDate,
     endDate:           q.policyEndDate,
     risks:             pdfRisks,
