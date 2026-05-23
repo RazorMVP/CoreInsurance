@@ -16,7 +16,6 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F6 | P3 | Two `// allow-mock:` opt-outs missing | `cia-frontend/scripts/check-api-wiring.sh` flags `MOCK_QUOTES` in QuoteDetailPage:26 (added Session 100) and `MOCK_CUSTOMERS` in CustomerDetailPage:18 (added Session 94). Both are decorative fallbacks-while-useQuery-is-in-flight (same pattern as `mockEndorsement` in EndorsementDetailPage which IS labelled). Two one-line comment fixes. Not a runtime issue — wiring script isn't a CI gate today, only informational locally. |
 | B1 | P2 | Quote-side agent attribution | Quote entity doesn't carry `agentId`. Extends Module 2 form + bulk-upload CSV + quote-document templates. Bind-from-quote currently always produces broker-attributed policies even when an agent was the intermediary. |
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
-| B5 | P2 | PolicyListPage silent column-accessor drift | Two columns silently render empty: `accessorKey: 'sumInsured'` (should be `totalSumInsured`) and `accessorKey: 'endDate'` (should be `policyEndDate`). Surfaced during B3 but kept out of that slice per discipline. Two one-line accessor renames; no DTO change. |
 | F7 | P3 | Flat receipts + payments inventory view dropped | Session 103 (F2) removed the "Receipts" + "Payments" sub-sections from ReceivablesTab + PayablesTab because backend has no `/api/v1/receipts` or `/api/v1/payments` flat list endpoint — receipts only exist nested under a debit-note (`/api/v1/debit-notes/{dnId}/receipts`), payments only under a credit-note. If a finance-level "show me all approved receipts this week" view is needed, add flat list controllers + ITs on the backend, then re-surface the sub-sections. Alternative: expose receipts + payments inside DebitNoteDetailDialog + CreditNoteDetailDialog so users can drill from the DN/CN inventory. `ReverseTransactionDialog` file kept in-tree (dead until either surface lands). |
 | F3 | P3 | DTO drift script picks up zod-derived types | `finance.ts` uses `export type X = z.infer<typeof XSchema>` (not `export interface X`). The drift parser only matches `export interface`, so DebitNoteDto / ReceiptDto / CreditNoteDto / PaymentDto are never checked. Extend the parser to also detect zod-derived types. |
 | C2 | P3 | Multi-risk on direct create form | `useFieldArray<PolicyRiskRequest>` on CreatePolicySheet. RisksEditorDialog already handles multi-risk post-creation; this is purely a create-time convenience. |
@@ -29,6 +28,56 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F1 | P2 | Placeholder-onClick row actions across back-office | 6 known: CustomersListPage Update KYC + Blacklist; ProductsPage Activate/Deactivate; QuotationListPage Submit + Convert + Edit + Duplicate. Each is small but adds up. Batch as one slice. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-23 — Session 105 (`main`): Backlog B5 — PolicyListPage accessor drift (two one-line renames)
+
+Twelfth slice under the Session 93 discipline rule. The cheapest possible follow-up: drain B5 (logged yesterday during B3) by renaming two stale column accessors. Smallest slice in the run.
+
+### What landed
+
+Two `accessorKey` corrections in `PolicyListPage.tsx`:
+
+- `'sumInsured'` → `'totalSumInsured'` (PolicyDto field, since the multi-risk reshape in Slice 95)
+- `'endDate'` → `'policyEndDate'` (PolicyDto field, same vintage)
+
+Both columns have been silently rendering empty against the real backend response shape — TanStack returns `undefined` for an unknown key, which then hits `.toLocaleString()` (line 73) or the muted-text span (line 127). At runtime the Sum Insured column would print `₦undefined` and the Expiry column would print nothing. The renames restore both columns.
+
+### Side-discoveries — verified, not absorbed
+
+Before editing I swept the back-office for the same drift pattern (`accessorKey: 'sumInsured' | 'endDate' | 'startDate' | 'premium'`) and found three other call sites:
+
+| File | Accessor | Verdict |
+|---|---|---|
+| `FACTab.tsx:232` | `sumInsured` | **No drift.** Reads from a file-local `FacInwardDto` (allow-mock — backend has no inward FAC equivalent yet; `RiFacCover` models outward only). Self-consistent. |
+| `PeriodLockListPage.tsx:139` | `startDate` | **No drift.** `FiscalPeriodDto` from `finance-closures.ts` declares `startDate: z.string()` directly (line 689). |
+| `PeriodLockListPage.tsx:144` | `endDate` | **No drift.** Same DTO declares `endDate: z.string()` (line 690). |
+
+Important: the sweep was the right move even though all three came back clean. Verifying that the drift was specifically two PolicyListPage accessors (not a project-wide pattern needing a broader pass) is what kept B5 a single-slice fix rather than escalating into a multi-page audit.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` — exit 0, zero output. Both renamed accessors resolve cleanly against `PolicyDto`.
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (29 interfaces, 2 skipped)` unchanged.
+- `bash cia-frontend/scripts/check-api-wiring.sh` — same two pre-existing F6 violations; nothing new.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — UI | `cia-frontend/apps/back-office/src/modules/policy/pages/PolicyListPage.tsx` (2 accessor renames) |
+| Docs | `cia-log.md` (this entry + B5 removed) |
+
+### Backlog reconciliation
+
+- **Removed**: B5.
+- **Added**: none. The sweep confirmed no other DataTable accessor drift across the back-office, so there's no follow-up row to log.
+- **Net**: 15 → 14 rows.
+
+### Known follow-ups (deliberately deferred)
+
+None. This slice was an honest one-row drain.
 
 ---
 

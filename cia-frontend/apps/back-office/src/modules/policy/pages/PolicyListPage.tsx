@@ -68,7 +68,7 @@ export default function PolicyListPage() {
       ),
     },
     {
-      accessorKey: 'sumInsured',
+      accessorKey: 'totalSumInsured',
       header: 'Sum Insured',
       cell: ({ getValue }) => (
         <span className="text-sm tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
@@ -122,7 +122,7 @@ export default function PolicyListPage() {
       cell: ({ getValue }) => <NaicomBadge uid={getValue() as string | undefined} />,
     },
     {
-      accessorKey: 'endDate',
+      accessorKey: 'policyEndDate',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Expiry" />,
       cell: ({ getValue }) => (
         <span className="text-sm text-muted-foreground">{getValue() as string}</span>
