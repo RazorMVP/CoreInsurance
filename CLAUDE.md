@@ -394,6 +394,8 @@ Super-admin creates tenant (admin API or super-admin console):
 9. Hibernate routes all queries to the correct tenant schema for that thread
 ```
 
+**Tenant realm provisioning requirement (Session 118).** Tenant Keycloak realms must have `UnmanagedAttributePolicy=ENABLED` on the user-profile config. Without it, the implicit `accessGroupId` attribute that `UserService.create` writes is silently dropped by Keycloak's default `DISABLED` policy, and the F1e-sync-AccessGroup-fanout cannot find users to re-sync when an access group's permissions change. Set via the admin API: `realm.users().userProfile().getConfiguration().setUnmanagedAttributePolicy(ENABLED)` then `realm.users().userProfile().update(config)`. The Testcontainers IT harness (`KeycloakItSupport.ensureTestRealm`) does this automatically for tests.
+
 **RBAC mapping:**
 
 | Keycloak Role | Spring Authority | Usage |

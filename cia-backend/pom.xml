@@ -306,6 +306,17 @@
         <scope>import</scope>
       </dependency>
 
+      <!-- ── testcontainers-keycloak (third-party, not in Testcontainers BOM)
+           Provides KeycloakContainer for ITs that exercise the Keycloak admin
+           client. Used by F1e-IT (S118) + downstream syncer + fanout ITs.
+           Pinned here so child modules don't have to repeat the version. ── -->
+      <dependency>
+        <groupId>com.github.dasniko</groupId>
+        <artifactId>testcontainers-keycloak</artifactId>
+        <version>3.5.1</version>
+        <scope>test</scope>
+      </dependency>
+
     </dependencies>
   </dependencyManagement>
 
