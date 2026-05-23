@@ -15,13 +15,82 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F8 | P3 | zod `.email()` / `.url()` deprecation across back-office | Surfaced as IDE diagnostics during Session 113 (F4) — pre-existing on `main` since commit `0860b3a` (Session 98). zod v4 deprecates the `.string().email()` / `.string().url()` chain in favour of top-level `z.email()` / `z.url()`. 14 occurrences across `cia-frontend/apps/back-office/src/modules/` (and possibly more elsewhere). Mechanical sweep; no behaviour change. Defer until a session has bandwidth for cross-module touch. |
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
 | F7 | P3 | Flat receipts + payments inventory view dropped | Session 103 (F2) removed the "Receipts" + "Payments" sub-sections from ReceivablesTab + PayablesTab because backend has no `/api/v1/receipts` or `/api/v1/payments` flat list endpoint — receipts only exist nested under a debit-note (`/api/v1/debit-notes/{dnId}/receipts`), payments only under a credit-note. If a finance-level "show me all approved receipts this week" view is needed, add flat list controllers + ITs on the backend, then re-surface the sub-sections. Alternative: expose receipts + payments inside DebitNoteDetailDialog + CreditNoteDetailDialog so users can drill from the DN/CN inventory. `ReverseTransactionDialog` file kept in-tree (dead until either surface lands). |
-| D1 | P3 | Server-side date-range validation on CommissionSetupRequest | `@Future` / cross-field bean validation that effectiveTo ≥ effectiveFrom. Frontend zod refine covers the UX; server-side is correctness defence. |
-| D2 | P3 | internal-api.json `components.schemas` backfill | Static doc has 247 paths but zero inline schemas (only `$ref`s). Auto-generate from Springdoc live `/v3/api-docs` rather than maintain by hand. Larger slice; depends on E1 fix first. |
-| E2 | P3 | docs-site/build/internal-api.json stale | Build copy regenerates on next Docusaurus deploy. Cosmetic. |
 | E3 | P3 | RelationshipManager.branch FK-cascade-awareness | Branch deletion doesn't 409 if RMs reference it; listing then shows soft-deleted branch name. Defensive only. |
 | E1-test | P3 | MockMvc IT for `GlobalExceptionHandler` no-handler / no-resource branches | Session 115 added `NoHandlerFoundException` + `NoResourceFoundException` handlers to `GlobalExceptionHandler` (both return 404 with structured `ApiResponse.error("NOT_FOUND", ...)`). The handlers have no test today — `cia-common` has no MockMvc / `@WebMvcTest` scaffolding. A future slice should add one IT class exercising both branches (assert 404 on an unmapped path; assert response body shape matches `ApiResponse.error`). |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-23 — Session 120 (`main`): Backlog D1 + D2 + E2 — date-range validator + OpenAPI components-clobber bug + regenerated spec
+
+Twenty-sixth slice under the Session 93 discipline rule. The user picked the "natural chain (mini) D1 → D2 → E2" because all three rows live on the same surface: the docs-site OpenAPI pipeline. D1 was a tiny correctness defence; D2 promised "regenerate the static file"; E2 was a verification step. In flight, D2 surfaced a much bigger bug than its row anticipated — explicit broaden per CLAUDE.md → Slice discipline, narrated in commit `c669f3b`.
+
+### What landed
+
+**D1 — `CommissionSetupRequest` server-side date-range validator.**
+
+`@AssertTrue public boolean isDateRangeValid()` enforces `effectiveTo == null || effectiveFrom == null || !effectiveTo.isBefore(effectiveFrom)`. The double null-guard is structural defence — `effectiveFrom` is already `@NotNull` so its clause is currently redundant, but leaving it in protects against future schema relaxations. Mirrors the Session-113 `PasswordPolicyRequest.isLengthRangeValid` convention exactly.
+
+Tested via a pure-function unit test in `cia-setup/src/test/.../product/dto/CommissionSetupRequestValidationTest.java` (`Validation.buildDefaultValidatorFactory()` + `Validator.validate(bean)`, no Spring, no Hibernate). 4 tests cover the matrix: end-after-start (valid), end-equals-start (valid — single-day window is legal), end-null (valid — open-ended commission rule), end-before-start (the one constraint violation, message asserted + propertyPath asserted as `dateRangeValid`). 4/4 green in 0.171s. Matches `KeycloakPolicyDslTest`'s pattern: pure JUnit alongside the production module, zero IT-suite cost.
+
+The original D1 row proposed an "IT in cia-api" — broadened down rather than up: a Spring controller IT for a single Bean Validation annotation would be ceremony. The constraint pipeline (`@Valid @RequestBody` → hibernate-validator → ConstraintViolation → handler) is upstream framework code, already exercised by every other validator IT in the suite. Unit-testing the bean's contract is enough.
+
+**D2 — InternalApiOpenApiConfig components-clobber root cause.**
+
+The D2 row was framed as "regenerate the static file because it has 247 paths and zero schemas." When I probed the live Springdoc endpoint, it ALSO returned 0 schemas — meaning the issue was not regen drift, it was a code bug:
+
+```java
+// before (bug)
+return openApi -> openApi
+        .info(...)
+        .components(new Components()                     // ← REPLACES auto-discovered components
+                .addSecuritySchemes("bearer-jwt", ...))
+        .addSecurityItem(...);
+```
+
+`OpenApiCustomizer` runs AFTER Springdoc's path-scan + schema-discovery pass, so `openApi.getComponents()` at customizer time already holds every discovered DTO schema. Calling `.components(new Components()...)` *replaced* that entire object with a fresh one containing only the security scheme — wiping 282 schemas every time. Fix: mutate the existing Components map (`openApi.getComponents().addSecuritySchemes(...)`), with a null-guard for the rare boot-path edge where Springdoc hasn't run yet.
+
+The partner-api group was unaffected because it provides components via a top-level `@Bean OpenAPI` whose Components is *merged* by Springdoc with auto-discovery — a different code path. The two configs only *look* symmetric; only the customizer path on internal-api had the bug.
+
+**D2 — regenerated `docs-site/static/internal-api.json` (254 paths, 282 schemas).**
+
+After restarting cia-api on the fixed binary, I ran the REFRESH.md curl-into-jq pipeline. Before: 247 paths / 0 schemas. After: 254 paths / 282 schemas. The 7 net-new paths are not net-new endpoints — they're the `/api/v1/setup/*` adjuster / agent / relationship-manager / broker routes added since the last manual refresh (S78–S119); the previous snapshot pre-dated them. Diff stat: +28,621 / −18,501 lines, a 65% file-size growth driven entirely by the now-present `components.schemas`.
+
+**E2 — verified Docusaurus build picks up the regenerated source.**
+
+`npm run build` in `docs-site/`. After: `docs-site/build/internal-api.json` matches `docs-site/static/internal-api.json` byte-for-byte (254 paths, 282 schemas, identical SHA). Docusaurus' `static/` directory is a passthrough — every file copied to `build/` as-is. E2 needed no extra plumbing; it's a property of how Docusaurus statically serves assets.
+
+### Verification
+
+- `mvn -pl cia-setup test -Dtest=CommissionSetupRequestValidationTest` — 4/4 in 0.171s.
+- `mvn install -DskipTests -pl cia-api -am` — clean (20.7s).
+- Live cia-api restart (PID 95760, "Started CiaApplication in 7.404 seconds") + curl probe — 254 paths + 282 schemas confirmed at `http://localhost:8090/partner/v3/api-docs/internal-api`.
+- `npm run build` in docs-site — `[SUCCESS] Generated static files in "build".`
+- `python3` diff check — `open('build/internal-api.json').read() == open('static/internal-api.json').read()` → `True`.
+- No new failsafe ITs ⇒ Session 119's 288/0/0/1 baseline is untouched.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend — DTO | `cia-setup/.../product/dto/CommissionSetupRequest.java` (`@AssertTrue isDateRangeValid`) |
+| Backend — config | `cia-api/.../config/InternalApiOpenApiConfig.java` (customizer mutates existing Components instead of replacing) |
+| Backend — test | `cia-setup/src/test/.../product/dto/CommissionSetupRequestValidationTest.java` (new — 4 pure-function tests) |
+| Docs site | `docs-site/static/internal-api.json` (regenerated: 254 paths + 282 schemas; +28,621 / −18,501) |
+| Docs | `cia-log.md` (this entry + D1 / D2 / E2 drained) |
+
+### Backlog reconciliation
+
+- **Removed**: D1, D2, E2.
+- **Added**: none. The D2 mid-slice broaden was explicit (the OpenAPI customizer bug was inseparable from the stated goal — couldn't ship the regen without also fixing what was clobbering the schemas) and bracketed inside the slice; no new follow-ups surfaced.
+- **Net**: 8 → 5 rows. Third three-row decrement in the run (after Session 116's F3+F6, Session 117's C2+C3, and Session 118's F1e-IT+F4-sync-tests+AccessGroup-fanout). The remaining 5 rows are all P3 long-tails with no natural chains between them.
+
+### Known follow-ups (deliberately deferred)
+
+- **Drift CI for `docs-site/static/*.json`** — REFRESH.md flagged it as future work even before this slice ("A CI check that boots cia-api against Testcontainers, curls both spec endpoints, compares against the committed JSON, fails the build if they diverge…"). S120 confirms the value: silent 282-schema clobber survived multiple PRs because no automated check sees the spec output. Still not a backlog row — it's a P2-scope build-pipeline initiative that needs its own design conversation (Testcontainers cia-api boot in CI is a different shape from the existing failsafe ITs).
+- **REFRESH.md procedure → shell script** — the manual curl-into-jq pipeline lives in markdown today. Wrapping it as `cia-backend/scripts/refresh-openapi.sh` would remove the copy-paste step. Not added to backlog; one-shot follow-up.
+- **`@AssertTrue` audit across all request DTOs** — `CommissionSetupRequest`'s pattern would also fit any DTO with paired date fields (start / end), paired counts (min / max), or mutually-exclusive booleans. Not gating; case-by-case as DTOs evolve.
 
 ---
 
