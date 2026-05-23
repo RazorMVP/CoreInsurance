@@ -125,17 +125,6 @@
       <artifactId>junit-jupiter</artifactId>
       <scope>test</scope>
     </dependency>
-    <!--
-      Testcontainers Keycloak — bootstraps a real Keycloak instance for the
-      UserServiceIT (F1e-IT). Third-party library (Niko Köbler); not part of
-      the testcontainers-bom. Version pinned here.
-    -->
-    <dependency>
-      <groupId>com.github.dasniko</groupId>
-      <artifactId>testcontainers-keycloak</artifactId>
-      <version>3.5.1</version>
-      <scope>test</scope>
-    </dependency>
 
   </dependencies>
 
