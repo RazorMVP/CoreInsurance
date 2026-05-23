@@ -82,6 +82,33 @@ export default function PolicyListPage() {
       ),
     },
     {
+      // Computed column — DB enforces broker XOR agent (ck_policies_broker_xor_agent).
+      // Falls back to "Direct" when both are null.
+      id:         'intermediary',
+      accessorFn: (row) => row.brokerName ?? row.agentName ?? 'Direct',
+      header:     ({ column }) => <DataTableColumnHeader column={column} title="Intermediary" />,
+      cell: ({ row }) => {
+        const { brokerName, agentName } = row.original;
+        if (brokerName) {
+          return (
+            <div className="text-sm">
+              <span className="text-muted-foreground">Broker · </span>
+              <span className="font-medium">{brokerName}</span>
+            </div>
+          );
+        }
+        if (agentName) {
+          return (
+            <div className="text-sm">
+              <span className="text-muted-foreground">Agent · </span>
+              <span className="font-medium">{agentName}</span>
+            </div>
+          );
+        }
+        return <span className="text-sm text-muted-foreground">Direct</span>;
+      },
+    },
+    {
       accessorKey: 'status',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
       cell: ({ getValue }) => {

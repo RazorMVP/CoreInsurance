@@ -16,7 +16,7 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F6 | P3 | Two `// allow-mock:` opt-outs missing | `cia-frontend/scripts/check-api-wiring.sh` flags `MOCK_QUOTES` in QuoteDetailPage:26 (added Session 100) and `MOCK_CUSTOMERS` in CustomerDetailPage:18 (added Session 94). Both are decorative fallbacks-while-useQuery-is-in-flight (same pattern as `mockEndorsement` in EndorsementDetailPage which IS labelled). Two one-line comment fixes. Not a runtime issue — wiring script isn't a CI gate today, only informational locally. |
 | B1 | P2 | Quote-side agent attribution | Quote entity doesn't carry `agentId`. Extends Module 2 form + bulk-upload CSV + quote-document templates. Bind-from-quote currently always produces broker-attributed policies even when an agent was the intermediary. |
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
-| B3 | P2 | Policy list page Intermediary column | Surface broker/agent on PolicyListPage. Small UI surface; mirrors the "Intermediary" row Slice 84e added to the detail page. |
+| B5 | P2 | PolicyListPage silent column-accessor drift | Two columns silently render empty: `accessorKey: 'sumInsured'` (should be `totalSumInsured`) and `accessorKey: 'endDate'` (should be `policyEndDate`). Surfaced during B3 but kept out of that slice per discipline. Two one-line accessor renames; no DTO change. |
 | F7 | P3 | Flat receipts + payments inventory view dropped | Session 103 (F2) removed the "Receipts" + "Payments" sub-sections from ReceivablesTab + PayablesTab because backend has no `/api/v1/receipts` or `/api/v1/payments` flat list endpoint — receipts only exist nested under a debit-note (`/api/v1/debit-notes/{dnId}/receipts`), payments only under a credit-note. If a finance-level "show me all approved receipts this week" view is needed, add flat list controllers + ITs on the backend, then re-surface the sub-sections. Alternative: expose receipts + payments inside DebitNoteDetailDialog + CreditNoteDetailDialog so users can drill from the DN/CN inventory. `ReverseTransactionDialog` file kept in-tree (dead until either surface lands). |
 | F3 | P3 | DTO drift script picks up zod-derived types | `finance.ts` uses `export type X = z.infer<typeof XSchema>` (not `export interface X`). The drift parser only matches `export interface`, so DebitNoteDto / ReceiptDto / CreditNoteDto / PaymentDto are never checked. Extend the parser to also detect zod-derived types. |
 | C2 | P3 | Multi-risk on direct create form | `useFieldArray<PolicyRiskRequest>` on CreatePolicySheet. RisksEditorDialog already handles multi-risk post-creation; this is purely a create-time convenience. |
@@ -29,6 +29,63 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F1 | P2 | Placeholder-onClick row actions across back-office | 6 known: CustomersListPage Update KYC + Blacklist; ProductsPage Activate/Deactivate; QuotationListPage Submit + Convert + Edit + Duplicate. Each is small but adds up. Batch as one slice. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-23 — Session 104 (`main`): Backlog B3 — PolicyListPage Intermediary column
+
+Eleventh slice under the Session 93 discipline rule. Goal as logged in B3: surface broker/agent on PolicyListPage, mirroring the "Intermediary" row Slice 84e added to the detail page. Honest scope: one new TanStack column on one file.
+
+### What landed
+
+`PolicyListPage` gains a computed `intermediary` column between Net Premium and Status:
+
+```ts
+{
+  id:         'intermediary',
+  accessorFn: (row) => row.brokerName ?? row.agentName ?? 'Direct',
+  header:     ({ column }) => <DataTableColumnHeader column={column} title="Intermediary" />,
+  cell:       ({ row }) => /* "Broker · Name" / "Agent · Name" / "Direct" */,
+}
+```
+
+- Uses `accessorFn` (not `accessorKey`) because it's a derived value — TanStack needs a computed string for sort + filter to work. The fallback resolves at accessor time, not at render time, so the column header sorts correctly across rows with broker / agent / no intermediary.
+- `cell` renders three visual variants: `Broker · {name}` with muted label, `Agent · {name}` with muted label, or `Direct` in muted text. The label + value split mirrors the detail page's S84e row exactly so the two surfaces feel consistent.
+- The fallback `row.brokerName ?? row.agentName ?? 'Direct'` is safe because of `ck_policies_broker_xor_agent` — the DB CHECK guarantees brokerId XOR agentId, so brokerName and agentName are never both non-null. Slice 84d's V53 migration enforces this; the frontend doesn't need defensive handling.
+
+### Side-discoveries — logged, not absorbed
+
+The current `PolicyListPage.tsx` has **two silently-broken column accessors** that were obvious once I read the file:
+
+- Line 71: `accessorKey: 'sumInsured'` — the DTO field is `totalSumInsured` (line 134 of `policy.ts`). The Sum Insured column has been rendering empty.
+- Line 98: `accessorKey: 'endDate'` — the DTO field is `policyEndDate` (line 132 of `policy.ts`). The Expiry column has been rendering empty.
+
+Both are clear-cut bugs adjacent to B3. Per Session 93 slice discipline ("side-discoveries are logged, not absorbed; the slice doesn't grow"), they are logged to the backlog as **B5 (P2)** rather than fixed in-slice. Both are one-line accessor renames against an unchanged DTO; a fast follow-up slice can drain B5 alongside any other P2 grouping.
+
+Tempting to absorb because (a) it's the same file, (b) they're trivial, and (c) the working Intermediary column landing next to two silently-broken columns is a coherence smell. But these bugs predate B3 — they exist on HEAD before my edit — and absorbing them would silently expand the commit. The discipline rule is specifically about preventing that drift.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` — exit 0, zero output.
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (29 interfaces, 2 skipped)` unchanged.
+- `bash cia-frontend/scripts/check-api-wiring.sh` — same two pre-existing F6 violations; nothing new from B3.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — UI | `cia-frontend/apps/back-office/src/modules/policy/pages/PolicyListPage.tsx` |
+| Docs | `cia-log.md` (this entry + B3 removed + B5 added) |
+
+### Backlog reconciliation
+
+- **Removed**: B3.
+- **Added**: B5 (P2) — PolicyListPage `accessorKey: 'sumInsured'` + `'endDate'` are stale; should be `totalSumInsured` + `policyEndDate`. Surfaced during B3, kept out of the slice per discipline.
+- **Net**: 15 → 15 rows (one removed, one added).
+
+### Known follow-ups (deliberately deferred)
+
+- B5 (silent accessor drift — see backlog). Tempting to grab in the next slice since it's two one-line changes; do that, but as its own slice.
 
 ---
 
