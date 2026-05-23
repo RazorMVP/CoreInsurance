@@ -8,6 +8,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     label: 'Company',
     items: [
       { label: 'Company Settings',  path: '/setup/company' },
+      { label: 'Password Policy',   path: '/setup/password-policy' },
     ],
   },
   {

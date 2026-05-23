@@ -15,8 +15,7 @@ import { applyApiErrors } from '@/lib/form-errors';
 // Aligned with backend in Session 98 / Backlog A1c — previously sent
 // `companyName` (backend silently dropped it; backend takes `name`) and a
 // `defaultCurrencyCode` field that doesn't exist on the request at all.
-// The "Password Policy" card was also captured but never sent — logged as
-// backlog F4 for when there's a real password-policy endpoint to wire.
+// Password-policy settings now live at /setup/password-policy (backlog F4).
 const schema = z.object({
   name:                z.string().min(2, 'Required'),
   rcNumber:            z.string().optional().or(z.literal('')),

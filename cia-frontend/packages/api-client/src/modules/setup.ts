@@ -21,6 +21,27 @@ export interface CompanySettingsDto {
   updatedAt:           string;
 }
 
+// Mirrors com.nubeero.cia.setup.company.dto.PasswordPolicyResponse 1:1.
+// Storage-only — actual login-time enforcement lives in Keycloak's realm
+// policy. Backlog F4 (this slice) wires the orphaned V3 entity end-to-end;
+// F4-sync would route updates into Keycloak realm settings later. id /
+// createdAt / updatedAt are null on the first GET (before any PUT) — the
+// service returns V3 DDL defaults so the UI never has to model an empty
+// state.
+export interface PasswordPolicyDto {
+  id?:                string | null;
+  minLength:          number;
+  maxLength:          number;
+  requireUppercase:   boolean;
+  requireLowercase:   boolean;
+  requireNumbers:     boolean;
+  requireSpecial:     boolean;
+  expiryDays:         number;
+  maxFailedAttempts:  number;
+  createdAt?:         string | null;
+  updatedAt?:         string | null;
+}
+
 export interface UserDto {
   id:              string;
   email:           string;

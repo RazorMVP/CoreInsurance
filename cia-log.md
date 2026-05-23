@@ -12,7 +12,8 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 | ID | P | Item | Notes |
 |---|---|---|---|
-| F4 | P3 | Password Policy UI needs real backend endpoint | CompanySettingsPage's Password Policy card was sending `minPasswordLength` + `passwordExpireDays` in the company-settings PUT body — backend `CompanySettingsRequest` doesn't accept either field. Session 98 removed the card from the form (was pure theatre). When a real password-policy endpoint exists, surface those settings under a separate `/setup/password-policy` page or a dedicated card with a real PUT target. |
+| F4-sync | P3 | Password-policy Keycloak realm sync | Session 113 shipped F4 storage-only — PasswordPolicy round-trips to the DB but login enforcement is still owned by Keycloak's realm policy attribute. A follow-up should call the admin client on PUT to write `passwordPolicy: length(N) and upperCase(1) and digits(1)…` against the tenant realm, translating the entity fields into Keycloak's policy DSL. Same admin-client surface as F1e-sync — combine with the re-attempt strategy noted there (separate `KeycloakPolicySyncer` class to keep the orphan-classloader regression at bay). |
+| F8 | P3 | zod `.email()` / `.url()` deprecation across back-office | Surfaced as IDE diagnostics during Session 113 (F4) — pre-existing on `main` since commit `0860b3a` (Session 98). zod v4 deprecates the `.string().email()` / `.string().url()` chain in favour of top-level `z.email()` / `z.url()`. 14 occurrences across `cia-frontend/apps/back-office/src/modules/` (and possibly more elsewhere). Mechanical sweep; no behaviour change. Defer until a session has bandwidth for cross-module touch. |
 | F1e-IT | P3 | UserController ITs against Testcontainers Keycloak (re-opened) | Session 112 first attempt used `com.github.dasniko:testcontainers-keycloak:3.5.1` + a `@DataJpaTest` slice that manually wired the admin client. Keycloak container cold-start exceeded the 120s default wait timeout. Re-attempt should bump `withStartupTimeout` to 3+ minutes, or use `start-dev --optimized` for faster boot. Earlier hypothesis that the testcontainers-keycloak transitive deps caused a classpath shadowing of `ClassOfBusinessRepository` was wrong — root-caused in the post-revert IT run to F1e-sync's UserService changes (see F1e-sync row). |
 | F1e-sync | P3 | Access-group → Keycloak realm-role sync (re-opened) | Session 112 added `syncRealmRoles` + `ensureRealmRole` + helpers to UserService. Code compiles cleanly; isolated `ContractGroupingServiceIT` runs pass. But the full failsafe IT suite errors with `NoClassDefFoundError: ClassOfBusinessRepository` on `ContractGroupingServiceIT` after certain preceding tests run. **Confirmed** by rolling UserService back to its S111 form (no sync additions): the full suite returns to 274/0/0/1 GREEN. Root cause is in the sync code, not the testcontainers-keycloak dep — likely Spring's component scan + Mockito `DefinitionsParser` reading UserService's new field types, with some interaction (annotation processing? JDK 25 bytecode? @Service scan ordering?) that pollutes classloader state for downstream tests in the same JVM. Re-attempt should: try implementing sync in a separate `UserRoleSyncer` class (so UserService's field set stays unchanged from S111), or qualify all Keycloak admin client field types with explicit non-Lombok declarations, or run with `-Dsurefire.reuseForks=false`. |
 | F6 | P3 | Two `// allow-mock:` opt-outs missing | `cia-frontend/scripts/check-api-wiring.sh` flags `MOCK_QUOTES` in QuoteDetailPage:26 (added Session 100) and `MOCK_CUSTOMERS` in CustomerDetailPage:18 (added Session 94). Both are decorative fallbacks-while-useQuery-is-in-flight (same pattern as `mockEndorsement` in EndorsementDetailPage which IS labelled). Two one-line comment fixes. Not a runtime issue — wiring script isn't a CI gate today, only informational locally. |
@@ -28,6 +29,83 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | E3 | P3 | RelationshipManager.branch FK-cascade-awareness | Branch deletion doesn't 409 if RMs reference it; listing then shows soft-deleted branch name. Defensive only. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-23 — Session 113 (`main`): Backlog F4 — Password Policy endpoint + UI (storage-only)
+
+Nineteenth slice under the Session 93 discipline rule. F4 was logged in Session 98 / Backlog A1c: CompanySettingsPage's Password Policy card was sending `minPasswordLength` + `passwordExpireDays` fields the backend's `CompanySettingsRequest` silently dropped. The card was removed pending a real password-policy endpoint. This slice finally wires it.
+
+### Discovery
+
+Before writing code:
+
+```sh
+find cia-backend/cia-setup/src/main/java -name "PasswordPolicy*"
+# → PasswordPolicy.java (orphaned entity)
+grep -rln "PasswordPolicy" cia-backend/ --include="*.java"
+# → same single file
+```
+
+The `PasswordPolicy` entity has been sitting in `com.nubeero.cia.setup.company` since V3 (the original setup tables migration) with **zero repository, service, controller, or DTOs** wired to it. The `password_policies` table is created in V3 with sensible DEFAULTs (8/128/T/T/T/F/90/5) but no row exists until inserted. F4 is literally "wire up what was already designed and never connected."
+
+The Keycloak scoping question was the only real decision. Three options were surfaced as a markdown table (per the user's preference memory): **A** storage-only bookkeeping (same semantics as Session 111's accessGroupId Keycloak attribute — round-trips but doesn't enforce); **B** storage + Keycloak realm-policy sync (same admin-client surface as F1e-sync, which is on the backlog with a known IT-pollution regression); **C** read-from-Keycloak only (deprecates the orphan entity entirely, useless for tenant config). User picked **A** — matches the entity's original design intent and ships cleanly without re-opening F1e-sync hazards.
+
+### What landed
+
+**Backend** (`cia-setup/company/`):
+
+- `dto/PasswordPolicyRequest.java` — bean validation: minLength/maxLength ∈ [4, 256], expiryDays ∈ [0, 3650] (0 = never), maxFailedAttempts ∈ [1, 100], plus an `@AssertTrue isLengthRangeValid()` cross-field check for `maxLength ≥ minLength`. The cross-field rule is the only piece the DB doesn't enforce (V3 has DEFAULT values but no CHECK).
+- `dto/PasswordPolicyResponse.java` — 11 fields (id, 8 policy fields, createdAt, updatedAt).
+- `PasswordPolicyRepository.java` — JpaRepository, single `findTopByDeletedAtIsNullOrderByCreatedAtDesc()` matching CompanySettingsRepository's singleton pattern.
+- `PasswordPolicyService.java` — `get()` returns DDL defaults synthesised via `defaultsResponse()` when no row exists (id/createdAt/updatedAt stay null so the UI can distinguish "configured" from "first time"). `upsert()` finds-or-creates the singleton row, mutates fields, audits CREATE vs UPDATE through `AuditService`. The default mirror (DEFAULT_MIN_LENGTH = 8, …) lives as `static final` constants so they can't drift from V3.
+- `PasswordPolicyController.java` — `GET /api/v1/setup/password-policy` (`SETUP_VIEW`) + `PUT` (`SETUP_UPDATE`). Springdoc annotations match CompanySettingsController convention exactly: `@Operation`, `@SecurityRequirement(name = "bearer-jwt")`, `@ApiResponses` for 200/400/401/403, `@Schema(implementation = ...)`.
+
+**Frontend** (`apps/back-office/src/modules/setup/`):
+
+- `packages/api-client/src/modules/setup.ts` — `PasswordPolicyDto` added under `CompanySettingsDto`; id/createdAt/updatedAt optional-nullable to match the synthetic-defaults response shape.
+- `pages/password-policy/PasswordPolicyPage.tsx` — RHF + zod schema with `.coerce.number().int()` on the five integer fields plus the cross-field `maxLength ≥ minLength` `.refine()` mirroring the backend `@AssertTrue`. Two cards (Length & Character Requirements / Lifetime & Lockout), Switch components for the four booleans, `<Input type="number" min={…} max={…}>` for the numeric fields. Amber notice card at the top makes the bookkeeping-only nature explicit so admins don't think changing knobs blocks weak passwords at login. Skeleton during loading; `applyApiErrors` plumbed through `useMutation.onError` matching CompanySettingsPage.
+- `modules/setup/index.tsx` — lazy import + `/setup/password-policy` route.
+- `modules/setup/layout/SetupLayout.tsx` — new "Password Policy" nav entry under the existing "Company" group.
+- `modules/setup/pages/company/CompanySettingsPage.tsx` — stale F4-backlog comment removed; replaced with one-line pointer at `/setup/password-policy`.
+
+### What was deliberately NOT touched
+
+- **Keycloak realm sync** — `passwordPolicy` realm attribute is unchanged. F4-sync added to the backlog (new row); same admin-client surface as the re-opened F1e-sync row, share strategy.
+- **No Flyway migration** — V3 already creates the table with DEFAULTs; lazy-create-on-first-PUT is the cleanest path. Adding V56 to seed a row on every tenant would conflict with the "tenant has never configured" / "configured the defaults explicitly" distinction the UI needs.
+- **No IT** — matches precedent (CompanySettingsController, CustomerNumberFormatController both ship without ITs; the 274 IT baseline is centered on finance/closures). The slice could ship a unit test of `PasswordPolicyService.defaultsResponse()` next time bandwidth allows; not gating today.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` — exit 0, zero output.
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (30 interfaces, 1 skipped)` — was 29, now 30 (PasswordPolicyDto). Matches PasswordPolicyResponse 1:1.
+- `bash cia-frontend/scripts/check-api-wiring.sh` — same two pre-existing F6 violations (MOCK_QUOTES / MOCK_CUSTOMERS); zero new violations.
+- `mvn install -DskipTests -pl cia-api -am` — full reactor build OK.
+- `mvn verify -pl cia-api` — `failsafe-summary.xml`: `<completed>274</completed> <errors>0</errors> <failures>0</failures> <skipped>1</skipped>`. Baseline holds.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend — DTOs | `cia-setup/.../dto/PasswordPolicyRequest.java`, `cia-setup/.../dto/PasswordPolicyResponse.java` (both new) |
+| Backend — wiring | `cia-setup/.../PasswordPolicyRepository.java`, `PasswordPolicyService.java`, `PasswordPolicyController.java` (all new) |
+| Frontend — DTO | `cia-frontend/packages/api-client/src/modules/setup.ts` (`PasswordPolicyDto` added) |
+| Frontend — UI | `cia-frontend/apps/back-office/src/modules/setup/pages/password-policy/PasswordPolicyPage.tsx` (new) |
+| Frontend — router + nav | `modules/setup/index.tsx` (route), `modules/setup/layout/SetupLayout.tsx` (nav entry) |
+| Frontend — cleanup | `modules/setup/pages/company/CompanySettingsPage.tsx` (stale F4 comment replaced) |
+| Docs | `cia-log.md` (this entry + F4 drained + F4-sync added + F8 added) |
+
+### Backlog reconciliation
+
+- **Removed**: F4.
+- **Added**: F4-sync (Keycloak realm-policy sync — same admin-client surface as F1e-sync), F8 (zod `.email()` / `.url()` deprecation sweep — surfaced as IDE diagnostics on a CompanySettingsPage line I touched only via a comment change; pre-existing on `main` since `0860b3a`, 14 occurrences in back-office).
+- **Net**: 14 → 15 rows. First net-increment slice in the run since the F1e-completion attempt (Session 112). The increment is honest — both new rows are real follow-ups surfaced *during* the slice, not deferred scope, and they're called out here rather than silently absorbed.
+
+### Known follow-ups (deliberately deferred)
+
+- F4-sync (above) — when the Keycloak admin-client classloader regression from F1e-sync has a known fix, the same `KeycloakPolicySyncer`-as-separate-class strategy should be reused for password-policy sync. Don't re-attempt F4-sync inside UserService.
+- F8 (above) — sweep is mechanical but cross-module; defer to a session with bandwidth for the wide touch.
+- A unit test of `PasswordPolicyService.defaultsResponse()` confirming the V3-DDL-default mirror stays in sync — small enough to bundle into the next setup-area slice.
 
 ---
 
