@@ -97,6 +97,22 @@ public class QuoteController {
         return ApiResponse.success(service.create(request));
     }
 
+    @PostMapping("/{id}/duplicate")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('QUOTATION_CREATE')")
+    @Operation(summary = "Duplicate a quote",
+               description = "Deep-copies an existing quote into a new DRAFT — new quote_number, fresh expires_at, cleared approval/rejection metadata, current user as inputter. Risks, coinsurance participants, quote-level loadings/discounts and selected clauses are carried forward. Totals are re-computed against the current QuoteConfig.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Quote duplicated",
+            content = @Content(schema = @Schema(implementation = QuoteResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks QUOTATION_CREATE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Source quote not found", content = @Content)
+    })
+    public ApiResponse<QuoteResponse> duplicate(@PathVariable UUID id) {
+        return ApiResponse.success(service.duplicate(id));
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('QUOTATION_UPDATE')")
     @Operation(summary = "Update a DRAFT quote",

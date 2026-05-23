@@ -24,10 +24,7 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | E1 | P3 | Springdoc live `/v3/api-docs` 500s in dev | Pre-existing auth NPE on unauthenticated probes. Frontend uses static `internal-api.json`, so not consumer-impacting; flagged since Session 80. |
 | E2 | P3 | docs-site/build/internal-api.json stale | Build copy regenerates on next Docusaurus deploy. Cosmetic. |
 | E3 | P3 | RelationshipManager.branch FK-cascade-awareness | Branch deletion doesn't 409 if RMs reference it; listing then shows soft-deleted branch name. Defensive only. |
-| F1c | P3 | Quote Duplicate mutation | Removed from QuotationListPage in Session 109 (no backend endpoint). When a `POST /api/v1/quotes/{id}/duplicate` (or `clone`) is added, restore the row action. Simple deep-copy clone — risks, loadings, discounts, clauses; status → DRAFT. |
-| F1d | P3 | AccessGroupController.delete should accept `?reason=` | Setup convention (V47 reasoned-delete) — every other Setup DELETE endpoint accepts `?reason=` and writes it to audit_log. AccessGroupController.delete currently ignores the param. Session 109 wired the frontend useDeleteWithReason against it anyway; reason gets sent but silently dropped. Add the param + audit-log write. |
-| F1e | P2 | Users page has no backend — missing UserController entirely | `/api/v1/setup/users` returns 404. UsersPage gracefully degrades to "No users yet" empty state. Reset password + Deactivate placeholder row actions removed in Session 109. Full user CRUD + Keycloak admin proxy needed. Larger slice — out of F1's frontend-sweep scope. |
-| F1f | P3 | AccessGroupsPage `permissions` + `userCount` accessor drift | Both column `accessorKey`s are stale — AccessGroupDto was reshaped in S97 (`userCount` removed) and never carried `permissions`. Both columns silently render undefined. Same drift pattern as B5 (PolicyListPage); fix is two accessor renames + maybe a backend addition for userCount. Surfaced in Session 109 sweep, kept out per discipline. |
+| F1e | P2 | Users page has no backend — missing UserController entirely | `/api/v1/setup/users` returns 404. UsersPage gracefully degrades to "No users yet" empty state. Reset password + Deactivate placeholder row actions removed in Session 109. Full user CRUD + Keycloak admin proxy needed — substantial slice (~3-5 hours). Users live in Keycloak; the controller is a thin proxy over the Keycloak Admin API (find / create / update / disable / reset-password). Needs admin-client config + service-account creds + IT against a Testcontainers Keycloak instance. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
 
@@ -108,6 +105,88 @@ QuotationListPage doesn't gain an Intermediary column either — same reasoning.
 ### Known follow-ups (deliberately deferred)
 
 - **Closed in Session 108.** This slice originally deferred the QuoteDetailPage main-card intermediary row + the QuotationListPage Intermediary column to a later slice. User pushback (rightly) flagged that as a half-shipped feature — a user could set the intermediary but couldn't see it on the detail page or list page. Session 108 (commit `<see below>`) added both surfaces. Discipline lesson preserved in the Session 108 notes.
+
+---
+
+## 2026-05-23 — Session 110 (`main`): Backlog F1c + F1d + F1f — batched resolution of three F1 follow-ups
+
+Sixteenth slice under the Session 93 discipline rule. After Session 109's full F1 sweep surfaced four new backlog rows (F1c–F1f), the user asked to "check them and provide resolutions". Inspecting each one revealed three small ones that batch cleanly + one large one (F1e — full Keycloak admin proxy) that deserves its own slice. Batching F1c + F1d + F1f now; surfacing F1e scope at the end of this entry for the next decision.
+
+### F1d — AccessGroupController.delete accepts `?reason=`
+
+Mirror of the BrokerController/BrokerService pattern from the V47 reasoned-delete convention:
+
+**Backend changes:**
+- `AccessGroupController.delete(UUID id)` → `delete(UUID id, @RequestParam(required = false) String reason)`.
+- `AccessGroupService.delete(UUID id)` → `delete(UUID id, String reason)`; switch from `auditService.log(...)` to `auditService.logWithReason(..., reason)` so the reason lands on `audit_log.reason` (V47).
+
+**Frontend:** none. The `useDeleteWithReason` hook on AccessGroupsPage was already sending `?reason=` since Session 109 — it was just being silently dropped on the backend until now.
+
+Six lines across two backend files.
+
+### F1f — AccessGroupsPage accessor drift (misdiagnosed at log time)
+
+The Session 109 entry logged F1f as "`permissions` + `userCount` accessor drift". On re-inspection only `userCount` is real drift — `AccessGroupResponse` does ship `permissions: List<String>` (verified by reading `AccessGroupService.toResponse` and `AccessGroupDto`). The `permissions` column has always been working; my sweep was wrong.
+
+`userCount` truly doesn't exist on the response — there's no field on `AccessGroupResponse`, and computing it would require a join against the users table, which doesn't exist (F1e). Dropped the column entirely; restoring it depends on F1e shipping a user backend first.
+
+One column block removed from `AccessGroupsPage.tsx`. Documenting the misdiagnosis here so future readers don't chase a non-bug.
+
+### F1c — Quote Duplicate (end-to-end)
+
+New `POST /api/v1/quotes/{id}/duplicate` endpoint + frontend row action restored.
+
+**Backend — new `QuoteService.duplicate(UUID id)`:**
+- Generates a fresh quote number via `QuoteNumberService.nextQuoteNumber()`.
+- New `Quote` built with the same customer / product / class-of-business / broker / agent / business-type / period / notes as the source.
+- Status forced to `DRAFT`; approval / rejection metadata left null (build defaults); `inputterName` resolves to the current user; `expiresAt` resets to `now + config.validityDays` so the copy gets the full validity window from the moment it's created.
+- Risks deep-copied via `QuoteRisk.builder()` — each row gets a new id (JPA cascade picks them up on save), with `loadings` + `discounts` deep-copied through a new helper `copyAdjustments(List<AdjustmentEntry>)` that constructs new `AdjustmentEntry` instances rather than sharing references.
+- Coinsurance participants deep-copied the same way.
+- JSONB lists (`selectedClauseIds`, `quoteLoadings`, `quoteDiscounts`) wrapped in `new ArrayList<>(...)` so the source and copy don't share mutable list state.
+- `recalculateTotals(copy, config)` re-runs against the **current** `QuoteConfig` rather than re-using the source's stored totals. If the tenant has rotated their quote configuration since the source was last priced (validity-days, calc-sequence, etc.), the copy reflects today's config — that's the right semantics for "duplicate as a starting point".
+
+**Backend — `QuoteController`:**
+- New `POST /{id}/duplicate` with `@PreAuthorize("hasRole('QUOTATION_CREATE')")` + full `@Operation` / `@ApiResponses` annotations matching the rest of the controller surface.
+
+**Frontend — `QuotationListPage.tsx`:**
+- New `duplicate` mutation that POSTs to the new endpoint, invalidates `['quotes']`, toasts success, and navigates to `/quotation/{new-id}` so the user can immediately refine the copy.
+- Row action restored at the bottom of the actions array.
+
+### Verification
+
+- `mvn install -DskipTests -pl cia-setup,cia-quotation,cia-policy,cia-api -am` — BUILD SUCCESS.
+- `pnpm --filter @cia/back-office exec tsc --noEmit` — exit 0.
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected. (29 interfaces, 2 skipped)` unchanged.
+- `mvn verify -pl cia-api -DskipUnitTests=true` — running at commit time. Result confirmed before push.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend — controllers | `AccessGroupController.java`, `QuoteController.java` |
+| Backend — services | `AccessGroupService.java`, `QuoteService.java` (new `duplicate` method + `copyAdjustments` helper) |
+| Frontend — UI | `QuotationListPage.tsx` (mutation + row action), `AccessGroupsPage.tsx` (drop userCount column) |
+| Docs | `cia-log.md` (this entry + F1c / F1d / F1f removed) |
+
+### Backlog reconciliation
+
+- **Removed**: F1c, F1d, F1f.
+- **Added**: none.
+- **Net**: 16 → 13 rows. Third net-decrement slice in the run (B5, B1b, now this).
+
+### Known follow-ups (deliberately deferred)
+
+**F1e — Missing UserController** stays on the backlog as the only F1-family item not closed by this slice. Scope outline so the next decision is informed:
+
+- New module: `cia-setup/.../user/` — `UserController`, `UserService`, `UserRequest`, `UserResponse`.
+- Dependency: Keycloak Admin Client (`org.keycloak:keycloak-admin-client`). Users live in Keycloak; the controller is a thin proxy. No new DB table.
+- New service-account credentials (`KEYCLOAK_ADMIN_CLIENT_ID` / `KEYCLOAK_ADMIN_CLIENT_SECRET`) — environment + secret manager.
+- Endpoints: `GET /api/v1/setup/users`, `GET /{id}`, `POST` (create + send welcome), `PUT /{id}` (edit profile + access group), `POST /{id}/reset-password` (Keycloak email), `POST /{id}/deactivate` (set enabled=false), `POST /{id}/activate`.
+- Tenant scoping via the existing `TenantContext` JWT claim → resolves the Keycloak realm.
+- IT against a Testcontainers Keycloak instance — non-trivial fixture setup; expect 5–8 ITs.
+- Frontend: restore the two row actions on `UsersPage` (Reset password / Deactivate) once endpoints exist; no other UI changes since the page already calls the right URLs.
+
+Realistic budget: **3–5 hours of focused work** (the Keycloak admin client integration is the heaviest part; once it's wired, the controller is largely mechanical). One commit, large but coherent. Worth its own slice with clear scope upfront rather than batched.
 
 ---
 

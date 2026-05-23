@@ -56,11 +56,13 @@ public class AccessGroupService {
     }
 
     @Transactional
-    public void delete(UUID id) {
+    public void delete(UUID id, String reason) {
         AccessGroup group = findOrThrow(id);
         group.softDelete();
         repository.save(group);
-        auditService.log("AccessGroup", id.toString(), AuditAction.DELETE, group, null);
+        // V47 reasoned-soft-delete convention — the reason ends up in
+        // audit_log.reason alongside the DELETE event.
+        auditService.logWithReason("AccessGroup", id.toString(), AuditAction.DELETE, group, null, reason);
     }
 
     private void addPermissions(AccessGroup group, List<String> permissions) {

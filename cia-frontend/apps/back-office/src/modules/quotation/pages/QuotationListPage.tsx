@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-  EmptyState, PageHeader, Skeleton,
+  EmptyState, PageHeader, Skeleton, toast,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type QuoteDto } from '@cia/api-client';
 import SingleRiskQuoteSheet from './create/SingleRiskQuoteSheet';
 import MultiRiskQuoteSheet  from './create/MultiRiskQuoteSheet';
@@ -54,6 +54,7 @@ const statusVariant: Record<QuoteDto['status'], 'active' | 'pending' | 'rejected
 
 export default function QuotationListPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [singleOpen, setSingleOpen] = useState(false);
   const [multiOpen,  setMultiOpen]  = useState(false);
   const [pdfData,    setPdfData]    = useState<QuotePdfData | null>(null);
@@ -66,6 +67,25 @@ export default function QuotationListPage() {
     },
   });
   const quotes = quotesQuery.data ?? [];
+
+  // Duplicate — deep-copies the quote into a new DRAFT (F1c, Session 110).
+  // Backend cascades risks + coinsurance participants + JSONB lists.
+  const duplicate = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiClient.post<{ data: { id: string } }>(
+        `/api/v1/quotes/${id}/duplicate`,
+      );
+      return res.data.data;
+    },
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ['quotes'] });
+      toast({ title: 'Quote duplicated' });
+      navigate(`/quotation/${created.id}`);
+    },
+    onError: () => {
+      toast({ variant: 'destructive', title: 'Could not duplicate quote' });
+    },
+  });
 
   const columns: ColumnDef<QuoteDto>[] = [
     {
@@ -169,6 +189,7 @@ export default function QuotationListPage() {
               ...((status === 'APPROVED' || status === 'CONVERTED') && mockQuotePdfData[row.original.id]
                 ? [{ label: 'Download PDF', onClick: (r: any) => setPdfData(mockQuotePdfData[r.original.id] ?? null) }]
                 : []),
+              { label: 'Duplicate', onClick: (r: { original: QuoteDto }) => duplicate.mutate(r.original.id) },
             ]}
           />
         );

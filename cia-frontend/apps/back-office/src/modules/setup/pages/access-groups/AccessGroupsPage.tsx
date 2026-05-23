@@ -58,11 +58,6 @@ export default function AccessGroupsPage() {
       },
     },
     {
-      accessorKey: 'userCount',
-      header: 'Users',
-      cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{getValue() as number}</span>,
-    },
-    {
       id: 'actions',
       cell: ({ row }) => (
         <DataTableRowActions

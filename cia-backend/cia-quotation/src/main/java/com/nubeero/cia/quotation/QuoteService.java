@@ -159,6 +159,94 @@ public class QuoteService {
         return toResponse(saved);
     }
 
+    // ── Duplicate ────────────────────────────────────────────────────────────
+    //
+    // Backlog F1c. Deep-copies an existing quote into a new DRAFT — new
+    // quote_number, fresh expires_at, cleared approval/rejection metadata,
+    // current user as inputter. Risks / coinsurance participants /
+    // quote-level loadings + discounts / selected clauses are all carried
+    // forward verbatim. Totals are re-computed against the current
+    // QuoteConfig to honour any tenant-config drift since the source quote
+    // was last priced.
+
+    @Transactional
+    public QuoteResponse duplicate(UUID id) {
+        Quote source = findOrThrow(id);
+        QuoteConfig config = quoteConfigService.fetchConfig();
+
+        Quote copy = Quote.builder()
+                .quoteNumber(quoteNumberService.nextQuoteNumber())
+                .status(QuoteStatus.DRAFT)
+                .customerId(source.getCustomerId())
+                .customerName(source.getCustomerName())
+                .productId(source.getProductId())
+                .productName(source.getProductName())
+                .productCode(source.getProductCode())
+                .productRate(source.getProductRate())
+                .classOfBusinessId(source.getClassOfBusinessId())
+                .classOfBusinessName(source.getClassOfBusinessName())
+                .brokerId(source.getBrokerId())
+                .brokerName(source.getBrokerName())
+                .agentId(source.getAgentId())
+                .agentName(source.getAgentName())
+                .businessType(source.getBusinessType())
+                .policyStartDate(source.getPolicyStartDate())
+                .policyEndDate(source.getPolicyEndDate())
+                .notes(source.getNotes())
+                .selectedClauseIds(new ArrayList<>(source.getSelectedClauseIds() == null
+                        ? List.of() : source.getSelectedClauseIds()))
+                .quoteLoadings(copyAdjustments(source.getQuoteLoadings()))
+                .quoteDiscounts(copyAdjustments(source.getQuoteDiscounts()))
+                .inputterName(currentUserName())
+                .expiresAt(Instant.now().plus(config.getValidityDays(), ChronoUnit.DAYS))
+                .build();
+
+        // Deep-copy risk rows. Each risk becomes a new orphan that the JPA
+        // cascade picks up when we save the parent Quote. orderNo + section
+        // metadata + riskDetails JSONB are carried verbatim.
+        source.getRisks().stream()
+                .filter(r -> r.getDeletedAt() == null)
+                .forEach(r -> copy.getRisks().add(QuoteRisk.builder()
+                        .quote(copy)
+                        .description(r.getDescription())
+                        .sumInsured(r.getSumInsured())
+                        .rate(r.getRate())
+                        .grossPremium(r.getGrossPremium())
+                        .premium(r.getPremium())
+                        .loadings(copyAdjustments(r.getLoadings()))
+                        .discounts(copyAdjustments(r.getDiscounts()))
+                        .sectionId(r.getSectionId())
+                        .sectionName(r.getSectionName())
+                        .riskDetails(r.getRiskDetails())
+                        .orderNo(r.getOrderNo())
+                        .build()));
+
+        source.getCoinsuranceParticipants().stream()
+                .filter(p -> p.getDeletedAt() == null)
+                .forEach(p -> copy.getCoinsuranceParticipants().add(
+                        QuoteCoinsuranceParticipant.builder()
+                                .quote(copy)
+                                .insuranceCompanyId(p.getInsuranceCompanyId())
+                                .insuranceCompanyName(p.getInsuranceCompanyName())
+                                .sharePercentage(p.getSharePercentage())
+                                .build()));
+
+        recalculateTotals(copy, config);
+
+        Quote saved = repository.save(copy);
+        auditService.log("Quote", saved.getId().toString(), AuditAction.CREATE, null, saved);
+        return toResponse(saved);
+    }
+
+    // AdjustmentEntry is JSONB-serialized + immutable in practice; create a
+    // new wrapping list so the source and copy don't share mutable state.
+    private List<AdjustmentEntry> copyAdjustments(List<AdjustmentEntry> source) {
+        if (source == null) return new ArrayList<>();
+        return source.stream()
+                .map(a -> new AdjustmentEntry(a.getTypeId(), a.getTypeName(), a.getFormat(), a.getValue()))
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+    }
+
     // ── Update ────────────────────────────────────────────────────────────────
 
     @Transactional
