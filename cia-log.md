@@ -104,8 +104,49 @@ QuotationListPage doesn't gain an Intermediary column either — same reasoning.
 
 ### Known follow-ups (deliberately deferred)
 
-- QuoteDetailPage main card doesn't show intermediary inline — out of scope for B1b; comes back as its own slice if a user asks.
-- QuotationListPage doesn't have an Intermediary column — the B3 analog for quotes. Skip until a real consumer asks.
+- **Closed in Session 108.** This slice originally deferred the QuoteDetailPage main-card intermediary row + the QuotationListPage Intermediary column to a later slice. User pushback (rightly) flagged that as a half-shipped feature — a user could set the intermediary but couldn't see it on the detail page or list page. Session 108 (commit `<see below>`) added both surfaces. Discipline lesson preserved in the Session 108 notes.
+
+---
+
+## 2026-05-23 — Session 108 (`main`): Backlog B1b — completion (detail card + list column)
+
+Follow-up to Session 107. The B1b slice as committed there shipped the picker + PDF + CSV template but explicitly carved out the QuoteDetailPage main-card Intermediary row and the QuotationListPage Intermediary column, citing "narrow B1b scope" + "doesn't gate the stated goal".
+
+### Why the carve-out was wrong
+
+The carve-out was technically defensible against the literal B1b backlog row (which mentioned only "agent picker + bulk CSV + PDF"), but the user pushback flagged the bigger problem: in a "make quote-side intermediary attribution work end-to-end" reading (the principle the option-B broaden was based on), shipping the data path everywhere *except* the surfaces where users actually read it is a half-feature. A user can pick a broker on the create sheet and see it on the PDF, but the detail page's main card and the list page both stay silent on the attribution.
+
+The discipline rule cited ("side-discoveries are logged, not absorbed") was the right rule for the wrong question — the detail-card row and list column aren't side-discoveries surfaced *during* B1b, they're constitutive parts of the "make it work end-to-end" goal that I deliberately under-scoped. The rule that should have applied was the "when mid-slice growth is legitimate" carve-out: if the stated goal can't ship in a user-meaningful way without X, broaden. I broadened to add the broker picker (option B), but stopped one step short of fully landing the feature.
+
+### What landed
+
+**`QuoteDetailPage.tsx`** — main Quote Details card now has an "Intermediary" row between Period and Prepared-by. Same format as the policy detail page from S84e: `Broker · {name}` / `Agent · {name}` / `Direct`.
+
+**`QuotationListPage.tsx`** — new computed column between Net Premium and Status using TanStack `accessorFn` (mirror of B3's PolicyListPage column from Session 104). Three visual variants: Broker · {name}, Agent · {name}, Direct in muted text. Same `ck_quotes_broker_xor_agent` invariant — the `??` chain is safe.
+
+### Discipline lesson
+
+The slice discipline rule is "don't silently expand", not "don't expand at all". An honest "B-option broaden" should have included these two surfaces from the start. The fix in Session 108 is small (~30 lines across two files) but the principle is worth recording: when the slice goal is framed as "make X work end-to-end", the test isn't "is each individual surface load-bearing for the others to compile" — it's "does the user-visible feature actually work end-to-end if I stop here". Skipping these surfaces produced a feature where the data was correct everywhere but the user couldn't see it on two of the four screens that would normally surface it.
+
+### Verification
+
+- `pnpm --filter @cia/back-office exec tsc --noEmit` — exit 0.
+- `node cia-frontend/scripts/check-dto-drift.mjs` — `✓ No DTO drift detected.` unchanged.
+- API-wiring check — same two pre-existing F6 violations, no new ones.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Frontend — quote detail | `QuoteDetailPage.tsx` — Intermediary row in main card |
+| Frontend — quote list | `QuotationListPage.tsx` — computed Intermediary column |
+| Docs | `cia-log.md` (this entry + Session 107's "deliberately deferred" note retroactively annotated) |
+
+### Backlog reconciliation
+
+- **Removed**: none. B1b was already removed in Session 107.
+- **Added**: none. This slice closes the under-scope from Session 107.
+- **Net**: 13 → 13 rows.
 
 ---
 

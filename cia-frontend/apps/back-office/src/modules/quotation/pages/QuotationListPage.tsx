@@ -110,6 +110,34 @@ export default function QuotationListPage() {
       ),
     },
     {
+      // Mirror of PolicyListPage's Intermediary column (B3 / Session 104).
+      // ck_quotes_broker_xor_agent (V55) guarantees at most one of
+      // brokerName / agentName is non-null — both null = Direct.
+      id:         'intermediary',
+      accessorFn: (row) => row.brokerName ?? row.agentName ?? 'Direct',
+      header:     ({ column }) => <DataTableColumnHeader column={column} title="Intermediary" />,
+      cell: ({ row }) => {
+        const { brokerName, agentName } = row.original;
+        if (brokerName) {
+          return (
+            <div className="text-sm">
+              <span className="text-muted-foreground">Broker · </span>
+              <span className="font-medium">{brokerName}</span>
+            </div>
+          );
+        }
+        if (agentName) {
+          return (
+            <div className="text-sm">
+              <span className="text-muted-foreground">Agent · </span>
+              <span className="font-medium">{agentName}</span>
+            </div>
+          );
+        }
+        return <span className="text-sm text-muted-foreground">Direct</span>;
+      },
+    },
+    {
       accessorKey: 'status',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
       cell: ({ getValue }) => {

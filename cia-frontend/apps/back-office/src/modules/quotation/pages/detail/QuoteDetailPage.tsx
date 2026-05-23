@@ -286,6 +286,16 @@ export default function QuoteDetailPage() {
             <Row label="Class"         value={q.classOfBusinessName} />
             <Row label="Business Type" value={q.businessType} />
             <Row label="Period"        value={`${q.policyStartDate} → ${q.policyEndDate}`} />
+            <Row
+              label="Intermediary"
+              value={
+                q.brokerName
+                  ? `Broker · ${q.brokerName}`
+                  : q.agentName
+                    ? `Agent · ${q.agentName}`
+                    : 'Direct'
+              }
+            />
             {q.inputterName && <Row label="Prepared by" value={q.inputterName} />}
             {q.approverName && <Row label="Approved by" value={q.approverName} />}
           </CardContent>
