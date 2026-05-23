@@ -49,6 +49,11 @@ export const AuditLogDtoSchema = z.object({
   ipAddress:      z.string().nullable().optional(),
   sessionId:      z.string().nullable().optional(),
   approvalAmount: z.number().nullable().optional(),
+  // V47 reasoned-soft-delete convention — `reason` is recorded alongside the
+  // user / timestamp on DELETE events. Surfaced by Session 116 (F3) extending
+  // the drift parser to zod-derived types; the field has shipped from the
+  // backend since V47 but was missing from this Dto.
+  reason:         z.string().nullable().optional(),
 });
 export type AuditLogDto = z.infer<typeof AuditLogDtoSchema>;
 

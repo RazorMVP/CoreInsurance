@@ -11,10 +11,8 @@ import EditCustomerSheet from './EditCustomerSheet';
 interface PolicyHistoryItem { id: string; policyNumber: string; product: string; status: string; premium: number; startDate: string; endDate: string; }
 interface ClaimHistoryItem  { id: string; claimNumber: string; policyNumber: string; status: string; amount: number; date: string; }
 
-// allow-mock: fallback while useQuery is in flight or for unknown ids. Values
-// are synthetic placeholders (not real PII) — keeps the layout visible without
-// shipping data that could be confused for real customers. Each row mirrors
-// the CustomerDto shape (Session 94 / Backlog A2 reconciliation).
+// allow-mock: fallback while useQuery is in flight or for unknown ids;
+// synthetic placeholders (no real PII) per Session 94 / Backlog A2.
 const MOCK_CUSTOMERS: CustomerDto[] = [
   {
     id: 'c1', customerNumber: 'CUST/2026/IND/00000001', customerType: 'INDIVIDUAL',

@@ -181,33 +181,119 @@ function extractJavaFields(filePath) {
   return fields;
 }
 
-// ── TS interface field extractor ─────────────────────────────────────────────
-// Captures field names declared inside `export interface XYZDto { ... }`.
-// Supports comments, optional `?:`, multi-line union types (string | null).
-function extractTsInterfaces(filePath) {
+// ── TS Dto field extractor ───────────────────────────────────────────────────
+// Captures field names from three declaration patterns ending in `Dto`:
+//
+//   1. `export interface XDto { ... }`                       (long-standing)
+//   2. `export type XDto = { ... }`                          (Session 116 / F3)
+//   3. `export type XDto = z.infer<typeof XDtoSchema>`       (Session 116 / F3)
+//
+// Patterns 2 + 3 were silently skipped before F3. The drift script's regex only
+// caught `export interface`, so the 60 zod-derived DTOs across audit / claims /
+// policy / finance / reinsurance / finance-closures (added since Session 92's
+// drift-check baseline) were never checked against their backend counterparts.
+// Likewise `ChartOfAccountNodeDto` (a recursive type-alias that can't be
+// z.infer'd) was invisible.
+//
+// Pattern 3 resolution: from `export type XDto = z.infer<typeof XDtoSchema>`,
+// locate `export const XDtoSchema = z.object({...})` in the same file (peeling
+// off `z.lazy(() => ...)` if the schema is recursive) and parse the object
+// body for top-level field declarations.
+//
+// All three patterns share `parseObjectBody`, which tracks brace/paren/bracket
+// depth so nested object/array literals don't leak depth-0 field matches.
+function extractTsDtos(filePath) {
   const src = readFileSync(filePath, 'utf8');
-  const out = new Map(); // interfaceName → Set<fieldName>
+  const out = new Map(); // dtoName → Set<fieldName>
 
-  // matchAll iterates over each `export interface X { ... }` block.
-  const pattern = /export\s+interface\s+(\w+)\s*\{([\s\S]*?)\n\}/g;
-  for (const m of src.matchAll(pattern)) {
+  // Pattern 1 — export interface XDto { ... }
+  for (const m of src.matchAll(/export\s+interface\s+(\w+)\s*\{([\s\S]*?)\n\}/g)) {
     const name = m[1];
     if (!name.endsWith('Dto')) continue;
-    const body = m[2];
-    const fields = new Set();
-    // Strip block comments inside the body before parsing.
-    const cleanBody = body.replace(/\/\*[\s\S]*?\*\//g, '');
-    for (const rawLine of cleanBody.split('\n')) {
-      const line = rawLine.trim();
-      if (!line || line.startsWith('//')) continue;
-      // Match `name:` or `name?:` at line start. Identifier matches \w+
-      // including the optional `?`.
-      const fm = line.match(/^(\w+)\s*\??\s*:/);
-      if (fm) fields.add(fm[1]);
-    }
-    out.set(name, fields);
+    out.set(name, parseObjectBody(m[2]));
   }
+
+  // Pattern 2 — export type XDto = { ... };
+  for (const m of src.matchAll(/export\s+type\s+(\w+)\s*=\s*\{([\s\S]*?)\n\};?/g)) {
+    const name = m[1];
+    if (!name.endsWith('Dto')) continue;
+    out.set(name, parseObjectBody(m[2]));
+  }
+
+  // Pattern 3 — export type XDto = z.infer<typeof XDtoSchema>
+  for (const m of src.matchAll(/export\s+type\s+(\w+)\s*=\s*z\.infer<\s*typeof\s+(\w+)\s*>/g)) {
+    const dtoName    = m[1];
+    const schemaName = m[2];
+    if (!dtoName.endsWith('Dto')) continue;
+    const body = findZodObjectBody(src, schemaName);
+    if (body !== null) out.set(dtoName, parseObjectBody(body));
+    // If we can't locate the schema body, leave the dto out — the violation
+    // report below will then flag a "no backend counterpart" skip rather
+    // than incorrectly claiming an empty field set.
+  }
+
   return out;
+}
+
+// Walk an object body line-by-line, collecting `name:` declarations only when
+// brace/paren/bracket depth is 0 (i.e. directly inside the outer object).
+// Strips block + line comments. Works uniformly for TS interfaces, TS type
+// literals, and zod schema bodies because all three use `name: TYPE,` lines.
+function parseObjectBody(body) {
+  const clean = body.replace(/\/\*[\s\S]*?\*\//g, '');
+  const fields = new Set();
+  let depth = 0;
+  for (const rawLine of clean.split('\n')) {
+    const lineDepth = depth; // depth at line start — only depth-0 lines count
+    for (const c of rawLine) {
+      if (c === '{' || c === '[' || c === '(') depth++;
+      else if (c === '}' || c === ']' || c === ')') depth--;
+    }
+    if (lineDepth !== 0) continue;
+    const trimmed = rawLine.trim();
+    if (!trimmed || trimmed.startsWith('//')) continue;
+    const fm = trimmed.match(/^(\w+)\s*\??\s*:/);
+    if (fm) fields.add(fm[1]);
+  }
+  return fields;
+}
+
+// Find the `z.object({ ... })` body for `<schemaName>`, returning the inner
+// braced text. Handles two schema forms:
+//
+//   export const XSchema = z.object({ ... });
+//   export const XSchema: z.ZodType<X> = z.lazy(() => z.object({ ... }));
+//
+// Returns null when the schema isn't found in the source — caller treats that
+// as "skip this dto" rather than "empty field set".
+function findZodObjectBody(src, schemaName) {
+  // Match the declaration's start; capture position after `=`.
+  const declRe = new RegExp(`\\b(?:const|let|var)\\s+${schemaName}\\b[^=]*=`);
+  const declMatch = declRe.exec(src);
+  if (!declMatch) return null;
+  const after = src.slice(declMatch.index + declMatch[0].length);
+
+  // Locate the first `z.object(` after the `=`. Anything between `=` and
+  // `z.object(` (e.g. `z.lazy(() => `) is consumed as a wrapper.
+  const objIdx = after.search(/z\.object\s*\(\s*\{/);
+  if (objIdx === -1) return null;
+
+  // Find the opening `{` after `z.object(` and walk a brace-depth tracker to
+  // its matching `}`.
+  const braceOffset = after.slice(objIdx).search(/\{/);
+  if (braceOffset === -1) return null;
+  const braceIdx = objIdx + braceOffset;
+
+  let depth = 0;
+  for (let i = braceIdx; i < after.length; i++) {
+    const c = after[i];
+    if (c === '{') depth++;
+    else if (c === '}') {
+      depth--;
+      if (depth === 0) return after.slice(braceIdx + 1, i);
+    }
+  }
+  return null; // unterminated — bail to "no body" rather than guessing
 }
 
 // ── Walk frontend interfaces ────────────────────────────────────────────────
@@ -217,7 +303,7 @@ const tsFiles = readdirSync(FRONTEND_MODULES_DIR)
 
 const allTsInterfaces = new Map(); // DtoName → { file, fields }
 for (const f of tsFiles) {
-  for (const [name, fields] of extractTsInterfaces(f)) {
+  for (const [name, fields] of extractTsDtos(f)) {
     allTsInterfaces.set(name, { file: f, fields });
   }
 }

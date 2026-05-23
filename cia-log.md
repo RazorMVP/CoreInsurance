@@ -16,10 +16,8 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | F1e-IT | P3 | UserController ITs against Testcontainers Keycloak (re-opened) | Session 112 first attempt used `com.github.dasniko:testcontainers-keycloak:3.5.1` + a `@DataJpaTest` slice that manually wired the admin client. Keycloak container cold-start exceeded the 120s default wait timeout. Re-attempt should bump `withStartupTimeout` to 3+ minutes, or use `start-dev --optimized` for faster boot. Note: the original Session 112 hypothesis (failing IT was caused by testcontainers-keycloak transitive deps) was wrong — Session 114 confirmed by direct fix that the root cause was Keycloak admin-client type references appearing in `UserService`'s bytecode (now resolved by the F1e-sync encapsulation strategy). The container-startup-timeout issue is the only remaining blocker for this row. |
 | F1e-sync-AccessGroup-fanout | P3 | Sync all users in a group when AccessGroup permissions change | Session 114's F1e-sync triggers realm-role sync on user create + user update. It does NOT trigger sync when an `AccessGroup` is mutated (e.g. permissions added/removed via `AccessGroupService.update()`). Today, group permission edits leave every existing user's Keycloak realm-role assignment stale until the user is touched again. Follow-up: in `AccessGroupService.update()`, iterate the users currently assigned to the group (via the Keycloak user attribute `accessGroupId`) and call `KeycloakRealmRoleSyncer.syncFor(...)` for each. Needs a "list users by access group" query against Keycloak admin client (`realm.users().searchByAttributes(...)`). |
 | F4-sync-tests | P3 | Mock-Keycloak IT for `KeycloakRealmRoleSyncer` + `KeycloakPasswordPolicySyncer` | Session 114 shipped a pure-function unit test of `KeycloakPolicyDsl` (6 assertions, runs in single-millisecond range). The two syncer classes themselves have no test coverage because exercising them requires a Keycloak server or a full admin-client mock — same blocker as F1e-IT. When F1e-IT lands (Testcontainers Keycloak with bumped startup timeout), extend it to cover both syncers in a single integration test class. Mockito-only tests would have to mock `RolesResource`, `RealmResource`, `UserResource` chains, which is brittle and adds the exact Keycloak-admin-client class graph in the test JVM that S112 showed was hazardous — defer in favour of Testcontainers. |
-| F6 | P3 | Two `// allow-mock:` opt-outs missing | `cia-frontend/scripts/check-api-wiring.sh` flags `MOCK_QUOTES` in QuoteDetailPage:26 (added Session 100) and `MOCK_CUSTOMERS` in CustomerDetailPage:18 (added Session 94). Both are decorative fallbacks-while-useQuery-is-in-flight (same pattern as `mockEndorsement` in EndorsementDetailPage which IS labelled). Two one-line comment fixes. Not a runtime issue — wiring script isn't a CI gate today, only informational locally. |
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
 | F7 | P3 | Flat receipts + payments inventory view dropped | Session 103 (F2) removed the "Receipts" + "Payments" sub-sections from ReceivablesTab + PayablesTab because backend has no `/api/v1/receipts` or `/api/v1/payments` flat list endpoint — receipts only exist nested under a debit-note (`/api/v1/debit-notes/{dnId}/receipts`), payments only under a credit-note. If a finance-level "show me all approved receipts this week" view is needed, add flat list controllers + ITs on the backend, then re-surface the sub-sections. Alternative: expose receipts + payments inside DebitNoteDetailDialog + CreditNoteDetailDialog so users can drill from the DN/CN inventory. `ReverseTransactionDialog` file kept in-tree (dead until either surface lands). |
-| F3 | P3 | DTO drift script picks up zod-derived types | `finance.ts` uses `export type X = z.infer<typeof XSchema>` (not `export interface X`). The drift parser only matches `export interface`, so DebitNoteDto / ReceiptDto / CreditNoteDto / PaymentDto are never checked. Extend the parser to also detect zod-derived types. |
 | C2 | P3 | Multi-risk on direct create form | `useFieldArray<PolicyRiskRequest>` on CreatePolicySheet. RisksEditorDialog already handles multi-risk post-creation; this is purely a create-time convenience. |
 | C3 | P3 | vehicleRegNumber + sectionId on direct risk row | Backend `PolicyRiskRequest` accepts both as optional; form has neither (filled via RisksEditorDialog on the detail page). |
 | D1 | P3 | Server-side date-range validation on CommissionSetupRequest | `@Future` / cross-field bean validation that effectiveTo ≥ effectiveFrom. Frontend zod refine covers the UX; server-side is correctness defence. |
@@ -29,6 +27,98 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | E1-test | P3 | MockMvc IT for `GlobalExceptionHandler` no-handler / no-resource branches | Session 115 added `NoHandlerFoundException` + `NoResourceFoundException` handlers to `GlobalExceptionHandler` (both return 404 with structured `ApiResponse.error("NOT_FOUND", ...)`). The handlers have no test today — `cia-common` has no MockMvc / `@WebMvcTest` scaffolding. A future slice should add one IT class exercising both branches (assert 404 on an unmapped path; assert response body shape matches `ApiResponse.error`). |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-23 — Session 116 (`main`): Backlog F3 + F6 — Drift parser zod support + 3 real drifts fixed + 2 mock-opt-outs
+
+Twenty-second slice under the Session 93 discipline rule. User picked the F3 → F6 chain pair off the backlog after E1 shipped.
+
+### Discovery — the F3 surface was bigger than the row described
+
+The backlog row claimed F3 was about `finance.ts`'s four DTOs (DebitNoteDto / ReceiptDto / CreditNoteDto / PaymentDto). Grepping for `^export type \w+Dto = z\.infer` across the whole api-client revealed the actual scope:
+
+| File | Zod-derived DTOs |
+|---|---|
+| `audit.ts` | 4 |
+| `claims.ts` | 7 |
+| `policy.ts` | 5 |
+| `finance.ts` | 4 |
+| `reinsurance.ts` | 3 |
+| `finance-closures.ts` | 37 |
+
+**60 zod-derived DTOs total**, plus `ChartOfAccountNodeDto` declared as a manual `export type X = { ... }` (it can't be `z.infer`'d through `z.lazy()`). All 61 were silently skipped by the existing parser. So the fix's blast radius was 30 → 91 DTOs (a 3× increase in coverage) — not "4 finance DTOs".
+
+The grep also confirmed the codebase has zero usages of `.merge()` / `.extend()` / `.pick()` / `.omit()` / `.passthrough()` and zero inline nested `z.array(z.object(...))`. Every zod schema is a flat `z.object({...})` literal (with `z.lazy(() => z.object({...}))` for the one recursive case). The parser doesn't need a real TS AST — depth-tracking text scanning is sufficient.
+
+### What landed — `check-dto-drift.mjs` parser extension
+
+The existing `extractTsInterfaces` (only `export interface X { ... }`) is replaced by `extractTsDtos` which handles three patterns uniformly:
+
+1. `export interface XDto { ... }` (long-standing)
+2. `export type XDto = { ... }` (new — picks up `ChartOfAccountNodeDto`)
+3. `export type XDto = z.infer<typeof XDtoSchema>` (new — picks up the 60 zod-derived DTOs)
+
+Pattern 3 resolution: from the type alias, locate `export const XDtoSchema = ... z.object({...})` in the same file. The `... z.object` allows for `z.lazy(() => z.object(...))` wrapping (the single recursive-schema case in `finance-closures.ts`). The braced block is extracted via a real brace-depth tracker (`findZodObjectBody`), not a non-greedy regex — robust against any future nested literals.
+
+`parseObjectBody` walks the body line-by-line tracking depth across `{ } [ ] ( )` so nested objects/arrays/method calls don't leak depth-0 field matches. Strips block + line comments first.
+
+### Drifts surfaced and fixed in-slice
+
+The extension surfaced 3 drifts out of 93 checked DTOs — a clean signal:
+
+| Dto | Drift | Fix |
+|---|---|---|
+| `AuditLogDto` | Backend ships `reason` (added in V47 reasoned-soft-delete convention); frontend declared none → missed-surface drift | Added `reason: z.string().nullable().optional()` to schema |
+| `ReceiptDto` | Backend ships `reversedAt` + `reversedBy` + `reversalReason`; frontend declared none → missed-surface drift | Added all three as nullable+optional |
+| `TreatyParticipantDto` | Frontend declared `isLead: boolean`; backend Lombok `@Data` on `boolean lead` publishes the JSON key as `"lead"` (field-name, not getter-name `isLead()`) → silent-drop drift (Jackson dropped `isLead` on POST and never delivered it on GET) | Renamed to `lead`, updated the one consumer in `TreatiesTab.tsx:160` |
+
+Single grep for `isLead` confirmed only one UI consumer (one line in `TreatiesTab.tsx`). The audit + finance UIs don't yet render `reason` / `reversedAt` etc., so adding the fields to the Dto is purely type-correctness with no UI changes needed — future UI work that wants those fields now has them on the type.
+
+The triple-fix-in-slice was the only honest move. F3 exists to surface drift; auto-allow-listing what it catches would defeat the whole point. Three drifts × small fixes each = within the slice's reasonable scope.
+
+### What landed — F6 (chained drain)
+
+`check-api-wiring.sh` flagged `MOCK_QUOTES` in `QuoteDetailPage:26` and `MOCK_CUSTOMERS` in `CustomerDetailPage:18`. Both had comments mentioning the fallback rationale but neither matched the script's pattern `//\s*allow-mock:` in the 3-line window above the declaration:
+
+- `QuoteDetailPage.tsx` had `// ── Mock fallback (allow-mock: synthetic ...)` — the `allow-mock:` marker was mid-line, not at the comment start.
+- `CustomerDetailPage.tsx` had `// allow-mock: ...` at the comment start, but the multi-line continuation pushed the marker to 4 lines above the declaration — outside the script's 3-line scan window.
+
+Both rewritten to the canonical one-line form matching `mockEndorsement` in `EndorsementDetailPage`:
+
+```ts
+// allow-mock: fallback while useQuery is in flight or for unknown ids
+const MOCK_QUOTES: QuoteDto[] = [...]
+```
+
+### Verification
+
+- `node check-dto-drift.mjs` — `✓ No DTO drift detected. (93 interfaces; 25 skipped — no backend counterpart)`. Up from 30 interfaces / 1 skipped before this slice.
+- `bash check-api-wiring.sh` — `✓ No API-wiring violations.` (was 2 before this slice).
+- `pnpm --filter @cia/back-office exec tsc --noEmit` — clean (no output).
+
+No backend changes ⇒ no need to re-run the cia-api failsafe suite. The IT baseline (274/0/0/1 from Session 115) is untouched.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Drift script | `cia-frontend/scripts/check-dto-drift.mjs` (renamed extractor + 2 new patterns + `parseObjectBody` + `findZodObjectBody`) |
+| Drift fixes — schema | `cia-frontend/packages/api-client/src/modules/audit.ts` (+ `reason` on AuditLogDtoSchema), `finance.ts` (+ 3 reversal fields on ReceiptDtoSchema), `reinsurance.ts` (`isLead` → `lead` on TreatyParticipantDtoSchema) |
+| Drift fix — consumer | `cia-frontend/apps/back-office/.../reinsurance/pages/treaties/TreatiesTab.tsx` (1-line rename) |
+| F6 mock opt-outs | `cia-frontend/apps/back-office/.../quotation/pages/detail/QuoteDetailPage.tsx`, `.../customers/pages/detail/CustomerDetailPage.tsx` (canonical `// allow-mock:` form) |
+| Docs | `cia-log.md` (this entry + F3 drained + F6 drained) |
+
+### Backlog reconciliation
+
+- **Removed**: F3, F6.
+- **Added**: none. The 3 surfaced drifts were fixed in-slice (not deferred to backlog); no new follow-ups surfaced.
+- **Net**: 15 → 13 rows. **First two-row decrement in the run** (most slices have been honest swaps or single drains). Possible because both rows were tightly scoped and the surfaced drifts were trivially fixable.
+
+### Known follow-ups (deliberately deferred)
+
+- **UI surfacing of new fields** — `AuditLogDto.reason` and `ReceiptDto.reversedAt` / `reversedBy` / `reversalReason` are now declared on the Dtos but not rendered anywhere in the UI. Audit log table could surface `reason` on DELETE rows; receipts table could show reversal metadata when `status === 'REVERSED'`. Small UX wins; defer to module-specific UI slices.
+- **`TreatyParticipantResponse` Lombok `boolean lead` naming** — the field name `lead` collides with English-language verb conjugation in code reviews. A separate slice could rename to `isLead` (with `@JsonProperty("isLead")` on the Lombok side) to align with conventional boolean naming. Today the frontend matches what the backend serializes, which is what matters for drift. No backlog row — purely stylistic.
 
 ---
 

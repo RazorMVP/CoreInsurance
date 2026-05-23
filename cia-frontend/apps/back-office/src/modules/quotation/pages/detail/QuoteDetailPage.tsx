@@ -20,9 +20,7 @@ import {
   MOCK_DISCOUNT_TYPES, MOCK_LOADING_TYPES, MOCK_QUOTE_CONFIG,
 } from '../../../setup/pages/policy-specs/quote-config-types';
 
-// ── Mock fallback (allow-mock: synthetic placeholders for /quotes/{id} when the
-//    backend doesn't have data for an id; same allow-mock pattern as
-//    CustomerDetailPage uses for its synthetic samples) ─────────────────────
+// allow-mock: fallback while useQuery is in flight or for unknown ids
 const MOCK_QUOTES: QuoteDto[] = [
   {
     id: 'q1', quoteNumber: 'QUO-2026-00001', status: 'APPROVED',

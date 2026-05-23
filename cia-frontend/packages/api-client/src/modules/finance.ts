@@ -81,6 +81,13 @@ export const ReceiptDtoSchema = z.object({
   chequeNumber:     z.string().nullable().optional(),
   narration:        z.string().nullable().optional(),
   postedBy:         z.string().nullable().optional(),
+  // Reversal metadata — set when status === 'REVERSED'. Surfaced by Session
+  // 116 (F3) extending the drift parser to zod-derived types; the fields have
+  // shipped from ReceiptResponse since the reversal flow landed but weren't
+  // declared on this Dto.
+  reversedAt:       z.string().nullable().optional(),
+  reversedBy:       z.string().nullable().optional(),
+  reversalReason:   z.string().nullable().optional(),
 });
 
 export type ReceiptDto = z.infer<typeof ReceiptDtoSchema>;

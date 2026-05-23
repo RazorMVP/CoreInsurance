@@ -157,7 +157,7 @@ export default function TreatiesTab() {
       cell: ({ row }) => (
         <div className="text-xs text-muted-foreground space-y-0.5">
           {row.original.participants.map(p => (
-            <p key={p.id}>{p.reinsuranceCompanyName} {p.sharePercentage}%{p.isLead ? ' (lead)' : ''}</p>
+            <p key={p.id}>{p.reinsuranceCompanyName} {p.sharePercentage}%{p.lead ? ' (lead)' : ''}</p>
           ))}
         </div>
       ),

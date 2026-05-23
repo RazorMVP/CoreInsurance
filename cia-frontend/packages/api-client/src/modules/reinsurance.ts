@@ -41,7 +41,11 @@ export const TreatyParticipantDtoSchema = z.object({
   reinsuranceCompanyName:   z.string(),
   sharePercentage:          z.number(),
   surplusLine:              z.number().nullable().optional(),
-  isLead:                   z.boolean(),
+  // Renamed from `isLead` in Session 116 (F3). Backend Lombok @Data on a
+  // `boolean lead` field publishes the JSON key as "lead" (field-name, not
+  // getter-name), so the previous frontend `isLead` was silent-drop drift —
+  // Jackson dropped it on POST and never delivered it on GET.
+  lead:                     z.boolean(),
   commissionRate:           z.number().nullable().optional(),
   createdAt:                z.string(),
 });
