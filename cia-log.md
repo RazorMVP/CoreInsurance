@@ -13,7 +13,6 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | ID | P | Item | Notes |
 |---|---|---|---|
 | F8 | P3 | zod `.email()` / `.url()` deprecation across back-office | Surfaced as IDE diagnostics during Session 113 (F4) — pre-existing on `main` since commit `0860b3a` (Session 98). zod v4 deprecates the `.string().email()` / `.string().url()` chain in favour of top-level `z.email()` / `z.url()`. 14 occurrences across `cia-frontend/apps/back-office/src/modules/` (and possibly more elsewhere). Mechanical sweep; no behaviour change. Defer until a session has bandwidth for cross-module touch. |
-| F1e-tenant-provisioning | P3 | Tenant Keycloak realm provisioning script | Session 118 documented that tenant realms need `UnmanagedAttributePolicy=ENABLED` on the user-profile config (the default `DISABLED` silently drops the implicit `accessGroupId` attribute that `UserService.create` writes, breaking the fanout). The IT harness sets this automatically; production tenants need an equivalent step. A future slice should add a tenant-provisioning automation that creates the realm + sets this policy + seeds any other realm-level defaults — replacing the current "manual ops" flow. CLAUDE.md → Tenant realm provisioning requirement now carries the inline `realm.users().userProfile()...` snippet. |
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
 | F7 | P3 | Flat receipts + payments inventory view dropped | Session 103 (F2) removed the "Receipts" + "Payments" sub-sections from ReceivablesTab + PayablesTab because backend has no `/api/v1/receipts` or `/api/v1/payments` flat list endpoint — receipts only exist nested under a debit-note (`/api/v1/debit-notes/{dnId}/receipts`), payments only under a credit-note. If a finance-level "show me all approved receipts this week" view is needed, add flat list controllers + ITs on the backend, then re-surface the sub-sections. Alternative: expose receipts + payments inside DebitNoteDetailDialog + CreditNoteDetailDialog so users can drill from the DN/CN inventory. `ReverseTransactionDialog` file kept in-tree (dead until either surface lands). |
 | D1 | P3 | Server-side date-range validation on CommissionSetupRequest | `@Future` / cross-field bean validation that effectiveTo ≥ effectiveFrom. Frontend zod refine covers the UX; server-side is correctness defence. |
@@ -23,6 +22,59 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | E1-test | P3 | MockMvc IT for `GlobalExceptionHandler` no-handler / no-resource branches | Session 115 added `NoHandlerFoundException` + `NoResourceFoundException` handlers to `GlobalExceptionHandler` (both return 404 with structured `ApiResponse.error("NOT_FOUND", ...)`). The handlers have no test today — `cia-common` has no MockMvc / `@WebMvcTest` scaffolding. A future slice should add one IT class exercising both branches (assert 404 on an unmapped path; assert response body shape matches `ApiResponse.error`). |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-23 — Session 119 (`main`): Backlog F1e-tenant-provisioning — KeycloakTenantBootstrap + provisioner + harness eats its own dog food
+
+Twenty-fifth slice under the Session 93 discipline rule. Closes the production gap S118 surfaced: tenant Keycloak realms need `UnmanagedAttributePolicy=ENABLED` on the user-profile config or the F1e-sync-AccessGroup-fanout silently fails. The IT harness handled this for tests; production tenants needed an equivalent step that ops would have had to remember manually for every new tenant.
+
+### What landed
+
+**`KeycloakTenantProvisioner` (`cia-setup/keycloak/`)** — new `@Service`, conditional on `cia.keycloak.admin.enabled=true`. Single public method `provisionTenantRealm(realmName)` that is idempotent:
+1. `ensureRealm` — creates the realm with `enabled=true` if missing; no-op otherwise.
+2. `ensureUnmanagedAttributePolicy` — reads the user-profile config; if the policy isn't already `ENABLED`, writes it back. Existing tenants get healed without a tear-down; never-existed-yet tenants get a clean greenfield setup.
+
+Encapsulation mirrors S114's `KeycloakRealmRoleSyncer` / S114's `KeycloakPasswordPolicySyncer`: every Keycloak admin-client type reference lives inside the provisioner. Callers see it as a plain Spring service.
+
+**`KeycloakTenantBootstrap` (`cia-setup/keycloak/`)** — `ApplicationRunner` that calls `provisionTargetRealm()` on app start. Conditional on the same property so it's absent in IT runs that disable admin. Failures are caught and logged at WARN — they must never block app boot. The rest of the application (everything that isn't Keycloak-touching) keeps serving while ops investigates.
+
+**Harness refactor — eat your own dog food.** `KeycloakItSupport.ensureTestRealm()` previously had its own copy of "create realm + set policy" code. S119 deletes that copy and delegates to the new `KeycloakTenantProvisioner`. The IT harness and production now exercise the EXACT same code path; any future realm invariant added to the provisioner is automatically picked up by the test suite. Inline `StaticObjectProviderForTests` keeps `KeycloakItSupport` self-contained (no extra test-package class needed for the wiring).
+
+**`KeycloakTenantProvisionerIT` (`cia-api/test/keycloak/`)** — 3 ITs against per-test fresh realm names so the assertions are unambiguous:
+- `createsMissingRealm` — sanity: realm doesn't exist; provisioner creates it; both realm-enabled and policy-enabled are asserted.
+- `healsExistingRealmPolicy` — pre-create a realm WITHOUT the policy (simulating a tenant realm created in the Keycloak console); assert the default policy is something other than ENABLED; run the provisioner; assert the policy is now ENABLED. **This is the production-fix proof** — what S118 said the system needed and what S119 actually delivers.
+- `idempotentReRun` — run the provisioner three times in a row; confirm nothing accumulates (exactly one realm exists, policy stays ENABLED).
+
+**Dev realm JSON cleanup.** `docker/keycloak/cia-realm.json` previously carried a `_comment_realm` field that Keycloak rejects on import (S118 finding #1). Dropped. Now any fresh dev Keycloak start successfully imports the cia realm; the application bootstrap on next boot then heals the user-profile policy.
+
+**CLAUDE.md** — Tenant realm provisioning requirement section rewritten from "Set via the admin API…" (manual ops) to "Automated by `KeycloakTenantBootstrap` on app startup." Documents the eat-your-own-dog-food relationship between the production provisioner and the test harness.
+
+### Verification
+
+- `mvn install -DskipTests -pl cia-api -am` — clean.
+- `mvn verify -pl cia-api` — `failsafe-summary.xml`: `<completed>288</completed> <errors>0</errors> <failures>0</failures> <skipped>1</skipped>`. **+3 ITs over S118's 285**, zero regression on the existing 285 (which includes 11 Keycloak ITs that all delegate through the new provisioner via the harness refactor).
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend — provisioner | `cia-setup/.../keycloak/KeycloakTenantProvisioner.java` (new), `KeycloakTenantBootstrap.java` (new) |
+| Tests — harness refactor | `cia-api/src/test/.../keycloak/KeycloakItSupport.java` (delegates to provisioner; inline `StaticObjectProviderForTests` adapter) |
+| Tests — new IT | `cia-api/src/test/.../keycloak/KeycloakTenantProvisionerIT.java` (3 tests) |
+| Ops — dev realm | `docker/keycloak/cia-realm.json` (removed `_comment_realm` — Keycloak rejects it) |
+| Docs | `CLAUDE.md` (Tenant realm provisioning requirement section rewritten), `cia-log.md` (this entry + F1e-tenant-provisioning drained) |
+
+### Backlog reconciliation
+
+- **Removed**: F1e-tenant-provisioning.
+- **Added**: none. The slice's full scope was delivered: provisioner, startup wiring, IT coverage, harness refactor, dev-realm cleanup, docs update. No new follow-ups surfaced.
+- **Net**: 9 → 8 rows.
+
+### Known follow-ups (deliberately deferred)
+
+- **Full multi-tenant onboarding API** — PRD describes a "super-admin admin API" that does ALL five tenant-provisioning steps (Keycloak realm + Postgres schema + Flyway + seed data + per-tenant config). This slice covers the Keycloak realm step only because that was the immediate F1e-tenant-provisioning blocker. The other four steps remain manual ops; full automation is a multi-slice initiative that needs design first (auth model for super-admin, audit, idempotency across the chain). No backlog row added — too speculative until the first multi-tenant deployment forces the design.
+- **Realm seed data via the provisioner** — `provisionTenantRealm` doesn't currently seed default client scopes, identity-provider config, or login-flow customisation. As the application grows realm-level invariants (e.g. MFA enforcement, custom themes), they slot into the provisioner alongside the user-profile policy. Single-method-per-invariant pattern keeps the slice growth bounded.
 
 ---
 

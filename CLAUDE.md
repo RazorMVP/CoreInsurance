@@ -394,7 +394,7 @@ Super-admin creates tenant (admin API or super-admin console):
 9. Hibernate routes all queries to the correct tenant schema for that thread
 ```
 
-**Tenant realm provisioning requirement (Session 118).** Tenant Keycloak realms must have `UnmanagedAttributePolicy=ENABLED` on the user-profile config. Without it, the implicit `accessGroupId` attribute that `UserService.create` writes is silently dropped by Keycloak's default `DISABLED` policy, and the F1e-sync-AccessGroup-fanout cannot find users to re-sync when an access group's permissions change. Set via the admin API: `realm.users().userProfile().getConfiguration().setUnmanagedAttributePolicy(ENABLED)` then `realm.users().userProfile().update(config)`. The Testcontainers IT harness (`KeycloakItSupport.ensureTestRealm`) does this automatically for tests.
+**Tenant realm provisioning (S118 → S119).** Tenant Keycloak realms must have `UnmanagedAttributePolicy=ENABLED` on the user-profile config — without it, Keycloak 24's default `DISABLED` policy silently drops the `accessGroupId` attribute `UserService.create` writes, breaking the F1e-sync-AccessGroup-fanout. As of S119, this is **automated by `KeycloakTenantBootstrap`** (an `ApplicationRunner` in `cia-setup/keycloak/`) which runs on every application startup when `cia.keycloak.admin.enabled=true`: it ensures the target realm exists and that `UnmanagedAttributePolicy=ENABLED` is set, idempotently. Operations no longer need a separate provisioning step — restart the app and the realm config heals. The Testcontainers IT harness (`KeycloakItSupport.ensureTestRealm`) delegates to the same `KeycloakTenantProvisioner` so tests and production exercise identical code.
 
 **RBAC mapping:**
 

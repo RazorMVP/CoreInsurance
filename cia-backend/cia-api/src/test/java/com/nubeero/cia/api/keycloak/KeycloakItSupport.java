@@ -1,16 +1,15 @@
 package com.nubeero.cia.api.keycloak;
 
+import com.nubeero.cia.setup.keycloak.KeycloakTenantProvisioner;
+import com.nubeero.cia.setup.user.KeycloakAdminProperties;
 import dasniko.testcontainers.keycloak.KeycloakContainer;
 import org.keycloak.admin.client.Keycloak;
-import org.keycloak.representations.idm.RealmRepresentation;
-import org.keycloak.representations.userprofile.config.UPConfig;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import jakarta.ws.rs.NotFoundException;
 import java.time.Duration;
 
 /**
@@ -110,29 +109,42 @@ public abstract class KeycloakItSupport {
         // already returns 200. Polling until the first request succeeds is
         // cheaper than over-tuning the container's wait strategy.
         Keycloak admin = pollUntilAdminReady();
-        try {
-            admin.realm(TEST_REALM).toRepresentation();
-        } catch (NotFoundException nfe) {
-            RealmRepresentation rep = new RealmRepresentation();
-            rep.setRealm(TEST_REALM);
-            rep.setEnabled(true);
-            admin.realms().create(rep);
-        }
 
-        // Keycloak 24's default UnmanagedAttributePolicy=DISABLED silently
-        // drops any user attribute that isn't declared in the user-profile
-        // schema — including {@code accessGroupId} which UserService writes
-        // on every user create. With DISABLED, the attribute round-trip
-        // through Keycloak fails (the value is accepted on POST but stored
-        // as null), which breaks the F1e-sync-AccessGroup-fanout query.
-        // Set to ENABLED so unmanaged attributes survive write + read.
-        // Production tenants need the same setting — flagged in the
-        // session entry's "Known follow-ups" for ops documentation.
-        UPConfig upc = admin.realm(TEST_REALM).users().userProfile().getConfiguration();
-        if (upc.getUnmanagedAttributePolicy() != UPConfig.UnmanagedAttributePolicy.ENABLED) {
-            upc.setUnmanagedAttributePolicy(UPConfig.UnmanagedAttributePolicy.ENABLED);
-            admin.realm(TEST_REALM).users().userProfile().update(upc);
-        }
+        // S119: delegate to the production provisioner — same code path
+        // that runs at application startup, so the harness gets exactly
+        // the realm config that production tenants get. Eats its own dog
+        // food; future required-realm-invariants (custom attributes,
+        // default client scopes, etc.) are picked up automatically.
+        KeycloakAdminProperties props = new KeycloakAdminProperties();
+        props.setEnabled(true);
+        props.setServerUrl(KEYCLOAK.getAuthServerUrl());
+        props.setAdminRealm("master");
+        props.setClientId("admin-cli");
+        props.setUsername(KEYCLOAK.getAdminUsername());
+        props.setPassword(KEYCLOAK.getAdminPassword());
+        props.setTargetRealm(TEST_REALM);
+
+        new KeycloakTenantProvisioner(new StaticObjectProviderForTests<>(admin), props)
+                .provisionTenantRealm(TEST_REALM);
+    }
+
+    /**
+     * Inline minimal {@link org.springframework.beans.factory.ObjectProvider}
+     * adapter — same as the test-package {@code StaticObjectProvider}, kept
+     * here to keep {@link KeycloakItSupport} self-contained (the provisioner
+     * is part of production code; this adapter is the test-only wiring
+     * needed to construct it without a Spring context).
+     */
+    private static final class StaticObjectProviderForTests<T>
+            implements org.springframework.beans.factory.ObjectProvider<T> {
+        private final T value;
+        StaticObjectProviderForTests(T value) { this.value = value; }
+        @Override public T getObject()                  { return value; }
+        @Override public T getObject(Object... args)    { return value; }
+        @Override public T getIfAvailable()             { return value; }
+        @Override public T getIfUnique()                { return value; }
+        @Override public java.util.stream.Stream<T> stream()        { return java.util.stream.Stream.of(value); }
+        @Override public java.util.stream.Stream<T> orderedStream() { return java.util.stream.Stream.of(value); }
     }
 
     private static Keycloak pollUntilAdminReady() {

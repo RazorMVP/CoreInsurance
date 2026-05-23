@@ -7,7 +7,6 @@
   "rememberMe": false,
   "verifyEmail": false,
   "resetPasswordAllowed": true,
-  "_comment_realm": "Dev-only realm import. UserService creates users + roles here at runtime; we ship an empty realm rather than pre-seeded fixtures so the dev experience matches a fresh tenant. Master admin (admin/admin) drives the UserService admin client via password grant against admin-cli.",
   "roles": {
     "realm": []
   }
