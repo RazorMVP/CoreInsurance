@@ -1,6 +1,7 @@
 package com.nubeero.cia.setup.product.dto;
 
 import com.nubeero.cia.setup.product.CommissionSourceType;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
@@ -24,4 +25,9 @@ public class CommissionSetupRequest {
     private LocalDate effectiveFrom;
 
     private LocalDate effectiveTo;
+
+    @AssertTrue(message = "effectiveTo must be on or after effectiveFrom")
+    public boolean isDateRangeValid() {
+        return effectiveTo == null || effectiveFrom == null || !effectiveTo.isBefore(effectiveFrom);
+    }
 }
