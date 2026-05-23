@@ -12,4 +12,6 @@ public interface RelationshipManagerRepository extends JpaRepository<Relationshi
     Page<RelationshipManager> findAllByDeletedAtIsNull(Pageable pageable);
 
     List<RelationshipManager> findAllByBranchIdAndDeletedAtIsNull(UUID branchId);
+
+    long countByBranchIdAndDeletedAtIsNull(UUID branchId);
 }

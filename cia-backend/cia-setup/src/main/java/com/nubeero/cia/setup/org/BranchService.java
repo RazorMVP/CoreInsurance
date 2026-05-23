@@ -2,6 +2,7 @@ package com.nubeero.cia.setup.org;
 
 import com.nubeero.cia.common.audit.AuditAction;
 import com.nubeero.cia.common.audit.AuditService;
+import com.nubeero.cia.common.exception.ResourceInUseException;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import com.nubeero.cia.setup.org.dto.BranchRequest;
 import com.nubeero.cia.setup.org.dto.BranchResponse;
@@ -19,6 +20,7 @@ public class BranchService {
 
     private final BranchRepository repository;
     private final SbuRepository sbuRepository;
+    private final RelationshipManagerRepository relationshipManagerRepository;
     private final AuditService auditService;
 
     @Transactional(readOnly = true)
@@ -59,6 +61,17 @@ public class BranchService {
     @Transactional
     public void delete(UUID id, String reason) {
         Branch entity = findOrThrow(id);
+
+        // FK-cascade-awareness — PostgreSQL's FK constraints don't know about
+        // `deleted_at IS NULL`, so we have to enforce "no active references"
+        // application-side. Without this, soft-deleting a Branch leaves orphan
+        // RelationshipManager rows pointing at a tombstoned parent — the RM
+        // listing then renders a soft-deleted branch name.
+        long activeRmCount = relationshipManagerRepository.countByBranchIdAndDeletedAtIsNull(id);
+        if (activeRmCount > 0) {
+            throw new ResourceInUseException("Branch", id, "RelationshipManager", activeRmCount);
+        }
+
         entity.softDelete();
         repository.save(entity);
         auditService.logWithReason("Branch", id.toString(), AuditAction.DELETE, entity, null, reason);

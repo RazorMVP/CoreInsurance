@@ -12,12 +12,80 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 | ID | P | Item | Notes |
 |---|---|---|---|
-| F8 | P3 | zod `.email()` / `.url()` deprecation across back-office | Surfaced as IDE diagnostics during Session 113 (F4) — pre-existing on `main` since commit `0860b3a` (Session 98). zod v4 deprecates the `.string().email()` / `.string().url()` chain in favour of top-level `z.email()` / `z.url()`. 14 occurrences across `cia-frontend/apps/back-office/src/modules/` (and possibly more elsewhere). Mechanical sweep; no behaviour change. Defer until a session has bandwidth for cross-module touch. |
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
 | F7 | P3 | Flat receipts + payments inventory view dropped | Session 103 (F2) removed the "Receipts" + "Payments" sub-sections from ReceivablesTab + PayablesTab because backend has no `/api/v1/receipts` or `/api/v1/payments` flat list endpoint — receipts only exist nested under a debit-note (`/api/v1/debit-notes/{dnId}/receipts`), payments only under a credit-note. If a finance-level "show me all approved receipts this week" view is needed, add flat list controllers + ITs on the backend, then re-surface the sub-sections. Alternative: expose receipts + payments inside DebitNoteDetailDialog + CreditNoteDetailDialog so users can drill from the DN/CN inventory. `ReverseTransactionDialog` file kept in-tree (dead until either surface lands). |
-| E3 | P3 | RelationshipManager.branch FK-cascade-awareness | Branch deletion doesn't 409 if RMs reference it; listing then shows soft-deleted branch name. Defensive only. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-23 — Session 122 (`main`): Backlog F8 + E3 — zod v4 sweep + Branch FK-cascade-awareness
+
+Twenty-eighth slice under the Session 93 discipline rule. The user picked the F8 → E3 pair as two independent P3 rows in sequence — both are defensive / cosmetic, neither chained the other. F8 was a pure mechanical sweep (frontend, zod API migration); E3 was a small service-layer correctness fix (backend, FK-cascade-awareness). Drained both in this single session entry to keep the per-session granularity sensible.
+
+### F8 — `z.string().email()` / `.url()` → `z.email()` / `z.url()` (zod v4)
+
+13 files touched, 14 lines changed (`CompanySettingsPage` carries both `.email` and `.url`). zod 4.3.6 added top-level `z.email()` and `z.url()` that return `ZodEmail` / `ZodURL` instead of `ZodString`; the chain forms are deprecated as compatibility shims. Behaviour is identical — `.optional()` / `.or(z.literal(''))` compose the same way, empty strings still rejected.
+
+| File | Diff |
+|---|---|
+| 7 organisations sheets — Agent / Adjuster / Broker / Insurer / Reinsurer / RelationshipManager / Surveyor | `z.string().email().optional().or(z.literal(''))` → `z.email().optional().or(z.literal(''))` |
+| 3 customer flows — IndividualOnboardingSheet, CorporateOnboardingSheet, EditCustomerSheet | `z.string().email('Invalid email')` → `z.email('Invalid email')` (with / without `.or`) |
+| Setup UserSheet | same as above |
+| Setup CompanySettingsPage | both `.email` and `.url`, both with positional message arg |
+| Reinsurance AddInwardFACSheet | `contactEmail` |
+
+Verification: `tsc --noEmit` clean; `check-dto-drift.mjs` clean (93 Dtos, 25 skipped); `check-api-wiring.sh` clean; grep for any residual `.string().email` / `.string().url` returns nothing.
+
+### E3 — `BranchService.delete` now denies if active `RelationshipManager`s reference the branch
+
+Three pieces:
+
+1. **`ResourceInUseException` (new, `cia-common.exception`)** — extends `CiaException` with HTTP **409 CONFLICT** + error code `RESOURCE_IN_USE`. Constructor `(resourceType, id, referencedBy, count)` builds a message like `"Cannot delete Branch <id>: 3 active RelationshipManager(s) reference it"`. 409 (not 422) because the request entity is well-formed; it's the *server state* that blocks the operation.
+2. **`RelationshipManagerRepository.countByBranchIdAndDeletedAtIsNull(UUID)`** — strictly better than the existing `findAllByBranchIdAndDeletedAtIsNull` for the cascade-check path (no entity hydration; pure `SELECT COUNT(*) WHERE ...`).
+3. **`BranchService.delete` cascade check** — runs the count before the soft-delete write; if non-zero, throws `ResourceInUseException` with the count; if zero, proceeds with `softDelete()` + audit log as before.
+
+**Why application-layer?** PostgreSQL's FK constraints don't honour `deleted_at IS NULL` — a foreign key pointing to a soft-deleted row is still valid by the DB's lights. The "this Branch is in active use" semantic is purely application-defined, so the check must live in service code before the soft-delete write.
+
+**Unit test** (`cia-setup/src/test/.../org/BranchServiceDeleteTest.java`, 3 tests, ~0.6s) — Mockito-only, mirrors `CommissionSetupRequestValidationTest`'s "fast unit test alongside the production module" pattern. A full Testcontainers IT would prove the same property at much higher cost; the boundary being tested is purely application-layer.
+
+| Test | What it pins |
+|---|---|
+| `delete_whenNoActiveRms_softDeletes` | Happy path — count=0 ⇒ soft-delete fires, audit log written |
+| `delete_whenActiveRmsExist_throwsResourceInUse` | Count=3 ⇒ exception thrown with `RESOURCE_IN_USE` code, 409 status, message contains both ID and count; **NO state mutation** (no `save`, no audit log) |
+| `delete_whenOnlySoftDeletedRmsExist_softDeletes` | Boundary — `countByBranchIdAndDeletedAtIsNull` excludes soft-deleted RMs by name, so a branch whose only RM refs are themselves soft-deleted is freely deletable |
+
+Frontend isn't touched — the existing `ConfirmDeleteDialog` + `useDeleteWithReason` flow runs through React Query's `onError`, and `GlobalExceptionHandler` produces a structured `ApiResponse.error(...)` body, so a 409 surfaces as a normal error toast with the readable message. No UX hand-off needed for the defensive case.
+
+### Verification
+
+- `mvn install -DskipTests -pl cia-setup -am` — clean.
+- `mvn -pl cia-setup test -Dtest=BranchServiceDeleteTest` — 3/3 in 0.592s.
+- `mvn -pl cia-setup test` — 13/13 (10 pre-existing + 3 new), zero regression.
+- `pnpm --filter @cia/back-office exec tsc --noEmit` (F8 step) — clean.
+- No cia-api IT exercises Branch delete (grep confirmed) ⇒ Session 119's failsafe baseline (288/0/0/1) untouched.
+
+### Files touched
+
+| Layer | Files |
+|---|---|
+| Backend — exception | `cia-common/.../exception/ResourceInUseException.java` (new) |
+| Backend — repository | `cia-setup/.../org/RelationshipManagerRepository.java` (added `countByBranchIdAndDeletedAtIsNull`) |
+| Backend — service | `cia-setup/.../org/BranchService.java` (cascade check in `delete`) |
+| Backend — test | `cia-setup/src/test/.../org/BranchServiceDeleteTest.java` (new — 3 Mockito unit tests) |
+| Frontend — zod sweep | 13 files (see F8 table above) |
+| Docs | `cia-log.md` (this entry + F8 + E3 drained) |
+
+### Backlog reconciliation
+
+- **Removed**: F8, E3.
+- **Added**: none. Both rows landed cleanly; F8 was strictly mechanical, E3's broaden-to-include-`ResourceInUseException` was in-scope from the start (the new error condition needs its own exception type and HTTP status — not abstraction-for-its-own-sake).
+- **Net**: 4 → 2 rows. Final remaining: **B2** (RM commission via 2520 — needs design conversation first) and **F7** (flat receipts/payments inventory view — needs new backend flat-list endpoints first). Both blocked on out-of-slice prerequisites; no actionable items remain in the canonical backlog without surfacing new work.
+
+### Known follow-ups (deliberately deferred)
+
+- **FK-cascade-awareness audit across other master-data delete paths.** E3 covers Branch → RM. The same pattern applies to every soft-deletable master-data entity that's referenced elsewhere (Product → Policy, Broker → Customer, Sbu → Branch, ClassOfBusiness → Product, etc.). A systematic sweep would surface all such gaps and apply `ResourceInUseException` uniformly. Not added to backlog as a row yet because the right shape may be a generic protected helper on a `MasterDataService` base class rather than per-service copy-paste — that design decision needs its own brief slice.
+- **`z.email()` / `z.url()` positional string message form is itself a v4 deprecation.** The IDE hint fires on `z.email('Invalid email')` because the positional string form is a compatibility shim too; the v4-canonical form is `z.email({ error: 'Invalid email' })`. `tsc --noEmit` doesn't surface this as an error (severity Hint), so left as-is for now — re-running the sweep with the options-object form is a second, smaller pass when the IDE noise becomes annoying.
 
 ---
 
