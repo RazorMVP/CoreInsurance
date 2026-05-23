@@ -4,6 +4,7 @@ import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import com.nubeero.cia.setup.access.AccessGroup;
 import com.nubeero.cia.setup.access.AccessGroupRepository;
+import com.nubeero.cia.setup.keycloak.KeycloakRealmRoleSyncer;
 import com.nubeero.cia.setup.user.dto.UserRequest;
 import com.nubeero.cia.setup.user.dto.UserResponse;
 import jakarta.ws.rs.NotFoundException;
@@ -49,9 +50,18 @@ public class UserService {
     /** Keycloak user attribute key carrying the access-group FK. */
     private static final String ATTR_ACCESS_GROUP_ID = "accessGroupId";
 
-    private final ObjectProvider<Keycloak>  keycloak;
-    private final KeycloakAdminProperties   props;
-    private final AccessGroupRepository     accessGroupRepository;
+    private final ObjectProvider<Keycloak>                  keycloak;
+    private final KeycloakAdminProperties                   props;
+    private final AccessGroupRepository                     accessGroupRepository;
+    /**
+     * F1e-sync delegate. Declared as {@link ObjectProvider} so that when the
+     * underlying bean isn't a candidate (e.g. {@code cia.keycloak.admin.enabled=false}
+     * in tests), the field value is an empty provider rather than a missing
+     * bean injection failure. Type is intentionally the syncer class — not
+     * any Keycloak admin-client type — to keep new Keycloak symbols out of
+     * {@code UserService}'s bytecode (avoids the Session 112 regression).
+     */
+    private final ObjectProvider<KeycloakRealmRoleSyncer>   roleSyncer;
 
     public List<UserResponse> list() {
         List<UserRepresentation> reps = realm().users().list();
@@ -97,6 +107,7 @@ public class UserService {
             } catch (Exception e) {
                 log.warn("Welcome email failed for user {}: {}", createdId, e.getMessage());
             }
+            syncRealmRoles(createdId, group);
             return toResponse(realm().users().get(createdId).toRepresentation());
         }
     }
@@ -121,6 +132,7 @@ public class UserService {
         rep.setAttributes(attrs);
 
         resource.update(rep);
+        syncRealmRoles(id, group);
         return toResponse(resource.toRepresentation());
     }
 
@@ -140,6 +152,19 @@ public class UserService {
     }
 
     // ─── Internals ────────────────────────────────────────────────────────
+
+    /**
+     * F1e-sync delegation hook. No-ops when the Keycloak admin client is
+     * disabled (test / dev-without-Keycloak). Failures inside the syncer
+     * are swallowed by the syncer itself — the DB record is the source of
+     * truth and the next user-mutation will re-attempt the realm sync.
+     */
+    private void syncRealmRoles(String userId, AccessGroup group) {
+        KeycloakRealmRoleSyncer s = roleSyncer.getIfAvailable();
+        if (s != null) {
+            s.syncFor(userId, group);
+        }
+    }
 
     private UserResponse setEnabled(String id, boolean enabled) {
         UserResource resource = findOrThrow(id);

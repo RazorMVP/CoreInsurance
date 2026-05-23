@@ -4,7 +4,9 @@ import com.nubeero.cia.common.audit.AuditAction;
 import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.setup.company.dto.PasswordPolicyRequest;
 import com.nubeero.cia.setup.company.dto.PasswordPolicyResponse;
+import com.nubeero.cia.setup.keycloak.KeycloakPasswordPolicySyncer;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,8 +33,17 @@ public class PasswordPolicyService {
     static final int     DEFAULT_EXPIRY_DAYS        = 90;
     static final int     DEFAULT_MAX_FAILED         = 5;
 
-    private final PasswordPolicyRepository repository;
-    private final AuditService             auditService;
+    private final PasswordPolicyRepository                      repository;
+    private final AuditService                                  auditService;
+    /**
+     * F4-sync delegate. {@link ObjectProvider} so that when the underlying
+     * bean is absent (test / dev-without-Keycloak), the field value is an
+     * empty provider rather than a missing-bean injection failure. Type is
+     * intentionally the syncer class — not any Keycloak admin-client type —
+     * to keep Keycloak symbols out of {@code PasswordPolicyService}'s
+     * bytecode (parallel to the F1e-sync encapsulation in {@code UserService}).
+     */
+    private final ObjectProvider<KeycloakPasswordPolicySyncer>  policySyncer;
 
     @Transactional(readOnly = true)
     public PasswordPolicyResponse get() {
@@ -59,6 +70,16 @@ public class PasswordPolicyService {
         PasswordPolicy saved = repository.save(policy);
         AuditAction action = isNew ? AuditAction.CREATE : AuditAction.UPDATE;
         auditService.log("PasswordPolicy", saved.getId().toString(), action, null, saved);
+
+        // F4-sync delegation. No-ops when the syncer bean isn't a candidate
+        // (cia.keycloak.admin.enabled=false). Failures inside the syncer are
+        // swallowed there — DB record is the source of truth and the next
+        // upsert re-attempts the realm write.
+        KeycloakPasswordPolicySyncer s = policySyncer.getIfAvailable();
+        if (s != null) {
+            s.sync(saved);
+        }
+
         return toResponse(saved);
     }
 
