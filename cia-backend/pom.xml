@@ -74,6 +74,13 @@
       managed version so first-declaration-wins ordering takes effect.
     -->
     <byte-buddy.version>1.15.11</byte-buddy.version>
+    <!--
+      Keycloak admin client — used by cia-setup UserService to proxy user
+      CRUD + reset-password + activate/deactivate against Keycloak. 26.x
+      tracks the running Keycloak server version per docker-compose
+      (keycloak:24+; admin-client maintains backwards compatibility).
+    -->
+    <keycloak-admin-client.version>26.0.2</keycloak-admin-client.version>
   </properties>
 
   <dependencyManagement>
@@ -234,6 +241,13 @@
         <version>${aws-sdk.version}</version>
         <type>pom</type>
         <scope>import</scope>
+      </dependency>
+
+      <!-- ── Keycloak admin client ──────────────────────────────────── -->
+      <dependency>
+        <groupId>org.keycloak</groupId>
+        <artifactId>keycloak-admin-client</artifactId>
+        <version>${keycloak-admin-client.version}</version>
       </dependency>
 
       <!-- ── Bucket4j rate limiting ─────────────────────────────────── -->

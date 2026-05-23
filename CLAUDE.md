@@ -1072,6 +1072,10 @@ node cia-frontend/scripts/check-dto-drift.mjs
 | `REDIS_URL` | Redis connection (partner rate limiting) | env / vault |
 | `WEBHOOK_SIGNING_SECRET` | Default HMAC-SHA256 key for webhook payloads | env / vault |
 | `PII_ENCRYPTION_KEY` | pgcrypto symmetric key for NDPR PII encryption (`id_number`, `id_document_url`, `address` on customers + directors). Loss = unrecoverable customer PII. Recommended: 32+ random bytes, base64-encoded. | env / vault |
+| `KEYCLOAK_ADMIN_ENABLED` | Master switch for the Module 1 UserController Keycloak admin proxy. `false` in dev when no Keycloak is running — UserController returns 503 with a clear message. Set `true` in prod. | env |
+| `KEYCLOAK_ADMIN_CLIENT_ID` | Service-account client id used by the admin proxy (must have the `realm-management` composite role on the target realm). | env / vault |
+| `KEYCLOAK_ADMIN_CLIENT_SECRET` | Service-account client secret. Pair with `KEYCLOAK_ADMIN_CLIENT_ID`. | env / vault |
+| `KEYCLOAK_ADMIN_REALM` | Realm the admin client authenticates against. Defaults to `master` — that's where service accounts typically live. | env |
 
 **Frontend environment variables (Vite — prefix `VITE_`):**
 

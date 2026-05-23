@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import {
-  Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
-  EmptyState, PageHeader, Skeleton,
+  Badge, Button, ConfirmDeleteDialog, DataTable, DataTableColumnHeader, DataTableRowActions,
+  EmptyState, PageHeader, Skeleton, toast,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type UserDto } from '@cia/api-client';
 import UserSheet from './UserSheet';
 
@@ -15,8 +15,13 @@ const statusVariant: Record<UserDto['status'], 'active' | 'rejected' | 'draft'> 
 };
 
 export default function UsersPage() {
+  const queryClient = useQueryClient();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing,   setEditing]   = useState<UserDto | null>(null);
+  // Deactivate confirmation — destructive enough to warrant the standard
+  // ConfirmDeleteDialog UX (reason captured + recorded in audit log via the
+  // backend's POST /deactivate handler).
+  const [deactivateTarget, setDeactivateTarget] = useState<UserDto | null>(null);
 
   const usersQuery = useQuery<UserDto[]>({
     queryKey: ['setup', 'users'],
@@ -26,6 +31,50 @@ export default function UsersPage() {
     },
   });
   const users = usersQuery.data ?? [];
+
+  // Send Keycloak's UPDATE_PASSWORD action email. No body needed — the
+  // backend triggers Keycloak's own reset flow.
+  const resetPassword = useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.post(`/api/v1/setup/users/${id}/reset-password`);
+    },
+    onSuccess: () => {
+      toast({ title: 'Password-reset email sent' });
+    },
+    onError: () => {
+      toast({ variant: 'destructive', title: 'Could not send reset email' });
+    },
+  });
+
+  // Deactivate / re-activate the Keycloak user. The reason is captured for
+  // audit but not required by the backend endpoint today (logged to local
+  // audit only; Keycloak's own audit captures the enabled=false event).
+  const deactivate = useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.post(`/api/v1/setup/users/${id}/deactivate`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['setup', 'users'] });
+      toast({ title: 'User deactivated' });
+      setDeactivateTarget(null);
+    },
+    onError: () => {
+      toast({ variant: 'destructive', title: 'Could not deactivate user' });
+    },
+  });
+
+  const activate = useMutation({
+    mutationFn: async (id: string) => {
+      await apiClient.post(`/api/v1/setup/users/${id}/activate`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['setup', 'users'] });
+      toast({ title: 'User re-activated' });
+    },
+    onError: () => {
+      toast({ variant: 'destructive', title: 'Could not re-activate user' });
+    },
+  });
 
   function openCreate() { setEditing(null); setSheetOpen(true); }
   function openEdit(u: UserDto) { setEditing(u); setSheetOpen(true); }
@@ -61,18 +110,21 @@ export default function UsersPage() {
     },
     {
       id: 'actions',
-      cell: ({ row }) => (
-        <DataTableRowActions
-          row={row}
-          actions={[
-            { label: 'Edit', onClick: (r) => openEdit(r.original) },
-            // Reset password + Deactivate require backend endpoints that don't
-            // exist yet — no UserController in cia-setup. Backlog F1e tracks
-            // the full UserController gap (the whole UsersPage 404s today;
-            // page degrades to "No users yet" empty state).
-          ]}
-        />
-      ),
+      cell: ({ row }) => {
+        const isActive = row.original.status === 'ACTIVE';
+        return (
+          <DataTableRowActions
+            row={row}
+            actions={[
+              { label: 'Edit',           onClick: (r) => openEdit(r.original) },
+              { label: 'Reset password', onClick: (r) => resetPassword.mutate(r.original.id) },
+              isActive
+                ? { label: 'Deactivate', onClick: (r: { original: UserDto }) => setDeactivateTarget(r.original), separator: true, className: 'text-destructive' }
+                : { label: 'Activate',   onClick: (r: { original: UserDto }) => activate.mutate(r.original.id), separator: true },
+            ]}
+          />
+        );
+      },
     },
   ];
 
@@ -105,6 +157,14 @@ export default function UsersPage() {
         onOpenChange={setSheetOpen}
         user={editing}
         onSuccess={() => setSheetOpen(false)}
+      />
+      <ConfirmDeleteDialog
+        open={deactivateTarget !== null}
+        onOpenChange={(v) => { if (!v) setDeactivateTarget(null); }}
+        entityLabel="Deactivate user"
+        entityName={deactivateTarget ? `${deactivateTarget.firstName} ${deactivateTarget.lastName}` : undefined}
+        busy={deactivate.isPending}
+        onConfirm={() => { if (deactivateTarget) deactivate.mutate(deactivateTarget.id); }}
       />
     </div>
   );

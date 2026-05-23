@@ -117,6 +117,24 @@ cia:
     # Recommended: 32+ random bytes, base64-encoded.
     pii-key: ${PII_ENCRYPTION_KEY:dev-pii-key-do-not-use-in-prod-CHANGE-ME}
 
+  keycloak:
+    # Admin-client config for UserService (Module 1 Users page). The admin
+    # client authenticates with service-account credentials against the
+    # `master` realm, then performs user CRUD against the tenant realm
+    # configured below. Disable in dev when no Keycloak instance is running —
+    # UserController returns 503 SERVICE_UNAVAILABLE with a clear message.
+    admin:
+      enabled:       ${KEYCLOAK_ADMIN_ENABLED:false}
+      server-url:    ${KEYCLOAK_URL:http://localhost:8280}
+      admin-realm:   ${KEYCLOAK_ADMIN_REALM:master}
+      client-id:     ${KEYCLOAK_ADMIN_CLIENT_ID:admin-cli}
+      client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:}
+      # Realm operated on for user CRUD. Mirrors spring.security.oauth2's
+      # KEYCLOAK_REALM. When realm-per-tenant lands (PRD multi-tenant model),
+      # this becomes a TenantContext-derived lookup; today it's a single
+      # shared realm matching the application's resource-server config.
+      target-realm:  ${KEYCLOAK_REALM:cia}
+
 springdoc:
   api-docs:
     path: /partner/v3/api-docs
