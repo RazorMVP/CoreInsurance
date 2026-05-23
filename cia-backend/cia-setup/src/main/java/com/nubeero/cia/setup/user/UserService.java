@@ -3,7 +3,6 @@ package com.nubeero.cia.setup.user;
 import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import com.nubeero.cia.setup.access.AccessGroup;
-import com.nubeero.cia.setup.access.AccessGroupPermission;
 import com.nubeero.cia.setup.access.AccessGroupRepository;
 import com.nubeero.cia.setup.user.dto.UserRequest;
 import com.nubeero.cia.setup.user.dto.UserResponse;
@@ -12,20 +11,16 @@ import jakarta.ws.rs.core.Response;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.keycloak.admin.client.Keycloak;
-import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.admin.client.resource.UserResource;
-import org.keycloak.representations.idm.RoleRepresentation;
+import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -92,13 +87,6 @@ public class UserService {
             }
 
             String createdId = extractIdFromLocation(response);
-
-            // Sync realm roles for the assigned access group. New users have
-            // no roles by default — applying the group's permissions here is
-            // what makes Spring @PreAuthorize actually grant access on the
-            // user's first sign-in. (Backlog F1e-sync.)
-            syncRealmRoles(realm().users().get(createdId), group);
-
             // Send Keycloak's own action-required email so the user sets
             // their password + verifies email on first sign-in. Failure is
             // non-fatal — the user can still be administered, just without
@@ -129,19 +117,10 @@ public class UserService {
         AccessGroup group = resolveGroup(request.getAccessGroupId());
         Map<String, List<String>> attrs = rep.getAttributes() == null
                 ? new HashMap<>() : new HashMap<>(rep.getAttributes());
-        // Capture the previous accessGroupId before overwriting so we can
-        // skip role-sync when nothing changed (avoids a Keycloak round-trip
-        // per save on profile-only edits).
-        String previousGroupId = firstAttr(rep, ATTR_ACCESS_GROUP_ID);
         attrs.put(ATTR_ACCESS_GROUP_ID, List.of(group.getId().toString()));
         rep.setAttributes(attrs);
 
         resource.update(rep);
-
-        boolean groupChanged = !group.getId().toString().equals(previousGroupId);
-        if (groupChanged) {
-            syncRealmRoles(resource, group);
-        }
         return toResponse(resource.toRepresentation());
     }
 
@@ -161,97 +140,6 @@ public class UserService {
     }
 
     // ─── Internals ────────────────────────────────────────────────────────
-
-    /**
-     * Backlog F1e-sync. Replace the user's realm roles with exactly the set
-     * implied by their access group's permissions. Permission names map 1:1
-     * onto realm role names (the JwtAuthConverter prefixes {@code ROLE_}
-     * before Spring's {@code hasRole(...)} matches, so a permission like
-     * {@code SETUP_VIEW} drives a {@code @PreAuthorize("hasRole('SETUP_VIEW')")}
-     * check against a Keycloak realm role of the same name).
-     *
-     * <p>Missing realm roles are auto-created on demand. The access group is
-     * the source of truth — if a permission lands in the DB that doesn't
-     * have a corresponding Keycloak role, we create it rather than 500.
-     *
-     * <p>Diff strategy: compute (desired, current); remove (current - desired),
-     * add (desired - current). Idempotent — re-running with no group change
-     * is a no-op.
-     */
-    private void syncRealmRoles(UserResource user, AccessGroup group) {
-        RealmResource realm = realm();
-        Set<String> desired = group.getPermissions().stream()
-                .filter(p -> p.getDeletedAt() == null)
-                .map(AccessGroupPermission::getPermission)
-                .collect(Collectors.toCollection(HashSet::new));
-
-        List<RoleRepresentation> currentRoles = user.roles().realmLevel().listAll();
-        Set<String> current = currentRoles.stream()
-                .map(RoleRepresentation::getName)
-                .collect(Collectors.toCollection(HashSet::new));
-
-        // Only touch roles named like our permissions — never strip out
-        // roles a Keycloak admin manually assigned (e.g. infrastructure
-        // roles). The intersection-with-desired narrows the responsibility.
-        Set<String> manageable = new HashSet<>(current);
-        // Anything in `desired` is in scope; anything in `current` that
-        // matches our naming convention (UPPER_SNAKE_CASE permissions —
-        // mirroring the access_group_permissions seed pattern) is also
-        // ours to manage. Conservatively, we only treat as ours the names
-        // that look like permission identifiers.
-        manageable.removeIf(name -> !looksLikePermission(name));
-
-        Set<String> toAdd    = setDifference(desired, current);
-        Set<String> toRemove = setDifference(manageable, desired);
-
-        if (!toAdd.isEmpty()) {
-            List<RoleRepresentation> reps = toAdd.stream()
-                    .map(name -> ensureRealmRole(realm, name))
-                    .collect(Collectors.toCollection(ArrayList::new));
-            user.roles().realmLevel().add(reps);
-        }
-        if (!toRemove.isEmpty()) {
-            List<RoleRepresentation> reps = currentRoles.stream()
-                    .filter(r -> toRemove.contains(r.getName()))
-                    .collect(Collectors.toCollection(ArrayList::new));
-            user.roles().realmLevel().remove(reps);
-        }
-        log.debug("Realm-role sync for group {} → desired={}, added={}, removed={}",
-                group.getName(), desired, toAdd, toRemove);
-    }
-
-    /**
-     * Look up a realm role by name; create it (with the empty description
-     * placeholder) if it doesn't exist. The access_group permission table
-     * is the canonical list of what role names must exist.
-     */
-    private RoleRepresentation ensureRealmRole(RealmResource realm, String name) {
-        try {
-            return realm.roles().get(name).toRepresentation();
-        } catch (NotFoundException nfe) {
-            RoleRepresentation rep = new RoleRepresentation();
-            rep.setName(name);
-            rep.setDescription("Auto-created by UserService.syncRealmRoles — access_group permission.");
-            realm.roles().create(rep);
-            log.info("Auto-created realm role {} (missing on Keycloak; backed by access_group_permission).", name);
-            return realm.roles().get(name).toRepresentation();
-        }
-    }
-
-    /**
-     * Permission names by convention are UPPER_SNAKE_CASE (SETUP_VIEW,
-     * FINANCE_CREATE, etc.). Anything else (e.g., {@code default-roles-cia},
-     * {@code offline_access}) is owned by Keycloak/admin and we leave alone.
-     */
-    private static boolean looksLikePermission(String name) {
-        return name != null && name.matches("^[A-Z][A-Z0-9_]*$");
-    }
-
-    private static <T> Set<T> setDifference(Set<T> a, Set<T> b) {
-        Set<T> result = new HashSet<>(a);
-        result.removeAll(b);
-        return result;
-    }
 
     private UserResponse setEnabled(String id, boolean enabled) {
         UserResource resource = findOrThrow(id);
