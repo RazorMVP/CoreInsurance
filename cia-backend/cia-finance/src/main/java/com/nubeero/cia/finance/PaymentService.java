@@ -5,6 +5,7 @@ import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +33,44 @@ public class PaymentService {
         this.creditNoteService = creditNoteService;
         this.numberService = numberService;
         this.auditService = auditService;
+    }
+
+    public Page<PaymentListItemResponse> findAll(
+            Specification<Payment> spec,
+            Pageable pageable) {
+        var fullSpec = (spec == null
+                ? PaymentSpecs.deletedAtIsNull()
+                : Specification.where(PaymentSpecs.deletedAtIsNull()).and(spec));
+        return paymentRepository.findAll(fullSpec, pageable).map(this::toListItem);
+    }
+
+    private PaymentListItemResponse toListItem(Payment p) {
+        CreditNote cn = p.getCreditNote();
+        // CreditNote denormalises entityType + entityReference at creation time.
+        // entityType (FinanceEntityType enum) → beneficiaryType string label.
+        // entityReference (e.g. "CLM-001234", "BRK-007") → beneficiaryReference.
+        // No Policy/Customer chain traversal needed — same pattern as ReceiptService.
+        String beneficiaryType = null;
+        String beneficiaryReference = null;
+        if (cn != null) {
+            beneficiaryType = cn.getEntityType() != null ? cn.getEntityType().name() : null;
+            beneficiaryReference = cn.getEntityReference();
+        }
+        return new PaymentListItemResponse(
+                p.getId(),
+                p.getPaymentNumber(),
+                cn != null ? cn.getId() : null,
+                cn != null ? cn.getCreditNoteNumber() : null,
+                beneficiaryType,
+                beneficiaryReference,
+                p.getAmount(),
+                p.getPaymentMethod(),
+                p.getPaymentDate(),
+                p.getStatus(),
+                p.getReversedAt(),
+                p.getReversedBy(),
+                p.getReversalReason(),
+                p.getCreatedAt());
     }
 
     public Page<Payment> findByCreditNote(UUID creditNoteId, Pageable pageable) {
