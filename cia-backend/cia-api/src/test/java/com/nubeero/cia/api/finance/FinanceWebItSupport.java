@@ -56,7 +56,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * </ul>
  *
  * <h2>Database</h2>
- * A <em>singleton</em> Postgres 16 Testcontainers instance migrated to V49.
+ * A <em>singleton</em> Postgres 16 Testcontainers instance migrated to V56.
  * The container is started exactly once for the JVM (in a static initializer
  * block, no {@code @Container} / {@code @Testcontainers}) and is cleaned up by
  * the JVM-level shutdown hook Testcontainers installs via Ryuk.
@@ -133,7 +133,7 @@ public abstract class FinanceWebItSupport {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.target", () -> "49");
+        registry.add("spring.flyway.target", () -> "56");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 }

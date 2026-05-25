@@ -18,6 +18,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -81,6 +82,16 @@ class AnnualRevenueAccountEngineIT {
     @Autowired private AnnualRevenueAccountEngine engine;
     @Autowired private JdbcTemplate jdbcTemplate;
 
+    /**
+     * Per-JE line counter so {@link #insertLine} can assign deterministic,
+     * monotonically increasing {@code line_no} values within each JE. Replaces
+     * the pre-existing {@code Math.random() * 1000} approach, which produced
+     * sporadic violations of {@code uq_journal_entry_line_no(journal_entry_id,
+     * line_no)} when two lines under the same JE collided. Reset in
+     * {@link #seed()} alongside the other per-test cleanup.
+     */
+    private final Map<UUID, Integer> lineCounters = new HashMap<>();
+
     private UUID yearPeriodId;
     private UUID motorClassId;
     private UUID fireClassId;
@@ -94,6 +105,7 @@ class AnnualRevenueAccountEngineIT {
 
     @BeforeEach
     void seed() {
+        lineCounters.clear();
         jdbcTemplate.update("DELETE FROM journal_entry_line");
         jdbcTemplate.update("DELETE FROM journal_entry");
         jdbcTemplate.update("DELETE FROM fiscal_period");
@@ -415,13 +427,17 @@ class AnnualRevenueAccountEngineIT {
 
     private void insertLine(UUID jeId, UUID accountId, BigDecimal debit, BigDecimal credit,
                              UUID classOfBusinessId) {
+        // Deterministic per-JE line counter — avoids sporadic collisions on
+        // uq_journal_entry_line_no(journal_entry_id, line_no) that the prior
+        // Math.random()-based assignment surfaced once V50-V55 were pulled
+        // into the test envelope (Slice β / Task 1 — flake was always latent).
+        int lineNo = lineCounters.merge(jeId, 1, Integer::sum);
         jdbcTemplate.update(
             "INSERT INTO journal_entry_line (id, journal_entry_id, line_no, account_id, " +
             "debit_amount, credit_amount, class_of_business_id, created_by) " +
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             UUID.randomUUID(), jeId,
-            // line_no — incrementing across all lines per JE; tests don't care about value
-            (int) (Math.random() * 1000) + 1,
+            lineNo,
             accountId, debit, credit, classOfBusinessId, "test");
     }
 }

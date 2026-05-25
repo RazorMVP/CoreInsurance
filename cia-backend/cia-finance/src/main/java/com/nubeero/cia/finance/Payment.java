@@ -78,6 +78,9 @@ public class Payment extends BaseEntity implements LockableByPeriod {
     @Column(name = "reversed_by", length = 100)
     private String reversedBy;
 
+    @Column(name = "pdf_path", length = 512)
+    private String pdfPath;
+
     // getters and setters
 
     public String getPaymentNumber() { return paymentNumber; }
@@ -124,4 +127,7 @@ public class Payment extends BaseEntity implements LockableByPeriod {
 
     public String getReversedBy() { return reversedBy; }
     public void setReversedBy(String reversedBy) { this.reversedBy = reversedBy; }
+
+    public String getPdfPath() { return pdfPath; }
+    public void setPdfPath(String pdfPath) { this.pdfPath = pdfPath; }
 }
