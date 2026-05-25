@@ -43,31 +43,132 @@ The work splits into four slices honouring the Session 93 slice-discipline rule 
 
 ## Architecture overview
 
-```
-                    F7 — Receipt + Payment visibility, PDF, email, templates
-                    ───────────────────────────────────────────────────────
+Two views, complementary: the **slice-dependency diagram** shows how the 4 slices build on each other (which is the schedule); the **system-architecture diagram** shows the end-state set of components after δ ships and how they wire together at runtime.
 
-  Slice α — Visibility            Slice β — PDF                   Slice γ — Email                  Slice δ — Tenant template
-  ─────────────────────           ──────────────                  ────────────────                 ─────────────────────────
-  Backend                         Backend                         Backend                          Backend
-   • ReceiptListController         • ReceiptPdfGenerator           • BeneficiaryEmailResolver       • V52: email_template
-   • PaymentListController         • PaymentVoucherPdfGenerator    • SendReceiptEmailWorkflow         per-tenant per-type
-   • Spec-based repos              • V50: pdf_path                 • SendPaymentVoucherEmail-       • EmailTemplate entity
-   • Audit-fix on reverse              on receipts + payments          Workflow                       + repo + service
-                                   • Auto-store in MinIO           • V51: email_sent_at,            • EmailTemplateController
-  Frontend                         • GET .../{id}/pdf endpoints        email_sent_to on both        • EmailBodyComposer
-   • Restored sub-tabs                                             • EmailMessage.attachments         (modified — DB lookup
-       Receipts under Receivables  Frontend                            on cia-notifications API        + fallback to JAR)
-       Payments under Payables      • Download PDF row action      • EmailBodyComposer
-   • Nested list inside DN/CN          on every receipt/payment        + JAR default templates      Frontend
-       detail dialogs                  row + nested-in-dialog          (RECEIPT + PAY_VOUCHER)      • Setup → Email Templates
-   • Wire ReverseTransactionDialog                                                                       page (two tabs)
-   • Reversal audit columns                                        Frontend                          • Subject + body editor
-       (reversedAt, reversedBy,                                     • Email PDF row action               (plain HTML)
-        reversalReason)                                                 + EmailConfirmDialog          • Preview + Save +
-                                                                    • Last-emailed badge                 Revert to default
-                                                                    • Toast on success/failure
+### Slice dependency
+
+Solid arrows = strict prerequisite ordering. Dashed arrows = data-flow / abstraction-extension links between non-adjacent slices.
+
+```mermaid
+flowchart LR
+    A["α Visibility<br/>list + nested + reverse audit"]
+    B["β PDF<br/>generators + MinIO + download"]
+    C["γ Email<br/>workflows + resolvers + send"]
+    D["δ Template<br/>tenant override + fallback"]
+
+    A --> B
+    B --> C
+    C --> D
+
+    A -. "α surfaces carry β download + γ email buttons" .-> C
+    B -. "pdfPath = γ email-attachment input" .-> C
+    C -. "EmailBodyComposer extended in δ" .-> D
+
+    classDef alphaSlice fill:#E3F2FD,stroke:#1976D2,color:#0D47A1
+    classDef betaSlice  fill:#F3E5F5,stroke:#7B1FA2,color:#4A148C
+    classDef gammaSlice fill:#E8F5E9,stroke:#388E3C,color:#1B5E20
+    classDef deltaSlice fill:#FFF3E0,stroke:#F57C00,color:#E65100
+
+    class A alphaSlice
+    class B betaSlice
+    class C gammaSlice
+    class D deltaSlice
 ```
+
+### End-state system architecture
+
+Components colour-coded by the slice that introduces them. Edges are runtime calls.
+
+```mermaid
+flowchart TB
+    Browser["Operator Browser"]
+
+    subgraph spa ["React SPA (cia-frontend / back-office)"]
+        ReceiptUI["Receipts List + Nested Detail"]
+        PaymentUI["Payments List + Nested Detail"]
+        SetupUI["Setup → Email Templates"]
+    end
+
+    subgraph api ["Spring Boot API (cia-api)"]
+        subgraph cia_finance ["cia-finance"]
+            ListCtrls["ReceiptListController<br/>PaymentListController"]
+            NestedCtrls["ReceiptController + PaymentController<br/>GET pdf · POST email"]
+            Services["ReceiptService<br/>PaymentService"]
+            PdfGens["ReceiptPdfGenerator<br/>PaymentVoucherPdfGenerator"]
+            ProfileResolver["BeneficiaryProfileResolver<br/>(name + address per source type)"]
+            EmailResolver["BeneficiaryEmailResolver<br/>(email per source type)"]
+            EmailComposer["EmailBodyComposer<br/>(JAR default → tenant override)"]
+            Workflows["SendReceiptEmailWorkflow<br/>SendPaymentVoucherEmailWorkflow"]
+        end
+
+        subgraph cia_setup ["cia-setup"]
+            TemplateCtrl["EmailTemplateController"]
+            TemplateSvc["EmailTemplateService"]
+        end
+
+        subgraph cia_notif ["cia-notifications"]
+            NotifSvc["NotificationService<br/>EmailMessage + Attachment"]
+        end
+
+        subgraph cia_docs ["cia-documents"]
+            DocStore["DocumentStorageService"]
+            FontLoader["PdfFontLoader (Naira-aware TTF)"]
+        end
+    end
+
+    Postgres[("PostgreSQL<br/>receipts · payments · email_template")]
+    Minio[("MinIO<br/>receipt + voucher PDFs")]
+    Temporal["Temporal Worker"]
+    SMTP["SMTP / SendGrid"]
+
+    Browser --> ReceiptUI
+    Browser --> PaymentUI
+    Browser --> SetupUI
+
+    ReceiptUI --> ListCtrls
+    ReceiptUI --> NestedCtrls
+    PaymentUI --> ListCtrls
+    PaymentUI --> NestedCtrls
+    SetupUI --> TemplateCtrl
+
+    ListCtrls --> Services
+    NestedCtrls --> Services
+    Services --> Postgres
+
+    Services -- "post() auto-fires" --> PdfGens
+    PdfGens --> FontLoader
+    PdfGens --> ProfileResolver
+    PdfGens -- "upload" --> DocStore
+    DocStore --> Minio
+
+    Services -- "requestEmail() starts" --> Workflows
+    Workflows --> Temporal
+    Workflows --> EmailComposer
+    Workflows --> EmailResolver
+    Workflows -- "download PDF" --> DocStore
+    Workflows -- "sendEmail(+attachment)" --> NotifSvc
+    NotifSvc --> SMTP
+
+    EmailComposer -. "tenant template lookup" .-> TemplateSvc
+    TemplateCtrl --> TemplateSvc
+    TemplateSvc --> Postgres
+
+    classDef alphaSlice fill:#E3F2FD,stroke:#1976D2,color:#0D47A1
+    classDef betaSlice  fill:#F3E5F5,stroke:#7B1FA2,color:#4A148C
+    classDef gammaSlice fill:#E8F5E9,stroke:#388E3C,color:#1B5E20
+    classDef deltaSlice fill:#FFF3E0,stroke:#F57C00,color:#E65100
+    classDef external   fill:#ECEFF1,stroke:#455A64,color:#263238
+
+    class ListCtrls,NestedCtrls,Services alphaSlice
+    class PdfGens,ProfileResolver,FontLoader,DocStore betaSlice
+    class EmailResolver,EmailComposer,Workflows,NotifSvc gammaSlice
+    class TemplateCtrl,TemplateSvc,SetupUI deltaSlice
+    class Postgres,Minio,Temporal,SMTP external
+```
+
+**Reading the diagram.** An operator click on "Email PDF" on a receipt row flows `ReceiptUI` → `NestedCtrls` → `Services.requestEmail()` → starts `Workflows` (Temporal); the activity calls `EmailComposer` (which optionally hits `TemplateSvc` in δ for a tenant override, otherwise renders JAR default), pulls the PDF bytes from `DocStore` (MinIO), and calls `NotifSvc.sendEmail(...)` which dispatches to `SMTP/SendGrid` with the PDF as an `Attachment`. On success, the activity writes `email_sent_at` + `email_sent_to` back to `Postgres` and audit-logs a `SEND` row.
+
+**Figma version:** the same architecture is also published as an editable FigJam diagram (link added below once generated).
 
 **Architectural constraints (forced by existing CLAUDE.md conventions):**
 
