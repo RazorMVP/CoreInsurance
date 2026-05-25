@@ -168,7 +168,7 @@ flowchart TB
 
 **Reading the diagram.** An operator click on "Email PDF" on a receipt row flows `ReceiptUI` → `NestedCtrls` → `Services.requestEmail()` → starts `Workflows` (Temporal); the activity calls `EmailComposer` (which optionally hits `TemplateSvc` in δ for a tenant override, otherwise renders JAR default), pulls the PDF bytes from `DocStore` (MinIO), and calls `NotifSvc.sendEmail(...)` which dispatches to `SMTP/SendGrid` with the PDF as an `Attachment`. On success, the activity writes `email_sent_at` + `email_sent_to` back to `Postgres` and audit-logs a `SEND` row.
 
-**Figma version:** the same architecture is also published as an editable FigJam diagram (link added below once generated).
+**Figma version:** the same architecture is also published as an editable FigJam diagram — [F7 — Receipt + Payment Visibility, PDF, Email, Templates (Architecture)](https://www.figma.com/board/dTO6r5EEUfh4WvSiItx8la?utm_source=claude_code&utm_content=edit_in_figjam&architecture=true) (`fileKey: dTO6r5EEUfh4WvSiItx8la`). The mermaid above is the source of truth — the FigJam is a visual mirror you can move/annotate/share.
 
 **Architectural constraints (forced by existing CLAUDE.md conventions):**
 
