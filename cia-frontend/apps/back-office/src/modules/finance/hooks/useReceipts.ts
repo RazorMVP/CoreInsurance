@@ -25,7 +25,7 @@ export function useReverseReceipt() {
     mutationFn: async ({ dnId, receiptId, reason }: ReverseReceiptArgs) => {
       await apiClient.post(
         `/api/v1/debit-notes/${dnId}/receipts/${receiptId}/reverse`,
-        { reversalReason: reason },
+        { reason },
       );
     },
     onSuccess: () => {

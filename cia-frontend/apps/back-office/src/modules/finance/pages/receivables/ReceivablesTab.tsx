@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
   PageSection,
+  Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
@@ -12,6 +13,7 @@ import {
 } from '@cia/api-client';
 import PostReceiptSheet         from './PostReceiptSheet';
 import DebitNoteDetailDialog    from './DebitNoteDetailDialog';
+import ReceiptsListSection      from './ReceiptsListSection';
 
 const dnStatusVariant: Record<DebitNoteDto['status'], 'pending' | 'active' | 'draft' | 'rejected'> = {
   OUTSTANDING: 'pending',
@@ -121,48 +123,59 @@ export default function ReceivablesTab() {
   const outstanding = debitNotes.filter(d => d.status === 'OUTSTANDING' || d.status === 'PARTIAL');
 
   return (
-    <div className="space-y-8">
-      {/* Debit Notes */}
-      <PageSection
-        title="Debit Notes"
-        description="Premium receivables. Post receipts against a debit note to record collections."
-        actions={
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => { setBulkMode(true); setSelectedDns(outstanding.map(d => d.id)); setSheetOpen(true); }}
-              disabled={outstanding.length === 0}
-            >
-              Bulk Receipt ({outstanding.length})
-            </Button>
-          </div>
-        }
-      >
-        <DataTable
-          columns={dnColumns}
-          data={debitNotes}
-          toolbar={{ searchColumn: 'customerName', searchPlaceholder: 'Search debit notes…' }}
+    <Tabs defaultValue="debit-notes" className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="debit-notes">Debit Notes</TabsTrigger>
+        <TabsTrigger value="receipts">Receipts</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="debit-notes" className="space-y-8">
+        {/* Debit Notes */}
+        <PageSection
+          title="Debit Notes"
+          description="Premium receivables. Post receipts against a debit note to record collections."
+          actions={
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setBulkMode(true); setSelectedDns(outstanding.map(d => d.id)); setSheetOpen(true); }}
+                disabled={outstanding.length === 0}
+              >
+                Bulk Receipt ({outstanding.length})
+              </Button>
+            </div>
+          }
+        >
+          <DataTable
+            columns={dnColumns}
+            data={debitNotes}
+            toolbar={{ searchColumn: 'customerName', searchPlaceholder: 'Search debit notes…' }}
+          />
+        </PageSection>
+
+        {/* Post receipt sheet */}
+        <PostReceiptSheet
+          open={sheetOpen}
+          onOpenChange={setSheetOpen}
+          debitNoteIds={selectedDns}
+          bulk={bulkMode}
+          debitNotes={debitNotes}
+          onSuccess={() => setSheetOpen(false)}
         />
-      </PageSection>
 
-      {/* Post receipt sheet */}
-      <PostReceiptSheet
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        debitNoteIds={selectedDns}
-        bulk={bulkMode}
-        debitNotes={debitNotes}
-        onSuccess={() => setSheetOpen(false)}
-      />
+        {/* Debit note detail dialog */}
+        <DebitNoteDetailDialog
+          open={dnDetail !== null}
+          onOpenChange={(v) => { if (!v) setDnDetail(null); }}
+          debitNote={dnDetail}
+          onPostReceipt={handlePostReceiptFromDialog}
+        />
+      </TabsContent>
 
-      {/* Debit note detail dialog */}
-      <DebitNoteDetailDialog
-        open={dnDetail !== null}
-        onOpenChange={(v) => { if (!v) setDnDetail(null); }}
-        debitNote={dnDetail}
-        onPostReceipt={handlePostReceiptFromDialog}
-      />
-    </div>
+      <TabsContent value="receipts">
+        <ReceiptsListSection />
+      </TabsContent>
+    </Tabs>
   );
 }

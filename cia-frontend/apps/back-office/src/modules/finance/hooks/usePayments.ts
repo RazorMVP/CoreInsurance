@@ -25,7 +25,7 @@ export function useReversePayment() {
     mutationFn: async ({ cnId, paymentId, reason }: ReversePaymentArgs) => {
       await apiClient.post(
         `/api/v1/credit-notes/${cnId}/payments/${paymentId}/reverse`,
-        { reversalReason: reason },
+        { reason },
       );
     },
     onSuccess: () => {
