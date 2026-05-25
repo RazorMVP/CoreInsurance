@@ -93,6 +93,8 @@ class ReceiptReverseAuditIT extends FinanceItSupport {
                 null, "First Bank", null, "Initial premium"
         );
 
+        // baseline: post() does not write an audit row; only reverse() does.
+        // If post() ever gains its own audit call, the +1 delta below silently breaks.
         long auditBefore = auditLogRepository.count();
 
         receiptService.reverse(posted.getId(), "Customer requested refund — wrong account credited");

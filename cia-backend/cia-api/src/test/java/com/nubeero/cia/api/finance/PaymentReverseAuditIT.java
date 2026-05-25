@@ -94,6 +94,8 @@ class PaymentReverseAuditIT extends FinanceItSupport {
                 "John Doe", "0123456789", "Claim settlement"
         );
 
+        // baseline: post() does not write an audit row; only reverse() does.
+        // If post() ever gains its own audit call, the +1 delta below silently breaks.
         long auditBefore = auditLogRepository.count();
 
         paymentService.reverse(posted.getId(), "Beneficiary account closed — rerouting required");

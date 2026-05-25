@@ -68,7 +68,8 @@ public class FinanceItFixtures {
      *
      * <p>The {@code credit_notes} table stores {@code entity_id} and
      * {@code entity_reference} as plain UUID/VARCHAR columns, so no FK-parent rows
-     * are required.
+     * are required. The {@code beneficiary_id} column is nullable, so no beneficiary
+     * row is required either.
      *
      * @return the UUID of the newly created credit note
      */
