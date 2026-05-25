@@ -5,6 +5,7 @@ import com.nubeero.cia.common.api.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -69,6 +70,23 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error("NOT_FOUND", "No resource: " + ex.getResourcePath()));
+    }
+
+    /**
+     * {@code @PreAuthorize} / method-security denial → 403. Spring Security 6
+     * throws {@link org.springframework.security.authorization.AuthorizationDeniedException}
+     * (a subtype of {@link AccessDeniedException}) when a {@code @PreAuthorize}
+     * expression evaluates to false. Without this handler the exception falls
+     * through to the {@link Exception} catch-all and returns 500. Handling the
+     * base {@link AccessDeniedException} covers both the Spring Security 5 type
+     * and the 6.x subtype in one declaration.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
+        log.debug("Access denied: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("FORBIDDEN", "Access denied"));
     }
 
     @ExceptionHandler(Exception.class)

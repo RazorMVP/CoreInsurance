@@ -115,6 +115,17 @@
     </dependency>
 
     <!-- ── Test ───────────────────────────────────────────────────── -->
+    <!--
+      spring-security-test: provides @WithMockUser / SecurityMockMvcRequestPostProcessors
+      for MockMvc controller ITs that need pre-authenticated principals without a
+      live Keycloak. Used by ReceiptListControllerIT (Task 7 — FinanceWebItSupport).
+      Version is managed by spring-boot-starter-parent (matches the spring-security BOM).
+    -->
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-test</artifactId>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>postgresql</artifactId>

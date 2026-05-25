@@ -15,6 +15,15 @@ import java.util.UUID;
  * are out of scope for a slice-scoped Finance IT. Direct JDBC inserts produce
  * a consistent, deterministic state that tests can reason about exactly.
  *
+ * <p>Transactional helpers that require business-service logic (posting or
+ * reversing receipts) are not housed here because they would require
+ * {@link com.nubeero.cia.finance.ReceiptService} as a constructor dependency,
+ * which breaks the existing {@code @DataJpaTest} ITs that import this class
+ * without importing {@code ReceiptService} (e.g. {@code PaymentReverseAuditIT}).
+ * Controller ITs that extend {@link FinanceWebItSupport} have the full
+ * {@code @SpringBootTest} context and access the service beans directly via
+ * {@code @Autowired} — no indirection through this class is needed.
+ *
  * @since Slice α — F7 Receipt/Payment visibility
  */
 @Component
