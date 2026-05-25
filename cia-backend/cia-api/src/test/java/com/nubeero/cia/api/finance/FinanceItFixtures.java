@@ -61,4 +61,37 @@ public class FinanceItFixtures {
         return dnId;
     }
 
+    /**
+     * Inserts a single {@code credit_notes} row (status=OUTSTANDING, total=₦250,000.00)
+     * via {@link JdbcTemplate} for tests that only need a CN to attach a payment to.
+     * Does not create any parent entities (no claim row, no customer row).
+     *
+     * <p>The {@code credit_notes} table stores {@code entity_id} and
+     * {@code entity_reference} as plain UUID/VARCHAR columns, so no FK-parent rows
+     * are required.
+     *
+     * @return the UUID of the newly created credit note
+     */
+    public UUID createOutstandingCreditNote() {
+        UUID cnId = UUID.randomUUID();
+        UUID entityId = UUID.randomUUID(); // synthetic claim id
+
+        jdbc.update(
+            "INSERT INTO credit_notes " +
+            "  (id, credit_note_number, status, entity_type, entity_id, entity_reference, " +
+            "   beneficiary_name, description, amount, tax_amount, total_amount, " +
+            "   paid_amount, currency_code, created_by) " +
+            "VALUES (?, ?, 'OUTSTANDING', 'CLAIM', ?, ?, ?, ?, ?, 0, ?, 0, 'NGN', 'test')",
+            cnId,
+            "CN-" + cnId.toString().substring(0, 8),
+            entityId,
+            "CLM-TEST-001",
+            "Test Beneficiary",
+            "Claim settlement for CLM-TEST-001",
+            new BigDecimal("250000.00"),
+            new BigDecimal("250000.00")
+        );
+        return cnId;
+    }
+
 }

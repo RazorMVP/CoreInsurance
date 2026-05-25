@@ -1,5 +1,7 @@
 package com.nubeero.cia.finance;
 
+import com.nubeero.cia.common.audit.AuditAction;
+import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,13 +22,16 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final CreditNoteService creditNoteService;
     private final FinanceNumberService numberService;
+    private final AuditService auditService;
 
     public PaymentService(PaymentRepository paymentRepository,
                           CreditNoteService creditNoteService,
-                          FinanceNumberService numberService) {
+                          FinanceNumberService numberService,
+                          AuditService auditService) {
         this.paymentRepository = paymentRepository;
         this.creditNoteService = creditNoteService;
         this.numberService = numberService;
+        this.auditService = auditService;
     }
 
     public Page<Payment> findByCreditNote(UUID creditNoteId, Pageable pageable) {
@@ -77,16 +82,35 @@ public class PaymentService {
         if (payment.getStatus() == TransactionStatus.REVERSED) {
             throw new IllegalStateException("Payment is already reversed");
         }
+
+        ReverseSnapshot oldValue = new ReverseSnapshot(
+                payment.getStatus(), null, null, null);
+
         payment.setStatus(TransactionStatus.REVERSED);
         payment.setReversalReason(reversalReason);
         payment.setReversedAt(Instant.now());
         payment.setReversedBy(currentUser());
-        paymentRepository.save(payment);
+        Payment saved = paymentRepository.save(payment);
 
-        UUID creditNoteId = payment.getCreditNote().getId();
+        ReverseSnapshot newValue = new ReverseSnapshot(
+                saved.getStatus(),
+                saved.getReversedAt(),
+                saved.getReversedBy(),
+                saved.getReversalReason());
+
+        auditService.log("Payment", saved.getId().toString(),
+                AuditAction.REVERSE, oldValue, newValue);
+
+        UUID creditNoteId = saved.getCreditNote().getId();
         BigDecimal newPaid = sumPostedPayments(creditNoteId);
         creditNoteService.recalculateStatus(creditNoteId, newPaid);
     }
+
+    private record ReverseSnapshot(
+            TransactionStatus status,
+            Instant reversedAt,
+            String reversedBy,
+            String reversalReason) {}
 
     private BigDecimal sumPostedPayments(UUID creditNoteId) {
         List<Payment> posted = paymentRepository
