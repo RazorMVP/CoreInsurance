@@ -67,6 +67,37 @@ export async function validatedGet<T extends z.ZodTypeAny>(
   return parsed.data;
 }
 
+/**
+ * GET + validate a paginated list endpoint. Returns BOTH the `data` array and
+ * the `meta` block from the {@link ApiResponse} envelope.
+ *
+ * Use this when the caller needs pagination metadata (total / page / size);
+ * use {@link validatedGet} when only the data is needed.
+ *
+ * @example
+ *   const { data, meta } = await validatedList(
+ *     '/api/v1/receipts',
+ *     ReceiptListItemResponseSchema,
+ *     { params: { status: 'POSTED' } },
+ *   );
+ */
+export async function validatedList<T extends z.ZodTypeAny>(
+  url:     string,
+  itemSchema: T,
+  config?: AxiosRequestConfig,
+): Promise<{ data: z.infer<T>[]; meta: { total: number; page: number; size: number } }> {
+  const res = await apiClient.get(url, config);
+  const envelopeSchema = z.object({
+    data: z.array(itemSchema),
+    meta: z.object({
+      total: z.number(),
+      page:  z.number(),
+      size:  z.number(),
+    }),
+  });
+  return envelopeSchema.parse(res.data) as { data: z.infer<T>[]; meta: { total: number; page: number; size: number } };
+}
+
 /** POST + validate. Returns just the `data` field of the envelope. */
 export async function validatedPost<T extends z.ZodTypeAny>(
   url:     string,

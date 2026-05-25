@@ -14,6 +14,7 @@
 // loudly at runtime instead of silently passing undefined to the UI.
 
 import { z } from 'zod';
+import { validatedList } from '../validation';
 
 // ── Enums ─────────────────────────────────────────────────────────────────
 
@@ -179,3 +180,85 @@ export const PostPaymentRequestSchema = z.object({
 });
 
 export type PostPaymentRequest = z.infer<typeof PostPaymentRequestSchema>;
+
+// ── Flat list responses (F7 slice α — GET /api/v1/receipts + /api/v1/payments) ────────
+
+export const ReceiptListItemResponseSchema = z.object({
+  id:               z.string(),
+  reference:        z.string(),
+  debitNoteId:      z.string(),
+  debitNoteNumber:  z.string(),
+  policyNumber:     z.string().nullable(),
+  customerName:     z.string().nullable(),
+  amount:           z.number(),
+  paymentMethod:    PaymentMethodSchema,
+  paymentDate:      z.string().nullable(),
+  status:           ReceiptStatusSchema,
+  reversedAt:       z.string().nullable(),
+  reversedBy:       z.string().nullable(),
+  reversalReason:   z.string().nullable(),
+  createdAt:        z.string(),
+});
+export type ReceiptListItemResponse = z.infer<typeof ReceiptListItemResponseSchema>;
+
+export const PaymentListItemResponseSchema = z.object({
+  id:                   z.string(),
+  reference:            z.string(),
+  creditNoteId:         z.string(),
+  creditNoteNumber:     z.string(),
+  beneficiaryType:      z.string().nullable(),
+  beneficiaryReference: z.string().nullable(),
+  amount:               z.number(),
+  paymentMethod:        PaymentMethodSchema,
+  paymentDate:          z.string().nullable(),
+  status:               PaymentStatusSchema,
+  reversedAt:           z.string().nullable(),
+  reversedBy:           z.string().nullable(),
+  reversalReason:       z.string().nullable(),
+  createdAt:            z.string(),
+});
+export type PaymentListItemResponse = z.infer<typeof PaymentListItemResponseSchema>;
+
+export interface ReceiptListFilters {
+  status?:         'POSTED' | 'REVERSED';
+  createdFrom?:    string;
+  createdTo?:      string;
+  paymentMethod?:  string;
+  debitNoteId?:    string;
+  page?:           number;
+  size?:           number;
+}
+
+export interface PaymentListFilters {
+  status?:         'POSTED' | 'REVERSED';
+  createdFrom?:    string;
+  createdTo?:      string;
+  paymentMethod?:  string;
+  creditNoteId?:   string;
+  page?:           number;
+  size?:           number;
+}
+
+function buildParams(filters: ReceiptListFilters | PaymentListFilters): Record<string, string> {
+  const out: Record<string, string> = {};
+  Object.entries(filters as Record<string, unknown>).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') out[k] = String(v);
+  });
+  return out;
+}
+
+export async function listReceipts(filters: ReceiptListFilters = {}) {
+  return validatedList(
+    '/api/v1/receipts',
+    ReceiptListItemResponseSchema,
+    { params: buildParams(filters) },
+  );
+}
+
+export async function listPayments(filters: PaymentListFilters = {}) {
+  return validatedList(
+    '/api/v1/payments',
+    PaymentListItemResponseSchema,
+    { params: buildParams(filters) },
+  );
+}

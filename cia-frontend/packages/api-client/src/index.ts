@@ -30,6 +30,6 @@ export type { ApiResponse, ApiMeta, ApiError, PageResponse } from './types';
 export { useGet, useList, useCreate, useUpdate, useRemove } from './hooks';
 export {
   apiEnvelope,
-  validatedGet, validatedPost, validatedPut, validatedPatch,
+  validatedGet, validatedList, validatedPost, validatedPut, validatedPatch,
 } from './validation';
 export * from './modules';
