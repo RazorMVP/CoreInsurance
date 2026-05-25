@@ -802,7 +802,7 @@ Each tenant can optionally enable a **sandbox mode** for Insurtechs to test inte
 | 5 | Claims | 23 | Reserves, DVs, claim settlements, credit notes to finance |
 | 6 | Reinsurance | 17 | RI allocations, offer slips, credit notes, bordereaux |
 | 7 | Customer Onboarding | 10 | Customer records, KYC status, reports |
-| 8 | Finance | 5 | Receipts, payments, settled/outstanding tracking |
+| 8 | Finance | 5 | Receipts, payments, settled/outstanding tracking; F7 slice α — flat /api/v1/receipts + /api/v1/payments endpoints with status/method/date filters; ReverseTransactionDialog wired into 4 surfaces (Receivables + Payables tabs plus nested-in-DN-and-CN detail dialogs); reversal-audit columns surfaced (timestamp + user + reason) |
 | 9 | Partner Open API | 15 | OAuth2 client management, REST partner API, webhooks, OpenAPI docs, Postman collection |
 | 10 | Audit & Compliance | 15 | Full audit trail, login logs, 6 reports, CSV export, real-time alerts, System Auditor role |
 | 11 | Reports & Analytics | 20 | 67 pre-built reports across 7 categories (incl. CLOSURES — 12 GL/IFRS-17/IFRS-9 ledger reports), custom report builder, CSV/PDF export, pin management, access control |
@@ -995,6 +995,7 @@ node cia-frontend/scripts/check-dto-drift.mjs
 - Tenant context always resolved from JWT, never from request body.
 - Standard response envelope: `{ "data": ..., "meta": ..., "errors": [...] }`.
 - Pagination: cursor-based for large lists. **List endpoints must place the array directly in `data` and the pagination metadata (`total`, `page`, `size`, `nextCursor`, `prevCursor`) in `meta`.** Never serialise Spring's full `Page<T>` object into `data` — the frontend's `useQuery` hooks unwrap `res.data.data` as an array, and a Page object there crashes the consumer with `(query.data ?? []).map is not a function`. The canonical controller idiom is `ApiResponse.success(page.getContent(), ApiMeta.builder().total(page.getTotalElements()).page(page.getNumber()).size(page.getSize()).build())` — return type `ResponseEntity<ApiResponse<List<T>>>`, never `ResponseEntity<ApiResponse<Page<T>>>`.
+- **Flat list endpoints for child aggregates** — when a child aggregate (e.g. Receipt → DebitNote, Payment → CreditNote) needs a cross-parent list view, create a separate `*ListController` rather than adding the flat endpoint to the existing nested parent-scoped controller. Keeps responsibility lines clean; the nested controller stays narrowly about the parent context. F7 slice α introduced `ReceiptListController` (`/api/v1/receipts`) and `PaymentListController` (`/api/v1/payments`) alongside the existing `ReceiptController` and `PaymentController`. Filtering via `JpaSpecificationExecutor<T>` + a static `*Specs` factory class; projection DTOs (`*ListItemResponse`) carry parent + grandparent context to avoid N+1 on row rendering.
 
 ### Partner API Design (cia-partner-api specific)
 
@@ -1190,10 +1191,10 @@ node cia-frontend/scripts/check-dto-drift.mjs
 
 | Status | Sub-page | Key features |
 |---|---|---|
-| `[x]` | Receipts | ReceivablesTab — debit note number clickable → DebitNoteDetailDialog (policy + debit note details); "View policy" + "Post Receipt" both open detail dialog → PostReceiptSheet; "Reverse" on approved receipts → ReverseTransactionDialog with cannot-undo warning |
+| `[x]` | Receipts | ReceivablesTab — debit note number clickable → DebitNoteDetailDialog (policy + debit note details); "View policy" + "Post Receipt" both open detail dialog → PostReceiptSheet; "Reverse" on approved receipts → ReverseTransactionDialog with cannot-undo warning. F7 slice α: Receivables now has a sibling Receipts sub-tab (flat /api/v1/receipts list with status + method + date filters, 20-row pagination, inline reversal audit) and the DN detail dialog shows nested receipts with per-row Reverse. |
 | `[x]` | Bulk Receipts | PostReceiptSheet opens in bulk mode with all outstanding DNs selected; shows total with per-note breakdown |
 | `[x]` | Receipt Approval | Receipts DataTable with approve/reject row actions on PENDING_APPROVAL rows |
-| `[x]` | Payables | PayablesTab — credit note number clickable → CreditNoteDetailDialog (source type, reference, description, beneficiary, amount); "Process Payment" + "View source" both open detail dialog → ProcessPaymentSheet (amount, method, bank, ref); "Reverse" → ReverseTransactionDialog |
+| `[x]` | Payables | PayablesTab — credit note number clickable → CreditNoteDetailDialog (source type, reference, description, beneficiary, amount); "Process Payment" + "View source" both open detail dialog → ProcessPaymentSheet (amount, method, bank, ref); "Reverse" → ReverseTransactionDialog. F7 slice α: Payables now has a sibling Payments sub-tab (flat /api/v1/payments list with same filter + pagination + reversal audit shape) and the CN detail dialog shows nested payments with per-row Reverse. |
 | `[x]` | Payment Approval | Payments DataTable with Approve/Reject actions on PENDING rows |
 
 ---
