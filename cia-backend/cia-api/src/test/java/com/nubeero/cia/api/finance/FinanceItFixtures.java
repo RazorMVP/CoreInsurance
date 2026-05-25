@@ -27,14 +27,17 @@ public class FinanceItFixtures {
     }
 
     /**
-     * Creates a debit note in OUTSTANDING status with a total of ₦200,000.00.
-     * No policy/customer/product rows are required — the debit_notes table only
-     * FK-references itself and finance_counters; all other references (customer_id,
-     * entity_id, entity_reference) are stored as plain UUID/VARCHAR columns.
+     * Inserts a single {@code debit_notes} row (status=OUTSTANDING, total=₦200,000.00)
+     * via {@link JdbcTemplate} for tests that only need a DN to attach a receipt or
+     * payment to. Does not create any parent entities (no policy row, no customer row).
+     *
+     * <p>The {@code debit_notes} table stores {@code customer_id}, {@code entity_id},
+     * and {@code entity_reference} as plain UUID/VARCHAR columns, so no FK-parent rows
+     * are required.
      *
      * @return the UUID of the newly created debit note
      */
-    public UUID createApprovedPolicyAndDebitNote() {
+    public UUID createOutstandingDebitNote() {
         UUID dnId = UUID.randomUUID();
         UUID entityId = UUID.randomUUID(); // synthetic policy id
         UUID customerId = UUID.randomUUID();
@@ -58,20 +61,4 @@ public class FinanceItFixtures {
         return dnId;
     }
 
-    /**
-     * Seeds a {@code finance_counters} row for the given type and current year,
-     * at sequence 0. The counter auto-increments on first use — calling this
-     * before any {@code FinanceNumberService.next*()} call prevents the
-     * "INSERT … ON CONFLICT" path from being needed.
-     *
-     * <p>Not required by the current IT (FinanceNumberService creates the row
-     * lazily via upsert), but provided for tests that want a predictable
-     * sequence starting value.
-     */
-    public void seedCounter(String type, int year) {
-        jdbc.update(
-            "INSERT INTO finance_counters (counter_type, year, last_sequence) " +
-            "VALUES (?, ?, 0) ON CONFLICT DO NOTHING",
-            type, year);
-    }
 }

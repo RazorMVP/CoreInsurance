@@ -10,6 +10,7 @@ import com.nubeero.cia.finance.FinanceNumberService;
 import com.nubeero.cia.finance.PaymentMethod;
 import com.nubeero.cia.finance.Receipt;
 import com.nubeero.cia.finance.ReceiptService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,6 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -62,6 +62,11 @@ class ReceiptReverseAuditIT extends FinanceItSupport {
     @Autowired AuditLogRepository auditLogRepository;
     @Autowired FinanceItFixtures fixtures;
 
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
     @BeforeEach
     void authenticateUser() {
         // ReceiptService.currentUser() reads SecurityContextHolder.
@@ -76,11 +81,10 @@ class ReceiptReverseAuditIT extends FinanceItSupport {
     }
 
     @Test
-    @Transactional
     @DisplayName("reverse() writes exactly one AuditLog row with action=REVERSE, " +
                  "entity_type=Receipt, old status=POSTED, new status=REVERSED")
     void reverse_writesAuditLogRowWithActionReverse() {
-        UUID dnId = fixtures.createApprovedPolicyAndDebitNote();
+        UUID dnId = fixtures.createOutstandingDebitNote();
         Receipt posted = receiptService.post(
                 dnId,
                 new BigDecimal("100000.00"),
