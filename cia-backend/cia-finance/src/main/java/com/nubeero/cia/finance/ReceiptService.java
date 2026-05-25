@@ -1,5 +1,7 @@
 package com.nubeero.cia.finance;
 
+import com.nubeero.cia.common.audit.AuditAction;
+import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,13 +22,16 @@ public class ReceiptService {
     private final ReceiptRepository receiptRepository;
     private final DebitNoteService debitNoteService;
     private final FinanceNumberService numberService;
+    private final AuditService auditService;
 
     public ReceiptService(ReceiptRepository receiptRepository,
                           DebitNoteService debitNoteService,
-                          FinanceNumberService numberService) {
+                          FinanceNumberService numberService,
+                          AuditService auditService) {
         this.receiptRepository = receiptRepository;
         this.debitNoteService = debitNoteService;
         this.numberService = numberService;
+        this.auditService = auditService;
     }
 
     public Page<Receipt> findByDebitNote(UUID debitNoteId, Pageable pageable) {
@@ -77,16 +82,35 @@ public class ReceiptService {
         if (receipt.getStatus() == TransactionStatus.REVERSED) {
             throw new IllegalStateException("Receipt is already reversed");
         }
+
+        ReverseSnapshot oldValue = new ReverseSnapshot(
+                receipt.getStatus(), null, null, null);
+
         receipt.setStatus(TransactionStatus.REVERSED);
         receipt.setReversalReason(reversalReason);
         receipt.setReversedAt(Instant.now());
         receipt.setReversedBy(currentUser());
-        receiptRepository.save(receipt);
+        Receipt saved = receiptRepository.save(receipt);
 
-        UUID debitNoteId = receipt.getDebitNote().getId();
+        ReverseSnapshot newValue = new ReverseSnapshot(
+                saved.getStatus(),
+                saved.getReversedAt(),
+                saved.getReversedBy(),
+                saved.getReversalReason());
+
+        auditService.log("Receipt", saved.getId().toString(),
+                AuditAction.REVERSE, oldValue, newValue);
+
+        UUID debitNoteId = saved.getDebitNote().getId();
         BigDecimal newPaid = sumPostedReceipts(debitNoteId);
         debitNoteService.recalculateStatus(debitNoteId, newPaid);
     }
+
+    private record ReverseSnapshot(
+            TransactionStatus status,
+            Instant reversedAt,
+            String reversedBy,
+            String reversalReason) {}
 
     private BigDecimal sumPostedReceipts(UUID debitNoteId) {
         List<Receipt> posted = receiptRepository

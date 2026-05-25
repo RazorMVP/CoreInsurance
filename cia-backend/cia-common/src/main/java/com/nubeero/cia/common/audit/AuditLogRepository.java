@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface AuditLogRepository extends JpaRepository<AuditLog, UUID>,
@@ -21,6 +22,9 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID>,
     Page<AuditLog> findByTimestampBetween(Instant from, Instant to, Pageable pageable);
 
     long countByUserIdAndActionAndTimestampAfter(String userId, AuditAction action, Instant after);
+
+    /** Returns the single most-recently written audit row, or empty if the table is empty. */
+    Optional<AuditLog> findTopByOrderByTimestampDesc();
 
     @Query("SELECT a.userId AS userId, a.userName AS userName, COUNT(a) AS actionCount " +
            "FROM AuditLog a WHERE a.timestamp BETWEEN :from AND :to " +
