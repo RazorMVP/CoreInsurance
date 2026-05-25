@@ -5,6 +5,7 @@ import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +37,47 @@ public class ReceiptService {
 
     public Page<Receipt> findByDebitNote(UUID debitNoteId, Pageable pageable) {
         return receiptRepository.findAllByDebitNote_IdAndDeletedAtIsNull(debitNoteId, pageable);
+    }
+
+    public Page<ReceiptListItemResponse> findAll(Specification<Receipt> spec, Pageable pageable) {
+        // Always exclude soft-deleted rows, regardless of what the caller passes.
+        var fullSpec = (spec == null
+                ? ReceiptSpecs.deletedAtIsNull()
+                : Specification.where(ReceiptSpecs.deletedAtIsNull()).and(spec));
+
+        return receiptRepository.findAll(fullSpec, pageable).map(this::toListItem);
+    }
+
+    private ReceiptListItemResponse toListItem(Receipt r) {
+        DebitNote dn = r.getDebitNote();
+        // DebitNote denormalises customerName and entityReference at creation time
+        // (see PolicyApprovedEventListener / EndorsementApprovedEventListener).
+        // entityReference holds the policy/endorsement/claim number depending on
+        // entityType — for POLICY DNs it IS the policy number, which is exactly
+        // what the list table needs. No cross-module join required.
+        String policyNumber = null;
+        String customerName = null;
+        if (dn != null) {
+            customerName = dn.getCustomerName();
+            if (dn.getEntityType() == FinanceEntityType.POLICY) {
+                policyNumber = dn.getEntityReference();
+            }
+        }
+        return new ReceiptListItemResponse(
+                r.getId(),
+                r.getReceiptNumber(),
+                dn != null ? dn.getId() : null,
+                dn != null ? dn.getDebitNoteNumber() : null,
+                policyNumber,
+                customerName,
+                r.getAmount(),
+                r.getPaymentMethod(),
+                r.getPaymentDate(),
+                r.getStatus(),
+                r.getReversedAt(),
+                r.getReversedBy(),
+                r.getReversalReason(),
+                r.getCreatedAt());
     }
 
     public Receipt findOrThrow(UUID id) {
