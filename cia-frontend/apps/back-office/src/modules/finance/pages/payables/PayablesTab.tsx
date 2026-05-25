@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Badge, DataTable, DataTableColumnHeader, DataTableRowActions,
   PageSection,
+  Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
@@ -12,6 +13,7 @@ import {
 } from '@cia/api-client';
 import CreditNoteDetailDialog   from './CreditNoteDetailDialog';
 import ProcessPaymentSheet      from './ProcessPaymentSheet';
+import PaymentsListSection      from './PaymentsListSection';
 
 const ENTITY_LABELS: Record<FinanceEntityType, string> = {
   POLICY:        'Policy',
@@ -121,34 +123,45 @@ export default function PayablesTab() {
   ];
 
   return (
-    <div className="space-y-8">
-      {/* Credit Notes */}
-      <PageSection
-        title="Credit Notes"
-        description="Payables — claims DVs, commissions, endorsement refunds and RI credits. Process a payment against a credit note to settle."
-      >
-        <DataTable
-          columns={cnColumns}
-          data={creditNotes}
-          toolbar={{ searchColumn: 'creditNoteNumber', searchPlaceholder: 'Search credit notes…' }}
+    <Tabs defaultValue="credit-notes" className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="credit-notes">Credit Notes</TabsTrigger>
+        <TabsTrigger value="payments">Payments</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="credit-notes" className="space-y-8">
+        {/* Credit Notes */}
+        <PageSection
+          title="Credit Notes"
+          description="Payables — claims DVs, commissions, endorsement refunds and RI credits. Process a payment against a credit note to settle."
+        >
+          <DataTable
+            columns={cnColumns}
+            data={creditNotes}
+            toolbar={{ searchColumn: 'creditNoteNumber', searchPlaceholder: 'Search credit notes…' }}
+          />
+        </PageSection>
+
+        {/* Credit note detail dialog */}
+        <CreditNoteDetailDialog
+          open={cnDetail !== null}
+          onOpenChange={(v) => { if (!v) setCnDetail(null); }}
+          creditNote={cnDetail}
+          onProcessPayment={handleProcessPaymentFromDialog}
         />
-      </PageSection>
 
-      {/* Credit note detail dialog */}
-      <CreditNoteDetailDialog
-        open={cnDetail !== null}
-        onOpenChange={(v) => { if (!v) setCnDetail(null); }}
-        creditNote={cnDetail}
-        onProcessPayment={handleProcessPaymentFromDialog}
-      />
+        {/* Process payment sheet */}
+        <ProcessPaymentSheet
+          open={processPayTarget !== null}
+          onOpenChange={(v) => { if (!v) setProcessPayTarget(null); }}
+          creditNote={processPayTarget}
+          onSuccess={() => setProcessPayTarget(null)}
+        />
+      </TabsContent>
 
-      {/* Process payment sheet */}
-      <ProcessPaymentSheet
-        open={processPayTarget !== null}
-        onOpenChange={(v) => { if (!v) setProcessPayTarget(null); }}
-        creditNote={processPayTarget}
-        onSuccess={() => setProcessPayTarget(null)}
-      />
-    </div>
+      <TabsContent value="payments">
+        <PaymentsListSection />
+      </TabsContent>
+    </Tabs>
   );
 }
