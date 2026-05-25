@@ -11,8 +11,6 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * Base class for Finance module <em>controller</em> integration tests.
@@ -24,11 +22,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * because its tests target the service/repository layer, not HTTP/auth.
  *
  * <h2>Auth in tests</h2>
- * There is no {@code spring-security-test} dependency on the classpath, so
- * {@code @WithMockUser} is not available. Subclasses set up authentication
- * by populating {@code SecurityContextHolder} directly in {@code @BeforeEach}
- * — the same pattern used by {@link ReceiptReverseAuditIT} and
- * {@link PaymentReverseAuditIT}.
+ * {@code spring-security-test} is on the classpath, so subclasses authenticate
+ * via {@code @WithMockUser} at class or method level. The
+ * {@code TestSecurityContextHolderPostProcessor} hooks into MockMvc's request
+ * lifecycle, pre-populating {@code SecurityContextHolder} before the filter
+ * chain runs — the only reliable approach in a {@code @SpringBootTest} setup
+ * (direct mutation in the test body is wiped by
+ * {@code SecurityContextPersistenceFilter} before {@code @PreAuthorize} fires).
  *
  * <h2>External-service isolation</h2>
  * {@code @MockBean} is used rather than a {@code @TestConfiguration @Primary}
@@ -42,8 +42,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  *
  * <ul>
  *   <li><b>{@link JwtDecoder}</b> — replaces {@code SecurityConfig.jwtDecoder()};
- *       never exercised because the IT sets {@code SecurityContextHolder}
- *       directly (pre-auth, bypasses the JWT filter).</li>
+ *       never exercised because {@code @WithMockUser} pre-populates
+ *       {@code SecurityContextHolder} ahead of the filter chain.</li>
  *   <li><b>{@link WorkflowServiceStubs} / {@link WorkflowClient} /
  *       {@link WorkerFactory}</b> — replaces {@code TemporalConfig} beans so
  *       no gRPC dial to {@code localhost:7233} occurs.</li>
@@ -56,12 +56,26 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * </ul>
  *
  * <h2>Database</h2>
- * A shared Postgres 16 Testcontainers instance migrated to V49, identical to
- * {@link FinanceItSupport}.
+ * A <em>singleton</em> Postgres 16 Testcontainers instance migrated to V49.
+ * The container is started exactly once for the JVM (in a static initializer
+ * block, no {@code @Container} / {@code @Testcontainers}) and is cleaned up by
+ * the JVM-level shutdown hook Testcontainers installs via Ryuk.
  *
- * @since Slice α — Task 7, ReceiptListController
+ * <p>Why the singleton pattern instead of {@code @Container} (as
+ * {@code FinanceItSupport} uses): {@code @SpringBootTest} contexts are cached
+ * across test classes by Spring's {@code ContextCache}. The first IT extending
+ * this base ({@code ReceiptListControllerIT}) caches a context whose
+ * {@code DataSource} resolves to whatever URL Testcontainers exposed at that
+ * moment. JUnit's {@code @Testcontainers} extension then stops the
+ * {@code @Container static} field at the end of the test class, killing the
+ * Postgres. When the next IT extending this base ({@code PaymentListControllerIT})
+ * begins, Spring reuses the cached context — but its DataSource still points
+ * at the now-stopped container, producing {@code Connection refused} on every
+ * test. Promoting the container to JVM-singleton lifetime (no JUnit lifecycle
+ * binding) keeps the URL stable across all reusing tests.
+ *
+ * @since Slice α — Task 7, ReceiptListController (singleton-container fix added in Task 8)
  */
-@Testcontainers
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
@@ -96,15 +110,23 @@ public abstract class FinanceWebItSupport {
      */
     @MockBean DocumentStorageService documentStorageService;
 
-    // ── Database ───────────────────────────────────────────────────────────
+    // ── Database — singleton, JVM-lifetime, see class Javadoc ──────────────
 
-    @Container
     @SuppressWarnings("resource")
     static final PostgreSQLContainer<?> POSTGRES =
         new PostgreSQLContainer<>("postgres:16-alpine")
             .withDatabaseName("ciawebtest")
             .withUsername("ciawebtest")
             .withPassword("ciawebtest");
+
+    static {
+        // Start once for the JVM; Testcontainers' Ryuk handles teardown.
+        // No @Container annotation = JUnit does NOT stop this between
+        // test classes, so a Spring-cached @SpringBootTest context that
+        // references POSTGRES.getJdbcUrl() stays valid for every IT that
+        // reuses the cached context.
+        POSTGRES.start();
+    }
 
     @DynamicPropertySource
     static void datasourceProps(DynamicPropertyRegistry registry) {
