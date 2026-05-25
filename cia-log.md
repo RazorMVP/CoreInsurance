@@ -19,6 +19,30 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-05-25 — Session 124 (`main`): F7 brainstorm — in flight
+
+Brainstorming-skill driven scoping pass on backlog row **F7** (flat receipts + payments inventory view). No code written; design doc not yet authored. The user confirmed both motivations from Question 1 — operator self-visibility ("see what I have done") AND audit trail ("who did what, when, why") — and introduced a new sub-requirement not in the original F7 row: **operators need to generate receipts as documents for onward transmission to the customer**.
+
+Question 2 (in-flight, awaiting answer) presents three splits:
+
+- **a.** Visibility only — flat-list backend + ITs + restored tabs + nested receipts/payments in DN/CN detail dialogs + reversal-audit columns + wire `ReverseTransactionDialog`. Receipt PDF becomes a new backlog row.
+- **b.** Visibility + receipt PDF download — adds `ReceiptPdfGenerator` + Thymeleaf template + `GET /api/v1/debit-notes/{dnId}/receipts/{id}/pdf` (and payment-voucher equivalent) + download buttons. No email.
+- **c.** Visibility + PDF + email transmission — adds `NotificationService` attachment delivery path; the existing interface may need an `EmailMessage` attachment overload.
+
+### Files touched
+
+None this session. Brainstorm only.
+
+### Backlog reconciliation
+
+No change yet — F7 still on the table. If the user picks split (a), a new row (provisionally **F9**) will be added for receipt-PDF-for-customer-transmission. If (b), a new row for the email path. If (c), F7 absorbs everything and closes.
+
+### Known follow-ups
+
+- Spec doc target: `docs/superpowers/specs/2026-05-25-f7-receipt-payment-visibility-design.md` (per brainstorming skill convention) — will be authored once Question 2 + the remaining clarifying question land.
+
+---
+
 ## 2026-05-24 — Session 123 (`main`): Context-load only — no code touched
 
 Session opened with `/cia` to load the CIAGB skill brief. No files created or modified; no decisions locked in. Awaiting direction from the user on the next slice — the canonical backlog table at the top of this file is down to two rows (**B2** RM commission via 2520, blocked on design conversation; **F7** flat receipts/payments inventory view, blocked on new backend flat-list endpoints), so the next slice is most likely a new initiative outside the table (e.g. Module 12 Phase 6 cross-tenant platform admin view, Frontend Phase 3 Partner Portal builds P1–P5, or a Phase 4 v2 NAICOM follow-up).
