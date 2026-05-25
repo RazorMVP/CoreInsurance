@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import {
   Badge, Button, Separator, Skeleton,
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@cia/ui';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, type DebitNoteDto, type PolicyDto } from '@cia/api-client';
+import { useReceiptList } from '../../hooks/useReceipts';
+import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
 
 const DN_STATUS_VARIANT: Record<DebitNoteDto['status'], 'pending' | 'active' | 'draft' | 'rejected'> = {
   OUTSTANDING: 'pending',
@@ -43,13 +46,19 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
     enabled: open && isPolicyBacked && !!debitNote?.entityId,
   });
 
+  const [reverseTarget, setReverseTarget] = useState<ReverseTarget | null>(null);
+  const receiptsQuery = useReceiptList(
+    debitNote ? { debitNoteId: debitNote.id } : { debitNoteId: '' },
+  );
+  const receipts = receiptsQuery.data?.data ?? [];
+
   if (!debitNote) return null;
 
   const canPost = debitNote.status === 'OUTSTANDING' || debitNote.status === 'PARTIAL';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <DialogTitle>{debitNote.debitNoteNumber}</DialogTitle>
@@ -102,6 +111,66 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
             <p className="text-base font-semibold text-primary">₦{debitNote.outstandingAmount.toLocaleString()}</p>
           </div>
         </div>
+
+        {receipts.length > 0 && (
+          <section className="mt-2 rounded-lg border overflow-hidden">
+            <div className="bg-muted/40 px-4 py-2 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Receipts ({receipts.length})
+              </p>
+            </div>
+            <ul className="divide-y">
+              {receipts.map((r) => (
+                <li key={r.id} className="flex items-start justify-between gap-3 px-4 py-2">
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="font-mono text-xs">{r.reference}</span>
+                    <span className="text-xs text-muted-foreground">
+                      ₦{r.amount.toLocaleString()} · {r.paymentMethod.replace('_', ' ').toLowerCase()} · {r.paymentDate ?? '—'}
+                    </span>
+                    {r.status === 'REVERSED' && r.reversedAt && (
+                      <span className="text-[11px] text-muted-foreground">
+                        Reversed {new Date(r.reversedAt).toLocaleString()} by {r.reversedBy ?? 'unknown'}
+                        {r.reversalReason ? ` — ${r.reversalReason}` : ''}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-start gap-2">
+                    <Badge
+                      variant={r.status === 'POSTED' ? 'active' : 'rejected'}
+                      className="text-[10px]"
+                    >
+                      {r.status.toLowerCase()}
+                    </Badge>
+                    {r.status === 'POSTED' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setReverseTarget({
+                          type:      'RECEIPT',
+                          id:        r.id,
+                          parentId:  r.debitNoteId,
+                          reference: r.reference,
+                          linkedRef: r.debitNoteNumber,
+                          amount:    r.amount,
+                          method:    r.paymentMethod,
+                          date:      r.paymentDate ?? '',
+                        })}
+                      >
+                        Reverse
+                      </Button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <ReverseTransactionDialog
+          open={reverseTarget !== null}
+          onOpenChange={(v) => { if (!v) setReverseTarget(null); }}
+          target={reverseTarget}
+        />
 
         <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
