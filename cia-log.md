@@ -13,9 +13,96 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | ID | P | Item | Notes |
 |---|---|---|---|
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
-| F7 | P3 | Flat receipts + payments inventory view dropped | Session 103 (F2) removed the "Receipts" + "Payments" sub-sections from ReceivablesTab + PayablesTab because backend has no `/api/v1/receipts` or `/api/v1/payments` flat list endpoint — receipts only exist nested under a debit-note (`/api/v1/debit-notes/{dnId}/receipts`), payments only under a credit-note. If a finance-level "show me all approved receipts this week" view is needed, add flat list controllers + ITs on the backend, then re-surface the sub-sections. Alternative: expose receipts + payments inside DebitNoteDetailDialog + CreditNoteDetailDialog so users can drill from the DN/CN inventory. `ReverseTransactionDialog` file kept in-tree (dead until either surface lands). |
+| F7-β | P2 | Receipt + Payment PDF generation + MinIO storage + download endpoints | Slice β of F7. `ReceiptPdfGenerator` (cia-documents) + Thymeleaf templates + `GET /api/v1/debit-notes/{dnId}/receipts/{id}/pdf` (and payment-voucher equivalent) returning bytes from `DocumentStorageService` or generating on demand. Download buttons on ReceiptsListSection + PaymentsListSection + nested DN/CN detail dialog rows. Includes V50 migration to add `pdf_path` column on `receipts` + `payments` if persisted. Slice α (visibility) already landed in Session 125. |
+| F7-γ | P3 | Symmetric receipt + payment-voucher email transmission via Temporal | Slice γ of F7. Requires F7-β complete. `BeneficiaryEmailResolver` (Policy → customer.email for receipts; CreditNote.entityType + entityReference → claim payee / commission beneficiary / FAC reinsurer for payments). Temporal `SendReceiptEmailWorkflow` / `SendPaymentVoucherEmailWorkflow` with retries (3× exponential backoff). Email attachment delivery via `NotificationService.sendEmail` (may need attachment overload on the interface — confirm). Send + Resend buttons; persists last-send timestamp + status on Receipt + Payment. |
+| F7-δ | P3 | Per-tenant email template override for receipt / payment emails | Slice δ of F7. Requires F7-γ complete. Default subject + body templates ship in `cia-documents` resources; per-tenant overrides stored in `tenant_email_template` (V52) keyed by template type. Renderer falls back to default if no row. Setup → Notifications → Email Templates page lists default + override side-by-side; reset-to-default action. |
+| F9 | P3 | Receipt PDF download surface ergonomics | Captured during F7 Session 124 brainstorm scope-cap discussion. Once F7-β lands, surface PDF download from the existing receipt + payment number cells (not only as a row action), plus a "Recent downloads" panel for operators tracking what they've already pushed to customers this session. Pure UX polish on top of F7-β. |
+| F10 | P3 | Bulk receipt-PDF email send | Captured during F7 Session 124 scope cap. After F7-γ ships, add a multi-select on ReceiptsListSection that fires N `SendReceiptEmailWorkflow` instances in parallel with a progress dialog. Useful for end-of-month bulk-collection scenarios. |
+| R7 | P3 | Per-tenant SMS template override + SMS-receipt option | Captured during F7 Session 124. SMS path mirrors F7-δ but for receipt + payment SMS notifications via `NotificationService.sendSms`. Distinct from email because some tenants prefer SMS for transactional confirmations. Likely depends on `tenant_sms_template` (V53) + per-tenant default channel preference (email vs SMS) on `tenant_settings`. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-25 — Session 125 (`main`): F7 slice α — receipt + payment visibility + reversal audit
+
+Brainstorm landed (Session 124) → plan written (`docs/superpowers/plans/2026-05-25-f7-slice-alpha-visibility.md`, 18 TDD tasks) → executed under `superpowers:subagent-driven-development`. Stated goal: "Operators can see every posted receipt + payment with full audit trail (reversal columns surfaced) across DN-scoped, CN-scoped, and global flat-list surfaces; reverse() actions write to audit_log; ReverseTransactionDialog wired into all four list surfaces (Receivables + Payables tabs + nested DN + nested CN dialogs)." Visibility-only — PDF + email + per-tenant templates explicitly deferred to slices β / γ / δ per Q4 of the brainstorm.
+
+### What landed
+
+**Backend.** Two new flat-list REST surfaces (`GET /api/v1/receipts`, `GET /api/v1/payments`) live alongside the existing nested write-surfaces (`POST /api/v1/debit-notes/{dnId}/receipts`, `POST /api/v1/credit-notes/{cnId}/payments`) which stay as the canonical creation + reverse paths. Filtering via `JpaSpecificationExecutor<T>` + a static `*Specs` factory class per entity (5 specs each: `deletedAtIsNull`, `statusEquals`, `createdBetween`, `paymentMethodEquals`, `debitNoteIdEquals` / `creditNoteIdEquals`). Projection DTOs (`ReceiptListItemResponse`, `PaymentListItemResponse` — Java records, 14 fields each) carry parent + grandparent context (debit-note number + policy number + customer name for receipts; credit-note number + beneficiary type + beneficiary reference for payments) so the table row never N+1s through Policy / Customer / Claim. `Receipt|PaymentService.findAll(spec, pageable)` does the JPA query + projection mapping; controller hands back `ApiResponse<List<*ListItemResponse>>` with paged `ApiMeta`. `Receipt|PaymentService.reverse()` now writes a single `AuditLog` row with `action=REVERSE`, `entity_type=Receipt|Payment`, `old_value.status=POSTED`, `new_value.status=REVERSED` + reversal reason; the visibility UI surfaces this audit data inline under the REVERSED chip. The audit write uses the existing `AuditService.log(...)` flow.
+
+**Frontend.** Four new visibility surfaces all share the same shape (status filter, 20-row pagination, inline reversal audit, Reverse row action wired to existing `ReverseTransactionDialog`): (1) Receivables → new `ReceiptsListSection` sibling tab, default tab stays Debit Notes for behavioural compat; (2) Payables → new `PaymentsListSection` sibling tab, default tab stays Credit Notes; (3) `DebitNoteDetailDialog` → new nested Receipts section (hidden when DN has zero receipts), dialog widened from `sm:max-w-md` to `sm:max-w-lg`; (4) `CreditNoteDetailDialog` → new nested Payments section, same widening. New zod schemas (`Receipt|PaymentListItemResponseSchema`) in `@cia/api-client/modules/finance.ts`, gated through a new `validatedList<T>` helper in `packages/api-client/src/validation.ts` (returns `{ data, meta }` — `validatedGet` deliberately discards `meta`, so a new envelope-preserving variant was needed for paginated reads). New `useReceiptList` + `usePaymentList` + `useReverseReceipt` + `useReversePayment` hooks in `apps/back-office/src/modules/finance/hooks/`. Reverse mutations now correctly POST `{ reason }` matching the backend `ReverseRequest` record (the hooks initially had `{ reversalReason }` from a plan-stub error; fixed in the Task 11 commit while wiring the receipts-tab Reverse action).
+
+**Docs.** `CLAUDE.md` Module 8 row + Build 6 Receipts/Payables rows updated to reflect the restored sub-tabs and nested-in-detail surfaces. New "Flat list endpoints for child aggregates" bullet under API Design captures the convention (separate `*ListController` alongside the existing nested controller — never bolt-on; use `JpaSpecificationExecutor` + static `*Specs` + projection DTO; carries parent context to avoid N+1). `docs-site/static/internal-api.json` 254 → 256 paths — full OpenAPI 3.1 entries for `/api/v1/receipts` GET + `/api/v1/payments` GET (FINANCE_VIEW security + parameters + envelope schema), plus `ReceiptListItemResponse` + `PaymentListItemResponse` schema components.
+
+### Slice-margin discoveries (resolved in-flight; not deferred)
+
+Three findings surfaced during execution that materially affect the codebase beyond the F7 line. All three were resolved in their host task per slice-discipline rule (b) — "if you discover that the stated goal can't ship without also fixing X, broaden the stated goal with a one-line justification" — and called out in the host commit message:
+
+- **`@EnableMethodSecurity` was missing from `SecurityConfig`** (added in Task 7). Without it, every `@PreAuthorize("...")` annotation in the entire backend was silently no-op'ing — any FINANCE_VIEW / FINANCE_UPDATE / etc. gate on a controller method would let unauthenticated or under-privileged requests through. The Task 7 IT (`listReceipts_returns403WithoutFinanceViewRole`) failed against this and forced the discovery. Codebase-wide impact: every existing `@PreAuthorize` is now enforced; full failsafe baseline post-fix is green (295 ITs at Task 7, 300 at Task 8) so no existing IT was relying on the broken behaviour.
+- **`AccessDeniedException` was falling through to 500** (added a handler in `GlobalExceptionHandler` mapping it to 403; Task 7). Spring Security 6's `AuthorizationDeniedException` extends `AccessDeniedException`; we map both. Without this, the new 403 IT would have asserted on a 500 response — bug masked.
+- **`FinanceWebItSupport` `@Container` lifecycle was broken across cached @SpringBootTest contexts** (Task 8). With one IT (Task 7) it worked; with two ITs (Tasks 7 + 8) the first IT's `@Testcontainers` extension stopped the Postgres at class end, but Spring's `ContextCache` reused the cached `DataSource` URL for the second IT and got `Connection refused`. Fix: promoted the container to JVM-singleton lifetime (started in a `static {}` block, dropped `@Testcontainers`); Testcontainers' Ryuk handles teardown at JVM exit. Pattern is documented in `FinanceWebItSupport` Javadoc so the next Finance IT base class doesn't re-trip the same wire.
+
+### Files touched
+
+**Backend — production** (10 files):
+
+| File | Change |
+|---|---|
+| `cia-common/.../audit/AuditLogRepository.java` | Added `findTopByOrderByTimestampDesc()` for IT assertions |
+| `cia-auth/.../SecurityConfig.java` | Added `@EnableMethodSecurity` (codebase-wide security fix) |
+| `cia-common/.../GlobalExceptionHandler.java` | Added `AccessDeniedException → 403` handler |
+| `cia-finance/.../ReceiptService.java` | `reverse()` now writes AuditLog REVERSE; new `findAll(spec, pageable)` + `toListItem` projection |
+| `cia-finance/.../PaymentService.java` | Mirror — AuditLog on reverse; `findAll` + projection |
+| `cia-finance/.../ReceiptRepository.java` | Now `extends JpaSpecificationExecutor<Receipt>` |
+| `cia-finance/.../PaymentRepository.java` | Now `extends JpaSpecificationExecutor<Payment>` |
+| `cia-finance/.../ReceiptSpecs.java` + `PaymentSpecs.java` | New static factory classes — 5 specs each, null-guarded |
+| `cia-finance/.../ReceiptListItemResponse.java` + `PaymentListItemResponse.java` | New Java record projection DTOs |
+| `cia-finance/.../ReceiptListController.java` + `PaymentListController.java` | New REST controllers, FINANCE_VIEW gated |
+
+**Backend — tests + dependencies** (5 files):
+
+| File | Change |
+|---|---|
+| `cia-api/pom.xml` | Added `spring-security-test` (test scope) |
+| `cia-api/src/test/.../FinanceItSupport.java` | New `@DataJpaTest` base (Testcontainers Postgres) |
+| `cia-api/src/test/.../FinanceWebItSupport.java` | New `@SpringBootTest + @AutoConfigureMockMvc` base; JVM-singleton container post-Task-8 |
+| `cia-api/src/test/.../FinanceItFixtures.java` | New JDBC-only fixture helpers (`createOutstandingDebitNote`, `createOutstandingCreditNote`) — intentionally no service-layer deps so `@DataJpaTest` ITs can import without breaking |
+| `cia-api/src/test/.../ReceiptReverseAuditIT.java` + `PaymentReverseAuditIT.java` + `ReceiptListControllerIT.java` + `PaymentListControllerIT.java` | New ITs |
+
+**Frontend** (10 files):
+
+| File | Change |
+|---|---|
+| `packages/api-client/src/validation.ts` | New `validatedList<T>` helper preserving `{ data, meta }` |
+| `packages/api-client/src/index.ts` | Re-export `validatedList` |
+| `packages/api-client/src/modules/finance.ts` | New zod schemas + types + `ReceiptListFilters` / `PaymentListFilters` + `listReceipts` / `listPayments` fetchers |
+| `apps/back-office/src/modules/finance/hooks/useReceipts.ts` + `usePayments.ts` | New `useReceiptList` / `usePaymentList` + `useReverseReceipt` / `useReversePayment` |
+| `apps/back-office/src/modules/finance/pages/receivables/ReceiptsListSection.tsx` | New default-export section component |
+| `apps/back-office/src/modules/finance/pages/receivables/ReceivablesTab.tsx` | Wrapped existing content in `Tabs`; added Receipts sub-tab |
+| `apps/back-office/src/modules/finance/pages/receivables/DebitNoteDetailDialog.tsx` | Added nested Receipts section + per-row Reverse; widened `sm:max-w-lg` |
+| `apps/back-office/src/modules/finance/pages/payables/PaymentsListSection.tsx` | Mirror of ReceiptsListSection |
+| `apps/back-office/src/modules/finance/pages/payables/PayablesTab.tsx` | Wrapped in `Tabs`; added Payments sub-tab |
+| `apps/back-office/src/modules/finance/pages/payables/CreditNoteDetailDialog.tsx` | Added nested Payments section + per-row Reverse; widened |
+
+**Docs** (3 files): `CLAUDE.md` (Module 8 row + Build 6 + new API Design bullet), `docs-site/static/internal-api.json` (254 → 256 paths), `docs/superpowers/specs/2026-05-25-f7-receipt-payment-visibility-design.md` + `docs/superpowers/plans/2026-05-25-f7-slice-alpha-visibility.md` (already committed in Session 124's spec + plan push).
+
+### Test coverage
+
+- **+12 backend ITs** added by this slice: 1 audit-pinning IT for each of Receipt + Payment reverse (Tasks 1 + 2), 5 controller-slice ITs for each of `/api/v1/receipts` + `/api/v1/payments` (Tasks 7 + 8). Failsafe baseline 274 → 300 in cia-api (mid-slice intermediate jumps include the @EnableMethodSecurity unmask making previously-not-running gate paths now reachable from existing tests). 0 failures, 0 errors, 1 intentional benchmark skip throughout.
+- **Frontend gates** all green at slice close: `pnpm --filter @cia/back-office typecheck` exit 0; `check-dto-drift.mjs` clean (93 Dtos, 25 skipped); `check-api-wiring.sh` clean (no `console.log`, no mock data, no leftover TODO markers in modules).
+
+### Backlog reconciliation
+
+- **Removed**: F7 (visibility half — original row) folded down to the visibility-only deliverable, which is done as of this slice.
+- **Added**: F7-β (PDF + MinIO), F7-γ (email via Temporal), F7-δ (per-tenant email template) for the remaining-slice scope; F9 (PDF surface ergonomics), F10 (bulk receipt-PDF email), R7 (SMS template + channel preference) captured from Section 6 scope-cap discussion in the spec. All seven rows are in the canonical table at the top of this file with explicit dependency ordering (γ requires β; δ requires γ; F9 requires β; F10 requires γ).
+
+### Known follow-ups
+
+- Next slice is **F7-β** if continuing this work, or any P-prioritised row in the table.
+- Two TS patterns flagged-not-extracted for rule-of-three: (1) `validatedList` helper signature pattern — typed filter interface + internal indexable cast (single occurrence in Tasks 9 + 11 + 12 + 13 + 14 — already at four reuses but the helper is the rule-of-three answer; nothing to extract further). (2) `Tab-wrapping an existing single-content tab page` pattern — implemented twice (Tasks 11 + 12, ReceivablesTab + PayablesTab) but doesn't warrant a shared component yet; if a third tab page appears with the same "add sibling list tab over existing single-content tab" need, lift to a helper.
+- Internal-api.json's `PaymentMethod` enum is inlined in 4 places (existing `PaymentResponse` + `PostPaymentRequest` + new `ReceiptListItemResponse` + `PaymentListItemResponse`); extracting to a shared `#/components/schemas/PaymentMethod` is a P3 polish item — out of scope per scope-cap policy.
 
 ---
 
