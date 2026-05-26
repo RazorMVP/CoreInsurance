@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body style="font-family: sans-serif; color: #333; max-width: 600px;">
+  <h2>Receipt for your payment</h2>
+  <p>Dear <span th:text="${customerName}">Customer Name</span>,</p>
+  <p>Thank you for your payment of <b><span th:text="${amount}">₦0.00</span></b>
+     received on <span th:text="${paymentDate}">YYYY-MM-DD</span>.</p>
+  <p>Your official receipt (<span th:text="${receiptNumber}">REC-XXXX</span>) is attached
+     to this email as a PDF.</p>
+  <p>This receipt closes debit note <span th:text="${debitNoteNumber}">DN-XXXX</span>.</p>
+  <hr/>
+  <p style="color: #888; font-size: 0.9em;">
+    Regards,<br/>
+    <span th:text="${companyName}">Company Name</span>
+  </p>
+</body>
+</html>
