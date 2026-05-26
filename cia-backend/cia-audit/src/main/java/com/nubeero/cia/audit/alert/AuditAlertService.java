@@ -2,9 +2,8 @@ package com.nubeero.cia.audit.alert;
 
 import com.nubeero.cia.audit.alert.dto.AuditAlertResponse;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
-import com.nubeero.cia.notifications.NotificationService;
-import com.nubeero.cia.notifications.model.NotificationChannel;
-import com.nubeero.cia.notifications.model.NotificationRequest;
+import com.nubeero.cia.notifications.email.EmailMessage;
+import com.nubeero.cia.notifications.email.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -24,7 +23,7 @@ import java.util.UUID;
 public class AuditAlertService {
 
     private final AuditAlertRepository alertRepository;
-    private final NotificationService notificationService;
+    private final EmailService emailService;
 
     @Transactional
     public AuditAlert fire(AlertType type, String severity, String userId, String userName,
@@ -67,13 +66,8 @@ public class AuditAlertService {
 
     private void notifyAuditors(AuditAlert alert) {
         try {
-            NotificationRequest request = NotificationRequest.builder()
-                    .recipient("auditor@nubeero.com")
-                    .subject("[CIA Alert] " + alert.getAlertType().name() + " — " + alert.getSeverity())
-                    .body(alert.getDescription())
-                    .channel(NotificationChannel.EMAIL)
-                    .build();
-            notificationService.send(request);
+            String subject = "[CIA Alert] " + alert.getAlertType().name() + " — " + alert.getSeverity();
+            emailService.sendEmail(EmailMessage.of("auditor@nubeero.com", subject, alert.getDescription()));
         } catch (Exception e) {
             log.warn("Failed to send alert notification for alertId={}: {}", alert.getId(), e.getMessage());
         }

@@ -4,9 +4,8 @@ import com.nubeero.cia.common.tenant.TenantContext;
 import com.nubeero.cia.finance.gl.PeriodReopenedEvent;
 import com.nubeero.cia.finance.gl.TenantReopenRecipient;
 import com.nubeero.cia.finance.gl.TenantReopenRecipientRepository;
-import com.nubeero.cia.notifications.NotificationService;
-import com.nubeero.cia.notifications.model.NotificationChannel;
-import com.nubeero.cia.notifications.model.NotificationRequest;
+import com.nubeero.cia.notifications.email.EmailMessage;
+import com.nubeero.cia.notifications.email.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,7 +17,7 @@ import java.util.List;
 
 /**
  * Bridges the {@link PeriodReopenedEvent} (published by {@code cia-finance})
- * to the {@code NotificationService} (in {@code cia-notifications}) for the
+ * to the {@code EmailService} (in {@code cia-notifications}) for the
  * mandatory CFO + compliance email on every reopen of a HARD-closed period.
  *
  * <p>Slice 1.7 reads recipients from a single Spring property
@@ -27,8 +26,8 @@ import java.util.List;
  * deployments configure one platform-wide recipient list.
  *
  * <p>The listener is intentionally minimal: it does not retry, batch, or
- * persist a delivery log. The active {@code NotificationService} adapter
- * (SendGrid / SES / SMTP / log) handles delivery semantics. The
+ * persist a delivery log. The active {@code EmailService} implementation
+ * (SendGrid / SMTP / log) handles delivery semantics. The
  * {@code PeriodReopenedLogListener} in {@code cia-finance} writes an
  * unconditional WARN log line so the event is auditable even when no email
  * recipients are configured.
@@ -40,7 +39,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PeriodReopenedNotificationListener {
 
-    private final NotificationService notificationService;
+    private final EmailService emailService;
     // Slice 1.7c — per-tenant recipient list takes precedence over the
     // legacy CSV Spring property. The property remains as a fallback for
     // environments that haven't migrated their config to the DB yet.
@@ -90,13 +89,7 @@ public class PeriodReopenedNotificationListener {
 
         for (String recipient : recipients) {
             try {
-                notificationService.send(NotificationRequest.builder()
-                    .recipient(recipient)
-                    .subject(subject)
-                    .body(body)
-                    .channel(NotificationChannel.EMAIL)
-                    .tenantId(tenantId)
-                    .build());
+                emailService.sendEmail(EmailMessage.of(recipient, subject, body));
             } catch (Exception ex) {
                 log.error("Failed to send period-reopen notification to {}: {}", recipient, ex.getMessage(), ex);
             }
