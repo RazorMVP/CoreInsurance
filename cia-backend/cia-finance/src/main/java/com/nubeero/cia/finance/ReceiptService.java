@@ -3,6 +3,11 @@ package com.nubeero.cia.finance;
 import com.nubeero.cia.common.audit.AuditAction;
 import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
+import com.nubeero.cia.common.tenant.TenantContext;
+import com.nubeero.cia.finance.pdf.ReceiptPdfGenerator;
+import com.nubeero.cia.storage.DocumentStorageService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -10,6 +15,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -20,19 +26,27 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class ReceiptService {
 
+    private static final Logger log = LoggerFactory.getLogger(ReceiptService.class);
+
     private final ReceiptRepository receiptRepository;
     private final DebitNoteService debitNoteService;
     private final FinanceNumberService numberService;
     private final AuditService auditService;
+    private final ReceiptPdfGenerator    pdfGenerator;
+    private final DocumentStorageService storage;
 
     public ReceiptService(ReceiptRepository receiptRepository,
                           DebitNoteService debitNoteService,
                           FinanceNumberService numberService,
-                          AuditService auditService) {
+                          AuditService auditService,
+                          ReceiptPdfGenerator pdfGenerator,
+                          DocumentStorageService storage) {
         this.receiptRepository = receiptRepository;
         this.debitNoteService = debitNoteService;
         this.numberService = numberService;
         this.auditService = auditService;
+        this.pdfGenerator = pdfGenerator;
+        this.storage = storage;
     }
 
     public Page<Receipt> findByDebitNote(UUID debitNoteId, Pageable pageable) {
@@ -77,7 +91,8 @@ public class ReceiptService {
                 r.getReversedAt(),
                 r.getReversedBy(),
                 r.getReversalReason(),
-                r.getCreatedAt());
+                r.getCreatedAt(),
+                r.getPdfPath());
     }
 
     public Receipt findOrThrow(UUID id) {
@@ -115,6 +130,7 @@ public class ReceiptService {
         BigDecimal newPaid = sumPostedReceipts(debitNoteId);
         debitNoteService.recalculateStatus(debitNoteId, newPaid);
 
+        generateAndPersistPdf(saved);
         return saved;
     }
 
@@ -166,5 +182,32 @@ public class ReceiptService {
     private String currentUser() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         return auth != null ? auth.getName() : "system";
+    }
+
+    /**
+     * Generates the receipt PDF + uploads to MinIO + persists pdfPath.
+     * Failure mode: log WARN, leave pdf_path null, do NOT throw — keeps the
+     * post() commit intact so a PDF rendering hiccup never loses a receipt.
+     */
+    private void generateAndPersistPdf(Receipt receipt) {
+        byte[] pdf = pdfGenerator.generate(receipt);
+        if (pdf == null) {
+            // Already logged inside the generator.
+            return;
+        }
+        try {
+            String tenantId = TenantContext.getTenantId();
+            String path = String.format("receipts/%d/%02d/%s.pdf",
+                receipt.getPaymentDate().getYear(),
+                receipt.getPaymentDate().getMonthValue(),
+                receipt.getId());
+            storage.upload(tenantId, path,
+                           new ByteArrayInputStream(pdf), "application/pdf");
+            receipt.setPdfPath(path);
+            receiptRepository.save(receipt);
+        } catch (Exception e) {
+            log.warn("Failed to upload generated receipt PDF for {}: {}",
+                     receipt.getId(), e.getMessage(), e);
+        }
     }
 }

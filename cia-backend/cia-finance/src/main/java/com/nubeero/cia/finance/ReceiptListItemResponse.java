@@ -23,5 +23,6 @@ public record ReceiptListItemResponse(
         Instant reversedAt,          // nullable
         String reversedBy,           // nullable
         String reversalReason,       // nullable
-        Instant createdAt
+        Instant createdAt,
+        String pdfPath               // nullable — null = PDF was never generated
 ) {}
