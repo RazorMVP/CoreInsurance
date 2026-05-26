@@ -14,7 +14,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * <p>Starts a shared Postgres 16 Testcontainers instance and wires its
  * datasource coordinates into the Spring test context via
  * {@link DynamicPropertySource}. All Flyway migrations run to the current
- * tip (V56) so subclasses have the full production schema available.
+ * tip (V57) so subclasses have the full production schema available.
  *
  * <p>Multi-tenancy is disabled ({@code NONE}) because the IT schema is a
  * single-tenant in-process database — the same pattern used by every other
@@ -41,7 +41,7 @@ public abstract class FinanceItSupport {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.target", () -> "56");
+        registry.add("spring.flyway.target", () -> "57");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 }

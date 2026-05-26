@@ -81,6 +81,12 @@ public class Payment extends BaseEntity implements LockableByPeriod {
     @Column(name = "pdf_path", length = 512)
     private String pdfPath;
 
+    @Column(name = "email_sent_at")
+    private Instant emailSentAt;
+
+    @Column(name = "email_sent_to", length = 255)
+    private String emailSentTo;
+
     // getters and setters
 
     public String getPaymentNumber() { return paymentNumber; }
@@ -130,4 +136,10 @@ public class Payment extends BaseEntity implements LockableByPeriod {
 
     public String getPdfPath() { return pdfPath; }
     public void setPdfPath(String pdfPath) { this.pdfPath = pdfPath; }
+
+    public Instant getEmailSentAt() { return emailSentAt; }
+    public void setEmailSentAt(Instant emailSentAt) { this.emailSentAt = emailSentAt; }
+
+    public String getEmailSentTo() { return emailSentTo; }
+    public void setEmailSentTo(String emailSentTo) { this.emailSentTo = emailSentTo; }
 }
