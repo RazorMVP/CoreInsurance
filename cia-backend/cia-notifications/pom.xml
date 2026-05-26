@@ -29,6 +29,22 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-thymeleaf</artifactId>
     </dependency>
+
+    <!-- SendGrid SDK for the SendGrid email provider impl (Slice γ). -->
+    <dependency>
+      <groupId>com.sendgrid</groupId>
+      <artifactId>sendgrid-java</artifactId>
+      <version>4.10.2</version>
+    </dependency>
+
+    <!-- greenmail — in-process SMTP server for the email IT (verifies
+         MimeMultipart construction + attachment delivery end-to-end). -->
+    <dependency>
+      <groupId>com.icegreen</groupId>
+      <artifactId>greenmail-junit5</artifactId>
+      <version>2.0.1</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
 </project>
