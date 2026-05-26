@@ -5,7 +5,7 @@ import {
 } from '@cia/ui';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, type DebitNoteDto, type PolicyDto } from '@cia/api-client';
-import { useReceiptList } from '../../hooks/useReceipts';
+import { useDownloadReceiptPdf, useReceiptList } from '../../hooks/useReceipts';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
 
 const DN_STATUS_VARIANT: Record<DebitNoteDto['status'], 'pending' | 'active' | 'draft' | 'rejected'> = {
@@ -51,6 +51,8 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
     debitNote ? { debitNoteId: debitNote.id } : { debitNoteId: '' },
   );
   const receipts = receiptsQuery.data?.data ?? [];
+
+  const downloadPdf = useDownloadReceiptPdf();
 
   if (!debitNote) return null;
 
@@ -141,6 +143,20 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
                     >
                       {r.status.toLowerCase()}
                     </Badge>
+                    {r.pdfPath && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => downloadPdf.mutate({
+                          dnId:      r.debitNoteId,
+                          receiptId: r.id,
+                          reference: r.reference,
+                        })}
+                        disabled={downloadPdf.isPending && downloadPdf.variables?.receiptId === r.id}
+                      >
+                        {downloadPdf.isPending && downloadPdf.variables?.receiptId === r.id ? 'Downloading…' : 'Download'}
+                      </Button>
+                    )}
                     {r.status === 'POSTED' && (
                       <Button
                         variant="outline"

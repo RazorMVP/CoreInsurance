@@ -4,7 +4,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@cia/ui';
 import type { CreditNoteDto, FinanceEntityType } from '@cia/api-client';
-import { usePaymentList } from '../../hooks/usePayments';
+import { useDownloadPaymentPdf, usePaymentList } from '../../hooks/usePayments';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
 
 const ENTITY_LABELS: Record<FinanceEntityType, string> = {
@@ -45,6 +45,8 @@ export default function CreditNoteDetailDialog({ open, onOpenChange, creditNote,
     creditNote ? { creditNoteId: creditNote.id } : { creditNoteId: '' },
   );
   const payments = paymentsQuery.data?.data ?? [];
+
+  const downloadPdf = useDownloadPaymentPdf();
 
   if (!creditNote) return null;
 
@@ -129,6 +131,20 @@ export default function CreditNoteDetailDialog({ open, onOpenChange, creditNote,
                     >
                       {p.status.toLowerCase()}
                     </Badge>
+                    {p.pdfPath && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => downloadPdf.mutate({
+                          cnId:      p.creditNoteId,
+                          paymentId: p.id,
+                          reference: p.reference,
+                        })}
+                        disabled={downloadPdf.isPending && downloadPdf.variables?.paymentId === p.id}
+                      >
+                        {downloadPdf.isPending && downloadPdf.variables?.paymentId === p.id ? 'Downloading…' : 'Download'}
+                      </Button>
+                    )}
                     {p.status === 'POSTED' && (
                       <Button
                         variant="outline"
