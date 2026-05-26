@@ -18,7 +18,23 @@
   <dependencies>
     <dependency>
       <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-claims</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
       <artifactId>cia-common</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-customer</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-endorsement</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-policy</artifactId>
     </dependency>
     <dependency>
       <groupId>com.nubeero.cia</groupId>
@@ -26,11 +42,11 @@
     </dependency>
     <dependency>
       <groupId>com.nubeero.cia</groupId>
-      <artifactId>cia-workflow</artifactId>
+      <artifactId>cia-storage</artifactId>
     </dependency>
     <dependency>
       <groupId>com.nubeero.cia</groupId>
-      <artifactId>cia-storage</artifactId>
+      <artifactId>cia-workflow</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.pdfbox</groupId>
