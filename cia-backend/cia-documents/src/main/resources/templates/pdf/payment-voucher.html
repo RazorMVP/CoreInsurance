@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+  <h1 th:text="${headerLabel}">PAYMENT VOUCHER</h1>
+  <hr/>
+
+  <p><b>Voucher No.:</b> <span th:text="${paymentNumber}">PAY-XXXX</span></p>
+  <p><b>Date:</b> <span th:text="${paymentDate}">YYYY-MM-DD</span></p>
+  <hr/>
+
+  <h2>Paid to</h2>
+  <p><b th:text="${beneficiaryName}">Beneficiary Name</b></p>
+  <p th:if="${beneficiaryAddressLine1}" th:text="${beneficiaryAddressLine1}">Address line 1</p>
+  <p th:if="${beneficiaryAddressLine2}" th:text="${beneficiaryAddressLine2}">Address line 2</p>
+
+  <h2>Payment Details</h2>
+  <table>
+    <tr><td>Amount</td><td><b><span th:text="${amountFormatted}">&#8358;0.00</span></b></td></tr>
+    <tr><td>Method</td><td><span th:text="${paymentMethod}">METHOD</span></td></tr>
+    <tr><td>Reference</td><td><span th:text="${creditNoteNumber}">CN-XXXX</span></td></tr>
+    <tr><td>Source</td><td><span th:text="${entityReference}">REF</span></td></tr>
+  </table>
+
+  <h2>Being payment for</h2>
+  <p th:text="${narration}">Narration text</p>
+
+  <hr/>
+  <table>
+    <tr>
+      <td>_________________________<br/>Prepared by</td>
+      <td>_________________________<br/>Approved by</td>
+    </tr>
+  </table>
+</body>
+</html>
