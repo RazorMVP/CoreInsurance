@@ -26,5 +26,6 @@ public record PaymentListItemResponse(
         Instant reversedAt,
         String reversedBy,
         String reversalReason,
-        Instant createdAt
+        Instant createdAt,
+        String pdfPath                // nullable — null = PDF was never generated
 ) {}

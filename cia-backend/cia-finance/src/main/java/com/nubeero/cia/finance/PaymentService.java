@@ -3,6 +3,11 @@ package com.nubeero.cia.finance;
 import com.nubeero.cia.common.audit.AuditAction;
 import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
+import com.nubeero.cia.common.tenant.TenantContext;
+import com.nubeero.cia.finance.pdf.PaymentVoucherPdfGenerator;
+import com.nubeero.cia.storage.DocumentStorageService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -10,6 +15,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -20,19 +26,27 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class PaymentService {
 
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
+
     private final PaymentRepository paymentRepository;
     private final CreditNoteService creditNoteService;
     private final FinanceNumberService numberService;
     private final AuditService auditService;
+    private final PaymentVoucherPdfGenerator pdfGenerator;
+    private final DocumentStorageService     storage;
 
     public PaymentService(PaymentRepository paymentRepository,
                           CreditNoteService creditNoteService,
                           FinanceNumberService numberService,
-                          AuditService auditService) {
+                          AuditService auditService,
+                          PaymentVoucherPdfGenerator pdfGenerator,
+                          DocumentStorageService storage) {
         this.paymentRepository = paymentRepository;
         this.creditNoteService = creditNoteService;
         this.numberService = numberService;
         this.auditService = auditService;
+        this.pdfGenerator = pdfGenerator;
+        this.storage = storage;
     }
 
     public Page<PaymentListItemResponse> findAll(
@@ -70,7 +84,8 @@ public class PaymentService {
                 p.getReversedAt(),
                 p.getReversedBy(),
                 p.getReversalReason(),
-                p.getCreatedAt());
+                p.getCreatedAt(),
+                p.getPdfPath());
     }
 
     public Page<Payment> findByCreditNote(UUID creditNoteId, Pageable pageable) {
@@ -112,6 +127,7 @@ public class PaymentService {
         BigDecimal newPaid = sumPostedPayments(creditNoteId);
         creditNoteService.recalculateStatus(creditNoteId, newPaid);
 
+        generateAndPersistPdf(saved);
         return saved;
     }
 
@@ -163,5 +179,32 @@ public class PaymentService {
     private String currentUser() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         return auth != null ? auth.getName() : "system";
+    }
+
+    /**
+     * Generates the payment voucher PDF + uploads to MinIO + persists pdfPath.
+     * Failure mode: log WARN, leave pdf_path null, do NOT throw — keeps the
+     * post() commit intact so a PDF rendering hiccup never loses a payment.
+     */
+    private void generateAndPersistPdf(Payment payment) {
+        byte[] pdf = pdfGenerator.generate(payment);
+        if (pdf == null) {
+            // Already logged inside the generator.
+            return;
+        }
+        try {
+            String tenantId = TenantContext.getTenantId();
+            String path = String.format("payments/%d/%02d/%s.pdf",
+                payment.getPaymentDate().getYear(),
+                payment.getPaymentDate().getMonthValue(),
+                payment.getId());
+            storage.upload(tenantId, path,
+                           new ByteArrayInputStream(pdf), "application/pdf");
+            payment.setPdfPath(path);
+            paymentRepository.save(payment);
+        } catch (Exception e) {
+            log.warn("Failed to upload generated payment voucher PDF for {}: {}",
+                     payment.getId(), e.getMessage(), e);
+        }
     }
 }

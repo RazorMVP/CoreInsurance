@@ -10,6 +10,8 @@ import com.nubeero.cia.finance.FinanceNumberService;
 import com.nubeero.cia.finance.Payment;
 import com.nubeero.cia.finance.PaymentMethod;
 import com.nubeero.cia.finance.PaymentService;
+import com.nubeero.cia.finance.pdf.PaymentVoucherPdfGenerator;
+import com.nubeero.cia.storage.DocumentStorageService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -140,6 +142,22 @@ class PaymentReverseAuditIT extends FinanceItSupport {
         @Bean
         AuditService auditService(AuditLogRepository repo, ObjectMapper mapper) {
             return new AuditService(repo, mapper, mock(ApplicationEventPublisher.class));
+        }
+
+        /**
+         * Slice β / Task 14 — PaymentService now depends on a PDF generator.
+         * For this audit-focused IT we mock both new collaborators; the generator
+         * returns null so {@code generateAndPersistPdf()} short-circuits before
+         * touching storage. The reverse-path under test never calls either.
+         */
+        @Bean
+        PaymentVoucherPdfGenerator paymentVoucherPdfGenerator() {
+            return mock(PaymentVoucherPdfGenerator.class);
+        }
+
+        @Bean
+        DocumentStorageService documentStorageService() {
+            return mock(DocumentStorageService.class);
         }
     }
 }
