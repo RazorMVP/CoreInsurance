@@ -5,7 +5,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import { useReceiptList } from '../../hooks/useReceipts';
+import { useDownloadReceiptPdf, useReceiptList } from '../../hooks/useReceipts';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
 import type { ReceiptListItemResponse } from '@cia/api-client';
 
@@ -22,6 +22,8 @@ export default function ReceiptsListSection() {
   const receiptsQuery = useReceiptList({ status, page, size: 20 });
   const receipts = receiptsQuery.data?.data ?? [];
   const meta     = receiptsQuery.data?.meta;
+
+  const downloadPdf = useDownloadReceiptPdf();
 
   const columns: ColumnDef<ReceiptListItemResponse>[] = [
     {
@@ -80,19 +82,32 @@ export default function ReceiptsListSection() {
       id: 'actions',
       cell: ({ row }) => {
         const r = row.original;
-        const actions = r.status === 'POSTED' ? [{
-          label: 'Reverse',
-          onClick: () => setReverseTarget({
-            type:      'RECEIPT',
-            id:        r.id,
-            parentId:  r.debitNoteId,
-            reference: r.reference,
-            linkedRef: r.debitNoteNumber,
-            amount:    r.amount,
-            method:    r.paymentMethod,
-            date:      r.paymentDate ?? '',
-          }),
-        }] : [];
+        const actions: { label: string; onClick: () => void }[] = [];
+        if (r.pdfPath !== null) {
+          actions.push({
+            label: 'Download PDF',
+            onClick: () => downloadPdf.mutate({
+              dnId:      r.debitNoteId,
+              receiptId: r.id,
+              reference: r.reference,
+            }),
+          });
+        }
+        if (r.status === 'POSTED') {
+          actions.push({
+            label: 'Reverse',
+            onClick: () => setReverseTarget({
+              type:      'RECEIPT',
+              id:        r.id,
+              parentId:  r.debitNoteId,
+              reference: r.reference,
+              linkedRef: r.debitNoteNumber,
+              amount:    r.amount,
+              method:    r.paymentMethod,
+              date:      r.paymentDate ?? '',
+            }),
+          });
+        }
         if (actions.length === 0) return null;
         return <DataTableRowActions row={row} actions={actions} />;
       },

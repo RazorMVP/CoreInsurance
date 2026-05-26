@@ -5,7 +5,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import { usePaymentList } from '../../hooks/usePayments';
+import { useDownloadPaymentPdf, usePaymentList } from '../../hooks/usePayments';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
 import type { FinanceEntityType, PaymentListItemResponse } from '@cia/api-client';
 
@@ -31,6 +31,8 @@ export default function PaymentsListSection() {
   const paymentsQuery = usePaymentList({ status, page, size: 20 });
   const payments = paymentsQuery.data?.data ?? [];
   const meta     = paymentsQuery.data?.meta;
+
+  const downloadPdf = useDownloadPaymentPdf();
 
   const columns: ColumnDef<PaymentListItemResponse>[] = [
     {
@@ -102,19 +104,32 @@ export default function PaymentsListSection() {
       id: 'actions',
       cell: ({ row }) => {
         const r = row.original;
-        const actions = r.status === 'POSTED' ? [{
-          label: 'Reverse',
-          onClick: () => setReverseTarget({
-            type:      'PAYMENT',
-            id:        r.id,
-            parentId:  r.creditNoteId,
-            reference: r.reference,
-            linkedRef: r.creditNoteNumber,
-            amount:    r.amount,
-            method:    r.paymentMethod,
-            date:      r.paymentDate ?? '',
-          }),
-        }] : [];
+        const actions: { label: string; onClick: () => void }[] = [];
+        if (r.pdfPath !== null) {
+          actions.push({
+            label: 'Download PDF',
+            onClick: () => downloadPdf.mutate({
+              cnId:      r.creditNoteId,
+              paymentId: r.id,
+              reference: r.reference,
+            }),
+          });
+        }
+        if (r.status === 'POSTED') {
+          actions.push({
+            label: 'Reverse',
+            onClick: () => setReverseTarget({
+              type:      'PAYMENT',
+              id:        r.id,
+              parentId:  r.creditNoteId,
+              reference: r.reference,
+              linkedRef: r.creditNoteNumber,
+              amount:    r.amount,
+              method:    r.paymentMethod,
+              date:      r.paymentDate ?? '',
+            }),
+          });
+        }
         if (actions.length === 0) return null;
         return <DataTableRowActions row={row} actions={actions} />;
       },
