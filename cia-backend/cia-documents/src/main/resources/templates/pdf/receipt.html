@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+  <h1>OFFICIAL RECEIPT</h1>
+  <hr/>
+
+  <p><b>Receipt No.:</b> <span th:text="${receiptNumber}">REC-XXXX</span></p>
+  <p><b>Date:</b> <span th:text="${paymentDate}">YYYY-MM-DD</span></p>
+  <hr/>
+
+  <h2>Received from</h2>
+  <p><b th:text="${customerName}">Customer Name</b></p>
+
+  <h2>Payment Details</h2>
+  <table>
+    <tr><td>Amount</td><td><b><span th:text="${amountFormatted}">&#8358;0.00</span></b></td></tr>
+    <tr><td>Method</td><td><span th:text="${paymentMethod}">METHOD</span></td></tr>
+    <tr><td>Reference</td><td><span th:text="${debitNoteNumber}">DN-XXXX</span></td></tr>
+    <tr th:if="${policyNumber}"><td>Policy</td><td><span th:text="${policyNumber}">POL-XXXX</span></td></tr>
+  </table>
+
+  <h2>Being payment for</h2>
+  <p th:text="${narration}">Narration text</p>
+
+  <hr/>
+  <p><i>Posted by: <span th:text="${postedBy}">user</span></i></p>
+  <p><i>This is a system-generated receipt and does not require a physical signature.</i></p>
+</body>
+</html>
