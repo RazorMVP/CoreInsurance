@@ -1,9 +1,12 @@
 package com.nubeero.cia.finance;
 
 import com.nubeero.cia.common.api.ApiResponse;
+import com.nubeero.cia.common.exception.ResourceNotFoundException;
+import com.nubeero.cia.common.tenant.TenantContext;
 import com.nubeero.cia.finance.dto.PaymentResponse;
 import com.nubeero.cia.finance.dto.PostPaymentRequest;
 import com.nubeero.cia.finance.dto.ReverseRequest;
+import com.nubeero.cia.storage.DocumentStorageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -12,12 +15,18 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.InputStream;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,6 +39,7 @@ import java.util.UUID;
 public class PaymentController {
 
     private final PaymentService service;
+    private final DocumentStorageService storage;
 
     @GetMapping
     @PreAuthorize("hasRole('FINANCE_VIEW')")
@@ -105,6 +115,33 @@ public class PaymentController {
             @Valid @RequestBody ReverseRequest req) {
         service.reverse(id, req.reason());
         return ApiResponse.success(null);
+    }
+
+    @GetMapping("/{id}/pdf")
+    @PreAuthorize("hasAuthority('FINANCE_VIEW')")
+    @Operation(summary = "Download the payment voucher PDF",
+               description = "Streams the generated voucher PDF for the payment from object storage. 404 when pdfPath IS NULL.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "PDF bytes"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_VIEW", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Payment not found OR pdfPath is null", content = @Content)
+    })
+    public ResponseEntity<Resource> downloadPdf(@PathVariable UUID creditNoteId,
+                                                  @PathVariable UUID id) {
+        Payment payment = service.findOrThrow(id);
+        if (payment.getPdfPath() == null) {
+            throw new ResourceNotFoundException("Payment", id);
+        }
+        String tenantId = TenantContext.getTenantId();
+        InputStream stream = storage.download(tenantId, payment.getPdfPath());
+        String filename = "PAY-" + payment.getPaymentNumber() + ".pdf";
+
+        return ResponseEntity.ok()
+            .contentType(MediaType.APPLICATION_PDF)
+            .header(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=\"" + filename + "\"")
+            .body(new InputStreamResource(stream));
     }
 
     private PaymentResponse toResponse(Payment p) {
