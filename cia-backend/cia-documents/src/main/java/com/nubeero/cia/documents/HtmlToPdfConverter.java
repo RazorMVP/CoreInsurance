@@ -4,8 +4,8 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -37,9 +38,9 @@ public class HtmlToPdfConverter {
     public byte[] convert(String html) throws IOException {
         org.jsoup.nodes.Document jsoupDoc = Jsoup.parse(html);
         try (PDDocument doc = new PDDocument()) {
-            PDType1Font regular = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
-            PDType1Font bold    = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-            RenderState state   = new RenderState(doc, regular, bold);
+            PDFont regular = loadFont(doc, "/fonts/NotoSans-Regular.ttf");
+            PDFont bold    = loadFont(doc, "/fonts/NotoSans-Bold.ttf");
+            RenderState state = new RenderState(doc, regular, bold);
 
             for (Node child : jsoupDoc.body().childNodes()) {
                 renderNode(state, child);
@@ -49,6 +50,15 @@ public class HtmlToPdfConverter {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             doc.save(out);
             return out.toByteArray();
+        }
+    }
+
+    private static PDFont loadFont(PDDocument doc, String resourcePath) throws IOException {
+        try (InputStream in = HtmlToPdfConverter.class.getResourceAsStream(resourcePath)) {
+            if (in == null) {
+                throw new IOException("Font resource not found on classpath: " + resourcePath);
+            }
+            return PDType0Font.load(doc, in);
         }
     }
 
@@ -135,12 +145,12 @@ public class HtmlToPdfConverter {
 
     private static final class RenderState {
         private final PDDocument        doc;
-        private final PDType1Font       regular;
-        private final PDType1Font       bold;
+        private final PDFont            regular;
+        private final PDFont            bold;
         private PDPageContentStream     cs;
         private float                   y;
 
-        RenderState(PDDocument doc, PDType1Font regular, PDType1Font bold) throws IOException {
+        RenderState(PDDocument doc, PDFont regular, PDFont bold) throws IOException {
             this.doc     = doc;
             this.regular = regular;
             this.bold    = bold;
@@ -171,7 +181,7 @@ public class HtmlToPdfConverter {
         }
 
         void writeText(String text, int fontSize, boolean useBold, float lineH) throws IOException {
-            PDType1Font font = useBold ? bold : regular;
+            PDFont font = useBold ? bold : regular;
             for (String line : wrap(text, font, fontSize)) {
                 if (y - lineH < MARGIN) newPage();
                 cs.beginText();
@@ -183,13 +193,13 @@ public class HtmlToPdfConverter {
             }
         }
 
-        private List<String> wrap(String text, PDType1Font font, int size) throws IOException {
+        private List<String> wrap(String text, PDFont font, int size) throws IOException {
             List<String> lines = new ArrayList<>();
             String[] words = text.split("\\s+");
             StringBuilder cur = new StringBuilder();
             for (String word : words) {
                 String candidate = cur.isEmpty() ? word : cur + " " + word;
-                float w = font.getStringWidth(sanitise(candidate)) / 1000f * size;
+                float w = font.getStringWidth(candidate) / 1000f * size;
                 if (w > CONTENT_W && !cur.isEmpty()) {
                     lines.add(cur.toString());
                     cur = new StringBuilder(word);
@@ -199,11 +209,6 @@ public class HtmlToPdfConverter {
             }
             if (!cur.isEmpty()) lines.add(cur.toString());
             return lines.isEmpty() ? List.of("") : lines;
-        }
-
-        /** PDFBox getStringWidth chokes on non-WinAnsi chars; strip them. */
-        private static String sanitise(String s) {
-            return s.replaceAll("[^\\x20-\\x7E\\xA0-\\xFF]", "?");
         }
     }
 }
