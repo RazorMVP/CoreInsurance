@@ -14,6 +14,7 @@
 // loudly at runtime instead of silently passing undefined to the UI.
 
 import { z } from 'zod';
+import { apiClient } from '../client';
 import { validatedList } from '../validation';
 
 // ── Enums ─────────────────────────────────────────────────────────────────
@@ -198,6 +199,7 @@ export const ReceiptListItemResponseSchema = z.object({
   reversedBy:       z.string().nullable(),
   reversalReason:   z.string().nullable(),
   createdAt:        z.string(),
+  pdfPath:          z.string().nullable(),
 });
 export type ReceiptListItemResponse = z.infer<typeof ReceiptListItemResponseSchema>;
 
@@ -216,6 +218,7 @@ export const PaymentListItemResponseSchema = z.object({
   reversedBy:           z.string().nullable(),
   reversalReason:       z.string().nullable(),
   createdAt:            z.string(),
+  pdfPath:              z.string().nullable(),
 });
 export type PaymentListItemResponse = z.infer<typeof PaymentListItemResponseSchema>;
 
@@ -261,4 +264,35 @@ export async function listPayments(filters: PaymentListFilters = {}) {
     PaymentListItemResponseSchema,
     { params: buildParams(filters) },
   );
+}
+
+/**
+ * Streams the receipt PDF as a Blob for browser download. Uses
+ * responseType:'blob' so axios doesn't try to JSON-parse the bytes.
+ * Caller is responsible for filename synthesis + anchor-click side effect
+ * (see useDownloadReceiptPdf hook).
+ */
+export async function downloadReceiptPdf(
+  debitNoteId: string,
+  receiptId:   string,
+): Promise<Blob> {
+  const res = await apiClient.get<Blob>(
+    `/api/v1/debit-notes/${debitNoteId}/receipts/${receiptId}/pdf`,
+    { responseType: 'blob' },
+  );
+  return res.data;
+}
+
+/**
+ * Streams the payment voucher PDF as a Blob. Mirror of downloadReceiptPdf.
+ */
+export async function downloadPaymentPdf(
+  creditNoteId: string,
+  paymentId:    string,
+): Promise<Blob> {
+  const res = await apiClient.get<Blob>(
+    `/api/v1/credit-notes/${creditNoteId}/payments/${paymentId}/pdf`,
+    { responseType: 'blob' },
+  );
+  return res.data;
 }
