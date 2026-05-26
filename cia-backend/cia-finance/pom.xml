@@ -42,6 +42,10 @@
     </dependency>
     <dependency>
       <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-notifications</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
       <artifactId>cia-storage</artifactId>
     </dependency>
     <dependency>
