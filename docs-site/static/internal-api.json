@@ -19628,6 +19628,118 @@
           }
         }
       }
+    },
+    "/api/v1/debit-notes/{debitNoteId}/receipts/{id}/pdf": {
+      "get": {
+        "tags": [
+          "Receipts (Module 8)"
+        ],
+        "summary": "Download the receipt PDF",
+        "description": "Streams the generated OFFICIAL RECEIPT PDF for the given receipt from object storage. 404 when pdfPath IS NULL (PDF was never generated or generation failed) or when the receipt id is unknown. Content-Disposition: attachment; filename=\"REC-<receiptNumber>.pdf\".",
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "debitNoteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF bytes (application/pdf)",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Caller lacks FINANCE_VIEW authority"
+          },
+          "404": {
+            "description": "Receipt not found OR pdfPath is null"
+          }
+        }
+      }
+    },
+    "/api/v1/credit-notes/{creditNoteId}/payments/{id}/pdf": {
+      "get": {
+        "tags": [
+          "Payments (Module 8)"
+        ],
+        "summary": "Download the payment voucher PDF",
+        "description": "Streams the generated PAYMENT VOUCHER PDF (label varies by source: CLAIM SETTLEMENT VOUCHER / COMMISSION VOUCHER / FAC PREMIUM VOUCHER / ENDORSEMENT REFUND VOUCHER) from object storage. 404 when pdfPath IS NULL or payment id unknown. Content-Disposition: attachment; filename=\"PAY-<paymentNumber>.pdf\".",
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "creditNoteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF bytes (application/pdf)",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Caller lacks FINANCE_VIEW authority"
+          },
+          "404": {
+            "description": "Payment not found OR pdfPath is null"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -29334,6 +29446,11 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "pdfPath": {
+            "type": "string",
+            "nullable": true,
+            "description": "MinIO object path of the generated PDF (e.g. \"receipts/2026/05/<uuid>.pdf\"). Null = PDF was never generated (generator failure logs WARN + leaves the column null)."
           }
         },
         "required": [
@@ -29422,6 +29539,11 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "pdfPath": {
+            "type": "string",
+            "nullable": true,
+            "description": "MinIO object path of the generated PDF (e.g. \"receipts/2026/05/<uuid>.pdf\"). Null = PDF was never generated (generator failure logs WARN + leaves the column null)."
           }
         },
         "required": [

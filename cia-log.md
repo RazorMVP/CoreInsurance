@@ -13,7 +13,8 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | ID | P | Item | Notes |
 |---|---|---|---|
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
-| F7-β | P2 | Receipt + Payment PDF generation + MinIO storage + download endpoints | Slice β of F7. `ReceiptPdfGenerator` (cia-documents) + Thymeleaf templates + `GET /api/v1/debit-notes/{dnId}/receipts/{id}/pdf` (and payment-voucher equivalent) returning bytes from `DocumentStorageService` or generating on demand. Download buttons on ReceiptsListSection + PaymentsListSection + nested DN/CN detail dialog rows. Includes V50 migration to add `pdf_path` column on `receipts` + `payments` if persisted. Slice α (visibility) already landed in Session 125. |
+| F7-β-NAICOM-flake | P3 | Audit sibling NAICOM engine ITs for `Math.random()`-based `line_no` collision pattern | Surfaced during F7-β Task 1 (Session 126) — `AnnualRevenueAccountEngineIT.insertLine` was using `(int)(Math.random()*1000)+1` and hit a `uq_journal_entry_line_no` collision on the V50-V56 Flyway bump. Fixed there. Similar pattern may exist in sibling NAICOM engine ITs (`BalanceSheetEngineIT`, `PrudentialReturnEngineIT`, etc.) — grep for `Math.random` under `cia-api/src/test/.../naicom/` and replace with the deterministic per-JE counter pattern used in the Task-1 fix. |
+| F7-β-symbol-glyphs | P3 | NotoSans Latin lacks symbol glyphs (✓ ✗ ★ → ←) | Surfaced during F7-β Task 3 (Session 126) — the NotoSans-Regular TTF embedded in `HtmlToPdfConverter` is the "latin-greek-cyrillic" variant which doesn't ship U+2713. The existing F7-β receipt + voucher templates don't need symbol glyphs, but if a future template / per-tenant override (slice δ) wants a ✓ status indicator or similar, either (a) add Noto Sans Symbols TTF as a fallback font in `HtmlToPdfConverter.loadFont`, or (b) ASCII-escape the symbol in the template. Documented as a future template-author concern; not blocking. |
 | F7-γ | P3 | Symmetric receipt + payment-voucher email transmission via Temporal | Slice γ of F7. Requires F7-β complete. `BeneficiaryEmailResolver` (Policy → customer.email for receipts; CreditNote.entityType + entityReference → claim payee / commission beneficiary / FAC reinsurer for payments). Temporal `SendReceiptEmailWorkflow` / `SendPaymentVoucherEmailWorkflow` with retries (3× exponential backoff). Email attachment delivery via `NotificationService.sendEmail` (may need attachment overload on the interface — confirm). Send + Resend buttons; persists last-send timestamp + status on Receipt + Payment. |
 | F7-δ | P3 | Per-tenant email template override for receipt / payment emails | Slice δ of F7. Requires F7-γ complete. Default subject + body templates ship in `cia-documents` resources; per-tenant overrides stored in `tenant_email_template` (V52) keyed by template type. Renderer falls back to default if no row. Setup → Notifications → Email Templates page lists default + override side-by-side; reset-to-default action. |
 | F9 | P3 | Receipt PDF download surface ergonomics | Captured during F7 Session 124 brainstorm scope-cap discussion. Once F7-β lands, surface PDF download from the existing receipt + payment number cells (not only as a row action), plus a "Recent downloads" panel for operators tracking what they've already pushed to customers this session. Pure UX polish on top of F7-β. |
@@ -21,6 +22,95 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | R7 | P3 | Per-tenant SMS template override + SMS-receipt option | Captured during F7 Session 124. SMS path mirrors F7-δ but for receipt + payment SMS notifications via `NotificationService.sendSms`. Distinct from email because some tenants prefer SMS for transactional confirmations. Likely depends on `tenant_sms_template` (V53) + per-tenant default channel preference (email vs SMS) on `tenant_settings`. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-26 — Session 126 (`main`): F7 slice β — auto-generated PDFs for receipts + payment vouchers
+
+Slice α (visibility + reversal audit) landed in Session 125 → user picked Option C for the slice β address-block design (full JPA cross-module deps + `@ColumnTransformer` decryption) → plan written at `docs/superpowers/plans/2026-05-25-f7-slice-beta-pdf-generation.md` (20 tasks across 7 phases) → executed under `superpowers:subagent-driven-development` over two calendar days. Stated goal: "Every successful `receiptService.post()` and `paymentService.post()` synchronously generates a branded PDF (₦-glyph supported), uploads it to MinIO, and persists `pdf_path` on the entity. The four slice-α visibility surfaces gain a Download PDF row action. No email — that's slice γ."
+
+### What landed
+
+**Foundation (Tasks 1–3).** V56 migration adds `pdf_path VARCHAR(512)` nullable to `receipts` + `payments`; entities gain `pdfPath` getter/setter. `cia-finance/pom.xml` gains module deps on `cia-customer` + `cia-claims` + `cia-endorsement` + `cia-policy` — reverses the prior "no business-entity deps in finance" convention because slice β needs JPA entity loading so `Customer.address` auto-decrypts via `@ColumnTransformer` (NDPR-encrypted bytea → plain string on read). `HtmlToPdfConverter` refactored from `PDType1Font.HELVETICA` (Standard 14, no ₦ glyph) to `PDType0Font` loaded from new `cia-documents/src/main/resources/fonts/NotoSans-{Regular,Bold}.ttf` resources (~1.6 MB total, SIL OFL 1.1 with included OFL.txt). The `sanitise()` WinAnsi guard that mapped non-WinAnsi chars to `?` is removed entirely; PDType0Font handles full Unicode natively. Existing consumers (`QuotePdfService`, `DocumentGenerationServiceImpl`) gain ₦ rendering transparently — public API of `HtmlToPdfConverter.convert(String html)` unchanged.
+
+**Resolver SPI + 4 implementations (Tasks 4–9).** `BeneficiaryProfile` record (`name, addressLine1, addressLine2`) + `BeneficiaryProfileResolver` interface + `BeneficiaryProfileResolverDispatcher` (`@Component`, EnumMap-backed, bean-name dispatch via `"<ENTITY_TYPE>-profile"` convention, denormalised-name fallback for unmapped types POLICY/CLAIM_EXPENSE). Four `@Component`-registered resolvers: `ClaimBeneficiaryProfileResolver` (CLAIM → Claim → Customer; address decrypted via JPA), `CommissionBeneficiaryProfileResolver` (COMMISSION → try Broker, fall back to Agent — both plain `address`), `FacOutwardBeneficiaryProfileResolver` (REINSURANCE → ReinsuranceCompany, plain `address`), `EndorsementRefundBeneficiaryProfileResolver` (ENDORSEMENT → Customer; **plan simplification**: skipped the planned Endorsement → Policy → Customer chain because `Endorsement.customerId` is already denormalised at the column level — one fewer hop, same end result). `BeneficiaryProfileResolverIT` pins 8 cases: per-source-type routing (4) + unmapped POLICY/CLAIM_EXPENSE fallback (2) + missing-customer fallback for CLAIM (1) + Customer.address decryption round-trip (1, the key correctness test for the @ColumnTransformer integration).
+
+**Receipt PDF pipeline (Tasks 10–12).** `ReceiptPdfGenerator` (`@Component`, never throws — catches Exception, logs WARN, returns `null`) renders the Thymeleaf template `templates/pdf/receipt.html` ("OFFICIAL RECEIPT" header, receipt no, date, customer, ₦-formatted amount, method, DN ref, policy number when DN is policy-backed, narration, posted-by) and converts to PDF via `HtmlToPdfConverter`. `ReceiptService` constructor expanded from 4 → 6 args (adds `ReceiptPdfGenerator` + `DocumentStorageService`); `post()` runs `generateAndPersistPdf(saved)` after the existing DN recalc — PDF generated, uploaded to MinIO at `receipts/{yyyy}/{MM}/{id}.pdf`, `pdf_path` persisted via a second save. Failure of either generator or storage logs WARN + leaves `pdf_path` null; **never throws, never rolls back the receipt save**. `ReceiptListItemResponse` gains `pdfPath` field; `toListItem` projection includes it. `ReceiptController.downloadPdf(...)` at `GET /api/v1/debit-notes/{dnId}/receipts/{id}/pdf` streams bytes from MinIO via `DocumentStorageService.download(tenantId, pdfPath)`; `hasAuthority('FINANCE_VIEW')`; 404 when `pdfPath IS NULL` or receipt unknown; filename `REC-<receiptNumber>.pdf`.
+
+**Payment voucher PDF pipeline (Tasks 13–15).** Mirror of Tasks 10–12 for payments. `PaymentVoucherPdfGenerator` reads `CreditNote.entityType` to pick the header label (CLAIM SETTLEMENT VOUCHER / COMMISSION VOUCHER / FAC PREMIUM VOUCHER / ENDORSEMENT REFUND VOUCHER / generic PAYMENT VOUCHER fallback) + calls `BeneficiaryProfileResolverDispatcher.resolve(cn)` for the "Paid to" name + address block. `PaymentService.post()` auto-generates + persists to `payments/{yyyy}/{MM}/{id}.pdf`. `PaymentController.downloadPdf(...)` at `GET /api/v1/credit-notes/{cnId}/payments/{id}/pdf`; filename `PAY-<paymentNumber>.pdf`.
+
+**Frontend (Tasks 16–19).** `@cia/api-client` finance module: `ReceiptListItemResponseSchema` + `PaymentListItemResponseSchema` gain `pdfPath: z.string().nullable()`; new `downloadReceiptPdf(...)` + `downloadPaymentPdf(...)` blob fetchers via `apiClient.get(..., { responseType: 'blob' })` matching the F5.16 NAICOM artifact pattern. `useDownloadReceiptPdf()` + `useDownloadPaymentPdf()` mutations handle `createObjectURL` + anchor-click + filename synthesis. Download PDF row action added to `ReceiptsListSection` + `PaymentsListSection` (ahead of the existing Reverse action; visible for both POSTED and REVERSED since the PDF was generated at post-time and remains valid for audit-trail download after reversal; the dropdown menu's `RowAction` type doesn't support `disabled`, so the action is conditionally included only when `pdfPath !== null`). Download Button added to each nested receipt row in `DebitNoteDetailDialog` + each nested payment row in `CreditNoteDetailDialog` — outline variant alongside the existing Reverse Button, per-row spinner keyed on `mutation.variables?.{receiptId,paymentId} === r.id`.
+
+**Docs (Task 20).** CLAUDE.md Module 8 row + Build 6 Receipts/Payables rows now describe the slice-β PDF capabilities. New API Design bullet documents the PDF generation pattern (Thymeleaf + HtmlToPdfConverter + never-throw contract + storage path convention + BeneficiaryProfileResolverDispatcher + @ColumnTransformer auto-decryption). `internal-api.json` 256 → 258 paths — full OpenAPI 3.1 entries for `/api/v1/debit-notes/{dnId}/receipts/{id}/pdf` GET + `/api/v1/credit-notes/{cnId}/payments/{id}/pdf` GET; `ReceiptListItemResponse` + `PaymentListItemResponse` schemas gain `pdfPath`.
+
+### Slice-margin discoveries (resolved in-flight; not deferred)
+
+Three findings surfaced during execution; all were absorbed into their host task per slice-discipline rule (b):
+
+- **Plan-V50 collision** (Task 1). Plan was authored assuming V50 was the next free Flyway version; V50–V55 already taken by Session 84a–B1a commission + agent work. Renumbered to V56; bumped Finance IT Flyway target from "49" → "56" (pulls in V50–V55 for the first time, validated by the full failsafe baseline staying at 300 post-bump).
+- **`AnnualRevenueAccountEngineIT.insertLine` flake** (Task 1). The V50–V55 bump's first run hit a `uq_journal_entry_line_no` collision because `insertLine` was using `(int)(Math.random()*1000)+1` for `line_no` — a pre-existing flake from Slice 1.10b that was hidden by the prior pin to V49. Replaced with a deterministic per-JE `Map<UUID, Integer>` counter that resets in `@BeforeEach`. Logged sibling-IT scan to backlog as `F7-β-NAICOM-flake`.
+- **`@DataJpaTest` ITs selectively importing `*Service` need mock beans for new constructor params** (Tasks 11 + 14). `ReceiptReverseAuditIT` + `PaymentReverseAuditIT` use `@Import(ReceiptService.class)` / `@Import(PaymentService.class)` to bring just the service into the slice — expanding those constructors from 4 → 6 args broke them. Added `@Bean` mocks for `ReceiptPdfGenerator` + `DocumentStorageService` (and the payment mirror) inside each IT's `TestSupportConfig`. The mock generator returns null so `generateAndPersistPdf()` short-circuits before touching storage.
+
+Two additional Task-3 specifics worth noting:
+
+- **NotoSans-Latin lacks symbol glyphs** (Task 3). The "latin-greek-cyrillic" variant of NotoSans-Regular doesn't include U+2713 (✓) — the planned non-WinAnsi smoke-test glyph. Substituted `Ł` (U+0141, Latin Extended-A) which equally exercised the post-sanitise() code path. Logged to backlog as `F7-β-symbol-glyphs` for slice δ template authors who might want symbol indicators.
+- **`TenantContext.getTenantId() == null` in `@SpringBootTest` IT context** (Tasks 12 + 15). `@WithMockUser` doesn't populate the tenant claim, so the IT controller's call to `storage.download(tenantId, path)` passes `null` as the first arg. `Mockito.anyString()` does NOT match null — switched to `Mockito.any()` for both args of the stub. Applies to every future controller IT that exercises a tenant-scoped storage path.
+
+### Files touched
+
+**Backend — production** (15 files):
+
+| File | Change |
+|---|---|
+| `cia-api/src/main/resources/db/migration/V56__add_pdf_path_to_receipts_payments.sql` | New — adds nullable `pdf_path VARCHAR(512)` to `receipts` + `payments` |
+| `cia-finance/src/main/java/com/nubeero/cia/finance/Receipt.java` | `pdfPath` field + getter/setter |
+| `cia-finance/src/main/java/com/nubeero/cia/finance/Payment.java` | Mirror |
+| `cia-finance/pom.xml` | +4 deps: cia-customer, cia-claims, cia-endorsement, cia-policy |
+| `cia-documents/src/main/resources/fonts/NotoSans-{Regular,Bold}.ttf` | New — embedded TTFs (1.6 MB total, OFL 1.1) |
+| `cia-documents/src/main/resources/fonts/OFL.txt` | New — SIL Open Font License 1.1 attribution |
+| `cia-documents/src/main/java/com/nubeero/cia/documents/HtmlToPdfConverter.java` | PDType0Font + NotoSans; sanitise() removed |
+| `cia-finance/src/main/java/com/nubeero/cia/finance/pdf/BeneficiaryProfile.java` + `BeneficiaryProfileResolver.java` + `BeneficiaryProfileResolverDispatcher.java` | New — strategy SPI + dispatcher |
+| `cia-finance/.../pdf/{Claim,Commission,FacOutward,EndorsementRefund}BeneficiaryProfileResolver.java` | New — 4 `@Component("<TYPE>-profile")` resolvers |
+| `cia-documents/src/main/resources/templates/pdf/receipt.html` + `payment-voucher.html` | New — Thymeleaf templates |
+| `cia-finance/.../pdf/ReceiptPdfGenerator.java` + `PaymentVoucherPdfGenerator.java` | New — generators, never-throw contract |
+| `cia-finance/.../ReceiptService.java` + `PaymentService.java` | +Logger; 6-arg constructor; `generateAndPersistPdf()` helper called in `post()` |
+| `cia-finance/.../ReceiptListItemResponse.java` + `PaymentListItemResponse.java` | +`pdfPath` field; toListItem projects it |
+| `cia-finance/.../ReceiptController.java` + `PaymentController.java` | +`GET /{id}/pdf` endpoint; `hasAuthority('FINANCE_VIEW')`; `DocumentStorageService` injected |
+
+**Backend — tests** (8 new + 3 modified):
+
+| File | Change |
+|---|---|
+| `cia-documents/.../HtmlToPdfConverterFontIT.java` | New — 3 tests for NotoSans + ₦ + non-WinAnsi |
+| `cia-api/src/test/.../pdf/BeneficiaryProfileResolverIT.java` | New — 8 tests, dispatcher + per-resolver |
+| `cia-api/src/test/.../pdf/ReceiptPdfGeneratorIT.java` | New — 4 tests |
+| `cia-api/src/test/.../pdf/PaymentVoucherPdfGeneratorIT.java` | New — 4 tests, one per source-type header |
+| `cia-api/src/test/.../ReceiptPdfListItemIT.java` + `PaymentPdfListItemIT.java` | New — 2+2 tests, post() persists pdfPath + projects into list response |
+| `cia-api/src/test/.../ReceiptControllerPdfIT.java` + `PaymentControllerPdfIT.java` | New — 5+5 tests each (200 happy, 404 null path, 404 unknown id, 403 missing role, storage.download invoked with expected path) |
+| `cia-api/src/test/.../ReceiptReverseAuditIT.java` + `PaymentReverseAuditIT.java` | Modified — TestSupportConfig gains 2 `@Bean` mocks each |
+| `cia-api/src/test/.../FinanceItSupport.java` + `FinanceWebItSupport.java` | Modified — Flyway target 49 → 56 |
+| `cia-api/src/test/.../naicom/AnnualRevenueAccountEngineIT.java` | Modified — `insertLine` flake fix (deterministic per-JE `line_no` counter) |
+
+**Frontend** (7 files): `packages/api-client/src/modules/finance.ts` (+pdfPath schemas, +2 blob fetchers); `apps/back-office/src/modules/finance/hooks/{useReceipts,usePayments}.ts` (+download hooks); `apps/back-office/src/modules/finance/pages/{receivables/ReceiptsListSection,payables/PaymentsListSection,receivables/DebitNoteDetailDialog,payables/CreditNoteDetailDialog}.tsx` (+Download UI).
+
+**Docs** (3 files): `CLAUDE.md` (Module 8 row + Build 6 + new API Design bullet), `docs-site/static/internal-api.json` (256 → 258 paths), `cia-log.md` (this entry + backlog reconciliation).
+
+### Test coverage
+
+- **+30 backend ITs** added by this slice: 3 (HtmlToPdfConverterFont) + 8 (BeneficiaryProfileResolver) + 4 (ReceiptPdfGenerator) + 4 (PaymentVoucherPdfGenerator) + 2 (ReceiptPdfListItem) + 2 (PaymentPdfListItem) + 5 (ReceiptControllerPdf) + 5 (PaymentControllerPdf) = 33 across 8 new IT classes. **Wait, recounted: 3 + 8 + 4 + 4 + 2 + 2 + 5 + 5 = 33, but the cumulative baseline went 300 → 330 (+30). The 3 HtmlToPdfConverterFont tests live in `cia-documents` Surefire (unit-test runner), not in the cia-api failsafe baseline, which accounts for the 3-test delta.** Failsafe baseline 300 → 330. 0 failures, 0 errors, 1 intentional benchmark skip throughout.
+- **Frontend gates** all green at slice close: `pnpm --filter @cia/back-office typecheck` exit 0; `check-dto-drift.mjs` clean (the pdfPath gap that briefly appeared after backend Tasks 11+14 is now closed at Task 16); `check-api-wiring.sh` clean.
+
+### Backlog reconciliation
+
+- **Removed**: F7-β (drained — receipt + payment-voucher PDF generation + MinIO storage + download surfaces all shipped).
+- **Added**: `F7-β-NAICOM-flake` (P3 — audit sibling NAICOM engine ITs for the `Math.random()`-based `line_no` collision pattern); `F7-β-symbol-glyphs` (P3 — NotoSans Latin lacks ✓/✗/★ glyphs; future template-author concern, blocking nothing today).
+- **Still on the table**: F7-γ (email transmission via Temporal — next slice if continuing F7); F7-δ (per-tenant email template override — depends on γ); F9 (receipt PDF download surface ergonomics, depends on β = now ready); F10 (bulk receipt-PDF email, depends on γ); R7 (SMS template + channel preference); B2 (RM commission via 2520).
+
+### Known follow-ups
+
+- **Next slice is F7-γ** if continuing this work, or any P-prioritised row in the table.
+- **F9 is now unblocked** by F7-β shipping — if the operator UX surfaces (click-through download from receipt/payment number cells, "recent downloads" panel) are desired before γ ships, F9 can land independently.
+- **Pattern flagged-not-yet-extracted (rule of three)**: the test-only `TestSupportConfig` pattern of adding `@Bean` mocks for new constructor params now exists in 4 places (ReceiptReverseAuditIT, PaymentReverseAuditIT — both got 2 mocks added in this slice; pre-existing TestSupportConfig users have their own combos). Not extracting yet — each IT has different combinations of mocks needed, and extracting would require a parameterised base class with conditional `@Bean` declarations.
 
 ---
 
