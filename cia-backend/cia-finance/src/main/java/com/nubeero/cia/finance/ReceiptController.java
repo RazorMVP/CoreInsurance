@@ -1,9 +1,12 @@
 package com.nubeero.cia.finance;
 
 import com.nubeero.cia.common.api.ApiResponse;
+import com.nubeero.cia.common.exception.ResourceNotFoundException;
+import com.nubeero.cia.common.tenant.TenantContext;
 import com.nubeero.cia.finance.dto.PostReceiptRequest;
 import com.nubeero.cia.finance.dto.ReceiptResponse;
 import com.nubeero.cia.finance.dto.ReverseRequest;
+import com.nubeero.cia.storage.DocumentStorageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -12,12 +15,18 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.InputStream;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,6 +39,7 @@ import java.util.UUID;
 public class ReceiptController {
 
     private final ReceiptService service;
+    private final DocumentStorageService storage;
 
     @GetMapping
     @PreAuthorize("hasRole('FINANCE_VIEW')")
@@ -105,6 +115,33 @@ public class ReceiptController {
             @Valid @RequestBody ReverseRequest req) {
         service.reverse(id, req.reason());
         return ApiResponse.success(null);
+    }
+
+    @GetMapping("/{id}/pdf")
+    @PreAuthorize("hasAuthority('FINANCE_VIEW')")
+    @Operation(summary = "Download the receipt PDF",
+               description = "Streams the generated PDF for the receipt from object storage. 404 when pdfPath IS NULL (PDF was never generated or generation failed).")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "PDF bytes"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_VIEW", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Receipt not found OR pdfPath is null", content = @Content)
+    })
+    public ResponseEntity<Resource> downloadPdf(@PathVariable UUID debitNoteId,
+                                                  @PathVariable UUID id) {
+        Receipt receipt = service.findOrThrow(id);
+        if (receipt.getPdfPath() == null) {
+            throw new ResourceNotFoundException("Receipt", id);
+        }
+        String tenantId = TenantContext.getTenantId();
+        InputStream stream = storage.download(tenantId, receipt.getPdfPath());
+        String filename = "REC-" + receipt.getReceiptNumber() + ".pdf";
+
+        return ResponseEntity.ok()
+            .contentType(MediaType.APPLICATION_PDF)
+            .header(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=\"" + filename + "\"")
+            .body(new InputStreamResource(stream));
     }
 
     private ReceiptResponse toResponse(Receipt r) {
