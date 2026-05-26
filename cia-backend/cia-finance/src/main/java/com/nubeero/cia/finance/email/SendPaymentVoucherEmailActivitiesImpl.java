@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.InputStream;
 import java.util.HashMap;
@@ -62,6 +63,7 @@ public class SendPaymentVoucherEmailActivitiesImpl implements SendPaymentVoucher
     private final JdbcTemplate                       jdbc;
 
     @Override
+    @Transactional
     public void deliver(String tenantId, UUID paymentId, String requestedBy) {
         Payment payment = paymentRepository.findById(paymentId)
             .orElseThrow(() -> ApplicationFailure.newNonRetryableFailure(

@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.InputStream;
 import java.util.HashMap;
@@ -51,6 +52,7 @@ public class SendReceiptEmailActivitiesImpl implements SendReceiptEmailActivitie
     private final JdbcTemplate           jdbc;
 
     @Override
+    @Transactional
     public void deliver(String tenantId, UUID receiptId, String requestedBy) {
         Receipt receipt = receiptRepository.findById(receiptId)
             .orElseThrow(() -> ApplicationFailure.newNonRetryableFailure(
