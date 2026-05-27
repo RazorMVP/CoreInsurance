@@ -3,6 +3,8 @@ package com.nubeero.cia.finance;
 import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import com.nubeero.cia.common.tenant.TenantContext;
+import com.nubeero.cia.finance.audit.PdfDocumentType;
+import com.nubeero.cia.finance.audit.PdfDownloadLogService;
 import com.nubeero.cia.finance.dto.PostReceiptRequest;
 import com.nubeero.cia.finance.dto.ReceiptResponse;
 import com.nubeero.cia.finance.dto.ReverseRequest;
@@ -41,6 +43,7 @@ public class ReceiptController {
 
     private final ReceiptService service;
     private final DocumentStorageService storage;
+    private final PdfDownloadLogService pdfDownloadLogService;
 
     @GetMapping
     @PreAuthorize("hasRole('FINANCE_VIEW')")
@@ -136,6 +139,19 @@ public class ReceiptController {
         }
         String tenantId = TenantContext.getTenantId();
         InputStream stream = storage.download(tenantId, receipt.getPdfPath());
+
+        // F11 — server-side download history. The service swallows write
+        // failures (REQUIRES_NEW + try/catch) so an audit-log hiccup never
+        // blocks the actual download response.
+        DebitNote dn = receipt.getDebitNote();
+        pdfDownloadLogService.log(
+                PdfDocumentType.RECEIPT,
+                receipt.getId(),
+                receipt.getReceiptNumber(),
+                dn != null ? dn.getId() : null,
+                dn != null ? dn.getDebitNoteNumber() : null,
+                dn != null ? dn.getCustomerName() : null);
+
         String filename = "REC-" + receipt.getReceiptNumber() + ".pdf";
 
         return ResponseEntity.ok()
