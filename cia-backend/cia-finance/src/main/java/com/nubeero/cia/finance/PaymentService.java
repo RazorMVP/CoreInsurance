@@ -82,6 +82,15 @@ public class PaymentService {
             beneficiaryType = cn.getEntityType() != null ? cn.getEntityType().name() : null;
             beneficiaryReference = cn.getEntityReference();
         }
+        // Slice γ — pre-resolve beneficiary email via the dispatcher.
+        // N+1: one resolver call per row (each resolver does one or two FK
+        // lookups — Claim → Customer, Broker, ReinsuranceCompany, etc.).
+        // Acceptable for v1; batch resolver is a follow-up if a perf
+        // concern surfaces. Unmapped entity types (POLICY) silently return
+        // null and the frontend disables the Email button.
+        String recipientEmail = (cn == null)
+                ? null
+                : emailResolver.resolve(cn).orElse(null);
         return new PaymentListItemResponse(
                 p.getId(),
                 p.getPaymentNumber(),
@@ -97,7 +106,10 @@ public class PaymentService {
                 p.getReversedBy(),
                 p.getReversalReason(),
                 p.getCreatedAt(),
-                p.getPdfPath());
+                p.getPdfPath(),
+                recipientEmail,
+                p.getEmailSentAt(),
+                p.getEmailSentTo());
     }
 
     public Page<Payment> findByCreditNote(UUID creditNoteId, Pageable pageable) {

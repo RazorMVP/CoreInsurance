@@ -24,5 +24,12 @@ public record ReceiptListItemResponse(
         String reversedBy,           // nullable
         String reversalReason,       // nullable
         Instant createdAt,
-        String pdfPath               // nullable — null = PDF was never generated
+        String pdfPath,              // nullable — null = PDF was never generated
+        // Slice γ — email transmission. recipientEmail is the pre-resolved
+        // customer email at projection time (drives the Email button enabled
+        // state on the frontend). emailSentAt / emailSentTo are populated by
+        // the Temporal email-workflow activity after a successful delivery.
+        String recipientEmail,       // nullable — gates the Email button
+        Instant emailSentAt,         // nullable — null until first successful send
+        String emailSentTo           // nullable — = recipientEmail at send time
 ) {}

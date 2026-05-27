@@ -90,6 +90,22 @@ public class ReceiptService {
                 policyNumber = dn.getEntityReference();
             }
         }
+        // Slice γ — pre-resolve customer email for the Email button.
+        // N+1: one JDBC SELECT per row. Acceptable for v1 (typical page
+        // size ≤ 50); switch to a batch IN query if a perf concern surfaces.
+        String recipientEmail = null;
+        if (dn != null && dn.getCustomerId() != null) {
+            try {
+                recipientEmail = jdbc.queryForObject(
+                    "SELECT email FROM customers WHERE id = ?",
+                    String.class, dn.getCustomerId());
+                if (recipientEmail != null && recipientEmail.isBlank()) {
+                    recipientEmail = null;
+                }
+            } catch (org.springframework.dao.EmptyResultDataAccessException ignored) {
+                // Customer not found — leave recipientEmail null.
+            }
+        }
         return new ReceiptListItemResponse(
                 r.getId(),
                 r.getReceiptNumber(),
@@ -105,7 +121,10 @@ public class ReceiptService {
                 r.getReversedBy(),
                 r.getReversalReason(),
                 r.getCreatedAt(),
-                r.getPdfPath());
+                r.getPdfPath(),
+                recipientEmail,
+                r.getEmailSentAt(),
+                r.getEmailSentTo());
     }
 
     public Receipt findOrThrow(UUID id) {

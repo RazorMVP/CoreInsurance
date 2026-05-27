@@ -27,5 +27,13 @@ public record PaymentListItemResponse(
         String reversedBy,
         String reversalReason,
         Instant createdAt,
-        String pdfPath                // nullable — null = PDF was never generated
+        String pdfPath,               // nullable — null = PDF was never generated
+        // Slice γ — email transmission. recipientEmail is resolved per row
+        // via BeneficiaryEmailResolverDispatcher (N+1 caveat: one resolver
+        // call per row; acceptable for v1, batch resolver is a follow-up if
+        // a perf concern surfaces). emailSentAt / emailSentTo populated by
+        // the Temporal email-workflow activity after successful delivery.
+        String recipientEmail,        // nullable — gates the Email button
+        Instant emailSentAt,          // nullable — null until first successful send
+        String emailSentTo            // nullable — = recipientEmail at send time
 ) {}
