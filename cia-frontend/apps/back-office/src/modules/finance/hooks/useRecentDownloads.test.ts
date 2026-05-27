@@ -29,6 +29,7 @@ describe('useRecentDownloads', () => {
 
   it('returns server data via useQuery', async () => {
     // listRecentDownloads → validatedList → returns { data: T[], meta: {...} }
+    // allow-mock: Vitest fixture for hook test
     const mockEntry = {
       id: 'abc',
       entityType: 'RECEIPT' as const,
@@ -39,6 +40,7 @@ describe('useRecentDownloads', () => {
       recipientName: 'Test',
       downloadedAt: '2026-05-27T10:00:00Z',
     };
+    // allow-mock: Vitest fixture for hook test
     const mockReturn = {
       data: [mockEntry],
       meta: { total: 1, page: 0, size: 20 },
