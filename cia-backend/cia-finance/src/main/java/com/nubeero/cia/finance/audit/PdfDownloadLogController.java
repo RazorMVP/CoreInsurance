@@ -27,7 +27,7 @@ public class PdfDownloadLogController {
     private final PdfDownloadLogService service;
 
     @GetMapping
-    @PreAuthorize("hasRole('FINANCE_VIEW')")
+    @PreAuthorize("hasAuthority('FINANCE_VIEW')")
     @Operation(summary = "List recent PDF downloads for the calling user",
                description = "Returns the calling user's PDF download events from the last `days` days, newest first. Default 1 day (today); max 30 days.")
     @ApiResponses({
