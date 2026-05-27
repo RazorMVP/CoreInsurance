@@ -179,6 +179,23 @@ public class PaymentController {
         return ApiResponse.success(Map.of("workflowId", workflowId));
     }
 
+    @PostMapping("/{id}/email/cancel")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @PreAuthorize("hasAuthority('FINANCE_UPDATE')")
+    @Operation(summary = "Cancel an in-flight payment-voucher email workflow",
+               description = "Signals the SendPaymentEmailWorkflow to cancel. Best-effort — if the activity-dispatch has already happened, the email send completes normally. Used by the BulkEmailSheet Cancel button.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "202", description = "Cancel signal sent"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_UPDATE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "WORKFLOW_NOT_FOUND — already finished or never started", content = @Content)
+    })
+    public ApiResponse<Map<String, Boolean>> cancelEmail(@PathVariable UUID creditNoteId,
+                                                          @PathVariable UUID id) {
+        service.cancelEmail(id);
+        return ApiResponse.success(Map.of("cancelled", true));
+    }
+
     private PaymentResponse toResponse(Payment p) {
         return new PaymentResponse(
                 p.getId(),
