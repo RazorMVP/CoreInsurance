@@ -165,7 +165,7 @@ class PaymentReverseAuditIT extends FinanceItSupport {
         /**
          * Slice γ / Task 26 — PaymentService now depends on
          * BeneficiaryEmailResolverDispatcher + WorkflowClient (to start the
-         * SendPaymentVoucherEmailWorkflow on EMAIL_QUEUE). The reverse-path
+         * SendPaymentVoucherEmailWorkflow on NOTIFICATIONS_QUEUE). The reverse-path
          * under test never calls requestEmail(); the mocks exist solely to
          * satisfy the constructor.
          */

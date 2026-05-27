@@ -11,7 +11,7 @@ public class PdfDownloadLogRetentionWorkflowImpl implements PdfDownloadLogRetent
     private final PdfDownloadLogRetentionActivities activities = Workflow.newActivityStub(
             PdfDownloadLogRetentionActivities.class,
             ActivityOptions.newBuilder()
-                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
                 .setStartToCloseTimeout(Duration.ofMinutes(5))
                 .build());
 

@@ -206,7 +206,7 @@ public class PaymentService {
      * Validates the email preflight (PDF exists + recipient resolved via
      * {@link BeneficiaryEmailResolverDispatcher}) and starts the
      * {@link SendPaymentVoucherEmailWorkflow} on
-     * {@link TemporalQueues#EMAIL_QUEUE}.
+     * {@link TemporalQueues#NOTIFICATIONS_QUEUE}.
      *
      * @return the started workflow id
      *         ({@code "send-payment-voucher-email-<paymentId>"}).
@@ -243,7 +243,7 @@ public class PaymentService {
         SendPaymentVoucherEmailWorkflow workflow = workflowClient.newWorkflowStub(
             SendPaymentVoucherEmailWorkflow.class,
             WorkflowOptions.newBuilder()
-                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
                 .setWorkflowId(workflowId)
                 .build());
         WorkflowClient.start(workflow::send, tenantId, paymentId, requestedBy);

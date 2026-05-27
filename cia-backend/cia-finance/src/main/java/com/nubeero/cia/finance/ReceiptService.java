@@ -215,7 +215,7 @@ public class ReceiptService {
 
     /**
      * Validates the email preflight (PDF exists + recipient resolved) and starts
-     * the {@link SendReceiptEmailWorkflow} on {@link TemporalQueues#EMAIL_QUEUE}.
+     * the {@link SendReceiptEmailWorkflow} on {@link TemporalQueues#NOTIFICATIONS_QUEUE}.
      *
      * @return the started workflow id ({@code "send-receipt-email-<receiptId>"}).
      * @throws NotificationPreflightException 422 with {@code RECEIPT_PDF_UNAVAILABLE} if
@@ -261,7 +261,7 @@ public class ReceiptService {
         SendReceiptEmailWorkflow workflow = workflowClient.newWorkflowStub(
             SendReceiptEmailWorkflow.class,
             WorkflowOptions.newBuilder()
-                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
                 .setWorkflowId(workflowId)
                 .build());
         WorkflowClient.start(workflow::send, tenantId, receiptId, requestedBy);

@@ -15,7 +15,7 @@ public class SendReceiptEmailWorkflowImpl implements SendReceiptEmailWorkflow {
     private final SendReceiptEmailActivities activities = Workflow.newActivityStub(
             SendReceiptEmailActivities.class,
             ActivityOptions.newBuilder()
-                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
                 .setStartToCloseTimeout(Duration.ofMinutes(2))
                 .setRetryOptions(RetryOptions.newBuilder()
                     .setInitialInterval(Duration.ofMinutes(5))

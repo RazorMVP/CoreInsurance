@@ -162,7 +162,7 @@ class ReceiptReverseAuditIT extends FinanceItSupport {
 
         /**
          * Slice γ / Task 25 — ReceiptService now depends on WorkflowClient
-         * (to start the SendReceiptEmailWorkflow on the new EMAIL_QUEUE).
+         * (to start the SendReceiptEmailWorkflow on the new NOTIFICATIONS_QUEUE).
          * The reverse-path under test never calls requestEmail(); the mock
          * exists solely to satisfy the constructor.
          */

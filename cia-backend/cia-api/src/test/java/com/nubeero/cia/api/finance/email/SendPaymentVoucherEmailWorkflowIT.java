@@ -90,7 +90,7 @@ class SendPaymentVoucherEmailWorkflowIT extends FinanceWebItSupport {
     @BeforeEach
     void setUpTemporal() {
         env    = TestWorkflowEnvironment.newInstance();
-        worker = env.newWorker(TemporalQueues.EMAIL_QUEUE);
+        worker = env.newWorker(TemporalQueues.NOTIFICATIONS_QUEUE);
         worker.registerWorkflowImplementationTypes(SendPaymentVoucherEmailWorkflowImpl.class);
         worker.registerActivitiesImplementations(voucherActivities);
         env.start();
@@ -146,7 +146,7 @@ class SendPaymentVoucherEmailWorkflowIT extends FinanceWebItSupport {
         SendPaymentVoucherEmailWorkflow wf = client.newWorkflowStub(
             SendPaymentVoucherEmailWorkflow.class,
             WorkflowOptions.newBuilder()
-                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
                 .setWorkflowId("test-pay-commish-" + p.getId())
                 .build());
         wf.send("test-tenant", p.getId(), "alice");
@@ -182,7 +182,7 @@ class SendPaymentVoucherEmailWorkflowIT extends FinanceWebItSupport {
         SendPaymentVoucherEmailWorkflow wf = client.newWorkflowStub(
             SendPaymentVoucherEmailWorkflow.class,
             WorkflowOptions.newBuilder()
-                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
                 .setWorkflowId("test-pay-ri-" + p.getId())
                 .build());
         wf.send("test-tenant", p.getId(), "alice");
@@ -212,7 +212,7 @@ class SendPaymentVoucherEmailWorkflowIT extends FinanceWebItSupport {
         SendPaymentVoucherEmailWorkflow wf = client.newWorkflowStub(
             SendPaymentVoucherEmailWorkflow.class,
             WorkflowOptions.newBuilder()
-                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
                 .setWorkflowId("test-pay-claim-" + p.getId())
                 .build());
         wf.send("test-tenant", p.getId(), "alice");
@@ -242,7 +242,7 @@ class SendPaymentVoucherEmailWorkflowIT extends FinanceWebItSupport {
         SendPaymentVoucherEmailWorkflow wf = client.newWorkflowStub(
             SendPaymentVoucherEmailWorkflow.class,
             WorkflowOptions.newBuilder()
-                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
                 .setWorkflowId("test-pay-end-" + p.getId())
                 .build());
         wf.send("test-tenant", p.getId(), "alice");
@@ -267,7 +267,7 @@ class SendPaymentVoucherEmailWorkflowIT extends FinanceWebItSupport {
         SendPaymentVoucherEmailWorkflow wf = client.newWorkflowStub(
             SendPaymentVoucherEmailWorkflow.class,
             WorkflowOptions.newBuilder()
-                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
                 .setWorkflowId("test-pay-unresolved-" + p.getId())
                 .build());
 
@@ -313,7 +313,7 @@ class SendPaymentVoucherEmailWorkflowIT extends FinanceWebItSupport {
         SendPaymentVoucherEmailWorkflow wf = client.newWorkflowStub(
             SendPaymentVoucherEmailWorkflow.class,
             WorkflowOptions.newBuilder()
-                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
                 .setWorkflowId("test-pay-retry-" + p.getId())
                 .build());
 

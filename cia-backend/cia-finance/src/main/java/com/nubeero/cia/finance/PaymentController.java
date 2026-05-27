@@ -165,7 +165,7 @@ public class PaymentController {
     @ResponseStatus(HttpStatus.ACCEPTED)
     @PreAuthorize("hasAuthority('FINANCE_UPDATE')")
     @Operation(summary = "Email the payment voucher PDF to the beneficiary",
-               description = "Starts a Temporal workflow (EMAIL_QUEUE) that downloads the PDF, composes the body, and delivers via the configured EmailService provider. Preflight: pdfPath != null and BeneficiaryEmailResolverDispatcher returns a non-blank email for the credit note's entityType. 202 with workflow id on enqueue; 422 with errorCode (PAYMENT_PDF_UNAVAILABLE / PAYMENT_RECIPIENT_UNRESOLVED) when preflight fails.")
+               description = "Starts a Temporal workflow (NOTIFICATIONS_QUEUE) that downloads the PDF, composes the body, and delivers via the configured EmailService provider. Preflight: pdfPath != null and BeneficiaryEmailResolverDispatcher returns a non-blank email for the credit note's entityType. 202 with workflow id on enqueue; 422 with errorCode (PAYMENT_PDF_UNAVAILABLE / PAYMENT_RECIPIENT_UNRESOLVED) when preflight fails.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "202", description = "Workflow enqueued; body carries workflowId"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),

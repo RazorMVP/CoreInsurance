@@ -16,12 +16,14 @@ public final class TemporalQueues {
     public static final String BACKFILL_QUEUE = "backfill-queue";
 
     /**
-     * F7 slice γ — receipt + payment-voucher email transmission.
-     * Hosts {@code SendReceiptEmailWorkflow} and
-     * {@code SendPaymentVoucherEmailWorkflow}; retries with exponential
-     * backoff (5 min → 1 hr, no cap) on SMTP/SendGrid failure.
+     * Transactional notification dispatch queue.
+     * Hosts email workflows ({@code SendReceiptEmailWorkflow},
+     * {@code SendPaymentVoucherEmailWorkflow}), SMS workflows (F7-δ / R7),
+     * and the {@code PdfDownloadLogRetentionWorkflow} cron.
+     * Retries with exponential backoff (5 min → 1 hr, no cap) on
+     * SMTP/SendGrid/SMS-provider failure.
      */
-    public static final String EMAIL_QUEUE = "email-queue";
+    public static final String NOTIFICATIONS_QUEUE = "notifications-queue";
 
     private TemporalQueues() {}
 }

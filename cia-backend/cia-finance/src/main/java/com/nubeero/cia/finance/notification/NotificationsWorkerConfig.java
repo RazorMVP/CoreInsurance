@@ -1,8 +1,12 @@
-package com.nubeero.cia.finance.email;
+package com.nubeero.cia.finance.notification;
 
 import com.nubeero.cia.finance.audit.PdfDownloadLogRetentionActivitiesImpl;
 import com.nubeero.cia.finance.audit.PdfDownloadLogRetentionWorkflow;
 import com.nubeero.cia.finance.audit.PdfDownloadLogRetentionWorkflowImpl;
+import com.nubeero.cia.finance.email.SendPaymentVoucherEmailActivitiesImpl;
+import com.nubeero.cia.finance.email.SendPaymentVoucherEmailWorkflowImpl;
+import com.nubeero.cia.finance.email.SendReceiptEmailActivitiesImpl;
+import com.nubeero.cia.finance.email.SendReceiptEmailWorkflowImpl;
 import com.nubeero.cia.workflow.TemporalQueues;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowOptions;
@@ -14,8 +18,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Registers both email workflows + their activity beans on
- * {@link TemporalQueues#EMAIL_QUEUE}. Mirrors {@code BackfillWorkerConfig}.
+ * Registers notification workflows (email, PDF retention) + their activity
+ * beans on {@link TemporalQueues#NOTIFICATIONS_QUEUE}.
+ * Mirrors {@code BackfillWorkerConfig}.
  *
  * <p>The {@code @PostConstruct} hook is graceful — if Temporal is unavailable
  * at boot, it logs a warning and the app still starts. This matches the
@@ -28,7 +33,7 @@ import org.springframework.context.annotation.Configuration;
 @Slf4j
 @Configuration
 @RequiredArgsConstructor
-public class EmailWorkerConfig {
+public class NotificationsWorkerConfig {
 
     private final WorkerFactory                          workerFactory;
     private final SendReceiptEmailActivitiesImpl         receiptActivities;
@@ -39,17 +44,17 @@ public class EmailWorkerConfig {
     @PostConstruct
     public void registerEmailWorker() {
         try {
-            Worker worker = workerFactory.newWorker(TemporalQueues.EMAIL_QUEUE);
+            Worker worker = workerFactory.newWorker(TemporalQueues.NOTIFICATIONS_QUEUE);
             worker.registerWorkflowImplementationTypes(
                 SendReceiptEmailWorkflowImpl.class,
                 SendPaymentVoucherEmailWorkflowImpl.class,
                 PdfDownloadLogRetentionWorkflowImpl.class);
             worker.registerActivitiesImplementations(
                 receiptActivities, voucherActivities, retentionActivities);
-            log.info("Registered Temporal worker on queue: {}", TemporalQueues.EMAIL_QUEUE);
+            log.info("Registered Temporal worker on queue: {}", TemporalQueues.NOTIFICATIONS_QUEUE);
             schedulePdfDownloadLogRetention();
         } catch (Exception e) {
-            log.warn("Could not register email Temporal worker (Temporal unavailable?): {}", e.getMessage());
+            log.warn("Could not register notifications Temporal worker (Temporal unavailable?): {}", e.getMessage());
         }
     }
 
@@ -65,7 +70,7 @@ public class EmailWorkerConfig {
             PdfDownloadLogRetentionWorkflow workflow = workflowClient.newWorkflowStub(
                 PdfDownloadLogRetentionWorkflow.class,
                 WorkflowOptions.newBuilder()
-                    .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                    .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
                     .setWorkflowId("pdf-download-log-retention-cron")
                     .setCronSchedule("0 2 * * 0")
                     .build());

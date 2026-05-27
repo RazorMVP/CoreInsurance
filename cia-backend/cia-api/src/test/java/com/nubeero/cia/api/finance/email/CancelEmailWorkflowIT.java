@@ -58,7 +58,7 @@ class CancelEmailWorkflowIT extends FinanceWebItSupport {
     @BeforeEach
     void setUpTemporal() {
         env = TestWorkflowEnvironment.newInstance();
-        Worker worker = env.newWorker(TemporalQueues.EMAIL_QUEUE);
+        Worker worker = env.newWorker(TemporalQueues.NOTIFICATIONS_QUEUE);
         worker.registerWorkflowImplementationTypes(SendReceiptEmailWorkflowImpl.class);
         worker.registerActivitiesImplementations(receiptActivities);
         env.start();
@@ -108,7 +108,7 @@ class CancelEmailWorkflowIT extends FinanceWebItSupport {
         WorkflowStub stub = client.newUntypedWorkflowStub(
             "SendReceiptEmailWorkflow",
             WorkflowOptions.newBuilder()
-                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
                 .setWorkflowId(workflowId)
                 .build());
         stub.signalWithStart(

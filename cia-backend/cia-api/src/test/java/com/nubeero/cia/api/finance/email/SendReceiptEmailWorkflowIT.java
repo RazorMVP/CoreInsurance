@@ -98,7 +98,7 @@ class SendReceiptEmailWorkflowIT extends FinanceWebItSupport {
     @BeforeEach
     void setUpTemporal() {
         env    = TestWorkflowEnvironment.newInstance();
-        worker = env.newWorker(TemporalQueues.EMAIL_QUEUE);
+        worker = env.newWorker(TemporalQueues.NOTIFICATIONS_QUEUE);
         worker.registerWorkflowImplementationTypes(SendReceiptEmailWorkflowImpl.class);
         worker.registerActivitiesImplementations(receiptActivities);
         env.start();
@@ -163,7 +163,7 @@ class SendReceiptEmailWorkflowIT extends FinanceWebItSupport {
         SendReceiptEmailWorkflow wf = client.newWorkflowStub(
             SendReceiptEmailWorkflow.class,
             WorkflowOptions.newBuilder()
-                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
                 .setWorkflowId("test-receipt-happy-" + r.getId())
                 .build());
         wf.send("test-tenant", r.getId(), "alice");
@@ -212,7 +212,7 @@ class SendReceiptEmailWorkflowIT extends FinanceWebItSupport {
         SendReceiptEmailWorkflow wf = client.newWorkflowStub(
             SendReceiptEmailWorkflow.class,
             WorkflowOptions.newBuilder()
-                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
                 .setWorkflowId("test-receipt-nopdf-" + receiptId)
                 .build());
 
@@ -264,7 +264,7 @@ class SendReceiptEmailWorkflowIT extends FinanceWebItSupport {
         SendReceiptEmailWorkflow wf = client.newWorkflowStub(
             SendReceiptEmailWorkflow.class,
             WorkflowOptions.newBuilder()
-                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
                 .setWorkflowId("test-receipt-retry-" + r.getId())
                 .build());
 

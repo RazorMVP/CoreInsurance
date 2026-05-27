@@ -25,7 +25,7 @@ public class SendPaymentVoucherEmailWorkflowImpl implements SendPaymentVoucherEm
     private final SendPaymentVoucherEmailActivities activities = Workflow.newActivityStub(
             SendPaymentVoucherEmailActivities.class,
             ActivityOptions.newBuilder()
-                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
                 .setStartToCloseTimeout(Duration.ofMinutes(2))
                 .setRetryOptions(RetryOptions.newBuilder()
                     .setInitialInterval(Duration.ofMinutes(5))
