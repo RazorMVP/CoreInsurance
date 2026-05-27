@@ -4,7 +4,8 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@cia/ui';
 import type { CreditNoteDto, FinanceEntityType } from '@cia/api-client';
-import { useDownloadPaymentPdf, useEmailPayment, usePaymentList } from '../../hooks/usePayments';
+import { useEmailPayment, usePaymentList } from '../../hooks/usePayments';
+import DownloadIconButton from '../../components/DownloadIconButton';
 import EmailConfirmDialog from '../EmailConfirmDialog';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
 
@@ -55,7 +56,6 @@ export default function CreditNoteDetailDialog({ open, onOpenChange, creditNote,
   );
   const payments = paymentsQuery.data?.data ?? [];
 
-  const downloadPdf      = useDownloadPaymentPdf();
   const emailPaymentMut  = useEmailPayment();
 
   if (!creditNote) return null;
@@ -161,20 +161,13 @@ export default function CreditNoteDetailDialog({ open, onOpenChange, creditNote,
                         Email
                       </Button>
                     )}
-                    {p.pdfPath && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => downloadPdf.mutate({
-                          cnId:      p.creditNoteId,
-                          paymentId: p.id,
-                          reference: p.reference,
-                        })}
-                        disabled={downloadPdf.isPending && downloadPdf.variables?.paymentId === p.id}
-                      >
-                        {downloadPdf.isPending && downloadPdf.variables?.paymentId === p.id ? 'Downloading…' : 'Download'}
-                      </Button>
-                    )}
+                    <DownloadIconButton
+                      type="PAYMENT"
+                      id={p.id}
+                      parentId={p.creditNoteId}
+                      reference={p.reference}
+                      pdfPath={p.pdfPath}
+                    />
                     {p.status === 'POSTED' && (
                       <Button
                         variant="outline"
