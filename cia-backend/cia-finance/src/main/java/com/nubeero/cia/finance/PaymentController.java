@@ -3,6 +3,8 @@ package com.nubeero.cia.finance;
 import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import com.nubeero.cia.common.tenant.TenantContext;
+import com.nubeero.cia.finance.audit.PdfDocumentType;
+import com.nubeero.cia.finance.audit.PdfDownloadLogService;
 import com.nubeero.cia.finance.dto.PaymentResponse;
 import com.nubeero.cia.finance.dto.PostPaymentRequest;
 import com.nubeero.cia.finance.dto.ReverseRequest;
@@ -41,6 +43,7 @@ public class PaymentController {
 
     private final PaymentService service;
     private final DocumentStorageService storage;
+    private final PdfDownloadLogService pdfDownloadLogService;
 
     @GetMapping
     @PreAuthorize("hasRole('FINANCE_VIEW')")
@@ -136,6 +139,19 @@ public class PaymentController {
         }
         String tenantId = TenantContext.getTenantId();
         InputStream stream = storage.download(tenantId, payment.getPdfPath());
+
+        // F11 — server-side download history. Service swallows failures
+        // (REQUIRES_NEW + try/catch) so an audit-log hiccup never blocks
+        // the download response.
+        CreditNote cn = payment.getCreditNote();
+        pdfDownloadLogService.log(
+                PdfDocumentType.PAYMENT,
+                payment.getId(),
+                payment.getPaymentNumber(),
+                cn != null ? cn.getId() : null,
+                cn != null ? cn.getCreditNoteNumber() : null,
+                cn != null ? cn.getBeneficiaryName() : null);
+
         String filename = "PAY-" + payment.getPaymentNumber() + ".pdf";
 
         return ResponseEntity.ok()
