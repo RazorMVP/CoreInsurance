@@ -2,9 +2,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   apiClient,
   downloadReceiptPdf,
+  emailReceipt,
   listReceipts,
+  type ApiError,
+  type ApiResponse,
   type ReceiptListFilters,
 } from '@cia/api-client';
+import { toast } from '@cia/ui';
+
+interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
 
 export function useReceiptList(filters: ReceiptListFilters) {
   return useQuery({
@@ -52,6 +58,51 @@ export function useDownloadReceiptPdf() {
       a.download = `REC-${reference}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
+    },
+  });
+}
+
+export interface EmailReceiptArgs {
+  dnId:      string;
+  receiptId: string;
+  reference: string;        // for toast — e.g. "REC-2026-00001"
+}
+
+/**
+ * Triggers the SendReceiptEmailWorkflow via POST /email. Surfaces server
+ * errorCode in the failure toast (RECEIPT_PDF_UNAVAILABLE /
+ * RECEIPT_RECIPIENT_UNRESOLVED). Invalidates receipt queries on success so
+ * the "Last emailed at" badge reflects the latest send timestamp once the
+ * workflow completes (next list refresh).
+ */
+export function useEmailReceipt() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ dnId, receiptId }: EmailReceiptArgs) => {
+      return await emailReceipt(dnId, receiptId);
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'receipts'] });
+      toast({
+        title: 'Email queued',
+        description: `Receipt ${vars.reference} will be delivered shortly. The "Last emailed" badge updates after delivery.`,
+      });
+    },
+    onError: (error) => {
+      const ax = error as ApiHttpError;
+      const errors: ApiError[] = ax?.response?.data?.errors ?? [];
+      const code = errors[0]?.code ?? '';
+      let description: string;
+      if (code === 'RECEIPT_PDF_UNAVAILABLE') {
+        description = 'PDF not yet available for this receipt. Try again in a moment or re-post the receipt.';
+      } else if (code === 'RECEIPT_RECIPIENT_UNRESOLVED') {
+        description = 'No email on file for this customer. Update the customer record before emailing.';
+      } else {
+        description = errors.length > 0
+          ? errors.map(e => e.message).filter(Boolean).join('. ')
+          : ax?.message ?? 'An unexpected error occurred. Please try again.';
+      }
+      toast({ variant: 'destructive', title: 'Email failed', description });
     },
   });
 }
