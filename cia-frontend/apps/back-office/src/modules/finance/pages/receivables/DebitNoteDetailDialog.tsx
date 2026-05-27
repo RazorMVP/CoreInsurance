@@ -5,7 +5,8 @@ import {
 } from '@cia/ui';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, type DebitNoteDto, type PolicyDto } from '@cia/api-client';
-import { useDownloadReceiptPdf, useEmailReceipt, useReceiptList } from '../../hooks/useReceipts';
+import { useEmailReceipt, useReceiptList } from '../../hooks/useReceipts';
+import DownloadIconButton from '../../components/DownloadIconButton';
 import EmailConfirmDialog from '../EmailConfirmDialog';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
 
@@ -61,7 +62,6 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
   );
   const receipts = receiptsQuery.data?.data ?? [];
 
-  const downloadPdf      = useDownloadReceiptPdf();
   const emailReceiptMut  = useEmailReceipt();
 
   if (!debitNote) return null;
@@ -173,20 +173,13 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
                         Email
                       </Button>
                     )}
-                    {r.pdfPath && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => downloadPdf.mutate({
-                          dnId:      r.debitNoteId,
-                          receiptId: r.id,
-                          reference: r.reference,
-                        })}
-                        disabled={downloadPdf.isPending && downloadPdf.variables?.receiptId === r.id}
-                      >
-                        {downloadPdf.isPending && downloadPdf.variables?.receiptId === r.id ? 'Downloading…' : 'Download'}
-                      </Button>
-                    )}
+                    <DownloadIconButton
+                      type="RECEIPT"
+                      id={r.id}
+                      parentId={r.debitNoteId}
+                      reference={r.reference}
+                      pdfPath={r.pdfPath}
+                    />
                     {r.status === 'POSTED' && (
                       <Button
                         variant="outline"
