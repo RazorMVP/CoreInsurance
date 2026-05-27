@@ -13,7 +13,6 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | ID | P | Item | Notes |
 |---|---|---|---|
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
-| F7-β-NAICOM-flake | P3 | Audit sibling NAICOM engine ITs for `Math.random()`-based `line_no` collision pattern | Surfaced during F7-β Task 1 (Session 126) — `AnnualRevenueAccountEngineIT.insertLine` was using `(int)(Math.random()*1000)+1` and hit a `uq_journal_entry_line_no` collision on the V50-V56 Flyway bump. Fixed there. Similar pattern may exist in sibling NAICOM engine ITs (`BalanceSheetEngineIT`, `PrudentialReturnEngineIT`, etc.) — grep for `Math.random` under `cia-api/src/test/.../naicom/` and replace with the deterministic per-JE counter pattern used in the Task-1 fix. |
 | F7-β-symbol-glyphs | P3 | NotoSans Latin lacks symbol glyphs (✓ ✗ ★ → ←) | Surfaced during F7-β Task 3 (Session 126) — the NotoSans-Regular TTF embedded in `HtmlToPdfConverter` is the "latin-greek-cyrillic" variant which doesn't ship U+2713. The existing F7-β receipt + voucher templates don't need symbol glyphs, but if a future template / per-tenant override (slice δ) wants a ✓ status indicator or similar, either (a) add Noto Sans Symbols TTF as a fallback font in `HtmlToPdfConverter.loadFont`, or (b) ASCII-escape the symbol in the template. Documented as a future template-author concern; not blocking. |
 | F7-δ | P3 | Per-tenant email template override for receipt / payment emails | Slice δ of F7. Requires F7-γ complete. Default subject + body templates ship in `cia-documents` resources; per-tenant overrides stored in `tenant_email_template` (V52) keyed by template type. Renderer falls back to default if no row. Setup → Notifications → Email Templates page lists default + override side-by-side; reset-to-default action. |
 | F9 | P3 | Receipt PDF download surface ergonomics | Captured during F7 Session 124 brainstorm scope-cap discussion. Once F7-β lands, surface PDF download from the existing receipt + payment number cells (not only as a row action), plus a "Recent downloads" panel for operators tracking what they've already pushed to customers this session. Pure UX polish on top of F7-β. |
@@ -21,6 +20,17 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | R7 | P3 | Per-tenant SMS template override + SMS-receipt option | Captured during F7 Session 124. SMS path mirrors F7-δ but for receipt + payment SMS notifications via `NotificationService.sendSms`. Distinct from email because some tenants prefer SMS for transactional confirmations. Likely depends on `tenant_sms_template` (V53) + per-tenant default channel preference (email vs SMS) on `tenant_settings`. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-27 — Session 129 (`main`): backlog audit — drain F7-β-NAICOM-flake (P3)
+
+Post-γ backlog sweep. User picked Bundle A (F7 closeout). A1 = drain `F7-β-NAICOM-flake` — the row asked us to audit sibling NAICOM engine ITs (`BalanceSheetEngineIT`, `PrudentialReturnEngineIT`, etc.) for the `(int)(Math.random()*1000)+1` `line_no` collision pattern that was fixed in `AnnualRevenueAccountEngineIT.insertLine` during F7-β Task 1 (Session 126). Audit result: `grep -rln 'Math\.random' cia-api/src/test/` returns ONE file — `AnnualRevenueAccountEngineIT.java` — and both occurrences there are inside doc comments referencing the OLD pattern. No sibling NAICOM IT carries the flake. **Zero-code drain.**
+
+### Known follow-ups
+
+- **Backlog row drained:** `F7-β-NAICOM-flake` (P3) — audited; no real exposure remained.
+- **No other changes.**
 
 ---
 
