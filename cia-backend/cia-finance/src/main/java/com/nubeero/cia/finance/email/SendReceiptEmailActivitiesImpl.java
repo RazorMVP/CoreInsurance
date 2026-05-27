@@ -2,7 +2,7 @@ package com.nubeero.cia.finance.email;
 
 import com.nubeero.cia.common.audit.AuditAction;
 import com.nubeero.cia.common.audit.AuditService;
-import com.nubeero.cia.common.email.EmailTemplateType;
+import com.nubeero.cia.common.notification.NotificationTemplateType;
 import com.nubeero.cia.finance.DebitNote;
 import com.nubeero.cia.finance.Receipt;
 import com.nubeero.cia.finance.ReceiptRepository;
@@ -91,7 +91,7 @@ public class SendReceiptEmailActivitiesImpl implements SendReceiptEmailActivitie
         fields.put("paymentDate", receipt.getPaymentDate().toString());
         fields.put("debitNoteNumber", dn.getDebitNoteNumber());
         fields.put("companyName", "Your Insurance Company"); // δ moves to tenant config
-        EmailContent content = bodyComposer.compose(EmailTemplateType.RECEIPT_EMAIL, fields);
+        EmailContent content = bodyComposer.compose(NotificationTemplateType.RECEIPT, fields);
 
         // Build EmailMessage + send (SMTP errors bubble for retry)
         EmailMessage msg = new EmailMessage(

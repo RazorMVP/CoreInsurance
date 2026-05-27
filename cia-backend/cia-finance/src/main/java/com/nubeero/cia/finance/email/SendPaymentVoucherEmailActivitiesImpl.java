@@ -2,7 +2,7 @@ package com.nubeero.cia.finance.email;
 
 import com.nubeero.cia.common.audit.AuditAction;
 import com.nubeero.cia.common.audit.AuditService;
-import com.nubeero.cia.common.email.EmailTemplateType;
+import com.nubeero.cia.common.notification.NotificationTemplateType;
 import com.nubeero.cia.finance.CreditNote;
 import com.nubeero.cia.finance.Payment;
 import com.nubeero.cia.finance.PaymentRepository;
@@ -98,7 +98,7 @@ public class SendPaymentVoucherEmailActivitiesImpl implements SendPaymentVoucher
         fields.put("paymentDate", payment.getPaymentDate().toString());
         fields.put("creditNoteNumber", cn.getCreditNoteNumber());
         fields.put("companyName", "Your Insurance Company"); // δ moves to tenant config
-        EmailContent content = bodyComposer.compose(EmailTemplateType.PAYMENT_VOUCHER_EMAIL, fields);
+        EmailContent content = bodyComposer.compose(NotificationTemplateType.PAYMENT_VOUCHER, fields);
 
         // Build EmailMessage + send (SMTP errors bubble for retry)
         EmailMessage msg = new EmailMessage(
