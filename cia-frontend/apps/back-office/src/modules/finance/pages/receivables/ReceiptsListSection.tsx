@@ -1,14 +1,18 @@
 import { useState } from 'react';
 import {
-  Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
+  Badge, Button, Checkbox, DataTable, DataTableColumnHeader, DataTableRowActions,
   PageSection,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import { useDownloadReceiptPdf, useEmailReceipt, useReceiptList } from '../../hooks/useReceipts';
+import { useEmailReceipt, useReceiptList } from '../../hooks/useReceipts';
+import DownloadIconButton from '../../components/DownloadIconButton';
+import RecentDownloadsPanel from '../../components/RecentDownloadsPanel';
+import BulkEmailSheet from '../BulkEmailSheet';
+import BulkDownloadButton from '../BulkDownloadButton';
 import EmailConfirmDialog from '../EmailConfirmDialog';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
-import type { ReceiptListItemResponse } from '@cia/api-client';
+import type { BulkDownloadItem, ReceiptListItemResponse } from '@cia/api-client';
 
 interface EmailTarget {
   dnId:           string;
@@ -27,19 +31,69 @@ export default function ReceiptsListSection() {
   const [page,           setPage]           = useState(0);
   const [reverseTarget,  setReverseTarget]  = useState<ReverseTarget | null>(null);
   const [emailTarget,    setEmailTarget]    = useState<EmailTarget | null>(null);
+  const [rowSelection,   setRowSelection]   = useState<Record<string, boolean>>({});
+  const [bulkEmailOpen,  setBulkEmailOpen]  = useState(false);
 
   const receiptsQuery = useReceiptList({ status, page, size: 20 });
   const receipts = receiptsQuery.data?.data ?? [];
   const meta     = receiptsQuery.data?.meta;
 
-  const downloadPdf = useDownloadReceiptPdf();
   const emailReceiptMut = useEmailReceipt();
+
+  const allPageIds   = receipts.map((r) => r.id);
+  const allSelected  = allPageIds.length > 0 && allPageIds.every((id) => rowSelection[id]);
+  const someSelected = allPageIds.some((id) => rowSelection[id]);
 
   const columns: ColumnDef<ReceiptListItemResponse>[] = [
     {
+      id: 'select',
+      header: () => (
+        <Checkbox
+          checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+          onCheckedChange={(checked) => {
+            setRowSelection(() => {
+              if (!checked) return {};
+              const next: Record<string, boolean> = {};
+              for (const id of allPageIds) next[id] = true;
+              return next;
+            });
+          }}
+          aria-label="Select all"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={rowSelection[row.original.id] ?? false}
+          onCheckedChange={(checked) => {
+            setRowSelection((prev) => {
+              const next = { ...prev };
+              if (checked) next[row.original.id] = true;
+              else delete next[row.original.id];
+              return next;
+            });
+          }}
+          aria-label="Select row"
+        />
+      ),
+    },
+    {
       accessorKey: 'reference',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Receipt" />,
-      cell: ({ getValue }) => <span className="font-mono text-xs">{getValue() as string}</span>,
+      cell: ({ row }) => {
+        const r = row.original;
+        return (
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-xs">{r.reference}</span>
+            <DownloadIconButton
+              type="RECEIPT"
+              id={r.id}
+              parentId={r.debitNoteId}
+              reference={r.reference}
+              pdfPath={r.pdfPath}
+            />
+          </div>
+        );
+      },
     },
     {
       accessorKey: 'debitNoteNumber',
@@ -110,16 +164,6 @@ export default function ReceiptsListSection() {
             }),
           });
         }
-        if (r.pdfPath !== null) {
-          actions.push({
-            label: 'Download PDF',
-            onClick: () => downloadPdf.mutate({
-              dnId:      r.debitNoteId,
-              receiptId: r.id,
-              reference: r.reference,
-            }),
-          });
-        }
         if (r.status === 'POSTED') {
           actions.push({
             label: 'Reverse',
@@ -141,27 +185,53 @@ export default function ReceiptsListSection() {
     },
   ];
 
+  const selectedRows = receipts.filter((r) => rowSelection[r.id]);
+  const selectedDownloadable: BulkDownloadItem[] = selectedRows
+    .filter((r) => r.pdfPath !== null)
+    .map((r) => ({ type: 'RECEIPT' as const, id: r.id }));
+  const selectedEmailable = selectedRows.filter(
+    (r) => r.pdfPath !== null && r.recipientEmail !== null,
+  );
+
   return (
     <>
       <PageSection
         title="Receipts"
         description="Flat list of all receipts. Filter by status to surface reversals or recently-posted collections."
         actions={
-          <Select
-            value={status ?? 'ALL'}
-            onValueChange={(v) => { setStatus(v === 'ALL' ? undefined : (v as 'POSTED' | 'REVERSED')); setPage(0); }}
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All statuses</SelectItem>
-              <SelectItem value="POSTED">Posted</SelectItem>
-              <SelectItem value="REVERSED">Reversed</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <RecentDownloadsPanel />
+            <Select
+              value={status ?? 'ALL'}
+              onValueChange={(v) => { setStatus(v === 'ALL' ? undefined : (v as 'POSTED' | 'REVERSED')); setPage(0); }}
+            >
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All statuses</SelectItem>
+                <SelectItem value="POSTED">Posted</SelectItem>
+                <SelectItem value="REVERSED">Reversed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         }
       >
+        {selectedRows.length > 0 && (
+          <div className="mb-2 flex items-center gap-2 rounded border bg-muted/40 p-2">
+            <span className="text-sm text-muted-foreground">
+              {selectedRows.length} selected
+            </span>
+            <Button
+              size="sm"
+              disabled={selectedEmailable.length === 0}
+              onClick={() => setBulkEmailOpen(true)}
+            >
+              Email {selectedEmailable.length}
+            </Button>
+            <BulkDownloadButton items={selectedDownloadable} />
+          </div>
+        )}
         <DataTable
           columns={columns}
           data={receipts}
@@ -215,6 +285,17 @@ export default function ReceiptsListSection() {
             { onSettled: () => setEmailTarget(null) },
           );
         }}
+      />
+
+      <BulkEmailSheet
+        type="RECEIPT"
+        rows={selectedEmailable.map((r) => ({
+          id:        r.id,
+          parentId:  r.debitNoteId,
+          reference: r.reference,
+        }))}
+        open={bulkEmailOpen}
+        onOpenChange={setBulkEmailOpen}
       />
     </>
   );
