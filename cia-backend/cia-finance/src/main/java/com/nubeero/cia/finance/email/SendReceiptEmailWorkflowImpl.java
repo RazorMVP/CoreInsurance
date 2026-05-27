@@ -8,17 +8,9 @@ import io.temporal.workflow.Workflow;
 import java.time.Duration;
 import java.util.UUID;
 
-/**
- * Temporal workflow implementation for sending a receipt email.
- *
- * <p>Retry policy: first retry at 5 minutes, doubles each time up to 1 hour,
- * no maximum attempt cap — keeps retrying until Temporal workflow timeout.
- * Three error codes are non-retryable and surface immediately to the caller:
- * RECEIPT_NOT_FOUND, RECEIPT_PDF_UNAVAILABLE, RECEIPT_RECIPIENT_UNRESOLVED.
- *
- * @since Slice γ — Task 19, F7 email transmission
- */
 public class SendReceiptEmailWorkflowImpl implements SendReceiptEmailWorkflow {
+
+    private boolean cancelled = false;
 
     private final SendReceiptEmailActivities activities = Workflow.newActivityStub(
             SendReceiptEmailActivities.class,
@@ -35,6 +27,19 @@ public class SendReceiptEmailWorkflowImpl implements SendReceiptEmailWorkflow {
 
     @Override
     public void send(String tenantId, UUID receiptId, String requestedBy) {
+        // Best-effort cancellation: check the flag BEFORE dispatching to the
+        // activity. If a cancel signal arrives after we've already dispatched,
+        // the activity (and its retries) complete normally — we don't try to
+        // interrupt SMTP in flight. This is enough for the bulk-email UI which
+        // fires N workflows serially; cancel mid-run means "don't send the
+        // remaining queued ones", and each queued workflow gets a clean
+        // pre-dispatch check.
+        if (cancelled) return;
         activities.deliver(tenantId, receiptId, requestedBy);
+    }
+
+    @Override
+    public void cancel() {
+        this.cancelled = true;
     }
 }

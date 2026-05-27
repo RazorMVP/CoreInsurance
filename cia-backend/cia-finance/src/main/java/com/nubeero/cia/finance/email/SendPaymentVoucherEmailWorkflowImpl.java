@@ -20,6 +20,8 @@ import java.util.UUID;
  */
 public class SendPaymentVoucherEmailWorkflowImpl implements SendPaymentVoucherEmailWorkflow {
 
+    private boolean cancelled = false;
+
     private final SendPaymentVoucherEmailActivities activities = Workflow.newActivityStub(
             SendPaymentVoucherEmailActivities.class,
             ActivityOptions.newBuilder()
@@ -35,6 +37,19 @@ public class SendPaymentVoucherEmailWorkflowImpl implements SendPaymentVoucherEm
 
     @Override
     public void send(String tenantId, UUID paymentId, String requestedBy) {
+        // Best-effort cancellation: check the flag BEFORE dispatching to the
+        // activity. If a cancel signal arrives after we've already dispatched,
+        // the activity (and its retries) complete normally — we don't try to
+        // interrupt SMTP in flight. This is enough for the bulk-email UI which
+        // fires N workflows serially; cancel mid-run means "don't send the
+        // remaining queued ones", and each queued workflow gets a clean
+        // pre-dispatch check.
+        if (cancelled) return;
         activities.deliver(tenantId, paymentId, requestedBy);
+    }
+
+    @Override
+    public void cancel() {
+        this.cancelled = true;
     }
 }
