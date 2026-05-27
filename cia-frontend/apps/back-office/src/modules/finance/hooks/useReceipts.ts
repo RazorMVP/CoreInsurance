@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   apiClient,
+  cancelReceiptEmail,
   downloadReceiptPdf,
   emailReceipt,
   listReceipts,
@@ -103,6 +104,45 @@ export function useEmailReceipt() {
           : ax?.message ?? 'An unexpected error occurred. Please try again.';
       }
       toast({ variant: 'destructive', title: 'Email failed', description });
+    },
+  });
+}
+
+export interface CancelReceiptEmailArgs {
+  dnId:      string;
+  receiptId: string;
+  reference: string;       // for toast
+}
+
+/**
+ * Signals the Temporal SendReceiptEmailWorkflow to cancel. Best-effort
+ * — see workflow Javadoc. UI surfaces success/error toast and
+ * invalidates the receipts list so any "Last emailed" badge state
+ * reflects the post-cancel result.
+ */
+export function useCancelReceiptEmail() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ dnId, receiptId }: CancelReceiptEmailArgs) => {
+      return await cancelReceiptEmail(dnId, receiptId);
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'receipts'] });
+      toast({
+        title: 'Email cancelled',
+        description: `Cancel signal sent for receipt ${vars.reference}. In-flight delivery may still complete (best-effort).`,
+      });
+    },
+    onError: (error) => {
+      const ax = error as ApiHttpError;
+      const errors: ApiError[] = ax?.response?.data?.errors ?? [];
+      const code = errors[0]?.code ?? '';
+      const description = code === 'WORKFLOW_NOT_FOUND'
+        ? 'The email workflow has already completed or never started — nothing to cancel.'
+        : (errors.length > 0
+            ? errors.map(e => e.message).filter(Boolean).join('. ')
+            : ax?.message ?? 'Cancel failed.');
+      toast({ variant: 'destructive', title: 'Cancel failed', description });
     },
   });
 }
