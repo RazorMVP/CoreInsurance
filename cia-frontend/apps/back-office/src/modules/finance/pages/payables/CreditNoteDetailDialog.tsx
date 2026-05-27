@@ -4,8 +4,16 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@cia/ui';
 import type { CreditNoteDto, FinanceEntityType } from '@cia/api-client';
-import { useDownloadPaymentPdf, usePaymentList } from '../../hooks/usePayments';
+import { useDownloadPaymentPdf, useEmailPayment, usePaymentList } from '../../hooks/usePayments';
+import EmailConfirmDialog from '../EmailConfirmDialog';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
+
+interface EmailTarget {
+  cnId:           string;
+  paymentId:      string;
+  reference:      string;
+  recipientEmail: string | null;
+}
 
 const ENTITY_LABELS: Record<FinanceEntityType, string> = {
   POLICY:        'Policy',
@@ -41,12 +49,14 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 
 export default function CreditNoteDetailDialog({ open, onOpenChange, creditNote, onProcessPayment }: Props) {
   const [reverseTarget, setReverseTarget] = useState<ReverseTarget | null>(null);
+  const [emailTarget,   setEmailTarget]   = useState<EmailTarget | null>(null);
   const paymentsQuery = usePaymentList(
     creditNote ? { creditNoteId: creditNote.id } : { creditNoteId: '' },
   );
   const payments = paymentsQuery.data?.data ?? [];
 
-  const downloadPdf = useDownloadPaymentPdf();
+  const downloadPdf      = useDownloadPaymentPdf();
+  const emailPaymentMut  = useEmailPayment();
 
   if (!creditNote) return null;
 
@@ -123,6 +133,12 @@ export default function CreditNoteDetailDialog({ open, onOpenChange, creditNote,
                         {p.reversalReason ? ` — ${p.reversalReason}` : ''}
                       </span>
                     )}
+                    {p.emailSentAt && (
+                      <span className="text-[11px] text-muted-foreground">
+                        Last emailed {new Date(p.emailSentAt).toLocaleString()}
+                        {p.emailSentTo ? ` to ${p.emailSentTo}` : ''}
+                      </span>
+                    )}
                   </div>
                   <div className="flex shrink-0 items-start gap-2">
                     <Badge
@@ -131,6 +147,20 @@ export default function CreditNoteDetailDialog({ open, onOpenChange, creditNote,
                     >
                       {p.status.toLowerCase()}
                     </Badge>
+                    {p.pdfPath && p.recipientEmail && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEmailTarget({
+                          cnId:           p.creditNoteId,
+                          paymentId:      p.id,
+                          reference:      p.reference,
+                          recipientEmail: p.recipientEmail,
+                        })}
+                      >
+                        Email
+                      </Button>
+                    )}
                     {p.pdfPath && (
                       <Button
                         variant="outline"
@@ -174,6 +204,25 @@ export default function CreditNoteDetailDialog({ open, onOpenChange, creditNote,
           open={reverseTarget !== null}
           onOpenChange={(v) => { if (!v) setReverseTarget(null); }}
           target={reverseTarget}
+        />
+
+        <EmailConfirmDialog
+          open={emailTarget !== null}
+          onOpenChange={(v) => { if (!v) setEmailTarget(null); }}
+          recipientEmail={emailTarget?.recipientEmail ?? null}
+          documentLabel={emailTarget ? `payment voucher ${emailTarget.reference}` : ''}
+          isPending={emailPaymentMut.isPending}
+          onConfirm={() => {
+            if (!emailTarget) return;
+            emailPaymentMut.mutate(
+              {
+                cnId:      emailTarget.cnId,
+                paymentId: emailTarget.paymentId,
+                reference: emailTarget.reference,
+              },
+              { onSettled: () => setEmailTarget(null) },
+            );
+          }}
         />
 
         <DialogFooter className="gap-2 sm:gap-2">

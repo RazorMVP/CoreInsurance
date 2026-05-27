@@ -5,8 +5,16 @@ import {
 } from '@cia/ui';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, type DebitNoteDto, type PolicyDto } from '@cia/api-client';
-import { useDownloadReceiptPdf, useReceiptList } from '../../hooks/useReceipts';
+import { useDownloadReceiptPdf, useEmailReceipt, useReceiptList } from '../../hooks/useReceipts';
+import EmailConfirmDialog from '../EmailConfirmDialog';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
+
+interface EmailTarget {
+  dnId:           string;
+  receiptId:      string;
+  reference:      string;
+  recipientEmail: string | null;
+}
 
 const DN_STATUS_VARIANT: Record<DebitNoteDto['status'], 'pending' | 'active' | 'draft' | 'rejected'> = {
   OUTSTANDING: 'pending',
@@ -47,12 +55,14 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
   });
 
   const [reverseTarget, setReverseTarget] = useState<ReverseTarget | null>(null);
+  const [emailTarget,   setEmailTarget]   = useState<EmailTarget | null>(null);
   const receiptsQuery = useReceiptList(
     debitNote ? { debitNoteId: debitNote.id } : { debitNoteId: '' },
   );
   const receipts = receiptsQuery.data?.data ?? [];
 
-  const downloadPdf = useDownloadReceiptPdf();
+  const downloadPdf      = useDownloadReceiptPdf();
+  const emailReceiptMut  = useEmailReceipt();
 
   if (!debitNote) return null;
 
@@ -135,6 +145,12 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
                         {r.reversalReason ? ` — ${r.reversalReason}` : ''}
                       </span>
                     )}
+                    {r.emailSentAt && (
+                      <span className="text-[11px] text-muted-foreground">
+                        Last emailed {new Date(r.emailSentAt).toLocaleString()}
+                        {r.emailSentTo ? ` to ${r.emailSentTo}` : ''}
+                      </span>
+                    )}
                   </div>
                   <div className="flex shrink-0 items-start gap-2">
                     <Badge
@@ -143,6 +159,20 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
                     >
                       {r.status.toLowerCase()}
                     </Badge>
+                    {r.pdfPath && r.recipientEmail && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEmailTarget({
+                          dnId:           r.debitNoteId,
+                          receiptId:      r.id,
+                          reference:      r.reference,
+                          recipientEmail: r.recipientEmail,
+                        })}
+                      >
+                        Email
+                      </Button>
+                    )}
                     {r.pdfPath && (
                       <Button
                         variant="outline"
@@ -186,6 +216,25 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
           open={reverseTarget !== null}
           onOpenChange={(v) => { if (!v) setReverseTarget(null); }}
           target={reverseTarget}
+        />
+
+        <EmailConfirmDialog
+          open={emailTarget !== null}
+          onOpenChange={(v) => { if (!v) setEmailTarget(null); }}
+          recipientEmail={emailTarget?.recipientEmail ?? null}
+          documentLabel={emailTarget ? `receipt ${emailTarget.reference}` : ''}
+          isPending={emailReceiptMut.isPending}
+          onConfirm={() => {
+            if (!emailTarget) return;
+            emailReceiptMut.mutate(
+              {
+                dnId:      emailTarget.dnId,
+                receiptId: emailTarget.receiptId,
+                reference: emailTarget.reference,
+              },
+              { onSettled: () => setEmailTarget(null) },
+            );
+          }}
         />
 
         <DialogFooter className="gap-2 sm:gap-2">

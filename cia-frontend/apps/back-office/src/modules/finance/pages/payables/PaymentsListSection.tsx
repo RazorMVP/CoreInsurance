@@ -5,9 +5,17 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import { useDownloadPaymentPdf, usePaymentList } from '../../hooks/usePayments';
+import { useDownloadPaymentPdf, useEmailPayment, usePaymentList } from '../../hooks/usePayments';
+import EmailConfirmDialog from '../EmailConfirmDialog';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
 import type { FinanceEntityType, PaymentListItemResponse } from '@cia/api-client';
+
+interface EmailTarget {
+  cnId:           string;
+  paymentId:      string;
+  reference:      string;
+  recipientEmail: string | null;
+}
 
 const ENTITY_LABELS: Record<FinanceEntityType, string> = {
   POLICY:        'Policy',
@@ -27,12 +35,14 @@ export default function PaymentsListSection() {
   const [status,         setStatus]         = useState<'POSTED' | 'REVERSED' | undefined>(undefined);
   const [page,           setPage]           = useState(0);
   const [reverseTarget,  setReverseTarget]  = useState<ReverseTarget | null>(null);
+  const [emailTarget,    setEmailTarget]    = useState<EmailTarget | null>(null);
 
   const paymentsQuery = usePaymentList({ status, page, size: 20 });
   const payments = paymentsQuery.data?.data ?? [];
   const meta     = paymentsQuery.data?.meta;
 
-  const downloadPdf = useDownloadPaymentPdf();
+  const downloadPdf      = useDownloadPaymentPdf();
+  const emailPaymentMut  = useEmailPayment();
 
   const columns: ColumnDef<PaymentListItemResponse>[] = [
     {
@@ -96,6 +106,12 @@ export default function PaymentsListSection() {
                 {r.reversalReason ? ` — ${r.reversalReason}` : ''}
               </span>
             )}
+            {r.emailSentAt && (
+              <span className="text-[11px] text-muted-foreground">
+                Last emailed {new Date(r.emailSentAt).toLocaleString()}
+                {r.emailSentTo ? ` to ${r.emailSentTo}` : ''}
+              </span>
+            )}
           </div>
         );
       },
@@ -105,6 +121,17 @@ export default function PaymentsListSection() {
       cell: ({ row }) => {
         const r = row.original;
         const actions: { label: string; onClick: () => void }[] = [];
+        if (r.pdfPath !== null && r.recipientEmail !== null) {
+          actions.push({
+            label: 'Email PDF',
+            onClick: () => setEmailTarget({
+              cnId:           r.creditNoteId,
+              paymentId:      r.id,
+              reference:      r.reference,
+              recipientEmail: r.recipientEmail,
+            }),
+          });
+        }
         if (r.pdfPath !== null) {
           actions.push({
             label: 'Download PDF',
@@ -191,6 +218,25 @@ export default function PaymentsListSection() {
         open={reverseTarget !== null}
         onOpenChange={(v) => { if (!v) setReverseTarget(null); }}
         target={reverseTarget}
+      />
+
+      <EmailConfirmDialog
+        open={emailTarget !== null}
+        onOpenChange={(v) => { if (!v) setEmailTarget(null); }}
+        recipientEmail={emailTarget?.recipientEmail ?? null}
+        documentLabel={emailTarget ? `payment voucher ${emailTarget.reference}` : ''}
+        isPending={emailPaymentMut.isPending}
+        onConfirm={() => {
+          if (!emailTarget) return;
+          emailPaymentMut.mutate(
+            {
+              cnId:      emailTarget.cnId,
+              paymentId: emailTarget.paymentId,
+              reference: emailTarget.reference,
+            },
+            { onSettled: () => setEmailTarget(null) },
+          );
+        }}
       />
     </>
   );

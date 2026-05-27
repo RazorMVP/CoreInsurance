@@ -5,9 +5,17 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import { useDownloadReceiptPdf, useReceiptList } from '../../hooks/useReceipts';
+import { useDownloadReceiptPdf, useEmailReceipt, useReceiptList } from '../../hooks/useReceipts';
+import EmailConfirmDialog from '../EmailConfirmDialog';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
 import type { ReceiptListItemResponse } from '@cia/api-client';
+
+interface EmailTarget {
+  dnId:           string;
+  receiptId:      string;
+  reference:      string;
+  recipientEmail: string | null;
+}
 
 const receiptStatusVariant: Record<'POSTED' | 'REVERSED', 'active' | 'rejected'> = {
   POSTED:   'active',
@@ -18,12 +26,14 @@ export default function ReceiptsListSection() {
   const [status,         setStatus]         = useState<'POSTED' | 'REVERSED' | undefined>(undefined);
   const [page,           setPage]           = useState(0);
   const [reverseTarget,  setReverseTarget]  = useState<ReverseTarget | null>(null);
+  const [emailTarget,    setEmailTarget]    = useState<EmailTarget | null>(null);
 
   const receiptsQuery = useReceiptList({ status, page, size: 20 });
   const receipts = receiptsQuery.data?.data ?? [];
   const meta     = receiptsQuery.data?.meta;
 
   const downloadPdf = useDownloadReceiptPdf();
+  const emailReceiptMut = useEmailReceipt();
 
   const columns: ColumnDef<ReceiptListItemResponse>[] = [
     {
@@ -74,6 +84,12 @@ export default function ReceiptsListSection() {
                 {r.reversalReason ? ` — ${r.reversalReason}` : ''}
               </span>
             )}
+            {r.emailSentAt && (
+              <span className="text-[11px] text-muted-foreground">
+                Last emailed {new Date(r.emailSentAt).toLocaleString()}
+                {r.emailSentTo ? ` to ${r.emailSentTo}` : ''}
+              </span>
+            )}
           </div>
         );
       },
@@ -83,6 +99,17 @@ export default function ReceiptsListSection() {
       cell: ({ row }) => {
         const r = row.original;
         const actions: { label: string; onClick: () => void }[] = [];
+        if (r.pdfPath !== null && r.recipientEmail !== null) {
+          actions.push({
+            label: 'Email PDF',
+            onClick: () => setEmailTarget({
+              dnId:           r.debitNoteId,
+              receiptId:      r.id,
+              reference:      r.reference,
+              recipientEmail: r.recipientEmail,
+            }),
+          });
+        }
         if (r.pdfPath !== null) {
           actions.push({
             label: 'Download PDF',
@@ -169,6 +196,25 @@ export default function ReceiptsListSection() {
         open={reverseTarget !== null}
         onOpenChange={(v) => { if (!v) setReverseTarget(null); }}
         target={reverseTarget}
+      />
+
+      <EmailConfirmDialog
+        open={emailTarget !== null}
+        onOpenChange={(v) => { if (!v) setEmailTarget(null); }}
+        recipientEmail={emailTarget?.recipientEmail ?? null}
+        documentLabel={emailTarget ? `receipt ${emailTarget.reference}` : ''}
+        isPending={emailReceiptMut.isPending}
+        onConfirm={() => {
+          if (!emailTarget) return;
+          emailReceiptMut.mutate(
+            {
+              dnId:      emailTarget.dnId,
+              receiptId: emailTarget.receiptId,
+              reference: emailTarget.reference,
+            },
+            { onSettled: () => setEmailTarget(null) },
+          );
+        }}
       />
     </>
   );
