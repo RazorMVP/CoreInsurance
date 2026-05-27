@@ -1,14 +1,18 @@
 import { useState } from 'react';
 import {
-  Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
+  Badge, Button, Checkbox, DataTable, DataTableColumnHeader, DataTableRowActions,
   PageSection,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import { useDownloadPaymentPdf, useEmailPayment, usePaymentList } from '../../hooks/usePayments';
+import { useEmailPayment, usePaymentList } from '../../hooks/usePayments';
+import DownloadIconButton from '../../components/DownloadIconButton';
+import RecentDownloadsPanel from '../../components/RecentDownloadsPanel';
+import BulkEmailSheet from '../BulkEmailSheet';
+import BulkDownloadButton from '../BulkDownloadButton';
 import EmailConfirmDialog from '../EmailConfirmDialog';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
-import type { FinanceEntityType, PaymentListItemResponse } from '@cia/api-client';
+import type { BulkDownloadItem, FinanceEntityType, PaymentListItemResponse } from '@cia/api-client';
 
 interface EmailTarget {
   cnId:           string;
@@ -36,19 +40,69 @@ export default function PaymentsListSection() {
   const [page,           setPage]           = useState(0);
   const [reverseTarget,  setReverseTarget]  = useState<ReverseTarget | null>(null);
   const [emailTarget,    setEmailTarget]    = useState<EmailTarget | null>(null);
+  const [rowSelection,   setRowSelection]   = useState<Record<string, boolean>>({});
+  const [bulkEmailOpen,  setBulkEmailOpen]  = useState(false);
 
   const paymentsQuery = usePaymentList({ status, page, size: 20 });
   const payments = paymentsQuery.data?.data ?? [];
   const meta     = paymentsQuery.data?.meta;
 
-  const downloadPdf      = useDownloadPaymentPdf();
   const emailPaymentMut  = useEmailPayment();
+
+  const allPageIds   = payments.map((p) => p.id);
+  const allSelected  = allPageIds.length > 0 && allPageIds.every((id) => rowSelection[id]);
+  const someSelected = allPageIds.some((id) => rowSelection[id]);
 
   const columns: ColumnDef<PaymentListItemResponse>[] = [
     {
+      id: 'select',
+      header: () => (
+        <Checkbox
+          checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+          onCheckedChange={(checked) => {
+            setRowSelection(() => {
+              if (!checked) return {};
+              const next: Record<string, boolean> = {};
+              for (const id of allPageIds) next[id] = true;
+              return next;
+            });
+          }}
+          aria-label="Select all"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={rowSelection[row.original.id] ?? false}
+          onCheckedChange={(checked) => {
+            setRowSelection((prev) => {
+              const next = { ...prev };
+              if (checked) next[row.original.id] = true;
+              else delete next[row.original.id];
+              return next;
+            });
+          }}
+          aria-label="Select row"
+        />
+      ),
+    },
+    {
       accessorKey: 'reference',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Payment" />,
-      cell: ({ getValue }) => <span className="font-mono text-xs">{getValue() as string}</span>,
+      cell: ({ row }) => {
+        const p = row.original;
+        return (
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-xs">{p.reference}</span>
+            <DownloadIconButton
+              type="PAYMENT"
+              id={p.id}
+              parentId={p.creditNoteId}
+              reference={p.reference}
+              pdfPath={p.pdfPath}
+            />
+          </div>
+        );
+      },
     },
     {
       accessorKey: 'creditNoteNumber',
@@ -59,9 +113,9 @@ export default function PaymentsListSection() {
       accessorKey: 'beneficiaryType',
       header: 'Source',
       cell: ({ row }) => {
-        const r = row.original;
-        const label = r.beneficiaryType
-          ? (ENTITY_LABELS[r.beneficiaryType as FinanceEntityType] ?? r.beneficiaryType)
+        const p = row.original;
+        const label = p.beneficiaryType
+          ? (ENTITY_LABELS[p.beneficiaryType as FinanceEntityType] ?? p.beneficiaryType)
           : '—';
         return <Badge variant="outline" className="text-xs">{label}</Badge>;
       },
@@ -94,22 +148,22 @@ export default function PaymentsListSection() {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => {
-        const r = row.original;
+        const p = row.original;
         return (
           <div className="flex flex-col gap-0.5">
-            <Badge variant={paymentStatusVariant[r.status]} className="text-[10px]">
-              {r.status.toLowerCase()}
+            <Badge variant={paymentStatusVariant[p.status]} className="text-[10px]">
+              {p.status.toLowerCase()}
             </Badge>
-            {r.status === 'REVERSED' && r.reversedAt && (
+            {p.status === 'REVERSED' && p.reversedAt && (
               <span className="text-[11px] text-muted-foreground">
-                Reversed {new Date(r.reversedAt).toLocaleString()} by {r.reversedBy ?? 'unknown'}
-                {r.reversalReason ? ` — ${r.reversalReason}` : ''}
+                Reversed {new Date(p.reversedAt).toLocaleString()} by {p.reversedBy ?? 'unknown'}
+                {p.reversalReason ? ` — ${p.reversalReason}` : ''}
               </span>
             )}
-            {r.emailSentAt && (
+            {p.emailSentAt && (
               <span className="text-[11px] text-muted-foreground">
-                Last emailed {new Date(r.emailSentAt).toLocaleString()}
-                {r.emailSentTo ? ` to ${r.emailSentTo}` : ''}
+                Last emailed {new Date(p.emailSentAt).toLocaleString()}
+                {p.emailSentTo ? ` to ${p.emailSentTo}` : ''}
               </span>
             )}
           </div>
@@ -119,41 +173,31 @@ export default function PaymentsListSection() {
     {
       id: 'actions',
       cell: ({ row }) => {
-        const r = row.original;
+        const p = row.original;
         const actions: { label: string; onClick: () => void }[] = [];
-        if (r.pdfPath !== null && r.recipientEmail !== null) {
+        if (p.pdfPath !== null && p.recipientEmail !== null) {
           actions.push({
             label: 'Email PDF',
             onClick: () => setEmailTarget({
-              cnId:           r.creditNoteId,
-              paymentId:      r.id,
-              reference:      r.reference,
-              recipientEmail: r.recipientEmail,
+              cnId:           p.creditNoteId,
+              paymentId:      p.id,
+              reference:      p.reference,
+              recipientEmail: p.recipientEmail,
             }),
           });
         }
-        if (r.pdfPath !== null) {
-          actions.push({
-            label: 'Download PDF',
-            onClick: () => downloadPdf.mutate({
-              cnId:      r.creditNoteId,
-              paymentId: r.id,
-              reference: r.reference,
-            }),
-          });
-        }
-        if (r.status === 'POSTED') {
+        if (p.status === 'POSTED') {
           actions.push({
             label: 'Reverse',
             onClick: () => setReverseTarget({
               type:      'PAYMENT',
-              id:        r.id,
-              parentId:  r.creditNoteId,
-              reference: r.reference,
-              linkedRef: r.creditNoteNumber,
-              amount:    r.amount,
-              method:    r.paymentMethod,
-              date:      r.paymentDate ?? '',
+              id:        p.id,
+              parentId:  p.creditNoteId,
+              reference: p.reference,
+              linkedRef: p.creditNoteNumber,
+              amount:    p.amount,
+              method:    p.paymentMethod,
+              date:      p.paymentDate ?? '',
             }),
           });
         }
@@ -163,27 +207,53 @@ export default function PaymentsListSection() {
     },
   ];
 
+  const selectedRows = payments.filter((p) => rowSelection[p.id]);
+  const selectedDownloadable: BulkDownloadItem[] = selectedRows
+    .filter((p) => p.pdfPath !== null)
+    .map((p) => ({ type: 'PAYMENT' as const, id: p.id }));
+  const selectedEmailable = selectedRows.filter(
+    (p) => p.pdfPath !== null && p.recipientEmail !== null,
+  );
+
   return (
     <>
       <PageSection
         title="Payments"
         description="Flat list of all payments. Filter by status to surface reversals or recently-posted disbursements."
         actions={
-          <Select
-            value={status ?? 'ALL'}
-            onValueChange={(v) => { setStatus(v === 'ALL' ? undefined : (v as 'POSTED' | 'REVERSED')); setPage(0); }}
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All statuses</SelectItem>
-              <SelectItem value="POSTED">Posted</SelectItem>
-              <SelectItem value="REVERSED">Reversed</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <RecentDownloadsPanel />
+            <Select
+              value={status ?? 'ALL'}
+              onValueChange={(v) => { setStatus(v === 'ALL' ? undefined : (v as 'POSTED' | 'REVERSED')); setPage(0); }}
+            >
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All statuses</SelectItem>
+                <SelectItem value="POSTED">Posted</SelectItem>
+                <SelectItem value="REVERSED">Reversed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         }
       >
+        {selectedRows.length > 0 && (
+          <div className="mb-2 flex items-center gap-2 rounded border bg-muted/40 p-2">
+            <span className="text-sm text-muted-foreground">
+              {selectedRows.length} selected
+            </span>
+            <Button
+              size="sm"
+              disabled={selectedEmailable.length === 0}
+              onClick={() => setBulkEmailOpen(true)}
+            >
+              Email {selectedEmailable.length}
+            </Button>
+            <BulkDownloadButton items={selectedDownloadable} />
+          </div>
+        )}
         <DataTable
           columns={columns}
           data={payments}
@@ -237,6 +307,17 @@ export default function PaymentsListSection() {
             { onSettled: () => setEmailTarget(null) },
           );
         }}
+      />
+
+      <BulkEmailSheet
+        type="PAYMENT"
+        rows={selectedEmailable.map((p) => ({
+          id:        p.id,
+          parentId:  p.creditNoteId,
+          reference: p.reference,
+        }))}
+        open={bulkEmailOpen}
+        onOpenChange={setBulkEmailOpen}
       />
     </>
   );
