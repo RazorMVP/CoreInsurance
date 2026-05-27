@@ -12,6 +12,7 @@ import com.nubeero.cia.finance.Receipt;
 import com.nubeero.cia.finance.ReceiptService;
 import com.nubeero.cia.finance.pdf.ReceiptPdfGenerator;
 import com.nubeero.cia.storage.DocumentStorageService;
+import io.temporal.client.WorkflowClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -157,6 +158,17 @@ class ReceiptReverseAuditIT extends FinanceItSupport {
         @Bean
         DocumentStorageService documentStorageService() {
             return mock(DocumentStorageService.class);
+        }
+
+        /**
+         * Slice γ / Task 25 — ReceiptService now depends on WorkflowClient
+         * (to start the SendReceiptEmailWorkflow on the new EMAIL_QUEUE).
+         * The reverse-path under test never calls requestEmail(); the mock
+         * exists solely to satisfy the constructor.
+         */
+        @Bean
+        WorkflowClient workflowClient() {
+            return mock(WorkflowClient.class);
         }
     }
 }

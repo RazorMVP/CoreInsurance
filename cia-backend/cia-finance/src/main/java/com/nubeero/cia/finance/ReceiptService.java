@@ -4,13 +4,20 @@ import com.nubeero.cia.common.audit.AuditAction;
 import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import com.nubeero.cia.common.tenant.TenantContext;
+import com.nubeero.cia.finance.email.EmailPreflightException;
+import com.nubeero.cia.finance.email.SendReceiptEmailWorkflow;
 import com.nubeero.cia.finance.pdf.ReceiptPdfGenerator;
 import com.nubeero.cia.storage.DocumentStorageService;
+import com.nubeero.cia.workflow.TemporalQueues;
+import io.temporal.client.WorkflowClient;
+import io.temporal.client.WorkflowOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,19 +41,25 @@ public class ReceiptService {
     private final AuditService auditService;
     private final ReceiptPdfGenerator    pdfGenerator;
     private final DocumentStorageService storage;
+    private final JdbcTemplate           jdbc;
+    private final WorkflowClient         workflowClient;
 
     public ReceiptService(ReceiptRepository receiptRepository,
                           DebitNoteService debitNoteService,
                           FinanceNumberService numberService,
                           AuditService auditService,
                           ReceiptPdfGenerator pdfGenerator,
-                          DocumentStorageService storage) {
+                          DocumentStorageService storage,
+                          JdbcTemplate jdbc,
+                          WorkflowClient workflowClient) {
         this.receiptRepository = receiptRepository;
         this.debitNoteService = debitNoteService;
         this.numberService = numberService;
         this.auditService = auditService;
         this.pdfGenerator = pdfGenerator;
         this.storage = storage;
+        this.jdbc = jdbc;
+        this.workflowClient = workflowClient;
     }
 
     public Page<Receipt> findByDebitNote(UUID debitNoteId, Pageable pageable) {
@@ -177,6 +190,63 @@ public class ReceiptService {
         return posted.stream()
                 .map(Receipt::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * Validates the email preflight (PDF exists + recipient resolved) and starts
+     * the {@link SendReceiptEmailWorkflow} on {@link TemporalQueues#EMAIL_QUEUE}.
+     *
+     * @return the started workflow id ({@code "send-receipt-email-<receiptId>"}).
+     * @throws EmailPreflightException 422 with {@code RECEIPT_PDF_UNAVAILABLE} if
+     *         the slice-β PDF was never generated; 422 with
+     *         {@code RECEIPT_RECIPIENT_UNRESOLVED} if the customer has no
+     *         recorded email.
+     */
+    public String requestEmail(UUID receiptId) {
+        Receipt receipt = findOrThrow(receiptId);
+
+        if (receipt.getPdfPath() == null) {
+            throw new EmailPreflightException(
+                "RECEIPT_PDF_UNAVAILABLE",
+                "PDF was never generated for receipt " + receiptId);
+        }
+
+        DebitNote dn = receipt.getDebitNote();
+        UUID customerId = dn != null ? dn.getCustomerId() : null;
+        if (customerId == null) {
+            throw new EmailPreflightException(
+                "RECEIPT_RECIPIENT_UNRESOLVED",
+                "Debit note has no customer reference");
+        }
+
+        String email;
+        try {
+            email = jdbc.queryForObject(
+                "SELECT email FROM customers WHERE id = ?",
+                String.class, customerId);
+        } catch (EmptyResultDataAccessException e) {
+            email = null;
+        }
+        if (email == null || email.isBlank()) {
+            throw new EmailPreflightException(
+                "RECEIPT_RECIPIENT_UNRESOLVED",
+                "Customer " + customerId + " has no email on file");
+        }
+
+        String tenantId    = TenantContext.getTenantId();
+        String requestedBy = currentUser();
+        String workflowId  = "send-receipt-email-" + receiptId;
+
+        SendReceiptEmailWorkflow workflow = workflowClient.newWorkflowStub(
+            SendReceiptEmailWorkflow.class,
+            WorkflowOptions.newBuilder()
+                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setWorkflowId(workflowId)
+                .build());
+        WorkflowClient.start(workflow::send, tenantId, receiptId, requestedBy);
+        log.info("ReceiptService.requestEmail: enqueued workflow {} for receiptId={} to={}",
+                 workflowId, receiptId, email);
+        return workflowId;
     }
 
     private String currentUser() {
