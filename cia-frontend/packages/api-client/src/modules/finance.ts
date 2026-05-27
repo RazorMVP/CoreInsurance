@@ -345,3 +345,77 @@ export async function emailPayment(
     EmailWorkflowResponseSchema,
   );
 }
+
+// ── F11: server-side download history + bulk download + email cancel ────
+
+export const PdfDocumentTypeSchema = z.enum(['RECEIPT', 'PAYMENT']);
+export type PdfDocumentType = z.infer<typeof PdfDocumentTypeSchema>;
+
+export const PdfDownloadLogEntrySchema = z.object({
+  id:             z.string(),
+  entityType:     PdfDocumentTypeSchema,
+  entityId:       z.string(),
+  reference:      z.string(),
+  parentId:       z.string().nullable(),
+  parentRef:      z.string().nullable(),
+  recipientName:  z.string().nullable(),
+  downloadedAt:   z.string(),
+});
+export type PdfDownloadLogEntry = z.infer<typeof PdfDownloadLogEntrySchema>;
+
+export interface BulkDownloadItem {
+  type: PdfDocumentType;
+  id:   string;
+}
+
+const EmailCancelResponseSchema = z.object({ cancelled: z.boolean() });
+export type EmailCancelResponse = z.infer<typeof EmailCancelResponseSchema>;
+
+/**
+ * Lists the calling user's PDF downloads from the last N days, newest first.
+ * Backend caps at 50 rows + at 30 days regardless of the days param.
+ * Returns the standard { data, meta } envelope so callers can access
+ * pagination metadata if needed.
+ */
+export async function listRecentDownloads(days = 1) {
+  return validatedList(
+    '/api/v1/finance/pdf-downloads',
+    PdfDownloadLogEntrySchema,
+    { params: { days: String(days) } },
+  );
+}
+
+/**
+ * Bulk-download N PDFs as a ZIP. Backend caps at 50 items; UI should
+ * gate the trigger button before reaching this point.
+ */
+export async function bulkDownloadZip(items: BulkDownloadItem[]): Promise<Blob> {
+  const res = await apiClient.post<Blob>(
+    '/api/v1/finance/pdfs/bulk-download',
+    { items },
+    { responseType: 'blob' },
+  );
+  return res.data;
+}
+
+export async function cancelReceiptEmail(
+  debitNoteId: string,
+  receiptId:   string,
+): Promise<EmailCancelResponse> {
+  return validatedPost(
+    `/api/v1/debit-notes/${debitNoteId}/receipts/${receiptId}/email/cancel`,
+    {},
+    EmailCancelResponseSchema,
+  );
+}
+
+export async function cancelPaymentEmail(
+  creditNoteId: string,
+  paymentId:    string,
+): Promise<EmailCancelResponse> {
+  return validatedPost(
+    `/api/v1/credit-notes/${creditNoteId}/payments/${paymentId}/email/cancel`,
+    {},
+    EmailCancelResponseSchema,
+  );
+}
