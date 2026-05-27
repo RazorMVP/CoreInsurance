@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family: sans-serif; color: #333; max-width: 600px;">
+  <h2>Receipt for your payment</h2>
+  <p>Dear {{customerName}},</p>
+  <p>Thank you for your payment of <b>{{amount}}</b>
+     received on {{paymentDate}}.</p>
+  <p>Your official receipt ({{receiptNumber}}) is attached
+     to this email as a PDF.</p>
+  <p>This receipt closes debit note {{debitNoteNumber}}.</p>
+  <hr/>
+  <p style="color: #888; font-size: 0.9em;">
+    Regards,<br/>
+    {{companyName}}
+  </p>
+</body>
+</html>

@@ -1,0 +1,1 @@
+Hi {{beneficiaryName}}, payment of {{amount}} processed. Voucher: {{paymentNumber}}.

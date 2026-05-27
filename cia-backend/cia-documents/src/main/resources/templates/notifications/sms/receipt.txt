@@ -1,0 +1,1 @@
+Hi {{customerName}}, we received your payment of {{amount}}. Receipt: {{receiptNumber}}.
