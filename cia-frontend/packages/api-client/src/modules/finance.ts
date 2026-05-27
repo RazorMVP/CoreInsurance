@@ -15,7 +15,7 @@
 
 import { z } from 'zod';
 import { apiClient } from '../client';
-import { validatedList } from '../validation';
+import { validatedList, validatedPost } from '../validation';
 
 // ── Enums ─────────────────────────────────────────────────────────────────
 
@@ -200,6 +200,11 @@ export const ReceiptListItemResponseSchema = z.object({
   reversalReason:   z.string().nullable(),
   createdAt:        z.string(),
   pdfPath:          z.string().nullable(),
+  // Slice γ — email transmission. recipientEmail pre-resolved at projection;
+  // emailSentAt + emailSentTo populated by the Temporal email workflow.
+  recipientEmail:   z.string().nullable(),
+  emailSentAt:      z.string().nullable(),
+  emailSentTo:      z.string().nullable(),
 });
 export type ReceiptListItemResponse = z.infer<typeof ReceiptListItemResponseSchema>;
 
@@ -219,6 +224,12 @@ export const PaymentListItemResponseSchema = z.object({
   reversalReason:       z.string().nullable(),
   createdAt:            z.string(),
   pdfPath:              z.string().nullable(),
+  // Slice γ — email transmission. recipientEmail resolved per row via
+  // BeneficiaryEmailResolverDispatcher; emailSentAt + emailSentTo populated
+  // by the Temporal payment-voucher email workflow.
+  recipientEmail:       z.string().nullable(),
+  emailSentAt:          z.string().nullable(),
+  emailSentTo:          z.string().nullable(),
 });
 export type PaymentListItemResponse = z.infer<typeof PaymentListItemResponseSchema>;
 
@@ -295,4 +306,42 @@ export async function downloadPaymentPdf(
     { responseType: 'blob' },
   );
   return res.data;
+}
+
+// ── Email transmission (F7 slice γ — POST /email returns 202 + { workflowId }) ────
+
+const EmailWorkflowResponseSchema = z.object({ workflowId: z.string() });
+export type EmailWorkflowResponse = z.infer<typeof EmailWorkflowResponseSchema>;
+
+/**
+ * Starts the Temporal SendReceiptEmailWorkflow. Returns the workflow id on
+ * 202 enqueue. On 422 the backend returns errorCode (RECEIPT_PDF_UNAVAILABLE
+ * / RECEIPT_RECIPIENT_UNRESOLVED) in the standard ApiResponse error envelope
+ * — the calling hook surfaces the code in a toast.
+ */
+export async function emailReceipt(
+  debitNoteId: string,
+  receiptId:   string,
+): Promise<EmailWorkflowResponse> {
+  return validatedPost(
+    `/api/v1/debit-notes/${debitNoteId}/receipts/${receiptId}/email`,
+    {},
+    EmailWorkflowResponseSchema,
+  );
+}
+
+/**
+ * Starts the Temporal SendPaymentVoucherEmailWorkflow. Mirror of
+ * emailReceipt. 422 errorCodes are PAYMENT_PDF_UNAVAILABLE /
+ * PAYMENT_RECIPIENT_UNRESOLVED.
+ */
+export async function emailPayment(
+  creditNoteId: string,
+  paymentId:    string,
+): Promise<EmailWorkflowResponse> {
+  return validatedPost(
+    `/api/v1/credit-notes/${creditNoteId}/payments/${paymentId}/email`,
+    {},
+    EmailWorkflowResponseSchema,
+  );
 }
