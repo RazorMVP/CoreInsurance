@@ -26,7 +26,9 @@ import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -266,6 +268,37 @@ public class ReceiptService {
         log.info("ReceiptService.requestEmail: enqueued workflow {} for receiptId={} to={}",
                  workflowId, receiptId, email);
         return workflowId;
+    }
+
+    /**
+     * Cancels an in-flight email workflow. Best-effort — the workflow
+     * checks its cancelled flag only before dispatching to the email
+     * activity, so a cancel signal arriving after dispatch lets the
+     * activity (and its retries) complete normally.
+     *
+     * @throws EmailPreflightException 404 with errorCode
+     *         {@code WORKFLOW_NOT_FOUND} if Temporal cannot find the
+     *         workflow (already finished or never started).
+     */
+    public void cancelEmail(UUID receiptId) {
+        String workflowId = "send-receipt-email-" + receiptId;
+        try {
+            SendReceiptEmailWorkflow workflow = workflowClient.newWorkflowStub(
+                    SendReceiptEmailWorkflow.class, workflowId);
+            workflow.cancel();
+        } catch (Exception e) {
+            throw new EmailPreflightException(
+                "WORKFLOW_NOT_FOUND",
+                "No in-flight email workflow for receipt " + receiptId);
+        }
+
+        Map<String, Object> newValue = new HashMap<>();
+        newValue.put("workflowId", workflowId);
+        newValue.put("cancelledBy", currentUser());
+        auditService.log("Receipt", receiptId.toString(),
+                AuditAction.CANCEL, null, newValue);
+        log.info("ReceiptService.cancelEmail: signalled cancel on workflow {} by {}",
+                 workflowId, currentUser());
     }
 
     private String currentUser() {
