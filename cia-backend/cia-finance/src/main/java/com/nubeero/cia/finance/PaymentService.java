@@ -4,8 +4,14 @@ import com.nubeero.cia.common.audit.AuditAction;
 import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import com.nubeero.cia.common.tenant.TenantContext;
+import com.nubeero.cia.finance.email.BeneficiaryEmailResolverDispatcher;
+import com.nubeero.cia.finance.email.EmailPreflightException;
+import com.nubeero.cia.finance.email.SendPaymentVoucherEmailWorkflow;
 import com.nubeero.cia.finance.pdf.PaymentVoucherPdfGenerator;
 import com.nubeero.cia.storage.DocumentStorageService;
+import com.nubeero.cia.workflow.TemporalQueues;
+import io.temporal.client.WorkflowClient;
+import io.temporal.client.WorkflowOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -34,19 +40,25 @@ public class PaymentService {
     private final AuditService auditService;
     private final PaymentVoucherPdfGenerator pdfGenerator;
     private final DocumentStorageService     storage;
+    private final BeneficiaryEmailResolverDispatcher emailResolver;
+    private final WorkflowClient workflowClient;
 
     public PaymentService(PaymentRepository paymentRepository,
                           CreditNoteService creditNoteService,
                           FinanceNumberService numberService,
                           AuditService auditService,
                           PaymentVoucherPdfGenerator pdfGenerator,
-                          DocumentStorageService storage) {
+                          DocumentStorageService storage,
+                          BeneficiaryEmailResolverDispatcher emailResolver,
+                          WorkflowClient workflowClient) {
         this.paymentRepository = paymentRepository;
         this.creditNoteService = creditNoteService;
         this.numberService = numberService;
         this.auditService = auditService;
         this.pdfGenerator = pdfGenerator;
         this.storage = storage;
+        this.emailResolver = emailResolver;
+        this.workflowClient = workflowClient;
     }
 
     public Page<PaymentListItemResponse> findAll(
@@ -174,6 +186,56 @@ public class PaymentService {
         return posted.stream()
                 .map(Payment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * Validates the email preflight (PDF exists + recipient resolved via
+     * {@link BeneficiaryEmailResolverDispatcher}) and starts the
+     * {@link SendPaymentVoucherEmailWorkflow} on
+     * {@link TemporalQueues#EMAIL_QUEUE}.
+     *
+     * @return the started workflow id
+     *         ({@code "send-payment-voucher-email-<paymentId>"}).
+     * @throws EmailPreflightException 422 with {@code PAYMENT_PDF_UNAVAILABLE}
+     *         if {@code pdfPath} is null; 422 with
+     *         {@code PAYMENT_RECIPIENT_UNRESOLVED} if the dispatcher returns
+     *         empty (unmapped entity type OR underlying entity has blank email).
+     */
+    public String requestEmail(UUID paymentId) {
+        Payment payment = findOrThrow(paymentId);
+
+        if (payment.getPdfPath() == null) {
+            throw new EmailPreflightException(
+                "PAYMENT_PDF_UNAVAILABLE",
+                "PDF was never generated for payment " + paymentId);
+        }
+
+        CreditNote cn = payment.getCreditNote();
+        if (cn == null) {
+            throw new EmailPreflightException(
+                "PAYMENT_RECIPIENT_UNRESOLVED",
+                "Payment has no credit note reference");
+        }
+
+        String recipient = emailResolver.resolve(cn).orElseThrow(() ->
+            new EmailPreflightException(
+                "PAYMENT_RECIPIENT_UNRESOLVED",
+                "No email on file for credit note " + cn.getId()));
+
+        String tenantId    = TenantContext.getTenantId();
+        String requestedBy = currentUser();
+        String workflowId  = "send-payment-voucher-email-" + paymentId;
+
+        SendPaymentVoucherEmailWorkflow workflow = workflowClient.newWorkflowStub(
+            SendPaymentVoucherEmailWorkflow.class,
+            WorkflowOptions.newBuilder()
+                .setTaskQueue(TemporalQueues.EMAIL_QUEUE)
+                .setWorkflowId(workflowId)
+                .build());
+        WorkflowClient.start(workflow::send, tenantId, paymentId, requestedBy);
+        log.info("PaymentService.requestEmail: enqueued workflow {} for paymentId={} to={}",
+                 workflowId, paymentId, recipient);
+        return workflowId;
     }
 
     private String currentUser() {

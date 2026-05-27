@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.InputStream;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -142,6 +143,24 @@ public class PaymentController {
             .header(HttpHeaders.CONTENT_DISPOSITION,
                     "attachment; filename=\"" + filename + "\"")
             .body(new InputStreamResource(stream));
+    }
+
+    @PostMapping("/{id}/email")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @PreAuthorize("hasAuthority('FINANCE_UPDATE')")
+    @Operation(summary = "Email the payment voucher PDF to the beneficiary",
+               description = "Starts a Temporal workflow (EMAIL_QUEUE) that downloads the PDF, composes the body, and delivers via the configured EmailService provider. Preflight: pdfPath != null and BeneficiaryEmailResolverDispatcher returns a non-blank email for the credit note's entityType. 202 with workflow id on enqueue; 422 with errorCode (PAYMENT_PDF_UNAVAILABLE / PAYMENT_RECIPIENT_UNRESOLVED) when preflight fails.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "202", description = "Workflow enqueued; body carries workflowId"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_UPDATE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Payment not found", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "Preflight failed — PDF unavailable or recipient unresolved", content = @Content)
+    })
+    public ApiResponse<Map<String, String>> requestEmail(@PathVariable UUID creditNoteId,
+                                                          @PathVariable UUID id) {
+        String workflowId = service.requestEmail(id);
+        return ApiResponse.success(Map.of("workflowId", workflowId));
     }
 
     private PaymentResponse toResponse(Payment p) {

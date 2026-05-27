@@ -10,8 +10,10 @@ import com.nubeero.cia.finance.FinanceNumberService;
 import com.nubeero.cia.finance.Payment;
 import com.nubeero.cia.finance.PaymentMethod;
 import com.nubeero.cia.finance.PaymentService;
+import com.nubeero.cia.finance.email.BeneficiaryEmailResolverDispatcher;
 import com.nubeero.cia.finance.pdf.PaymentVoucherPdfGenerator;
 import com.nubeero.cia.storage.DocumentStorageService;
+import io.temporal.client.WorkflowClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -158,6 +160,23 @@ class PaymentReverseAuditIT extends FinanceItSupport {
         @Bean
         DocumentStorageService documentStorageService() {
             return mock(DocumentStorageService.class);
+        }
+
+        /**
+         * Slice γ / Task 26 — PaymentService now depends on
+         * BeneficiaryEmailResolverDispatcher + WorkflowClient (to start the
+         * SendPaymentVoucherEmailWorkflow on EMAIL_QUEUE). The reverse-path
+         * under test never calls requestEmail(); the mocks exist solely to
+         * satisfy the constructor.
+         */
+        @Bean
+        BeneficiaryEmailResolverDispatcher beneficiaryEmailResolverDispatcher() {
+            return mock(BeneficiaryEmailResolverDispatcher.class);
+        }
+
+        @Bean
+        WorkflowClient workflowClient() {
+            return mock(WorkflowClient.class);
         }
     }
 }
