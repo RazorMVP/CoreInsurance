@@ -4,7 +4,7 @@ import com.nubeero.cia.common.audit.AuditAction;
 import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import com.nubeero.cia.common.tenant.TenantContext;
-import com.nubeero.cia.finance.email.EmailPreflightException;
+import com.nubeero.cia.finance.notification.NotificationPreflightException;
 import com.nubeero.cia.finance.email.SendReceiptEmailWorkflow;
 import com.nubeero.cia.finance.pdf.ReceiptPdfGenerator;
 import com.nubeero.cia.storage.DocumentStorageService;
@@ -218,7 +218,7 @@ public class ReceiptService {
      * the {@link SendReceiptEmailWorkflow} on {@link TemporalQueues#EMAIL_QUEUE}.
      *
      * @return the started workflow id ({@code "send-receipt-email-<receiptId>"}).
-     * @throws EmailPreflightException 422 with {@code RECEIPT_PDF_UNAVAILABLE} if
+     * @throws NotificationPreflightException 422 with {@code RECEIPT_PDF_UNAVAILABLE} if
      *         the slice-β PDF was never generated; 422 with
      *         {@code RECEIPT_RECIPIENT_UNRESOLVED} if the customer has no
      *         recorded email.
@@ -227,7 +227,7 @@ public class ReceiptService {
         Receipt receipt = findOrThrow(receiptId);
 
         if (receipt.getPdfPath() == null) {
-            throw new EmailPreflightException(
+            throw new NotificationPreflightException(
                 "RECEIPT_PDF_UNAVAILABLE",
                 "PDF was never generated for receipt " + receiptId);
         }
@@ -235,7 +235,7 @@ public class ReceiptService {
         DebitNote dn = receipt.getDebitNote();
         UUID customerId = dn != null ? dn.getCustomerId() : null;
         if (customerId == null) {
-            throw new EmailPreflightException(
+            throw new NotificationPreflightException(
                 "RECEIPT_RECIPIENT_UNRESOLVED",
                 "Debit note has no customer reference");
         }
@@ -249,7 +249,7 @@ public class ReceiptService {
             email = null;
         }
         if (email == null || email.isBlank()) {
-            throw new EmailPreflightException(
+            throw new NotificationPreflightException(
                 "RECEIPT_RECIPIENT_UNRESOLVED",
                 "Customer " + customerId + " has no email on file");
         }
@@ -276,7 +276,7 @@ public class ReceiptService {
      * activity, so a cancel signal arriving after dispatch lets the
      * activity (and its retries) complete normally.
      *
-     * @throws EmailPreflightException 404 with errorCode
+     * @throws NotificationPreflightException 404 with errorCode
      *         {@code WORKFLOW_NOT_FOUND} if Temporal cannot find the
      *         workflow (already finished or never started).
      */
@@ -287,7 +287,7 @@ public class ReceiptService {
                     SendReceiptEmailWorkflow.class, workflowId);
             workflow.cancel();
         } catch (Exception e) {
-            throw new EmailPreflightException(
+            throw new NotificationPreflightException(
                 "WORKFLOW_NOT_FOUND",
                 "No in-flight email workflow for receipt " + receiptId);
         }

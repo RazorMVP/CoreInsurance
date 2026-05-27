@@ -5,7 +5,7 @@ import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import com.nubeero.cia.common.tenant.TenantContext;
 import com.nubeero.cia.finance.email.BeneficiaryEmailResolverDispatcher;
-import com.nubeero.cia.finance.email.EmailPreflightException;
+import com.nubeero.cia.finance.notification.NotificationPreflightException;
 import com.nubeero.cia.finance.email.SendPaymentVoucherEmailWorkflow;
 import com.nubeero.cia.finance.pdf.PaymentVoucherPdfGenerator;
 import com.nubeero.cia.storage.DocumentStorageService;
@@ -210,7 +210,7 @@ public class PaymentService {
      *
      * @return the started workflow id
      *         ({@code "send-payment-voucher-email-<paymentId>"}).
-     * @throws EmailPreflightException 422 with {@code PAYMENT_PDF_UNAVAILABLE}
+     * @throws NotificationPreflightException 422 with {@code PAYMENT_PDF_UNAVAILABLE}
      *         if {@code pdfPath} is null; 422 with
      *         {@code PAYMENT_RECIPIENT_UNRESOLVED} if the dispatcher returns
      *         empty (unmapped entity type OR underlying entity has blank email).
@@ -219,20 +219,20 @@ public class PaymentService {
         Payment payment = findOrThrow(paymentId);
 
         if (payment.getPdfPath() == null) {
-            throw new EmailPreflightException(
+            throw new NotificationPreflightException(
                 "PAYMENT_PDF_UNAVAILABLE",
                 "PDF was never generated for payment " + paymentId);
         }
 
         CreditNote cn = payment.getCreditNote();
         if (cn == null) {
-            throw new EmailPreflightException(
+            throw new NotificationPreflightException(
                 "PAYMENT_RECIPIENT_UNRESOLVED",
                 "Payment has no credit note reference");
         }
 
         String recipient = emailResolver.resolve(cn).orElseThrow(() ->
-            new EmailPreflightException(
+            new NotificationPreflightException(
                 "PAYMENT_RECIPIENT_UNRESOLVED",
                 "No email on file for credit note " + cn.getId()));
 
@@ -258,7 +258,7 @@ public class PaymentService {
      * activity, so a cancel signal arriving after dispatch lets the
      * activity (and its retries) complete normally.
      *
-     * @throws EmailPreflightException 404 with errorCode
+     * @throws NotificationPreflightException 404 with errorCode
      *         {@code WORKFLOW_NOT_FOUND} if Temporal cannot find the
      *         workflow (already finished or never started).
      */
@@ -269,7 +269,7 @@ public class PaymentService {
                     SendPaymentVoucherEmailWorkflow.class, workflowId);
             workflow.cancel();
         } catch (Exception e) {
-            throw new EmailPreflightException(
+            throw new NotificationPreflightException(
                 "WORKFLOW_NOT_FOUND",
                 "No in-flight email workflow for payment " + paymentId);
         }

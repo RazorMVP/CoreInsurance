@@ -130,15 +130,15 @@ class CancelEmailWorkflowIT extends FinanceWebItSupport {
     }
 
     @Test
-    @DisplayName("Signal on unknown workflow id → service surfaces EmailPreflightException(WORKFLOW_NOT_FOUND)")
+    @DisplayName("Signal on unknown workflow id → service surfaces NotificationPreflightException(WORKFLOW_NOT_FOUND)")
     void signalOnUnknownWorkflow_throws() {
         // ReceiptService.cancelEmail uses the production WorkflowClient
         // (the @MockBean from FinanceWebItSupport). For an unknown
         // workflow id, the stub's cancel() invocation throws — service's
-        // try/catch wraps in EmailPreflightException.
+        // try/catch wraps in NotificationPreflightException.
         UUID fakeReceiptId = UUID.randomUUID();
         assertThatThrownBy(() -> receiptService.cancelEmail(fakeReceiptId))
-            .isInstanceOf(com.nubeero.cia.finance.email.EmailPreflightException.class)
+            .isInstanceOf(com.nubeero.cia.finance.notification.NotificationPreflightException.class)
             .hasMessageContaining("No in-flight email workflow");
     }
 
