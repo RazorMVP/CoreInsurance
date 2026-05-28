@@ -14,9 +14,8 @@ import java.util.UUID;
  * <p>Retry policy mirrors
  * {@link com.nubeero.cia.finance.email.SendPaymentVoucherEmailWorkflowImpl}:
  * first retry at 5 minutes, doubles each time up to 1 hour, no maximum
- * attempt cap. Three error codes are non-retryable:
- * {@code PAYMENT_NOT_FOUND}, {@code PAYMENT_PDF_UNAVAILABLE},
- * {@code PAYMENT_RECIPIENT_PHONE_UNRESOLVED}.
+ * attempt cap. Two error codes are non-retryable:
+ * {@code PAYMENT_NOT_FOUND}, {@code PAYMENT_RECIPIENT_PHONE_UNRESOLVED}.
  *
  * @since R7 — SMS Temporal workflows, Tasks 8.1–8.3
  */

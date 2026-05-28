@@ -7,6 +7,9 @@ import com.nubeero.cia.finance.email.SendPaymentVoucherEmailActivitiesImpl;
 import com.nubeero.cia.finance.email.SendPaymentVoucherEmailWorkflowImpl;
 import com.nubeero.cia.finance.email.SendReceiptEmailActivitiesImpl;
 import com.nubeero.cia.finance.email.SendReceiptEmailWorkflowImpl;
+import com.nubeero.cia.finance.sms.SendPaymentVoucherSmsWorkflowImpl;
+import com.nubeero.cia.finance.sms.SendReceiptSmsWorkflowImpl;
+import com.nubeero.cia.finance.sms.SmsActivitiesImpl;
 import com.nubeero.cia.workflow.TemporalQueues;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowOptions;
@@ -39,6 +42,7 @@ public class NotificationsWorkerConfig {
     private final SendReceiptEmailActivitiesImpl         receiptActivities;
     private final SendPaymentVoucherEmailActivitiesImpl  voucherActivities;
     private final PdfDownloadLogRetentionActivitiesImpl  retentionActivities;
+    private final SmsActivitiesImpl                      smsActivities;
     private final WorkflowClient                         workflowClient;
 
     @PostConstruct
@@ -48,9 +52,11 @@ public class NotificationsWorkerConfig {
             worker.registerWorkflowImplementationTypes(
                 SendReceiptEmailWorkflowImpl.class,
                 SendPaymentVoucherEmailWorkflowImpl.class,
-                PdfDownloadLogRetentionWorkflowImpl.class);
+                PdfDownloadLogRetentionWorkflowImpl.class,
+                SendReceiptSmsWorkflowImpl.class,
+                SendPaymentVoucherSmsWorkflowImpl.class);
             worker.registerActivitiesImplementations(
-                receiptActivities, voucherActivities, retentionActivities);
+                receiptActivities, voucherActivities, retentionActivities, smsActivities);
             log.info("Registered Temporal worker on queue: {}", TemporalQueues.NOTIFICATIONS_QUEUE);
             schedulePdfDownloadLogRetention();
         } catch (Exception e) {
