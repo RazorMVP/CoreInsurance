@@ -11,6 +11,7 @@ import {
   type NotificationChannel,
 } from '@cia/api-client';
 import { useNotificationTemplates } from '../../hooks/useNotificationTemplates';
+import NotificationTemplateEditorSheet from './NotificationTemplateEditorSheet';
 
 // ── Static combo grid ─────────────────────────────────────────────────────────
 
@@ -129,8 +130,15 @@ export default function NotificationTemplatesPage() {
         </div>
       </PageSection>
 
-      {/* Task 12.3 will render <NotificationTemplateEditorSheet ... /> here using `editing`. */}
-      {editing && null}
+      {editing && (
+        <NotificationTemplateEditorSheet
+          open={!!editing}
+          onOpenChange={(v) => { if (!v) setEditing(null); }}
+          templateType={editing.templateType}
+          channel={editing.channel}
+          existingOverride={editing.existingOverride}
+        />
+      )}
     </>
   );
 }
