@@ -87,6 +87,12 @@ public class Receipt extends BaseEntity implements LockableByPeriod {
     @Column(name = "email_sent_to", length = 255)
     private String emailSentTo;
 
+    @Column(name = "sms_sent_at")
+    private Instant smsSentAt;
+
+    @Column(name = "sms_sent_to", length = 50)
+    private String smsSentTo;
+
     // getters and setters
 
     public String getReceiptNumber() { return receiptNumber; }
@@ -139,4 +145,10 @@ public class Receipt extends BaseEntity implements LockableByPeriod {
 
     public String getEmailSentTo() { return emailSentTo; }
     public void setEmailSentTo(String emailSentTo) { this.emailSentTo = emailSentTo; }
+
+    public Instant getSmsSentAt() { return smsSentAt; }
+    public void setSmsSentAt(Instant smsSentAt) { this.smsSentAt = smsSentAt; }
+
+    public String getSmsSentTo() { return smsSentTo; }
+    public void setSmsSentTo(String smsSentTo) { this.smsSentTo = smsSentTo; }
 }
