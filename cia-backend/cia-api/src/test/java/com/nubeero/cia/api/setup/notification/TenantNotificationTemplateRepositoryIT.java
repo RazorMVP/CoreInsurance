@@ -74,7 +74,7 @@ class TenantNotificationTemplateRepositoryIT {
                 .bodyTemplate("Hi {{customerName}}")
                 .build());
 
-        var found = repository.findByTemplateTypeAndChannel(
+        var found = repository.findByTemplateTypeAndChannelAndDeletedAtIsNull(
                 NotificationTemplateType.RECEIPT, NotificationChannel.EMAIL);
 
         assertThat(found).isPresent();

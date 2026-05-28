@@ -36,8 +36,7 @@ public class NotificationTemplateService {
 
     @Transactional(readOnly = true)
     public List<NotificationTemplateResponse> listOverrides() {
-        return repo.findAllByOrderByTemplateTypeAscChannelAsc().stream()
-                .filter(e -> e.getDeletedAt() == null)
+        return repo.findAllByDeletedAtIsNullOrderByTemplateTypeAscChannelAsc().stream()
                 .map(NotificationTemplateResponse::from)
                 .toList();
     }
@@ -70,7 +69,7 @@ public class NotificationTemplateService {
     @Transactional
     public NotificationTemplateResponse create(NotificationTemplateRequest req) {
         validateRequest(req);
-        if (repo.existsByTemplateTypeAndChannel(req.templateType(), req.channel())) {
+        if (repo.existsByTemplateTypeAndChannelAndDeletedAtIsNull(req.templateType(), req.channel())) {
             throw new BusinessRuleException("TEMPLATE_TYPE_CHANNEL_CONFLICT",
                     "An override already exists for " + req.templateType() + "/" + req.channel());
         }

@@ -13,11 +13,11 @@ import java.util.UUID;
 public interface TenantNotificationTemplateRepository
         extends JpaRepository<TenantNotificationTemplate, UUID> {
 
-    Optional<TenantNotificationTemplate> findByTemplateTypeAndChannel(
+    Optional<TenantNotificationTemplate> findByTemplateTypeAndChannelAndDeletedAtIsNull(
             NotificationTemplateType templateType, NotificationChannel channel);
 
-    List<TenantNotificationTemplate> findAllByOrderByTemplateTypeAscChannelAsc();
+    List<TenantNotificationTemplate> findAllByDeletedAtIsNullOrderByTemplateTypeAscChannelAsc();
 
-    boolean existsByTemplateTypeAndChannel(
+    boolean existsByTemplateTypeAndChannelAndDeletedAtIsNull(
             NotificationTemplateType templateType, NotificationChannel channel);
 }

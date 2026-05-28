@@ -178,4 +178,26 @@ class NotificationComposerIT extends FinanceWebItSupport {
 
         assertThat(msg.body()).isEqualTo("Hi Bob!");
     }
+
+    @Test
+    @DisplayName("soft-deleted override → composer falls back to JAR default (not the deleted row)")
+    void softDeletedOverride_fallsBackToJarDefault() {
+        // Insert an override, then soft-delete it, simulating a reset-to-default operation.
+        TenantNotificationTemplate t = templateRepo.save(TenantNotificationTemplate.builder()
+                .templateType(NotificationTemplateType.RECEIPT)
+                .channel(NotificationChannel.EMAIL)
+                .subjectTemplate("Deleted override {{receiptNumber}}")
+                .bodyTemplate("Deleted body {{customerName}}")
+                .build());
+        t.softDelete();
+        templateRepo.save(t);
+
+        // Composer must use the JAR default subject, NOT the soft-deleted override.
+        ComposedMessage msg = composer.compose(
+                NotificationTemplateType.RECEIPT, NotificationChannel.EMAIL, receiptEmailFields());
+
+        assertThat(msg.subject()).isEqualTo("Receipt REC-001 — payment received");
+        assertThat(msg.body()).doesNotContain("Deleted body");
+        assertThat(msg.body()).contains("Acme Ltd");
+    }
 }

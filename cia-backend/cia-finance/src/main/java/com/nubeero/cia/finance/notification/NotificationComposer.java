@@ -53,7 +53,7 @@ public class NotificationComposer {
                                    NotificationChannel channel,
                                    Map<String, Object> mergeFields) {
 
-        Optional<TenantNotificationTemplate> override = repo.findByTemplateTypeAndChannel(type, channel);
+        Optional<TenantNotificationTemplate> override = repo.findByTemplateTypeAndChannelAndDeletedAtIsNull(type, channel);
 
         // For each field: use the DB override if present-and-non-blank, else the JAR default.
         String subjectTemplate = override
