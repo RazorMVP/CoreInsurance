@@ -11,6 +11,7 @@ import com.nubeero.cia.finance.Payment;
 import com.nubeero.cia.finance.PaymentMethod;
 import com.nubeero.cia.finance.PaymentService;
 import com.nubeero.cia.finance.email.BeneficiaryEmailResolverDispatcher;
+import com.nubeero.cia.finance.sms.BeneficiaryPhoneResolverDispatcher;
 import com.nubeero.cia.finance.pdf.PaymentVoucherPdfGenerator;
 import com.nubeero.cia.storage.DocumentStorageService;
 import io.temporal.client.WorkflowClient;
@@ -172,6 +173,17 @@ class PaymentReverseAuditIT extends FinanceItSupport {
         @Bean
         BeneficiaryEmailResolverDispatcher beneficiaryEmailResolverDispatcher() {
             return mock(BeneficiaryEmailResolverDispatcher.class);
+        }
+
+        /**
+         * F7-δ / R7 — PaymentService now also depends on
+         * BeneficiaryPhoneResolverDispatcher (SMS recipient resolution, mirroring
+         * the email dispatcher). The reverse-path under test never calls it; the
+         * mock exists solely to satisfy the constructor.
+         */
+        @Bean
+        BeneficiaryPhoneResolverDispatcher beneficiaryPhoneResolverDispatcher() {
+            return mock(BeneficiaryPhoneResolverDispatcher.class);
         }
 
         @Bean
