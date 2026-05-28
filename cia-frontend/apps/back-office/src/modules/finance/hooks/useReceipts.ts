@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   apiClient,
   cancelReceiptEmail,
+  cancelReceiptSms,
   downloadReceiptPdf,
   emailReceipt,
   listReceipts,
+  smsReceipt,
   type ApiError,
   type ApiResponse,
   type ReceiptListFilters,
@@ -139,6 +141,88 @@ export function useCancelReceiptEmail() {
       const code = errors[0]?.code ?? '';
       const description = code === 'WORKFLOW_NOT_FOUND'
         ? 'The email workflow has already completed or never started — nothing to cancel.'
+        : (errors.length > 0
+            ? errors.map(e => e.message).filter(Boolean).join('. ')
+            : ax?.message ?? 'Cancel failed.');
+      toast({ variant: 'destructive', title: 'Cancel failed', description });
+    },
+  });
+}
+
+export interface SmsReceiptArgs {
+  dnId:      string;
+  receiptId: string;
+  reference: string;        // for toast — e.g. "REC-2026-00001"
+}
+
+/**
+ * Triggers the SendReceiptSmsWorkflow via POST /sms. Surfaces server
+ * errorCode in the failure toast (RECEIPT_RECIPIENT_PHONE_UNRESOLVED).
+ * Invalidates receipt queries on success so the "Last texted" badge
+ * reflects the latest send timestamp once the workflow completes (next
+ * list refresh). Mirror of useEmailReceipt (F7-γ).
+ */
+export function useSmsReceipt() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ dnId, receiptId }: SmsReceiptArgs) => {
+      return await smsReceipt(dnId, receiptId);
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'receipts'] });
+      toast({
+        title: 'SMS queued',
+        description: `Receipt ${vars.reference} will be delivered shortly. The "Last texted" badge updates after delivery.`,
+      });
+    },
+    onError: (error) => {
+      const ax = error as ApiHttpError;
+      const errors: ApiError[] = ax?.response?.data?.errors ?? [];
+      const code = errors[0]?.code ?? '';
+      let description: string;
+      if (code === 'RECEIPT_RECIPIENT_PHONE_UNRESOLVED') {
+        description = 'No phone on file for this customer. Update the customer record before texting.';
+      } else {
+        description = errors.length > 0
+          ? errors.map(e => e.message).filter(Boolean).join('. ')
+          : ax?.message ?? 'An unexpected error occurred. Please try again.';
+      }
+      toast({ variant: 'destructive', title: 'SMS failed', description });
+    },
+  });
+}
+
+export interface CancelReceiptSmsArgs {
+  dnId:      string;
+  receiptId: string;
+  reference: string;       // for toast
+}
+
+/**
+ * Signals the Temporal SendReceiptSmsWorkflow to cancel. Best-effort
+ * — see workflow Javadoc. UI surfaces success/error toast and
+ * invalidates the receipts list so any "Last texted" badge state
+ * reflects the post-cancel result. Mirror of useCancelReceiptEmail (F7-γ).
+ */
+export function useCancelReceiptSms() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ dnId, receiptId }: CancelReceiptSmsArgs) => {
+      return await cancelReceiptSms(dnId, receiptId);
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'receipts'] });
+      toast({
+        title: 'SMS cancelled',
+        description: `Cancel signal sent for receipt ${vars.reference}. In-flight delivery may still complete (best-effort).`,
+      });
+    },
+    onError: (error) => {
+      const ax = error as ApiHttpError;
+      const errors: ApiError[] = ax?.response?.data?.errors ?? [];
+      const code = errors[0]?.code ?? '';
+      const description = code === 'WORKFLOW_NOT_FOUND'
+        ? 'The SMS workflow has already completed or never started — nothing to cancel.'
         : (errors.length > 0
             ? errors.map(e => e.message).filter(Boolean).join('. ')
             : ax?.message ?? 'Cancel failed.');

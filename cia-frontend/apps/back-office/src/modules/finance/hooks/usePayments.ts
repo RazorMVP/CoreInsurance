@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   apiClient,
   cancelPaymentEmail,
+  cancelPaymentSms,
   downloadPaymentPdf,
   emailPayment,
   listPayments,
+  smsPayment,
   type ApiError,
   type ApiResponse,
   type PaymentListFilters,
@@ -137,6 +139,86 @@ export function useCancelPaymentEmail() {
       const code = errors[0]?.code ?? '';
       const description = code === 'WORKFLOW_NOT_FOUND'
         ? 'The email workflow has already completed or never started — nothing to cancel.'
+        : (errors.length > 0
+            ? errors.map(e => e.message).filter(Boolean).join('. ')
+            : ax?.message ?? 'Cancel failed.');
+      toast({ variant: 'destructive', title: 'Cancel failed', description });
+    },
+  });
+}
+
+export interface SmsPaymentArgs {
+  cnId:      string;
+  paymentId: string;
+  reference: string;        // for toast — e.g. "PAY-2026-00001"
+}
+
+/**
+ * Triggers the SendPaymentVoucherSmsWorkflow via POST /sms. Surfaces
+ * server errorCode in the failure toast (PAYMENT_RECIPIENT_PHONE_UNRESOLVED).
+ * Invalidates payment queries on success. Mirror of useEmailPayment (F7-γ).
+ */
+export function useSmsPayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ cnId, paymentId }: SmsPaymentArgs) => {
+      return await smsPayment(cnId, paymentId);
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'payments'] });
+      toast({
+        title: 'SMS queued',
+        description: `Payment voucher ${vars.reference} will be delivered shortly. The "Last texted" badge updates after delivery.`,
+      });
+    },
+    onError: (error) => {
+      const ax = error as ApiHttpError;
+      const errors: ApiError[] = ax?.response?.data?.errors ?? [];
+      const code = errors[0]?.code ?? '';
+      let description: string;
+      if (code === 'PAYMENT_RECIPIENT_PHONE_UNRESOLVED') {
+        description = 'No phone on file for this beneficiary. Update the source record (broker / reinsurer / customer) before texting.';
+      } else {
+        description = errors.length > 0
+          ? errors.map(e => e.message).filter(Boolean).join('. ')
+          : ax?.message ?? 'An unexpected error occurred. Please try again.';
+      }
+      toast({ variant: 'destructive', title: 'SMS failed', description });
+    },
+  });
+}
+
+export interface CancelPaymentSmsArgs {
+  cnId:      string;
+  paymentId: string;
+  reference: string;       // for toast
+}
+
+/**
+ * Signals the Temporal SendPaymentVoucherSmsWorkflow to cancel. Best-effort
+ * — see workflow Javadoc. UI surfaces success/error toast and
+ * invalidates the payments list so any "Last texted" badge state
+ * reflects the post-cancel result. Mirror of useCancelPaymentEmail (F7-γ).
+ */
+export function useCancelPaymentSms() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ cnId, paymentId }: CancelPaymentSmsArgs) => {
+      return await cancelPaymentSms(cnId, paymentId);
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['finance', 'payments'] });
+      toast({
+        title: 'SMS cancelled',
+        description: `Cancel signal sent for payment voucher ${vars.reference}. In-flight delivery may still complete (best-effort).`,
+      });
+    },
+    onError: (error) => {
+      const ax = error as ApiHttpError;
+      const errors: ApiError[] = ax?.response?.data?.errors ?? [];
+      const code = errors[0]?.code ?? '';
+      const description = code === 'WORKFLOW_NOT_FOUND'
+        ? 'The SMS workflow has already completed or never started — nothing to cancel.'
         : (errors.length > 0
             ? errors.map(e => e.message).filter(Boolean).join('. ')
             : ax?.message ?? 'Cancel failed.');
