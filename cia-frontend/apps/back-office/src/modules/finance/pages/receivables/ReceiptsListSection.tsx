@@ -5,13 +5,15 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import { useEmailReceipt, useReceiptList } from '../../hooks/useReceipts';
+import { useEmailReceipt, useReceiptList, useSmsReceipt } from '../../hooks/useReceipts';
 import DownloadIconButton from '../../components/DownloadIconButton';
 import RecentDownloadsPanel from '../../components/RecentDownloadsPanel';
 import BulkEmailSheet from '../BulkEmailSheet';
 import BulkDownloadButton from '../BulkDownloadButton';
 import EmailConfirmDialog from '../EmailConfirmDialog';
+import SmsConfirmDialog from '../SmsConfirmDialog';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
+import { formatPhone } from '../../lib/formatPhone';
 import type { BulkDownloadItem, ReceiptListItemResponse } from '@cia/api-client';
 
 interface EmailTarget {
@@ -19,6 +21,13 @@ interface EmailTarget {
   receiptId:      string;
   reference:      string;
   recipientEmail: string | null;
+}
+
+interface SmsTarget {
+  dnId:           string;
+  receiptId:      string;
+  reference:      string;
+  recipientPhone: string | null;
 }
 
 const receiptStatusVariant: Record<'POSTED' | 'REVERSED', 'active' | 'rejected'> = {
@@ -31,6 +40,7 @@ export default function ReceiptsListSection() {
   const [page,           setPage]           = useState(0);
   const [reverseTarget,  setReverseTarget]  = useState<ReverseTarget | null>(null);
   const [emailTarget,    setEmailTarget]    = useState<EmailTarget | null>(null);
+  const [smsTarget,      setSmsTarget]      = useState<SmsTarget | null>(null);
   const [rowSelection,   setRowSelection]   = useState<Record<string, boolean>>({});
   const [bulkEmailOpen,  setBulkEmailOpen]  = useState(false);
 
@@ -39,6 +49,7 @@ export default function ReceiptsListSection() {
   const meta     = receiptsQuery.data?.meta;
 
   const emailReceiptMut = useEmailReceipt();
+  const smsReceiptMut   = useSmsReceipt();
 
   const allPageIds   = receipts.map((r) => r.id);
   const allSelected  = allPageIds.length > 0 && allPageIds.every((id) => rowSelection[id]);
@@ -144,6 +155,12 @@ export default function ReceiptsListSection() {
                 {r.emailSentTo ? ` to ${r.emailSentTo}` : ''}
               </span>
             )}
+            {r.smsSentAt && (
+              <span className="text-[11px] text-muted-foreground">
+                Last SMS&apos;d {new Date(r.smsSentAt).toLocaleString()}
+                {r.smsSentTo ? ` to ${formatPhone(r.smsSentTo)}` : ''}
+              </span>
+            )}
           </div>
         );
       },
@@ -161,6 +178,17 @@ export default function ReceiptsListSection() {
               receiptId:      r.id,
               reference:      r.reference,
               recipientEmail: r.recipientEmail,
+            }),
+          });
+        }
+        if (r.recipientPhone !== null) {
+          actions.push({
+            label: 'Send SMS',
+            onClick: () => setSmsTarget({
+              dnId:           r.debitNoteId,
+              receiptId:      r.id,
+              reference:      r.reference,
+              recipientPhone: r.recipientPhone,
             }),
           });
         }
@@ -283,6 +311,25 @@ export default function ReceiptsListSection() {
               reference: emailTarget.reference,
             },
             { onSettled: () => setEmailTarget(null) },
+          );
+        }}
+      />
+
+      <SmsConfirmDialog
+        open={smsTarget !== null}
+        onOpenChange={(v) => { if (!v) setSmsTarget(null); }}
+        recipientPhone={smsTarget?.recipientPhone ?? null}
+        documentLabel={smsTarget ? `receipt ${smsTarget.reference}` : ''}
+        isPending={smsReceiptMut.isPending}
+        onConfirm={() => {
+          if (!smsTarget) return;
+          smsReceiptMut.mutate(
+            {
+              dnId:      smsTarget.dnId,
+              receiptId: smsTarget.receiptId,
+              reference: smsTarget.reference,
+            },
+            { onSettled: () => setSmsTarget(null) },
           );
         }}
       />
