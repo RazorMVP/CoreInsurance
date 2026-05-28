@@ -16,6 +16,7 @@ const VehicleRegistryPage     = lazy(() => import('./pages/vehicle-registry/Vehi
 const ClaimsConfigPage        = lazy(() => import('./pages/claims-config/ClaimsConfigPage'));
 const PartnerAppsPage              = lazy(() => import('./pages/partner-apps/PartnerAppsPage'));
 const CustomerNumberFormatPage     = lazy(() => import('./pages/customer-number-format/CustomerNumberFormatPage'));
+const NotificationTemplatesPage    = lazy(() => import('./pages/notifications/NotificationTemplatesPage'));
 
 function PageLoading() {
   return (
@@ -46,6 +47,7 @@ export default function SetupModule() {
           <Route path="claims-config"    element={<ClaimsConfigPage />} />
           <Route path="partner-apps"             element={<PartnerAppsPage />} />
           <Route path="customer-number-format"  element={<CustomerNumberFormatPage />} />
+          <Route path="notification-templates"  element={<NotificationTemplatesPage />} />
         </Routes>
       </Suspense>
     </SetupLayout>

@@ -47,6 +47,12 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
+    label: 'Notifications',
+    items: [
+      { label: 'Notification Templates', path: '/setup/notification-templates' },
+    ],
+  },
+  {
     label: 'Integrations',
     items: [
       { label: 'Partner Apps',      path: '/setup/partner-apps' },
