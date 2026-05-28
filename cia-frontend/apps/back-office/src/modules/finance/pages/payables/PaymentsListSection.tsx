@@ -5,13 +5,15 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import { useEmailPayment, usePaymentList } from '../../hooks/usePayments';
+import { useEmailPayment, usePaymentList, useSmsPayment } from '../../hooks/usePayments';
 import DownloadIconButton from '../../components/DownloadIconButton';
 import RecentDownloadsPanel from '../../components/RecentDownloadsPanel';
 import BulkEmailSheet from '../BulkEmailSheet';
 import BulkDownloadButton from '../BulkDownloadButton';
 import EmailConfirmDialog from '../EmailConfirmDialog';
+import SmsConfirmDialog from '../SmsConfirmDialog';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
+import { formatPhone } from '../../lib/formatPhone';
 import type { BulkDownloadItem, FinanceEntityType, PaymentListItemResponse } from '@cia/api-client';
 
 interface EmailTarget {
@@ -19,6 +21,13 @@ interface EmailTarget {
   paymentId:      string;
   reference:      string;
   recipientEmail: string | null;
+}
+
+interface SmsTarget {
+  cnId:           string;
+  paymentId:      string;
+  reference:      string;
+  recipientPhone: string | null;
 }
 
 const ENTITY_LABELS: Record<FinanceEntityType, string> = {
@@ -40,6 +49,7 @@ export default function PaymentsListSection() {
   const [page,           setPage]           = useState(0);
   const [reverseTarget,  setReverseTarget]  = useState<ReverseTarget | null>(null);
   const [emailTarget,    setEmailTarget]    = useState<EmailTarget | null>(null);
+  const [smsTarget,      setSmsTarget]      = useState<SmsTarget | null>(null);
   const [rowSelection,   setRowSelection]   = useState<Record<string, boolean>>({});
   const [bulkEmailOpen,  setBulkEmailOpen]  = useState(false);
 
@@ -48,6 +58,7 @@ export default function PaymentsListSection() {
   const meta     = paymentsQuery.data?.meta;
 
   const emailPaymentMut  = useEmailPayment();
+  const smsPaymentMut    = useSmsPayment();
 
   const allPageIds   = payments.map((p) => p.id);
   const allSelected  = allPageIds.length > 0 && allPageIds.every((id) => rowSelection[id]);
@@ -166,6 +177,12 @@ export default function PaymentsListSection() {
                 {p.emailSentTo ? ` to ${p.emailSentTo}` : ''}
               </span>
             )}
+            {p.smsSentAt && (
+              <span className="text-[11px] text-muted-foreground">
+                Last SMS&apos;d {new Date(p.smsSentAt).toLocaleString()}
+                {p.smsSentTo ? ` to ${formatPhone(p.smsSentTo)}` : ''}
+              </span>
+            )}
           </div>
         );
       },
@@ -183,6 +200,17 @@ export default function PaymentsListSection() {
               paymentId:      p.id,
               reference:      p.reference,
               recipientEmail: p.recipientEmail,
+            }),
+          });
+        }
+        if (p.recipientPhone !== null) {
+          actions.push({
+            label: 'Send SMS',
+            onClick: () => setSmsTarget({
+              cnId:           p.creditNoteId,
+              paymentId:      p.id,
+              reference:      p.reference,
+              recipientPhone: p.recipientPhone,
             }),
           });
         }
@@ -305,6 +333,25 @@ export default function PaymentsListSection() {
               reference: emailTarget.reference,
             },
             { onSettled: () => setEmailTarget(null) },
+          );
+        }}
+      />
+
+      <SmsConfirmDialog
+        open={smsTarget !== null}
+        onOpenChange={(v) => { if (!v) setSmsTarget(null); }}
+        recipientPhone={smsTarget?.recipientPhone ?? null}
+        documentLabel={smsTarget ? `payment voucher ${smsTarget.reference}` : ''}
+        isPending={smsPaymentMut.isPending}
+        onConfirm={() => {
+          if (!smsTarget) return;
+          smsPaymentMut.mutate(
+            {
+              cnId:      smsTarget.cnId,
+              paymentId: smsTarget.paymentId,
+              reference: smsTarget.reference,
+            },
+            { onSettled: () => setSmsTarget(null) },
           );
         }}
       />

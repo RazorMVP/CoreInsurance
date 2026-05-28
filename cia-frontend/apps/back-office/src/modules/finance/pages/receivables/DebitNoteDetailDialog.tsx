@@ -5,16 +5,25 @@ import {
 } from '@cia/ui';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, type DebitNoteDto, type PolicyDto } from '@cia/api-client';
-import { useEmailReceipt, useReceiptList } from '../../hooks/useReceipts';
+import { useEmailReceipt, useReceiptList, useSmsReceipt } from '../../hooks/useReceipts';
 import DownloadIconButton from '../../components/DownloadIconButton';
 import EmailConfirmDialog from '../EmailConfirmDialog';
+import SmsConfirmDialog from '../SmsConfirmDialog';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
+import { formatPhone } from '../../lib/formatPhone';
 
 interface EmailTarget {
   dnId:           string;
   receiptId:      string;
   reference:      string;
   recipientEmail: string | null;
+}
+
+interface SmsTarget {
+  dnId:           string;
+  receiptId:      string;
+  reference:      string;
+  recipientPhone: string | null;
 }
 
 const DN_STATUS_VARIANT: Record<DebitNoteDto['status'], 'pending' | 'active' | 'draft' | 'rejected'> = {
@@ -57,12 +66,14 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
 
   const [reverseTarget, setReverseTarget] = useState<ReverseTarget | null>(null);
   const [emailTarget,   setEmailTarget]   = useState<EmailTarget | null>(null);
+  const [smsTarget,     setSmsTarget]     = useState<SmsTarget | null>(null);
   const receiptsQuery = useReceiptList(
     debitNote ? { debitNoteId: debitNote.id } : { debitNoteId: '' },
   );
   const receipts = receiptsQuery.data?.data ?? [];
 
   const emailReceiptMut  = useEmailReceipt();
+  const smsReceiptMut    = useSmsReceipt();
 
   if (!debitNote) return null;
 
@@ -151,6 +162,12 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
                         {r.emailSentTo ? ` to ${r.emailSentTo}` : ''}
                       </span>
                     )}
+                    {r.smsSentAt && (
+                      <span className="text-[11px] text-muted-foreground">
+                        Last SMS&apos;d {new Date(r.smsSentAt).toLocaleString()}
+                        {r.smsSentTo ? ` to ${formatPhone(r.smsSentTo)}` : ''}
+                      </span>
+                    )}
                   </div>
                   <div className="flex shrink-0 items-start gap-2">
                     <Badge
@@ -171,6 +188,20 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
                         })}
                       >
                         Email
+                      </Button>
+                    )}
+                    {r.recipientPhone !== null && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSmsTarget({
+                          dnId:           r.debitNoteId,
+                          receiptId:      r.id,
+                          reference:      r.reference,
+                          recipientPhone: r.recipientPhone,
+                        })}
+                      >
+                        SMS
                       </Button>
                     )}
                     <DownloadIconButton
@@ -226,6 +257,25 @@ export default function DebitNoteDetailDialog({ open, onOpenChange, debitNote, o
                 reference: emailTarget.reference,
               },
               { onSettled: () => setEmailTarget(null) },
+            );
+          }}
+        />
+
+        <SmsConfirmDialog
+          open={smsTarget !== null}
+          onOpenChange={(v) => { if (!v) setSmsTarget(null); }}
+          recipientPhone={smsTarget?.recipientPhone ?? null}
+          documentLabel={smsTarget ? `receipt ${smsTarget.reference}` : ''}
+          isPending={smsReceiptMut.isPending}
+          onConfirm={() => {
+            if (!smsTarget) return;
+            smsReceiptMut.mutate(
+              {
+                dnId:      smsTarget.dnId,
+                receiptId: smsTarget.receiptId,
+                reference: smsTarget.reference,
+              },
+              { onSettled: () => setSmsTarget(null) },
             );
           }}
         />

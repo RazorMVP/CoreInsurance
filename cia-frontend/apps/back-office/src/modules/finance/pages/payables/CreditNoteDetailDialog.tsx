@@ -4,16 +4,25 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@cia/ui';
 import type { CreditNoteDto, FinanceEntityType } from '@cia/api-client';
-import { useEmailPayment, usePaymentList } from '../../hooks/usePayments';
+import { useEmailPayment, usePaymentList, useSmsPayment } from '../../hooks/usePayments';
 import DownloadIconButton from '../../components/DownloadIconButton';
 import EmailConfirmDialog from '../EmailConfirmDialog';
+import SmsConfirmDialog from '../SmsConfirmDialog';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
+import { formatPhone } from '../../lib/formatPhone';
 
 interface EmailTarget {
   cnId:           string;
   paymentId:      string;
   reference:      string;
   recipientEmail: string | null;
+}
+
+interface SmsTarget {
+  cnId:           string;
+  paymentId:      string;
+  reference:      string;
+  recipientPhone: string | null;
 }
 
 const ENTITY_LABELS: Record<FinanceEntityType, string> = {
@@ -51,12 +60,14 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 export default function CreditNoteDetailDialog({ open, onOpenChange, creditNote, onProcessPayment }: Props) {
   const [reverseTarget, setReverseTarget] = useState<ReverseTarget | null>(null);
   const [emailTarget,   setEmailTarget]   = useState<EmailTarget | null>(null);
+  const [smsTarget,     setSmsTarget]     = useState<SmsTarget | null>(null);
   const paymentsQuery = usePaymentList(
     creditNote ? { creditNoteId: creditNote.id } : { creditNoteId: '' },
   );
   const payments = paymentsQuery.data?.data ?? [];
 
   const emailPaymentMut  = useEmailPayment();
+  const smsPaymentMut    = useSmsPayment();
 
   if (!creditNote) return null;
 
@@ -139,6 +150,12 @@ export default function CreditNoteDetailDialog({ open, onOpenChange, creditNote,
                         {p.emailSentTo ? ` to ${p.emailSentTo}` : ''}
                       </span>
                     )}
+                    {p.smsSentAt && (
+                      <span className="text-[11px] text-muted-foreground">
+                        Last SMS&apos;d {new Date(p.smsSentAt).toLocaleString()}
+                        {p.smsSentTo ? ` to ${formatPhone(p.smsSentTo)}` : ''}
+                      </span>
+                    )}
                   </div>
                   <div className="flex shrink-0 items-start gap-2">
                     <Badge
@@ -159,6 +176,20 @@ export default function CreditNoteDetailDialog({ open, onOpenChange, creditNote,
                         })}
                       >
                         Email
+                      </Button>
+                    )}
+                    {p.recipientPhone !== null && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSmsTarget({
+                          cnId:           p.creditNoteId,
+                          paymentId:      p.id,
+                          reference:      p.reference,
+                          recipientPhone: p.recipientPhone,
+                        })}
+                      >
+                        SMS
                       </Button>
                     )}
                     <DownloadIconButton
@@ -214,6 +245,25 @@ export default function CreditNoteDetailDialog({ open, onOpenChange, creditNote,
                 reference: emailTarget.reference,
               },
               { onSettled: () => setEmailTarget(null) },
+            );
+          }}
+        />
+
+        <SmsConfirmDialog
+          open={smsTarget !== null}
+          onOpenChange={(v) => { if (!v) setSmsTarget(null); }}
+          recipientPhone={smsTarget?.recipientPhone ?? null}
+          documentLabel={smsTarget ? `payment voucher ${smsTarget.reference}` : ''}
+          isPending={smsPaymentMut.isPending}
+          onConfirm={() => {
+            if (!smsTarget) return;
+            smsPaymentMut.mutate(
+              {
+                cnId:      smsTarget.cnId,
+                paymentId: smsTarget.paymentId,
+                reference: smsTarget.reference,
+              },
+              { onSettled: () => setSmsTarget(null) },
             );
           }}
         />
