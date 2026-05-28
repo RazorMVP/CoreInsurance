@@ -131,10 +131,18 @@ public class SmsActivitiesImpl implements SmsActivities {
         // Send (provider errors bubble for Temporal retry)
         smsService.sendSms(new SmsMessage(toPhone, msg.body()));
 
-        // Persist sms_sent_at + sms_sent_to (audit-after-success)
-        payment.setSmsSentAt(Instant.now());
-        payment.setSmsSentTo(toPhone);
-        paymentRepository.save(payment);
+        // Persist sms_sent_at + sms_sent_to via direct JDBC — mirrors
+        // SendPaymentVoucherEmailActivitiesImpl which also uses jdbc.update() instead of
+        // paymentRepository.save(). Using JPA save() here triggers a Hibernate flush of
+        // all entities in the session (including Claim / Endorsement entities loaded by the
+        // BeneficiaryPhoneResolverDispatcher). These entities carry @Builder.Default @OneToMany
+        // cascade=ALL collections; the pre-query flush inside NotificationComposer.compose()
+        // processes those collections once, and the post-send save() flush processes them
+        // again, causing Hibernate to throw "Found shared references to a collection".
+        // JDBC bypasses the Hibernate session entirely and avoids the double-flush cascade.
+        jdbc.update(
+            "UPDATE payments SET sms_sent_at = NOW(), sms_sent_to = ? WHERE id = ?",
+            toPhone, paymentId);
 
         // Audit row — written exactly once per successful send
         Map<String, Object> newValue = new HashMap<>();
