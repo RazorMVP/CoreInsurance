@@ -1,3 +1,9 @@
+// ── Setup & Administration — DTOs + Notification Template schemas/fetchers ─
+
+import { z } from 'zod';
+import { apiClient } from '../client';
+import { validatedGet, validatedPost, validatedPut } from '../validation';
+
 // ── Setup & Administration — DTOs ─────────────────────────────────────────
 
 // Mirrors com.nubeero.cia.setup.company.dto.CompanySettingsResponse 1:1.
@@ -311,4 +317,191 @@ export interface InsuranceCompanyDto {
   phone?:         string | null;
   createdAt:      string;
   updatedAt?:     string | null;
+}
+
+// ── Notification Templates (F7-δ / R7 — Setup → Notification Templates tab) ─
+//
+// Mirrors com.nubeero.cia.setup.notification.dto.* 1:1.
+// Enums mirror cia-common NotificationTemplateType + NotificationChannel.
+// NOTE: BaseEntity exposes createdBy but NOT updatedBy — updatedBy is absent
+// from NotificationTemplateResponse and therefore absent here too.
+
+// ── Enums ─────────────────────────────────────────────────────────────────
+
+export const NotificationTemplateTypeSchema = z.enum(['RECEIPT', 'PAYMENT_VOUCHER']);
+export type NotificationTemplateType = z.infer<typeof NotificationTemplateTypeSchema>;
+
+export const NotificationChannelSchema = z.enum(['EMAIL', 'SMS']);
+export type NotificationChannel = z.infer<typeof NotificationChannelSchema>;
+
+// ── Main response schema ───────────────────────────────────────────────────
+
+export const NotificationTemplateResponseSchema = z.object({
+  id:              z.string(),
+  templateType:    NotificationTemplateTypeSchema,
+  channel:         NotificationChannelSchema,
+  subjectTemplate: z.string().nullable(),
+  bodyTemplate:    z.string().nullable(),
+  createdAt:       z.string(),
+  updatedAt:       z.string(),
+  createdBy:       z.string().nullable(),
+});
+
+// Drift-check alias: maps NotificationTemplateDto → NotificationTemplateResponse.java
+// (the drift script strips 'Dto' and appends 'Response' to derive the backend file name).
+export type NotificationTemplateDto = z.infer<typeof NotificationTemplateResponseSchema>;
+
+// ── Request + helper schemas ───────────────────────────────────────────────
+
+export const NotificationTemplateRequestSchema = z.object({
+  templateType:    NotificationTemplateTypeSchema,
+  channel:         NotificationChannelSchema,
+  subjectTemplate: z.string().nullable().optional(),
+  bodyTemplate:    z.string().nullable().optional(),
+});
+export type NotificationTemplateRequest = z.infer<typeof NotificationTemplateRequestSchema>;
+
+// Mirrors NotificationTemplateDefaultsResponse { defaults: Entry[] }
+// where Entry = { templateType, channel, subjectTemplate, bodyTemplate }.
+const NotificationTemplateDefaultsEntrySchema = z.object({
+  templateType:    NotificationTemplateTypeSchema,
+  channel:         NotificationChannelSchema,
+  subjectTemplate: z.string().nullable(),
+  bodyTemplate:    z.string(),
+});
+
+export const NotificationTemplateDefaultsResponseSchema = z.object({
+  defaults: z.array(NotificationTemplateDefaultsEntrySchema),
+});
+export type NotificationTemplateDefaultsResponse = z.infer<typeof NotificationTemplateDefaultsResponseSchema>;
+
+// Mirrors NotificationTemplateVariablesResponse { variables: Entry[] }
+// where Entry = { templateType, channel, allowedVariables: string[] }.
+const NotificationTemplateVariablesEntrySchema = z.object({
+  templateType:     NotificationTemplateTypeSchema,
+  channel:          NotificationChannelSchema,
+  allowedVariables: z.array(z.string()),
+});
+
+export const NotificationTemplateVariablesResponseSchema = z.object({
+  variables: z.array(NotificationTemplateVariablesEntrySchema),
+});
+export type NotificationTemplateVariablesResponse = z.infer<typeof NotificationTemplateVariablesResponseSchema>;
+
+// Mirrors NotificationTemplatePreviewRequest { templateType, channel,
+// subjectTemplate?, bodyTemplate?, sampleValues: Map<String,Object> }.
+export const NotificationTemplatePreviewRequestSchema = z.object({
+  templateType:    NotificationTemplateTypeSchema,
+  channel:         NotificationChannelSchema,
+  subjectTemplate: z.string().nullable().optional(),
+  bodyTemplate:    z.string().nullable().optional(),
+  sampleValues:    z.record(z.string(), z.unknown()),
+});
+export type NotificationTemplatePreviewRequest = z.infer<typeof NotificationTemplatePreviewRequestSchema>;
+
+// Mirrors NotificationTemplatePreviewResponse { subject, body }.
+export const NotificationTemplatePreviewResponseSchema = z.object({
+  subject: z.string().nullable(),
+  body:    z.string(),
+});
+export type NotificationTemplatePreviewResponse = z.infer<typeof NotificationTemplatePreviewResponseSchema>;
+
+// ── Fetchers ───────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/setup/notification-templates
+ * Returns the full list of tenant notification template overrides (no
+ * pagination — the set is small and bounded by templateType × channel).
+ * Uses validatedGet + z.array because the controller returns
+ * ApiResponse<List<NotificationTemplateResponse>> with no meta block.
+ */
+export async function listNotificationTemplates(): Promise<NotificationTemplateDto[]> {
+  return validatedGet(
+    '/api/v1/setup/notification-templates',
+    z.array(NotificationTemplateResponseSchema),
+  );
+}
+
+/**
+ * GET /api/v1/setup/notification-templates/defaults
+ * JAR-bundled defaults for all (templateType, channel) combinations.
+ * Read-only reference — used by the UI to pre-fill the editor.
+ */
+export async function getNotificationTemplateDefaults(): Promise<NotificationTemplateDefaultsResponse> {
+  return validatedGet(
+    '/api/v1/setup/notification-templates/defaults',
+    NotificationTemplateDefaultsResponseSchema,
+  );
+}
+
+/**
+ * GET /api/v1/setup/notification-templates/variables
+ * Allowed Mustache variable names per (templateType, channel).
+ * Drives the variable-picker UI in the template editor.
+ */
+export async function getNotificationTemplateVariables(): Promise<NotificationTemplateVariablesResponse> {
+  return validatedGet(
+    '/api/v1/setup/notification-templates/variables',
+    NotificationTemplateVariablesResponseSchema,
+  );
+}
+
+/**
+ * POST /api/v1/setup/notification-templates
+ * Creates a tenant override for a (templateType, channel) pair.
+ */
+export async function createNotificationTemplate(
+  req: NotificationTemplateRequest,
+): Promise<NotificationTemplateDto> {
+  return validatedPost(
+    '/api/v1/setup/notification-templates',
+    req,
+    NotificationTemplateResponseSchema,
+  );
+}
+
+/**
+ * PUT /api/v1/setup/notification-templates/{id}
+ * Updates an existing tenant override.
+ */
+export async function updateNotificationTemplate(
+  id:  string,
+  req: NotificationTemplateRequest,
+): Promise<NotificationTemplateDto> {
+  return validatedPut(
+    `/api/v1/setup/notification-templates/${id}`,
+    req,
+    NotificationTemplateResponseSchema,
+  );
+}
+
+/**
+ * DELETE /api/v1/setup/notification-templates/{id}?reason=
+ * Deletes (resets) a tenant override — restores the JAR-bundled default.
+ * `reason` is optional at the API level but required by the UI
+ * (ConfirmDeleteDialog + useDeleteWithReason hook).
+ */
+export async function deleteNotificationTemplate(
+  id:      string,
+  reason?: string,
+): Promise<void> {
+  await apiClient.delete(
+    `/api/v1/setup/notification-templates/${id}`,
+    { params: reason ? { reason } : undefined },
+  );
+}
+
+/**
+ * POST /api/v1/setup/notification-templates/preview
+ * Renders a template body (and optional subject) with sample variable values.
+ * Used by the editor to show a live preview before saving.
+ */
+export async function previewNotificationTemplate(
+  req: NotificationTemplatePreviewRequest,
+): Promise<NotificationTemplatePreviewResponse> {
+  return validatedPost(
+    '/api/v1/setup/notification-templates/preview',
+    req,
+    NotificationTemplatePreviewResponseSchema,
+  );
 }
