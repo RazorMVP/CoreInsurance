@@ -2,10 +2,13 @@ package com.nubeero.cia.finance.email;
 
 import com.nubeero.cia.common.audit.AuditAction;
 import com.nubeero.cia.common.audit.AuditService;
+import com.nubeero.cia.common.notification.NotificationChannel;
 import com.nubeero.cia.common.notification.NotificationTemplateType;
 import com.nubeero.cia.finance.CreditNote;
 import com.nubeero.cia.finance.Payment;
 import com.nubeero.cia.finance.PaymentRepository;
+import com.nubeero.cia.finance.notification.ComposedMessage;
+import com.nubeero.cia.finance.notification.NotificationComposer;
 import com.nubeero.cia.notifications.email.Attachment;
 import com.nubeero.cia.notifications.email.EmailMessage;
 import com.nubeero.cia.notifications.email.EmailService;
@@ -56,7 +59,7 @@ public class SendPaymentVoucherEmailActivitiesImpl implements SendPaymentVoucher
 
     private final PaymentRepository                  paymentRepository;
     private final DocumentStorageService             storage;
-    private final EmailBodyComposer                  bodyComposer;
+    private final NotificationComposer               notificationComposer;
     private final EmailService                       emailService;
     private final AuditService                       auditService;
     private final BeneficiaryEmailResolverDispatcher recipientDispatcher;
@@ -98,13 +101,14 @@ public class SendPaymentVoucherEmailActivitiesImpl implements SendPaymentVoucher
         fields.put("paymentDate", payment.getPaymentDate().toString());
         fields.put("creditNoteNumber", cn.getCreditNoteNumber());
         fields.put("companyName", "Your Insurance Company"); // δ moves to tenant config
-        EmailContent content = bodyComposer.compose(NotificationTemplateType.PAYMENT_VOUCHER, fields);
+        ComposedMessage content = notificationComposer.compose(
+            NotificationTemplateType.PAYMENT_VOUCHER, NotificationChannel.EMAIL, fields);
 
         // Build EmailMessage + send (SMTP errors bubble for retry)
         EmailMessage msg = new EmailMessage(
             recipient,
             content.subject(),
-            content.bodyHtml(),
+            content.body(),
             List.of(new Attachment(
                 "PAY-" + payment.getPaymentNumber() + ".pdf",
                 "application/pdf",

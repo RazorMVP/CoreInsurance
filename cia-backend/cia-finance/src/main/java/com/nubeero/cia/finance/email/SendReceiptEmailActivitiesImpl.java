@@ -2,10 +2,13 @@ package com.nubeero.cia.finance.email;
 
 import com.nubeero.cia.common.audit.AuditAction;
 import com.nubeero.cia.common.audit.AuditService;
+import com.nubeero.cia.common.notification.NotificationChannel;
 import com.nubeero.cia.common.notification.NotificationTemplateType;
 import com.nubeero.cia.finance.DebitNote;
 import com.nubeero.cia.finance.Receipt;
 import com.nubeero.cia.finance.ReceiptRepository;
+import com.nubeero.cia.finance.notification.ComposedMessage;
+import com.nubeero.cia.finance.notification.NotificationComposer;
 import com.nubeero.cia.notifications.email.Attachment;
 import com.nubeero.cia.notifications.email.EmailMessage;
 import com.nubeero.cia.notifications.email.EmailService;
@@ -46,7 +49,7 @@ public class SendReceiptEmailActivitiesImpl implements SendReceiptEmailActivitie
 
     private final ReceiptRepository      receiptRepository;
     private final DocumentStorageService storage;
-    private final EmailBodyComposer      bodyComposer;
+    private final NotificationComposer   notificationComposer;
     private final EmailService           emailService;
     private final AuditService           auditService;
     private final JdbcTemplate           jdbc;
@@ -91,13 +94,14 @@ public class SendReceiptEmailActivitiesImpl implements SendReceiptEmailActivitie
         fields.put("paymentDate", receipt.getPaymentDate().toString());
         fields.put("debitNoteNumber", dn.getDebitNoteNumber());
         fields.put("companyName", "Your Insurance Company"); // δ moves to tenant config
-        EmailContent content = bodyComposer.compose(NotificationTemplateType.RECEIPT, fields);
+        ComposedMessage content = notificationComposer.compose(
+            NotificationTemplateType.RECEIPT, NotificationChannel.EMAIL, fields);
 
         // Build EmailMessage + send (SMTP errors bubble for retry)
         EmailMessage msg = new EmailMessage(
             customerEmail,
             content.subject(),
-            content.bodyHtml(),
+            content.body(),
             List.of(new Attachment(
                 "REC-" + receipt.getReceiptNumber() + ".pdf",
                 "application/pdf",
