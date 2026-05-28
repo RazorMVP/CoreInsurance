@@ -14,12 +14,33 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 |---|---|---|---|
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
 | F7-β-symbol-glyphs | P3 | NotoSans Latin lacks symbol glyphs (✓ ✗ ★ → ←) | Surfaced during F7-β Task 3 (Session 126) — the NotoSans-Regular TTF embedded in `HtmlToPdfConverter` is the "latin-greek-cyrillic" variant which doesn't ship U+2713. The existing F7-β receipt + voucher templates don't need symbol glyphs, but if a future template / per-tenant override (slice δ) wants a ✓ status indicator or similar, either (a) add Noto Sans Symbols TTF as a fallback font in `HtmlToPdfConverter.loadFont`, or (b) ASCII-escape the symbol in the template. Documented as a future template-author concern; not blocking. |
-| F7δ-stale-fetcher-jsdoc | P3 | smsReceipt/smsPayment fetcher JSDoc lists email-only 422 codes | Surfaced during F7-δ Phase 11 review (Session 133). The `smsReceipt` / `smsPayment` fetcher JSDoc in `cia-frontend/packages/api-client/src/modules/finance.ts` lists `RECEIPT_PDF_UNAVAILABLE` / `PAYMENT_PDF_UNAVAILABLE` 422 codes copied from the email fetchers — SMS has no PDF dependency (no PDF gate), so those codes never fire on the SMS path. Doc-only; the hooks never branch on them. Trim the JSDoc to the actual SMS codes (`*_RECIPIENT_PHONE_UNRESOLVED` / `WORKFLOW_NOT_FOUND`). |
-| F7δ-sms-badge-copy | P3 | SmsConfirmDialog body says "Last texted", row badge says "Last SMS'd" | Surfaced during F7-δ Phase 13 review (Session 133). `SmsConfirmDialog` body copy references a "Last texted" badge, but the actual row badge rendered on the 4 finance surfaces reads "Last SMS'd {ts} to {recipient}". Align the dialog copy to "Last SMS'd". Cosmetic; no behaviour change. |
 | R7-termii-prod | P3 | Termii SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): user opted for "Logging stub only" in the R7 slice. The SPI ships ready for prod impls; this row tracks the first one — `TermiiSmsService` (Nigeria-native, listed in CLAUDE.md candidate set). Adds `TERMII_API_KEY` + `TERMII_SENDER_ID` envs, `@ConditionalOnProperty(havingValue="termii")` gating, Termii rate-limit guard, Testcontainers IT against a wiremock stub. Pickup when a tenant signs up needing real SMS delivery. |
 | R7-twilio-prod | P3 | Twilio SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): same as `R7-termii-prod` but for non-Nigerian tenants. `TwilioSmsService` against the Twilio Programmable SMS API; `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_FROM_NUMBER` envs. Lower priority than Termii because the platform is Nigeria-first; ship only when the first non-NG tenant onboards. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-29 — Session 134 (`main`): backlog drain — F7δ cosmetic nits (in progress)
+
+Post-F7-δ/R7 cleanup batch. User picked three P3 backlog rows to drain: `F7δ-stale-fetcher-jsdoc`, `F7δ-sms-badge-copy`, and `F7-β-symbol-glyphs`. The two F7δ cosmetic nits are done + committed (`9bb123a`); `F7-β-symbol-glyphs` is being scoped next (a design decision is pending with the user — defensive glyph guard vs. embedding a Noto Sans Symbols fallback font).
+
+### What landed (commit `9bb123a`)
+
+- **`F7δ-stale-fetcher-jsdoc`** — `cia-frontend/packages/api-client/src/modules/finance.ts`: the `smsReceipt` / `smsPayment` fetcher JSDoc dropped the email-only `RECEIPT_PDF_UNAVAILABLE` / `PAYMENT_PDF_UNAVAILABLE` 422 codes (copied from the email fetchers — SMS has no PDF gate). Now lists only the real `*_RECIPIENT_PHONE_UNRESOLVED` code. Doc-only; the hooks never branched on the stale codes.
+- **`F7δ-sms-badge-copy`** — `SmsConfirmDialog.tsx` body copy `"Last texted"` → `"Last SMS'd"` to match the badge actually rendered on all 4 finance surfaces. Copy-only.
+
+Frontend gates clean: back-office typecheck, api-client `tsc --noEmit`, api-wiring, DTO-drift all green.
+
+### Grounding note on `F7-β-symbol-glyphs` (not yet executed)
+
+Scoping exploration corrected the backlog row's framing: **no current template (PDF or notification) uses any literal symbol glyph.** The Naira sign ₦ is written as the HTML entity `&#8358;` (U+20A6), which NotoSans-Regular includes (a passing test asserts it). The latent risk is that `HtmlToPdfConverter.writeText` calls `cs.showText(line)` with no try-catch, so a future dev-authored PDF template containing an unsupported glyph (e.g. ✓ U+2713) throws — though the failure degrades to a null PDF (the generators' outer try/catch), not an app crash. There is **no tenant-editable path** into the PDF renderer (F7-δ overrides are email/SMS templates, which don't use `HtmlToPdfConverter`). The fix-shape decision (defensive per-glyph guard vs. symbols fallback font vs. both) is pending user input.
+
+### Known follow-ups + backlog reconciliation
+
+- **Backlog rows DRAINED:** `F7δ-stale-fetcher-jsdoc` + `F7δ-sms-badge-copy` (both delivered in `9bb123a`) — removed from the canonical table.
+- **Backlog row IN PROGRESS (left in table):** `F7-β-symbol-glyphs` — decision pending; will drain when the chosen fix lands.
+- **Unchanged:** `B2`, `R7-termii-prod`, `R7-twilio-prod`.
 
 ---
 
