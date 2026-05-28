@@ -5,6 +5,7 @@ import com.nubeero.cia.common.audit.AuditService;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import com.nubeero.cia.common.tenant.TenantContext;
 import com.nubeero.cia.finance.email.BeneficiaryEmailResolverDispatcher;
+import com.nubeero.cia.finance.sms.BeneficiaryPhoneResolverDispatcher;
 import com.nubeero.cia.finance.notification.NotificationPreflightException;
 import com.nubeero.cia.finance.email.SendPaymentVoucherEmailWorkflow;
 import com.nubeero.cia.finance.pdf.PaymentVoucherPdfGenerator;
@@ -43,6 +44,7 @@ public class PaymentService {
     private final PaymentVoucherPdfGenerator pdfGenerator;
     private final DocumentStorageService     storage;
     private final BeneficiaryEmailResolverDispatcher emailResolver;
+    private final BeneficiaryPhoneResolverDispatcher phoneResolver;
     private final WorkflowClient workflowClient;
 
     public PaymentService(PaymentRepository paymentRepository,
@@ -52,6 +54,7 @@ public class PaymentService {
                           PaymentVoucherPdfGenerator pdfGenerator,
                           DocumentStorageService storage,
                           BeneficiaryEmailResolverDispatcher emailResolver,
+                          BeneficiaryPhoneResolverDispatcher phoneResolver,
                           WorkflowClient workflowClient) {
         this.paymentRepository = paymentRepository;
         this.creditNoteService = creditNoteService;
@@ -60,6 +63,7 @@ public class PaymentService {
         this.pdfGenerator = pdfGenerator;
         this.storage = storage;
         this.emailResolver = emailResolver;
+        this.phoneResolver = phoneResolver;
         this.workflowClient = workflowClient;
     }
 
@@ -85,14 +89,18 @@ public class PaymentService {
             beneficiaryReference = cn.getEntityReference();
         }
         // Slice γ — pre-resolve beneficiary email via the dispatcher.
+        // Task 6.2 — pre-resolve beneficiary phone via the phone dispatcher.
         // N+1: one resolver call per row (each resolver does one or two FK
         // lookups — Claim → Customer, Broker, ReinsuranceCompany, etc.).
         // Acceptable for v1; batch resolver is a follow-up if a perf
         // concern surfaces. Unmapped entity types (POLICY) silently return
-        // null and the frontend disables the Email button.
+        // null and the frontend disables the Email / SMS button.
         String recipientEmail = (cn == null)
                 ? null
                 : emailResolver.resolve(cn).orElse(null);
+        String recipientPhone = (cn == null)
+                ? null
+                : phoneResolver.resolve(cn).orElse(null);
         return new PaymentListItemResponse(
                 p.getId(),
                 p.getPaymentNumber(),
@@ -111,7 +119,10 @@ public class PaymentService {
                 p.getPdfPath(),
                 recipientEmail,
                 p.getEmailSentAt(),
-                p.getEmailSentTo());
+                p.getEmailSentTo(),
+                recipientPhone,
+                p.getSmsSentAt(),
+                p.getSmsSentTo());
     }
 
     public Page<Payment> findByCreditNote(UUID creditNoteId, Pageable pageable) {

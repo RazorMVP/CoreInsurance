@@ -35,5 +35,12 @@ public record PaymentListItemResponse(
         // the Temporal email-workflow activity after successful delivery.
         String recipientEmail,        // nullable — gates the Email button
         Instant emailSentAt,          // nullable — null until first successful send
-        String emailSentTo            // nullable — = recipientEmail at send time
+        String emailSentTo,           // nullable — = recipientEmail at send time
+        // Task 6.2 — SMS transmission. recipientPhone is resolved per row
+        // via BeneficiaryPhoneResolverDispatcher (same N+1 caveat as email).
+        // smsSentAt / smsSentTo populated by the Temporal sms-workflow activity
+        // after successful delivery.
+        String recipientPhone,        // nullable — gates the SMS button
+        Instant smsSentAt,            // nullable — null until first successful send
+        String smsSentTo              // nullable — = recipientPhone at send time
 ) {}

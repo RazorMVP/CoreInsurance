@@ -31,5 +31,12 @@ public record ReceiptListItemResponse(
         // the Temporal email-workflow activity after a successful delivery.
         String recipientEmail,       // nullable — gates the Email button
         Instant emailSentAt,         // nullable — null until first successful send
-        String emailSentTo           // nullable — = recipientEmail at send time
+        String emailSentTo,          // nullable — = recipientEmail at send time
+        // Task 6.2 — SMS transmission. recipientPhone is the pre-resolved
+        // customer phone at projection time (drives the SMS button enabled
+        // state on the frontend). smsSentAt / smsSentTo are populated by
+        // the Temporal sms-workflow activity after a successful delivery.
+        String recipientPhone,       // nullable — gates the SMS button
+        Instant smsSentAt,           // nullable — null until first successful send
+        String smsSentTo             // nullable — = recipientPhone at send time
 ) {}

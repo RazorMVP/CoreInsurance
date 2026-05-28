@@ -93,9 +93,11 @@ public class ReceiptService {
             }
         }
         // Slice γ — pre-resolve customer email for the Email button.
+        // Task 6.2 — pre-resolve customer phone for the SMS button.
         // N+1: one JDBC SELECT per row. Acceptable for v1 (typical page
         // size ≤ 50); switch to a batch IN query if a perf concern surfaces.
         String recipientEmail = null;
+        String recipientPhone = null;
         if (dn != null && dn.getCustomerId() != null) {
             try {
                 recipientEmail = jdbc.queryForObject(
@@ -106,6 +108,16 @@ public class ReceiptService {
                 }
             } catch (org.springframework.dao.EmptyResultDataAccessException ignored) {
                 // Customer not found — leave recipientEmail null.
+            }
+            try {
+                recipientPhone = jdbc.queryForObject(
+                    "SELECT phone FROM customers WHERE id = ?",
+                    String.class, dn.getCustomerId());
+                if (recipientPhone != null && recipientPhone.isBlank()) {
+                    recipientPhone = null;
+                }
+            } catch (org.springframework.dao.EmptyResultDataAccessException ignored) {
+                // Customer not found — leave recipientPhone null.
             }
         }
         return new ReceiptListItemResponse(
@@ -126,7 +138,10 @@ public class ReceiptService {
                 r.getPdfPath(),
                 recipientEmail,
                 r.getEmailSentAt(),
-                r.getEmailSentTo());
+                r.getEmailSentTo(),
+                recipientPhone,
+                r.getSmsSentAt(),
+                r.getSmsSentTo());
     }
 
     public Receipt findOrThrow(UUID id) {
