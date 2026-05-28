@@ -200,7 +200,7 @@ public class PaymentController {
     @ResponseStatus(HttpStatus.ACCEPTED)
     @PreAuthorize("hasAuthority('FINANCE_UPDATE')")
     @Operation(summary = "SMS the payment voucher notification to the beneficiary",
-               description = "Starts a Temporal workflow (SMS_QUEUE) that resolves the beneficiary phone number and delivers via the configured SmsService provider. Preflight: pdfPath != null and BeneficiarySmsResolverDispatcher returns a non-blank phone for the credit note's entityType. 202 with workflow id on enqueue; 422 with errorCode (PAYMENT_PDF_UNAVAILABLE / PAYMENT_SMS_RECIPIENT_UNRESOLVED) when preflight fails.")
+               description = "Starts a Temporal workflow (NOTIFICATIONS_QUEUE) that resolves the beneficiary phone number and delivers via the configured SmsService provider. Preflight: BeneficiaryPhoneResolverDispatcher returns a non-blank phone for the credit note's entityType (no PDF gate — SMS does not require pdfPath). 202 with workflow id on enqueue; 422 with errorCode (PAYMENT_RECIPIENT_PHONE_UNRESOLVED) when preflight fails.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "202", description = "Workflow enqueued; body carries workflowId"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),

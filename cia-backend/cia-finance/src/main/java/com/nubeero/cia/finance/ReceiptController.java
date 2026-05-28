@@ -200,7 +200,7 @@ public class ReceiptController {
     @ResponseStatus(HttpStatus.ACCEPTED)
     @PreAuthorize("hasAuthority('FINANCE_UPDATE')")
     @Operation(summary = "SMS the receipt notification to the customer",
-               description = "Starts a Temporal workflow (SMS_QUEUE) that resolves the customer phone number and delivers via the configured SmsService provider. Preflight checks pdfPath != null and customers.phone != null. 202 with workflow id on enqueue; 422 with errorCode (RECEIPT_PDF_UNAVAILABLE / RECEIPT_SMS_RECIPIENT_UNRESOLVED) when preflight fails.")
+               description = "Starts a Temporal workflow (NOTIFICATIONS_QUEUE) that resolves the customer phone number and delivers via the configured SmsService provider. Preflight checks customers.phone != null (no PDF gate — SMS does not require pdfPath). 202 with workflow id on enqueue; 422 with errorCode (RECEIPT_RECIPIENT_PHONE_UNRESOLVED) when preflight fails.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "202", description = "Workflow enqueued; body carries workflowId"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
