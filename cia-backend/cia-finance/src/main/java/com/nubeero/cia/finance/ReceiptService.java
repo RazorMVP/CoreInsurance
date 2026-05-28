@@ -6,6 +6,7 @@ import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import com.nubeero.cia.common.tenant.TenantContext;
 import com.nubeero.cia.finance.notification.NotificationPreflightException;
 import com.nubeero.cia.finance.email.SendReceiptEmailWorkflow;
+import com.nubeero.cia.finance.sms.SendReceiptSmsWorkflow;
 import com.nubeero.cia.finance.pdf.ReceiptPdfGenerator;
 import com.nubeero.cia.storage.DocumentStorageService;
 import com.nubeero.cia.workflow.TemporalQueues;
@@ -313,6 +314,91 @@ public class ReceiptService {
         auditService.log("Receipt", receiptId.toString(),
                 AuditAction.CANCEL, null, newValue);
         log.info("ReceiptService.cancelEmail: signalled cancel on workflow {} by {}",
+                 workflowId, currentUser());
+    }
+
+    /**
+     * Validates the SMS preflight (phone resolved) and starts the
+     * {@link SendReceiptSmsWorkflow} on {@link TemporalQueues#NOTIFICATIONS_QUEUE}.
+     *
+     * <p>No PDF gate — SMS delivery does not require the receipt PDF to have been
+     * generated.
+     *
+     * @return the started workflow id ({@code "send-receipt-sms-<receiptId>"}).
+     * @throws NotificationPreflightException 422 with
+     *         {@code RECEIPT_RECIPIENT_PHONE_UNRESOLVED} if the customer has no
+     *         recorded phone number.
+     */
+    public String requestSms(UUID receiptId) {
+        Receipt receipt = findOrThrow(receiptId);
+
+        DebitNote dn = receipt.getDebitNote();
+        UUID customerId = dn != null ? dn.getCustomerId() : null;
+        if (customerId == null) {
+            throw new NotificationPreflightException(
+                "RECEIPT_RECIPIENT_PHONE_UNRESOLVED",
+                "Debit note has no customer reference");
+        }
+
+        String phone;
+        try {
+            phone = jdbc.queryForObject(
+                "SELECT phone FROM customers WHERE id = ?",
+                String.class, customerId);
+        } catch (EmptyResultDataAccessException e) {
+            phone = null;
+        }
+        if (phone == null || phone.isBlank()) {
+            throw new NotificationPreflightException(
+                "RECEIPT_RECIPIENT_PHONE_UNRESOLVED",
+                "Customer " + customerId + " has no phone on file");
+        }
+
+        String tenantId    = TenantContext.getTenantId();
+        String requestedBy = currentUser();
+        String workflowId  = "send-receipt-sms-" + receiptId;
+
+        SendReceiptSmsWorkflow workflow = workflowClient.newWorkflowStub(
+            SendReceiptSmsWorkflow.class,
+            WorkflowOptions.newBuilder()
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
+                .setWorkflowId(workflowId)
+                .build());
+        WorkflowClient.start(workflow::send, tenantId, receiptId, requestedBy);
+        log.info("ReceiptService.requestSms: enqueued workflow {} for receiptId={} to={}",
+                 workflowId, receiptId, phone);
+        return workflowId;
+    }
+
+    /**
+     * Cancels an in-flight SMS workflow. Best-effort — the workflow checks its
+     * cancelled flag only before dispatching to the SMS activity, so a cancel
+     * signal arriving after dispatch lets the activity (and its retries) complete
+     * normally.
+     *
+     * @throws NotificationPreflightException 422 with errorCode
+     *         {@code WORKFLOW_NOT_FOUND} if Temporal cannot find the workflow
+     *         (already finished or never started).
+     */
+    public void cancelSms(UUID receiptId) {
+        String workflowId = "send-receipt-sms-" + receiptId;
+        try {
+            SendReceiptSmsWorkflow workflow = workflowClient.newWorkflowStub(
+                    SendReceiptSmsWorkflow.class, workflowId);
+            workflow.cancel();
+        } catch (Exception e) {
+            throw new NotificationPreflightException(
+                "WORKFLOW_NOT_FOUND",
+                "No in-flight SMS workflow for receipt " + receiptId);
+        }
+
+        Map<String, Object> newValue = new HashMap<>();
+        newValue.put("workflowId", workflowId);
+        newValue.put("cancelledBy", currentUser());
+        newValue.put("channel", "SMS");
+        auditService.log("Receipt", receiptId.toString(),
+                AuditAction.CANCEL, null, newValue);
+        log.info("ReceiptService.cancelSms: signalled cancel on workflow {} by {}",
                  workflowId, currentUser());
     }
 
