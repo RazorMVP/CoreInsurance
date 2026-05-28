@@ -205,6 +205,11 @@ export const ReceiptListItemResponseSchema = z.object({
   recipientEmail:   z.string().nullable(),
   emailSentAt:      z.string().nullable(),
   emailSentTo:      z.string().nullable(),
+  // Task 6.2 — SMS transmission. recipientPhone pre-resolved at projection;
+  // smsSentAt + smsSentTo populated by the Temporal SMS workflow.
+  recipientPhone:   z.string().nullable(),
+  smsSentAt:        z.string().nullable(),
+  smsSentTo:        z.string().nullable(),
 });
 export type ReceiptListItemResponse = z.infer<typeof ReceiptListItemResponseSchema>;
 
@@ -230,6 +235,12 @@ export const PaymentListItemResponseSchema = z.object({
   recipientEmail:       z.string().nullable(),
   emailSentAt:          z.string().nullable(),
   emailSentTo:          z.string().nullable(),
+  // Task 6.2 — SMS transmission. recipientPhone resolved per row via
+  // BeneficiaryPhoneResolverDispatcher; smsSentAt + smsSentTo populated
+  // by the Temporal SMS workflow.
+  recipientPhone:       z.string().nullable(),
+  smsSentAt:            z.string().nullable(),
+  smsSentTo:            z.string().nullable(),
 });
 export type PaymentListItemResponse = z.infer<typeof PaymentListItemResponseSchema>;
 
@@ -415,6 +426,75 @@ export async function cancelPaymentEmail(
 ): Promise<EmailCancelResponse> {
   return validatedPost(
     `/api/v1/credit-notes/${creditNoteId}/payments/${paymentId}/email/cancel`,
+    {},
+    EmailCancelResponseSchema,
+  );
+}
+
+// ── SMS transmission (F7-δ / R7 — POST /sms returns 202 + { workflowId }) ────
+//
+// Shape mirrors the email fetchers exactly — same envelope schemas
+// (EmailWorkflowResponseSchema + EmailCancelResponseSchema), same
+// validatedPost helper, same 422 / WORKFLOW_NOT_FOUND semantics.
+
+/**
+ * Starts the Temporal SendReceiptSmsWorkflow. Returns the workflow id on
+ * 202 enqueue. 422 errorCodes: RECEIPT_PDF_UNAVAILABLE /
+ * RECEIPT_RECIPIENT_PHONE_UNRESOLVED.
+ */
+export async function smsReceipt(
+  debitNoteId: string,
+  receiptId:   string,
+): Promise<EmailWorkflowResponse> {
+  return validatedPost(
+    `/api/v1/debit-notes/${debitNoteId}/receipts/${receiptId}/sms`,
+    {},
+    EmailWorkflowResponseSchema,
+  );
+}
+
+/**
+ * Signals the in-flight SendReceiptSmsWorkflow to cancel before dispatch.
+ * Best-effort — an activity already in flight completes normally.
+ * 422 errorCode: WORKFLOW_NOT_FOUND.
+ */
+export async function cancelReceiptSms(
+  debitNoteId: string,
+  receiptId:   string,
+): Promise<EmailCancelResponse> {
+  return validatedPost(
+    `/api/v1/debit-notes/${debitNoteId}/receipts/${receiptId}/sms/cancel`,
+    {},
+    EmailCancelResponseSchema,
+  );
+}
+
+/**
+ * Starts the Temporal SendPaymentVoucherSmsWorkflow. Mirror of smsReceipt.
+ * 422 errorCodes: PAYMENT_PDF_UNAVAILABLE /
+ * PAYMENT_RECIPIENT_PHONE_UNRESOLVED.
+ */
+export async function smsPayment(
+  creditNoteId: string,
+  paymentId:    string,
+): Promise<EmailWorkflowResponse> {
+  return validatedPost(
+    `/api/v1/credit-notes/${creditNoteId}/payments/${paymentId}/sms`,
+    {},
+    EmailWorkflowResponseSchema,
+  );
+}
+
+/**
+ * Signals the in-flight SendPaymentVoucherSmsWorkflow to cancel before dispatch.
+ * Mirror of cancelReceiptSms. 422 errorCode: WORKFLOW_NOT_FOUND.
+ */
+export async function cancelPaymentSms(
+  creditNoteId: string,
+  paymentId:    string,
+): Promise<EmailCancelResponse> {
+  return validatedPost(
+    `/api/v1/credit-notes/${creditNoteId}/payments/${paymentId}/sms/cancel`,
     {},
     EmailCancelResponseSchema,
   );
