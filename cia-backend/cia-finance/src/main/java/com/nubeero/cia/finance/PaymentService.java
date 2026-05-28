@@ -8,6 +8,7 @@ import com.nubeero.cia.finance.email.BeneficiaryEmailResolverDispatcher;
 import com.nubeero.cia.finance.sms.BeneficiaryPhoneResolverDispatcher;
 import com.nubeero.cia.finance.notification.NotificationPreflightException;
 import com.nubeero.cia.finance.email.SendPaymentVoucherEmailWorkflow;
+import com.nubeero.cia.finance.sms.SendPaymentVoucherSmsWorkflow;
 import com.nubeero.cia.finance.pdf.PaymentVoucherPdfGenerator;
 import com.nubeero.cia.storage.DocumentStorageService;
 import com.nubeero.cia.workflow.TemporalQueues;
@@ -291,6 +292,84 @@ public class PaymentService {
         auditService.log("Payment", paymentId.toString(),
                 AuditAction.CANCEL, null, newValue);
         log.info("PaymentService.cancelEmail: signalled cancel on workflow {} by {}",
+                 workflowId, currentUser());
+    }
+
+    /**
+     * Validates the SMS preflight (phone resolved via
+     * {@link BeneficiaryPhoneResolverDispatcher}) and starts the
+     * {@link SendPaymentVoucherSmsWorkflow} on
+     * {@link TemporalQueues#NOTIFICATIONS_QUEUE}.
+     *
+     * <p>No PDF gate — SMS delivery does not require the payment voucher PDF to
+     * have been generated.
+     *
+     * @return the started workflow id
+     *         ({@code "send-payment-voucher-sms-<paymentId>"}).
+     * @throws NotificationPreflightException 422 with
+     *         {@code PAYMENT_RECIPIENT_PHONE_UNRESOLVED} if the dispatcher returns
+     *         empty (unmapped entity type OR underlying entity has blank phone).
+     */
+    public String requestSms(UUID paymentId) {
+        Payment payment = findOrThrow(paymentId);
+
+        CreditNote cn = payment.getCreditNote();
+        if (cn == null) {
+            throw new NotificationPreflightException(
+                "PAYMENT_RECIPIENT_PHONE_UNRESOLVED",
+                "Payment has no credit note reference");
+        }
+
+        String phone = phoneResolver.resolve(cn).orElseThrow(() ->
+            new NotificationPreflightException(
+                "PAYMENT_RECIPIENT_PHONE_UNRESOLVED",
+                "No phone on file for credit note " + cn.getId()));
+
+        String tenantId    = TenantContext.getTenantId();
+        String requestedBy = currentUser();
+        String workflowId  = "send-payment-voucher-sms-" + paymentId;
+
+        SendPaymentVoucherSmsWorkflow workflow = workflowClient.newWorkflowStub(
+            SendPaymentVoucherSmsWorkflow.class,
+            WorkflowOptions.newBuilder()
+                .setTaskQueue(TemporalQueues.NOTIFICATIONS_QUEUE)
+                .setWorkflowId(workflowId)
+                .build());
+        WorkflowClient.start(workflow::send, tenantId, paymentId, requestedBy);
+        log.info("PaymentService.requestSms: enqueued workflow {} for paymentId={} to={}",
+                 workflowId, paymentId, phone);
+        return workflowId;
+    }
+
+    /**
+     * Cancels an in-flight SMS workflow. Best-effort — the workflow checks its
+     * cancelled flag only before dispatching to the SMS activity, so a cancel
+     * signal arriving after dispatch lets the activity (and its retries) complete
+     * normally.
+     *
+     * @throws NotificationPreflightException 422 with errorCode
+     *         {@code WORKFLOW_NOT_FOUND} if Temporal cannot find the workflow
+     *         (already finished or never started).
+     */
+    public void cancelSms(UUID paymentId) {
+        String workflowId = "send-payment-voucher-sms-" + paymentId;
+        try {
+            SendPaymentVoucherSmsWorkflow workflow = workflowClient.newWorkflowStub(
+                    SendPaymentVoucherSmsWorkflow.class, workflowId);
+            workflow.cancel();
+        } catch (Exception e) {
+            throw new NotificationPreflightException(
+                "WORKFLOW_NOT_FOUND",
+                "No in-flight SMS workflow for payment " + paymentId);
+        }
+
+        Map<String, Object> newValue = new HashMap<>();
+        newValue.put("workflowId", workflowId);
+        newValue.put("cancelledBy", currentUser());
+        newValue.put("channel", "SMS");
+        auditService.log("Payment", paymentId.toString(),
+                AuditAction.CANCEL, null, newValue);
+        log.info("PaymentService.cancelSms: signalled cancel on workflow {} by {}",
                  workflowId, currentUser());
     }
 
