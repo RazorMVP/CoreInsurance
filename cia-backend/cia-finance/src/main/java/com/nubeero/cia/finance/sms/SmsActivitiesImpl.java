@@ -21,7 +21,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -88,10 +87,17 @@ public class SmsActivitiesImpl implements SmsActivities {
         // Send (provider errors bubble for Temporal retry)
         smsService.sendSms(new SmsMessage(toPhone, msg.body()));
 
-        // Persist sms_sent_at + sms_sent_to (audit-after-success)
-        receipt.setSmsSentAt(Instant.now());
-        receipt.setSmsSentTo(toPhone);
-        receiptRepository.save(receipt);
+        // Persist sms_sent_at + sms_sent_to via direct JDBC — mirrors
+        // deliverPaymentVoucherSms which also uses jdbc.update() instead of
+        // receiptRepository.save(). Using JPA save() is safe for the receipt path
+        // today (receipts touch only DN → Customer, no @OneToMany cascade collections),
+        // but JDBC is used here for consistency + latent-safety: if a future entity
+        // loaded earlier in this activity gains a cascade collection, the double-flush
+        // "Found shared references" bug would surface silently. Both deliver methods
+        // now persist sms_sent_* identically via parameterised jdbc.update().
+        jdbc.update(
+            "UPDATE receipts SET sms_sent_at = NOW(), sms_sent_to = ? WHERE id = ?",
+            toPhone, receiptId);
 
         // Audit row — written exactly once per successful send
         Map<String, Object> newValue = new HashMap<>();
