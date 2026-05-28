@@ -439,8 +439,8 @@ export async function cancelPaymentEmail(
 
 /**
  * Starts the Temporal SendReceiptSmsWorkflow. Returns the workflow id on
- * 202 enqueue. 422 errorCodes: RECEIPT_PDF_UNAVAILABLE /
- * RECEIPT_RECIPIENT_PHONE_UNRESOLVED.
+ * 202 enqueue. 422 errorCode: RECEIPT_RECIPIENT_PHONE_UNRESOLVED (SMS has
+ * no PDF gate).
  */
 export async function smsReceipt(
   debitNoteId: string,
@@ -471,8 +471,7 @@ export async function cancelReceiptSms(
 
 /**
  * Starts the Temporal SendPaymentVoucherSmsWorkflow. Mirror of smsReceipt.
- * 422 errorCodes: PAYMENT_PDF_UNAVAILABLE /
- * PAYMENT_RECIPIENT_PHONE_UNRESOLVED.
+ * 422 errorCode: PAYMENT_RECIPIENT_PHONE_UNRESOLVED (SMS has no PDF gate).
  */
 export async function smsPayment(
   creditNoteId: string,

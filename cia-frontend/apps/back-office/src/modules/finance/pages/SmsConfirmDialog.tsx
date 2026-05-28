@@ -48,7 +48,7 @@ export default function SmsConfirmDialog({
               {recipientPhone ? formatPhone(recipientPhone) : '(unknown recipient)'}
             </span>{' '}
             via the configured SMS provider. Delivery happens asynchronously
-            — the "Last texted" badge on the row updates after the workflow
+            — the "Last SMS'd" badge on the row updates after the workflow
             finishes.
           </DialogDescription>
         </DialogHeader>
