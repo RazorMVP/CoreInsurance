@@ -196,6 +196,41 @@ public class ReceiptController {
         return ApiResponse.success(Map.of("cancelled", true));
     }
 
+    @PostMapping("/{id}/sms")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @PreAuthorize("hasAuthority('FINANCE_UPDATE')")
+    @Operation(summary = "SMS the receipt notification to the customer",
+               description = "Starts a Temporal workflow (SMS_QUEUE) that resolves the customer phone number and delivers via the configured SmsService provider. Preflight checks pdfPath != null and customers.phone != null. 202 with workflow id on enqueue; 422 with errorCode (RECEIPT_PDF_UNAVAILABLE / RECEIPT_SMS_RECIPIENT_UNRESOLVED) when preflight fails.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "202", description = "Workflow enqueued; body carries workflowId"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_UPDATE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Receipt not found", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "Preflight failed — PDF unavailable or SMS recipient unresolved", content = @Content)
+    })
+    public ApiResponse<Map<String, String>> requestSms(@PathVariable UUID debitNoteId,
+                                                        @PathVariable UUID id) {
+        String workflowId = service.requestSms(id);
+        return ApiResponse.success(Map.of("workflowId", workflowId));
+    }
+
+    @PostMapping("/{id}/sms/cancel")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @PreAuthorize("hasAuthority('FINANCE_UPDATE')")
+    @Operation(summary = "Cancel an in-flight receipt-SMS workflow",
+               description = "Signals the SendReceiptSmsWorkflow to cancel. Best-effort — if the activity-dispatch has already happened, the SMS send completes normally. Used by the BulkSmsSheet Cancel button.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "202", description = "Cancel signal sent"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks FINANCE_UPDATE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "WORKFLOW_NOT_FOUND — already finished or never started", content = @Content)
+    })
+    public ApiResponse<Map<String, Boolean>> cancelSms(@PathVariable UUID debitNoteId,
+                                                        @PathVariable UUID id) {
+        service.cancelSms(id);
+        return ApiResponse.success(Map.of("cancelled", true));
+    }
+
     private ReceiptResponse toResponse(Receipt r) {
         return new ReceiptResponse(
                 r.getId(),
