@@ -20,5 +20,8 @@ public enum DataSource {
     // IFRS 9 (V39, V40)
     IFRS9_HOLDINGS,
     IFRS9_CARRYING,
-    IFRS9_MOVEMENT
+    IFRS9_MOVEMENT,
+
+    // ── Module 11 — RM commission (per-RM accrual aggregation, B2 Task 4.1) ────
+    RM_COMMISSION
 }

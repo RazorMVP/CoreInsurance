@@ -201,7 +201,25 @@ public class ReportQueryBuilder {
             "imv.ecl_movement, imv.impairment_loss, imv.disposals, " +
             "imv.closing_balance, imv.closing_fair_value, imv.ecl_stage, " +
             "imv.total_pnl_income, imv.total_oci_movement " +
-            "FROM ifrs9_investment_movement_analysis imv WHERE 1=1")
+            "FROM ifrs9_investment_movement_analysis imv WHERE 1=1"),
+
+        // RM commission (B2 Task 4.1): aggregated per-RM accrual over a period.
+        // GROUP BY / ORDER BY supplied by BASE_QUERY_TAILS (mirrors TRIAL_BALANCE).
+        // total_accrued = Σ(net_premium × commission_rate / 100) — the SAME basis
+        // PolicyService.computeCommissionAmount uses at approval (net_premium ×
+        // commission_rate / 100), so it reconciles row-for-row with the Cr-2520
+        // commission-accrual postings. Only RELATIONSHIP_MANAGER-sourced,
+        // non-deleted policies count. date_from / date_to clip on p.approved_at
+        // (the accrual-recognition date), injected as ` AND p.approved_at >= ?`
+        // BEFORE the GROUP BY tail — identical injection point to TRIAL_BALANCE.
+        Map.entry(DataSource.RM_COMMISSION,
+            "SELECT rm.name AS relationship_manager_name, " +
+            "COUNT(p.id) AS policy_count, " +
+            "SUM(p.net_premium) AS total_premium, " +
+            "SUM(p.net_premium * p.commission_rate / 100) AS total_accrued " +
+            "FROM policies p " +
+            "JOIN relationship_managers rm ON rm.id = p.relationship_manager_id " +
+            "WHERE p.commission_source_type = 'RELATIONSHIP_MANAGER' AND p.deleted_at IS NULL")
     );
 
     // GROUP BY / HAVING suffix per data source. Applied AFTER the filter
@@ -209,7 +227,9 @@ public class ReportQueryBuilder {
     // this map have no aggregation tail (the common case).
     private static final Map<DataSource, String> BASE_QUERY_TAILS = Map.of(
         DataSource.TRIAL_BALANCE,
-            "GROUP BY coa.code, coa.name, coa.account_type"
+            "GROUP BY coa.code, coa.name, coa.account_type",
+        DataSource.RM_COMMISSION,
+            "GROUP BY rm.name ORDER BY total_accrued DESC"
     );
 
     public List<Map<String, Object>> execute(ReportDefinition definition,
@@ -413,6 +433,9 @@ public class ReportQueryBuilder {
             case IFRS9_HOLDINGS   -> "h.acquisition_date";
             case IFRS9_CARRYING   -> "fp.start_date";
             case IFRS9_MOVEMENT   -> "imv.period_start";
+            // RM commission: accrual-recognition date = policy approval date.
+            // Injected ` AND p.approved_at >= ?` lands BEFORE the GROUP BY tail.
+            case RM_COMMISSION    -> "p.approved_at";
         };
     }
 
@@ -439,6 +462,9 @@ public class ReportQueryBuilder {
             case IFRS9_HOLDINGS   -> "h.status";
             case IFRS9_CARRYING   -> "h.status";
             case IFRS9_MOVEMENT   -> "imv.holding_status";
+            // RM commission is grouped by rm.name — no single per-row status
+            // column is meaningful as a filter (mirrors TRIAL_BALANCE → null).
+            case RM_COMMISSION    -> null;
         };
     }
 
