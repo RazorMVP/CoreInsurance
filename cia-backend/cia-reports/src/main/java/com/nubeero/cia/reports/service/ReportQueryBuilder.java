@@ -275,7 +275,7 @@ public class ReportQueryBuilder {
                                               int maxRows) {
         ReportConfig config = definition.getConfig();
         DataSource ds = definition.getDataSource();
-        StringBuilder sql = new StringBuilder(SOURCE_COLUMNS.containsKey(ds)
+        StringBuilder sql = new StringBuilder(isBusinessSource(ds)
                 ? buildBusinessSql(ds, config)
                 : BASE_QUERIES.get(ds));
         List<Object> params = new ArrayList<>();
@@ -351,8 +351,12 @@ public class ReportQueryBuilder {
             }
         }
 
-        // Apply aggregation tail (GROUP BY / HAVING) before ORDER BY
-        String tail = BASE_QUERY_TAILS.get(ds);
+        // Apply aggregation tail (GROUP BY / HAVING) before ORDER BY.
+        // Business sources (not in BASE_QUERIES) get a dynamic GROUP BY when their
+        // report declares a groupBy; everything else keeps its BASE_QUERY_TAILS entry.
+        String tail = isBusinessSource(ds)
+                ? buildBusinessGroupBy(ds, config)
+                : BASE_QUERY_TAILS.get(ds);
         if (tail != null && !tail.isBlank()) {
             sql.append(' ').append(tail);
         }
@@ -524,17 +528,68 @@ public class ReportQueryBuilder {
     }
 
     /**
+     * A business source uses dynamic per-field projection (SOURCE_FROM / SOURCE_COLUMNS);
+     * every other source uses a fixed BASE_QUERIES entry. The two maps are exact
+     * complements over the DataSource enum — this single predicate is the one place that
+     * fact is expressed, so the SELECT branch (buildBusinessSql vs BASE_QUERIES) and the
+     * tail branch (buildBusinessGroupBy vs BASE_QUERY_TAILS) can never disagree.
+     */
+    private boolean isBusinessSource(DataSource ds) {
+        return SOURCE_COLUMNS.containsKey(ds);
+    }
+
+    /** Aggregate mode: a business source whose report declares a non-blank groupBy. */
+    private boolean isAggregateMode(DataSource ds, ReportConfig config) {
+        return isBusinessSource(ds)
+            && config.getGroupBy() != null && !config.getGroupBy().isBlank();
+    }
+
+    /**
+     * A measure is a non-computed numeric field — SUM-ed in aggregate mode. PERCENT is
+     * intentionally NOT a measure (you don't SUM a ratio): a raw PERCENT field would be
+     * treated as a dimension and land in the GROUP BY. The current groupBy reports never
+     * hit this — their PERCENT fields (loss_ratio / combined_ratio) are all computed and
+     * skipped before classification.
+     */
+    private boolean isMeasure(ReportField f) {
+        String t = f.getType();
+        return "MONEY".equals(t) || "NUMBER".equals(t) || "INTEGER".equals(t);
+    }
+
+    /**
+     * GROUP BY clause for an aggregate-mode business source: the SQL expressions of the
+     * report's non-computed dimension (non-measure) fields, in declared order. Returns
+     * "" when not in aggregate mode (the 49 no-groupBy business reports stay per-row).
+     * Group by the SQL expression (not the alias) for portability; mirrors the
+     * dimension/measure split buildBusinessSql uses, so SELECT and GROUP BY agree.
+     */
+    private String buildBusinessGroupBy(DataSource ds, ReportConfig config) {
+        if (!isAggregateMode(ds, config)) return "";
+        Map<String, String> columns = SOURCE_COLUMNS.get(ds);
+        List<String> dims = new ArrayList<>();
+        if (config.getFields() != null) {
+            for (ReportField f : config.getFields()) {
+                if (f.isComputed() || isMeasure(f)) continue;
+                dims.add(columns.getOrDefault(f.getKey(), "NULL"));
+            }
+        }
+        return dims.isEmpty() ? "" : "GROUP BY " + String.join(", ", dims);
+    }
+
+    /**
      * Builds the SELECT + FROM/JOIN/WHERE prefix for a business source by projecting
      * the report's declared non-computed field keys, in order, through SOURCE_COLUMNS.
-     * The filter loop in execute() appends ` AND <expr>` after this; there is no
-     * GROUP BY tail for business sources. Emitting columns in declared-field order
-     * is what makes the positional applyComputedFields() correct.
+     * The filter loop in execute() appends ` AND <expr>` after this; GROUP BY is added
+     * dynamically by buildBusinessGroupBy when the report declares a groupBy.
+     * Emitting columns in declared-field order is what makes the positional
+     * applyComputedFields() correct.
      *
      * A field key with no SOURCE_COLUMNS entry projects {@code NULL AS <key>} so a
      * report referencing an unbacked field (e.g. customers.channel) still runs.
      */
     private String buildBusinessSql(DataSource ds, ReportConfig config) {
         Map<String, String> columns = SOURCE_COLUMNS.get(ds);
+        boolean aggregate = isAggregateMode(ds, config);
         List<String> selects = new ArrayList<>();
         Set<String> projectedKeys = new HashSet<>();
         if (config.getFields() != null) {
@@ -545,20 +600,31 @@ public class ReportQueryBuilder {
                 // field key is persisted unvalidated by ReportDefinitionService, so an
                 // unsanitized `AS <key>` would be a SQL-injection vector for privileged
                 // report authors. The alias is cosmetic — applyComputedFields keys the
-                // result map by the raw config key positionally, not by this alias — so
-                // sanitizing it is pure hardening with no behavioural effect.
+                // result map by the raw config key positionally, not by this alias.
                 String alias = sanitizeColumnName(f.getKey());
-                selects.add(expr + " AS " + alias);
+                // In aggregate mode, numeric measures are SUM-ed and the remaining
+                // (dimension) fields form the GROUP BY (see buildBusinessGroupBy).
+                // Declared-field order is preserved either way, so the positional
+                // applyComputedFields stays correct by construction.
+                if (aggregate && isMeasure(f)) {
+                    selects.add("SUM(" + expr + ") AS " + alias);
+                } else {
+                    selects.add(expr + " AS " + alias);
+                }
                 projectedKeys.add(alias);
             }
         }
-        // If the report's sortBy references a column not in fields, project it as a
-        // trailing SELECT expression so the ORDER BY alias resolves in PostgreSQL.
-        String sortBy = config.getSortBy();
-        if (sortBy != null && !sortBy.isBlank()) {
-            String sortKey = sanitizeColumnName(sortBy);
-            if (!projectedKeys.contains(sortKey) && columns.containsKey(sortKey)) {
-                selects.add(columns.get(sortKey) + " AS " + sortKey);
+        // Sort-column injection: project a backed-but-undeclared sortBy column so the
+        // ORDER BY alias resolves in PostgreSQL. Suppressed in aggregate mode — a bare
+        // injected column would be illegal under GROUP BY (and no groupBy report needs
+        // it: all 6 sort by a SUM-ed measure alias or a computed field that ORDER BY skips).
+        if (!aggregate) {
+            String sortBy = config.getSortBy();
+            if (sortBy != null && !sortBy.isBlank()) {
+                String sortKey = sanitizeColumnName(sortBy);
+                if (!projectedKeys.contains(sortKey) && columns.containsKey(sortKey)) {
+                    selects.add(columns.get(sortKey) + " AS " + sortKey);
+                }
             }
         }
         if (selects.isEmpty()) selects.add("1");  // degenerate guard: report with no raw fields
