@@ -60,6 +60,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({
+    com.nubeero.cia.common.config.CiaCommonAutoConfiguration.class,
     ChartOfAccountService.class,
     FiscalPeriodResolver.class,
     JournalEntryService.class,
@@ -338,18 +339,20 @@ class SubledgerPostingServiceIT {
     }
 
     /**
-     * Slice-test support: a system {@link Clock} and a {@link CacheManager}
-     * pre-populated with the four COA cache regions plus the new posting-rule
-     * region introduced in Slice 1.5.
+     * Slice-test support: a {@link CacheManager} pre-populated with the four COA
+     * cache regions plus the posting-rule region introduced in Slice 1.5.
+     *
+     * <p>The {@link Clock} bean is provided by {@code CiaCommonAutoConfiguration}
+     * (imported above for {@code @EnableJpaAuditing} — without it {@code @CreatedDate}
+     * never fires and {@code journal_entry} inserts bind an explicit NULL into the
+     * NOT NULL {@code created_at}). That clock is {@code Clock.systemDefaultZone()};
+     * defining another here would collide on bean name 'clock' and fail context
+     * load (Boot disables bean-definition overriding). The tests anchor
+     * business_date on event timestamps, not the clock, so the system clock is fine.
      */
     @TestConfiguration
     @EnableCaching
     static class TestSupportConfig {
-
-        @Bean
-        Clock clock() {
-            return Clock.systemDefaultZone();
-        }
 
         @Bean
         CacheManager testCacheManager() {
