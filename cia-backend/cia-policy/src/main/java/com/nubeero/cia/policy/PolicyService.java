@@ -66,6 +66,7 @@ public class PolicyService {
     private final CommissionSetupRepository commissionSetupRepository;
     private final BrokerRepository brokerRepository;
     private final AgentRepository agentRepository;
+    private final com.nubeero.cia.setup.org.RelationshipManagerRepository relationshipManagerRepository;
     private final InsuranceCompanyRepository insuranceCompanyRepository;
     private final com.nubeero.cia.setup.product.ClassOfBusinessRepository classOfBusinessRepository;
     private final AuditService auditService;
@@ -118,7 +119,8 @@ public class PolicyService {
         // both legs of broker XOR agent. The DB CHECK on quotes
         // (ck_quotes_broker_xor_agent) guarantees at most one is non-null.
         CommissionSnapshot commission = resolveCommissionSnapshot(
-                quote.getProductId(), quote.getBrokerId(), quote.getAgentId(), quote.getPolicyStartDate());
+                quote.getProductId(), quote.getBrokerId(), quote.getAgentId(), null,
+                quote.getPolicyStartDate());
 
         Policy policy = Policy.builder()
                 .quoteId(quote.getId())
@@ -215,7 +217,16 @@ public class PolicyService {
         BigDecimal discount = request.getDiscount() != null ? request.getDiscount() : BigDecimal.ZERO;
 
         CommissionSnapshot commission = resolveCommissionSnapshot(
-                product.getId(), request.getBrokerId(), request.getAgentId(), request.getPolicyStartDate());
+                product.getId(), request.getBrokerId(), request.getAgentId(),
+                customer.getRelationshipManagerId(), request.getPolicyStartDate());
+
+        String relationshipManagerName = null;
+        if (commission.relationshipManagerId() != null) {
+            relationshipManagerName = relationshipManagerRepository
+                    .findById(commission.relationshipManagerId())
+                    .map(com.nubeero.cia.setup.org.RelationshipManager::getName)
+                    .orElse(null);
+        }
 
         Policy policy = Policy.builder()
                 .customerId(customer.getId())
@@ -233,6 +244,8 @@ public class PolicyService {
                 .agentName(agentName)
                 .commissionSourceType(commission.sourceType())
                 .commissionRate(commission.rate())
+                .relationshipManagerId(commission.relationshipManagerId())
+                .relationshipManagerName(relationshipManagerName)
                 .businessType(request.getBusinessType())
                 .niidRequired(request.isNiidRequired())
                 .policyStartDate(request.getPolicyStartDate())
@@ -880,24 +893,34 @@ public class PolicyService {
     private CommissionSnapshot resolveCommissionSnapshot(UUID productId,
                                                           UUID brokerId,
                                                           UUID agentId,
+                                                          UUID customerRelationshipManagerId,
                                                           java.time.LocalDate on) {
         if (brokerId != null) {
             return commissionSetupRepository
                     .findActiveForProduct(productId, CommissionSourceType.BROKER, on)
-                    .map(cs -> new CommissionSnapshot(CommissionSourceType.BROKER, cs.getRate()))
+                    .map(cs -> new CommissionSnapshot(CommissionSourceType.BROKER, cs.getRate(), null))
                     .orElse(CommissionSnapshot.EMPTY);
         }
         if (agentId != null) {
             return commissionSetupRepository
                     .findActiveForProduct(productId, CommissionSourceType.AGENT, on)
-                    .map(cs -> new CommissionSnapshot(CommissionSourceType.AGENT, cs.getRate()))
+                    .map(cs -> new CommissionSnapshot(CommissionSourceType.AGENT, cs.getRate(), null))
+                    .orElse(CommissionSnapshot.EMPTY);
+        }
+        if (customerRelationshipManagerId != null) {
+            return commissionSetupRepository
+                    .findActiveForProduct(productId, CommissionSourceType.RELATIONSHIP_MANAGER, on)
+                    .map(cs -> new CommissionSnapshot(
+                            CommissionSourceType.RELATIONSHIP_MANAGER, cs.getRate(),
+                            customerRelationshipManagerId))
                     .orElse(CommissionSnapshot.EMPTY);
         }
         return CommissionSnapshot.EMPTY;
     }
 
-    private record CommissionSnapshot(CommissionSourceType sourceType, BigDecimal rate) {
-        static final CommissionSnapshot EMPTY = new CommissionSnapshot(null, null);
+    private record CommissionSnapshot(CommissionSourceType sourceType, BigDecimal rate,
+                                      UUID relationshipManagerId) {
+        static final CommissionSnapshot EMPTY = new CommissionSnapshot(null, null, null);
     }
 
     /**
