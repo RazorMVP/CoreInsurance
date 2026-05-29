@@ -229,7 +229,7 @@ public class ReportQueryBuilder {
         DataSource.TRIAL_BALANCE,
             "GROUP BY coa.code, coa.name, coa.account_type",
         DataSource.RM_COMMISSION,
-            "GROUP BY rm.name ORDER BY total_accrued DESC"
+            "GROUP BY rm.name"
     );
 
     public List<Map<String, Object>> execute(ReportDefinition definition,
