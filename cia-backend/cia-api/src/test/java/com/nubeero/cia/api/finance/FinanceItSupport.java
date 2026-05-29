@@ -41,7 +41,7 @@ public abstract class FinanceItSupport {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.target", () -> "62");
+        registry.add("spring.flyway.target", () -> "63");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 }
