@@ -83,6 +83,13 @@ public class Policy extends BaseEntity {
     @Column(name = "agent_name", length = 100)
     private String agentName;
 
+    // ── Relationship Manager (V62 — B2; exclusive third commission source) ──
+    @Column(name = "relationship_manager_id")
+    private UUID relationshipManagerId;
+
+    @Column(name = "relationship_manager_name", length = 100)
+    private String relationshipManagerName;
+
     // ── Commission snapshot (V51) ────────────────────────────────────────
     // Frozen at policy creation / quote binding from the active CommissionSetup
     // row keyed by (productId, source, today). Null when no source is
