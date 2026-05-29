@@ -81,6 +81,12 @@ public class SubledgerPostingService {
     // (V54 → 2330 Commission payable - Agents).
     static final String EVENT_POLICY_COMMISSION_AGENT = "POLICY_COMMISSION_AGENT";
     static final String SOURCE_AGENT = "AGENT";
+    // B2 Task 3.2 — RM branch mirrors BROKER/AGENT, distinct rule key + Cr account
+    // (V63 → Dr 5130 / Cr 2520). Narrative has a single %s (policy number only) —
+    // RM is identified by policies.relationship_manager_id + the per-RM report,
+    // not by a payee name on the JE narrative.
+    static final String EVENT_POLICY_COMMISSION_RM = "POLICY_COMMISSION_RM";
+    static final String SOURCE_RM = "RELATIONSHIP_MANAGER";
 
     // ── Hardcoded COA codes for the compound FAC 3-line posting ──────────────
     private static final String COA_RI_PREMIUM_EXPENSE = "5210";   // Outward reinsurance premium
@@ -171,6 +177,21 @@ public class SubledgerPostingService {
                     event.classOfBusinessId(),
                     event.policyNumber(),
                     event.agentName());
+            } else if (SOURCE_RM.equals(event.commissionSourceType())) {
+                // B2 Task 3.2 — RM commission: Dr 5130 / Cr 2520 (V63). No payee
+                // name in the narrative (RM identified by
+                // policies.relationship_manager_id + the per-RM report) → the
+                // narrative template has a single %s (policy number), so we pass
+                // exactly the same arg set as broker/agent minus the trailing name.
+                postTwoLine(
+                    MODULE_POLICY,
+                    EVENT_POLICY_COMMISSION_RM,
+                    event.policyId().toString(),
+                    event.commissionAmount(),
+                    event.policyStartDate(),
+                    event.currencyCode(),
+                    event.classOfBusinessId(),
+                    event.policyNumber());
             }
         }
     }
