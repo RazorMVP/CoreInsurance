@@ -15,9 +15,51 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | R7-termii-prod | P3 | Termii SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): user opted for "Logging stub only" in the R7 slice. The SPI ships ready for prod impls; this row tracks the first one — `TermiiSmsService` (Nigeria-native, listed in CLAUDE.md candidate set). Adds `TERMII_API_KEY` + `TERMII_SENDER_ID` envs, `@ConditionalOnProperty(havingValue="termii")` gating, Termii rate-limit guard, Testcontainers IT against a wiremock stub. Pickup when a tenant signs up needing real SMS delivery. |
 | R7-twilio-prod | P3 | Twilio SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): same as `R7-termii-prod` but for non-Nigerian tenants. `TwilioSmsService` against the Twilio Programmable SMS API; `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_FROM_NUMBER` envs. Lower priority than Termii because the platform is Nigeria-first; ship only when the first non-NG tenant onboards. |
 | bindFromQuote-rm-derivation-it | P3 | `bindFromQuote` RM-derivation IT now unblocked | Was blocked by `quote-risk-gross-premium-drift` (a seeded APPROVED quote drove a `QuoteRisk` fetch that failed on the missing `gross_premium` column). That drift is fixed by V65 (Session 136), so the quote-conversion RM-derivation case in `PolicyRmCommissionDerivationIT` can now be added. Low priority: the four `create()` direct-entry cases already cover the broker→agent→RM→none fallback, and both entry points share `resolveCommissionSnapshot`, so the logic is covered; this is purely a second-entry-point coverage nicety. |
-| reports-aggregation-semantics-gap | P3 | V18 business reports declare `groupBy` + aggregate labels but never aggregate in SQL | Noted during the Session-136 reports-drift investigation. Many V18 reports (e.g. `Gross Written Premium` groupBy:class_of_business, label "GWP (₦)") have a `groupBy` in config and sum-style labels, but `execute()` only appends a GROUP BY for the two sources in `BASE_QUERY_TAILS` (TRIAL_BALANCE, RM_COMMISSION) — every business source returns per-row, un-aggregated data. Either the frontend aggregates client-side or the reports are simply wrong. Distinct from (and larger than) the table/column drift; resolve as part of, or after, the Option-A rebuild. |
+| reports-loss-ratio-premium-input | P3 | Loss/Combined/Annual-Revenue ratio columns are uncomputable | The 3 CLAIMS-source ratio reports compute `loss_ratio` = claims ÷ premium and `combined_ratio`, but the CLAIMS source carries no premium column and the reports don't declare a premium field, so `applyComputedFields` returns `0.00`. The aggregation slice (Session 136) correctly SUMs their `reserve_amount` by class but leaves the ratio columns at 0. Real fix: a combined premium+claims-by-class data source (JOIN `policies`+`claims` or a dedicated `DataSource`) + re-seed the 3 ratio configs with premium/claims measure fields. Larger data-model change; deliberately excluded from the aggregation slice (user-confirmed scope cap). |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-30 — Session 136 (`main`): reports aggregation semantics (GROUP BY + SUM)
+
+Drains `reports-aggregation-semantics-gap` (P3). The 6 business SYSTEM reports that
+declare `groupBy=class_of_business` returned per-row data; the frontend doesn't
+aggregate (`ReportChart` feeds raw rows to Recharts, `dataKey={xKey}/{yKey}`), so a
+"GWP by class" bar chart drew one bar per policy with duplicate class labels. Spec
+`docs/superpowers/specs/2026-05-29-reports-aggregation-semantics-design.md` (f23587d);
+plan `8e8721b`. Executed subagent-driven over 3 tasks.
+
+### What landed
+- **`ReportQueryBuilder` aggregate mode (`4aefd4b`).** A business source with a non-blank
+  `config.groupBy` now SUMs non-computed MONEY/NUMBER/INTEGER fields and GROUP BYs
+  non-computed STRING/DATE fields (`buildBusinessGroupBy` at the existing
+  `BASE_QUERY_TAILS` insertion point; `isAggregateMode` + `isMeasure` helpers;
+  sort-injection suppressed in aggregate mode). Declared-field order preserved →
+  positional `applyComputedFields` unchanged. The SELECT/GROUP BY dimension split is the
+  single `!isComputed && !isMeasure` predicate (can't disagree); the business-vs-fixed
+  partition is the single `isBusinessSource(ds)` predicate (review hardening — was two
+  complementary `containsKey` checks). The 49 no-`groupBy` business reports + closures
+  sources are untouched.
+- **3 aggregation ITs (`95cb7f1`)** in `BusinessReportValueIT`: NWP SUM-by-class; GWP
+  group-by-(class+product) — a 3-policy fixture (2 same product + 1 different) that
+  distinguishes group-by-(class,product) from both no-aggregation and group-by-class-only;
+  Loss Ratio Report SUMs `reserve_amount` with `loss_ratio` documented at 0. Filter on
+  unique seeded class names for shared-DB robustness.
+
+### Outcome
+The 3 premium reports (GWP / NWP / Premium Earned) are now fully correct. The 3 ratio
+reports correctly aggregate `reserve_amount` per class; their `loss_ratio`/
+`combined_ratio` columns stay `0.00` (no premium on the CLAIMS source) — tracked by the
+new `reports-loss-ratio-premium-input` row.
+
+### Known follow-ups + backlog reconciliation
+- **Backlog row DRAINED (1):** `reports-aggregation-semantics-gap`.
+- **Backlog row ADDED (1):** `reports-loss-ratio-premium-input` (P3, data-model — the
+  uncomputable ratio columns; a user-confirmed scope cap of this slice).
+- **Review findings (2 Minor) resolved in-task:** single `isBusinessSource` predicate for
+  the source partition; `isMeasure` documents PERCENT-as-dimension. No deferrals.
+- **Unchanged:** `bindFromQuote-rm-derivation-it` (P3), `R7-termii-prod` / `R7-twilio-prod` (P3).
 
 ---
 
