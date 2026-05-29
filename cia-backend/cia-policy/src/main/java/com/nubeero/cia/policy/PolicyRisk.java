@@ -1,5 +1,6 @@
 package com.nubeero.cia.policy;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.nubeero.cia.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
@@ -19,6 +20,12 @@ import java.util.UUID;
 @AllArgsConstructor
 public class PolicyRisk extends BaseEntity {
 
+    // @JsonIgnore breaks the Policy↔PolicyRisk bidirectional cycle so the
+    // AuditService snapshot (objectMapper.writeValueAsString(policy)) does not
+    // recurse Policy → risks → risk → policy → … infinitely. Without it,
+    // serialisation throws, falls back to toString(), and the audit_log JSONB
+    // INSERT fails — rolling back the whole create()/bindFromQuote() txn.
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "policy_id", nullable = false)
     private Policy policy;

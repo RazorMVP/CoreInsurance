@@ -1,5 +1,6 @@
 package com.nubeero.cia.policy;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.nubeero.cia.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
@@ -16,6 +17,9 @@ import java.util.UUID;
 @AllArgsConstructor
 public class PolicyCoinsuranceParticipant extends BaseEntity {
 
+    // @JsonIgnore — same Policy↔child cycle break as PolicyRisk.policy; keeps
+    // the AuditService snapshot of a coinsurance policy from recursing.
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "policy_id", nullable = false)
     private Policy policy;
