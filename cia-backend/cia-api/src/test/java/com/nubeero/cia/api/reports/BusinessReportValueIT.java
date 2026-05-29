@@ -75,6 +75,100 @@ class BusinessReportValueIT extends FinanceWebItSupport {
         return policyId;
     }
 
+    /** Insert a policy with explicit class name, product, and premium (for aggregation tests). */
+    private void insertPolicyForAgg(String policyNumber, String className,
+                                    String productName, String premium) {
+        jdbc.update(
+            "INSERT INTO policies (customer_id, customer_name, product_id, product_name, "
+                + "product_code, product_rate, class_of_business_id, class_of_business_name, "
+                + "class_of_business_code, policy_start_date, policy_end_date, policy_number, "
+                + "total_sum_insured, total_premium, status) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            UUID.randomUUID(), "AggCo", UUID.randomUUID(), productName, "PRD",
+            new BigDecimal("2.5000"), UUID.randomUUID(), className, "CLS",
+            LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31), policyNumber,
+            new BigDecimal("1000000.00"), new BigDecimal(premium), "ACTIVE");
+    }
+
+    /** Insert a claim with explicit class + reserve (FK to a real policy). */
+    private void insertClaimForAgg(String claimNumber, UUID policyId, String className, String reserve) {
+        jdbc.update(
+            "INSERT INTO claims (claim_number, policy_id, policy_number, "
+                + "policy_start_date, policy_end_date, "
+                + "customer_id, customer_name, "
+                + "product_id, product_name, "
+                + "class_of_business_id, class_of_business_name, "
+                + "status, reserve_amount, approved_amount, "
+                + "reported_date, incident_date, description) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            claimNumber, policyId, "POL-LR",
+            LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
+            UUID.randomUUID(), "AggCo",
+            UUID.randomUUID(), className,
+            UUID.randomUUID(), className,
+            "APPROVED", new BigDecimal(reserve),
+            new BigDecimal("0.00"), LocalDate.of(2026, 3, 1), LocalDate.of(2026, 2, 20),
+            "Agg test claim");
+    }
+
+    @Test
+    void netWrittenPremiumAggregatesSumByClass() {
+        insertPolicyForAgg("POL-AGG-1", "ZZ-AGG-FIRE", "Fire Special", "100000.00");
+        insertPolicyForAgg("POL-AGG-2", "ZZ-AGG-FIRE", "Fire Special", "200000.00");
+        insertPolicyForAgg("POL-AGG-3", "ZZ-AGG-MOTOR", "Motor Comp",  "50000.00");
+
+        List<Map<String, Object>> rows = run("Net Written Premium", WIDE);
+
+        List<Map<String, Object>> fire = rows.stream()
+            .filter(r -> "ZZ-AGG-FIRE".equals(r.get("class_of_business"))).toList();
+        assertThat(fire).as("2 FIRE policies aggregate to 1 row").hasSize(1);
+        assertThat(new BigDecimal(fire.get(0).get("premium").toString()))
+            .isEqualByComparingTo("300000.00");
+
+        Map<String, Object> motor = rows.stream()
+            .filter(r -> "ZZ-AGG-MOTOR".equals(r.get("class_of_business"))).findFirst().orElseThrow();
+        assertThat(new BigDecimal(motor.get("premium").toString())).isEqualByComparingTo("50000.00");
+    }
+
+    @Test
+    void grossWrittenPremiumGroupsByClassAndProduct() {
+        // GROUP BY (class, product): the same (class, product) pair collapses to one
+        // summed row, while a different product in the SAME class is a SEPARATE row.
+        // This distinguishes group-by-(class,product) [→2 rows] from both no-aggregation
+        // [→3 rows] and group-by-class-only [→1 row], so product is proven a dimension.
+        insertPolicyForAgg("POL-GWP-1", "ZZ-GWP-FIRE", "Fire Std",     "100000.00");
+        insertPolicyForAgg("POL-GWP-2", "ZZ-GWP-FIRE", "Fire Std",     "300000.00");
+        insertPolicyForAgg("POL-GWP-3", "ZZ-GWP-FIRE", "Fire Premium", "50000.00");
+
+        List<Map<String, Object>> fire = run("Gross Written Premium", WIDE).stream()
+            .filter(r -> "ZZ-GWP-FIRE".equals(r.get("class_of_business"))).toList();
+
+        assertThat(fire).as("GWP groups by (class, product) → 2 products → 2 rows").hasSize(2);
+        Map<String, Object> std = fire.stream()
+            .filter(r -> "Fire Std".equals(r.get("product_name"))).findFirst().orElseThrow();
+        assertThat(new BigDecimal(std.get("premium").toString())).isEqualByComparingTo("400000.00");
+        Map<String, Object> prem = fire.stream()
+            .filter(r -> "Fire Premium".equals(r.get("product_name"))).findFirst().orElseThrow();
+        assertThat(new BigDecimal(prem.get("premium").toString())).isEqualByComparingTo("50000.00");
+    }
+
+    @Test
+    void lossRatioReportAggregatesReserveButRatioStaysZero() {
+        UUID p1 = insertMinimalPolicy("POL-LR-1");
+        UUID p2 = insertMinimalPolicy("POL-LR-2");
+        insertClaimForAgg("CLM-LR-1", p1, "ZZ-LR-CLASS", "300000.00");
+        insertClaimForAgg("CLM-LR-2", p2, "ZZ-LR-CLASS", "200000.00");
+
+        List<Map<String, Object>> rows = run("Loss Ratio Report", WIDE).stream()
+            .filter(r -> "ZZ-LR-CLASS".equals(r.get("class_of_business"))).toList();
+
+        assertThat(rows).as("2 claims aggregate to 1 row").hasSize(1);
+        assertThat(new BigDecimal(rows.get(0).get("reserve_amount").toString()))
+            .isEqualByComparingTo("500000.00");
+        assertThat(new BigDecimal(rows.get(0).get("loss_ratio").toString()))
+            .as("loss_ratio uncomputable on CLAIMS source → 0").isEqualByComparingTo("0.00");
+    }
+
     @Test
     void policyRegisterMapsDenormalisedColumns() {
         jdbc.update(
