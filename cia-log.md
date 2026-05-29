@@ -13,7 +13,6 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | ID | P | Item | Notes |
 |---|---|---|---|
 | B2 | P3 | RM commission via 2520 + per-policy RM attribution | Different document type (staff payroll, not commission CN). Needs design conversation first. Open Q#11 partially answered (broker+agent shipped in 84d); RM left because of doc-type semantics. |
-| F7-β-symbol-glyphs | P3 | NotoSans Latin lacks symbol glyphs (✓ ✗ ★ → ←) | Surfaced during F7-β Task 3 (Session 126) — the NotoSans-Regular TTF embedded in `HtmlToPdfConverter` is the "latin-greek-cyrillic" variant which doesn't ship U+2713. The existing F7-β receipt + voucher templates don't need symbol glyphs, but if a future template / per-tenant override (slice δ) wants a ✓ status indicator or similar, either (a) add Noto Sans Symbols TTF as a fallback font in `HtmlToPdfConverter.loadFont`, or (b) ASCII-escape the symbol in the template. Documented as a future template-author concern; not blocking. |
 | R7-termii-prod | P3 | Termii SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): user opted for "Logging stub only" in the R7 slice. The SPI ships ready for prod impls; this row tracks the first one — `TermiiSmsService` (Nigeria-native, listed in CLAUDE.md candidate set). Adds `TERMII_API_KEY` + `TERMII_SENDER_ID` envs, `@ConditionalOnProperty(havingValue="termii")` gating, Termii rate-limit guard, Testcontainers IT against a wiremock stub. Pickup when a tenant signs up needing real SMS delivery. |
 | R7-twilio-prod | P3 | Twilio SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): same as `R7-termii-prod` but for non-Nigerian tenants. `TwilioSmsService` against the Twilio Programmable SMS API; `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_FROM_NUMBER` envs. Lower priority than Termii because the platform is Nigeria-first; ship only when the first non-NG tenant onboards. |
 
@@ -21,9 +20,9 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
-## 2026-05-29 — Session 134 (`main`): backlog drain — F7δ cosmetic nits (in progress)
+## 2026-05-29 — Session 134 (`main`): backlog drain — 3 P3 rows (F7δ nits + F7-β glyph guard)
 
-Post-F7-δ/R7 cleanup batch. User picked three P3 backlog rows to drain: `F7δ-stale-fetcher-jsdoc`, `F7δ-sms-badge-copy`, and `F7-β-symbol-glyphs`. The two F7δ cosmetic nits are done + committed (`9bb123a`); `F7-β-symbol-glyphs` is being scoped next (a design decision is pending with the user — defensive glyph guard vs. embedding a Noto Sans Symbols fallback font).
+Post-F7-δ/R7 cleanup batch. User picked three P3 backlog rows to drain: `F7δ-stale-fetcher-jsdoc`, `F7δ-sms-badge-copy`, and `F7-β-symbol-glyphs`. All three landed. Commits: `9bb123a` (2 nits), `d537c19` (this log + nit reconciliation), `00b9a2f` (glyph guard).
 
 ### What landed (commit `9bb123a`)
 
@@ -32,15 +31,21 @@ Post-F7-δ/R7 cleanup batch. User picked three P3 backlog rows to drain: `F7δ-s
 
 Frontend gates clean: back-office typecheck, api-client `tsc --noEmit`, api-wiring, DTO-drift all green.
 
-### Grounding note on `F7-β-symbol-glyphs` (not yet executed)
+### `F7-β-symbol-glyphs` — defensive glyph guard (commit `00b9a2f`, decision A)
 
-Scoping exploration corrected the backlog row's framing: **no current template (PDF or notification) uses any literal symbol glyph.** The Naira sign ₦ is written as the HTML entity `&#8358;` (U+20A6), which NotoSans-Regular includes (a passing test asserts it). The latent risk is that `HtmlToPdfConverter.writeText` calls `cs.showText(line)` with no try-catch, so a future dev-authored PDF template containing an unsupported glyph (e.g. ✓ U+2713) throws — though the failure degrades to a null PDF (the generators' outer try/catch), not an app crash. There is **no tenant-editable path** into the PDF renderer (F7-δ overrides are email/SMS templates, which don't use `HtmlToPdfConverter`). The fix-shape decision (defensive per-glyph guard vs. symbols fallback font vs. both) is pending user input.
+Scoping exploration corrected the backlog row's framing: **no current template (PDF or notification) uses any literal symbol glyph.** The Naira sign ₦ is written as the HTML entity `&#8358;` (U+20A6), which NotoSans-Regular includes (a passing test asserts it). The latent risk: `HtmlToPdfConverter` measures via `wrap()`→`font.getStringWidth()` and renders via `cs.showText()`, both of which throw `IllegalArgumentException: No glyph for U+XXXX` on an unsupported glyph — so a future dev-authored PDF template carrying ✓/★/→ would fail the whole render (degrading to a null PDF via the generators' outer try/catch — no crash, but a silently-missing PDF). There is **no tenant-editable path** into the PDF renderer (F7-δ overrides are email/SMS templates, which don't use `HtmlToPdfConverter`), so this is purely preventive for future hardcoded PDF templates.
+
+User chose **A (defensive guard)** over B (embed a Noto Sans Symbols fallback font) / C (both) — B's symbol-rendering capability is speculative (no consumer, no tenant path → YAGNI), while A cheaply removes the silent-total-PDF-failure risk and composes with B later if a real template ever needs ✓.
+
+`RenderState.sanitizeToFont(text, font)` (new) replaces any code point the **active** font (`useBold ? bold : regular`) can't encode with `'?'`, collecting the substituted code points into a `LinkedHashSet` and logging a single deduped WARN (`U+XXXX, …`) per call. Applied at the top of `writeText` **before** the `wrap()` call — the single chokepoint that covers both throw sites (wrap's `getStringWidth` and the per-line `showText` both then operate on sanitised text). Detection primitive: per-code-point `font.getStringWidth(...)` in try/catch (PDFBox 3.0.2 makes `PDType0Font.encode` protected, so the width-probe is the accessible equivalent — pure measurement, no doc side-effect). Surrogate-pair-safe (`codePointAt`/`charCount`/`appendCodePoint`); zero-allocation passthrough (returns the original string reference when nothing is replaced), so supported glyphs incl. ₦ are untouched. `HtmlToPdfConverterFontIT` gains `unsupportedGlyphIsReplacedNotThrown` (✓ → valid `%PDF`, extracted text shows `?` not `✓`, WARN fired); the existing ₦ + Ł survival tests confirm no over-sanitisation. cia-documents suite 15/15 green.
+
+Flagged-not-acted (too trivial for a backlog row): the guard now calls `getStringWidth` per code point on the all-encodable common path; a whole-string fast-path probe (measure once, fall to per-code-point only on failure) would remove that, but it's negligible for receipt/voucher-sized text — noted by the code reviewer as a future micro-opt, not a correctness concern.
 
 ### Known follow-ups + backlog reconciliation
 
-- **Backlog rows DRAINED:** `F7δ-stale-fetcher-jsdoc` + `F7δ-sms-badge-copy` (both delivered in `9bb123a`) — removed from the canonical table.
-- **Backlog row IN PROGRESS (left in table):** `F7-β-symbol-glyphs` — decision pending; will drain when the chosen fix lands.
+- **Backlog rows DRAINED (3):** `F7δ-stale-fetcher-jsdoc` + `F7δ-sms-badge-copy` (`9bb123a`) + `F7-β-symbol-glyphs` (`00b9a2f`) — all removed from the canonical table.
 - **Unchanged:** `B2`, `R7-termii-prod`, `R7-twilio-prod`.
+- **No new rows added.**
 
 ---
 
