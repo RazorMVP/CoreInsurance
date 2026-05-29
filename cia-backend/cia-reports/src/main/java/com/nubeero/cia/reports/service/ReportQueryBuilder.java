@@ -111,7 +111,7 @@ public class ReportQueryBuilder {
             "FROM journal_entry_line jel " +
             "JOIN journal_entry je ON je.id = jel.journal_entry_id AND je.deleted_at IS NULL " +
             "JOIN chart_of_account coa ON coa.id = jel.account_id AND coa.deleted_at IS NULL " +
-            "LEFT JOIN class_of_business cob ON cob.id = jel.class_of_business_id " +
+            "LEFT JOIN classes_of_business cob ON cob.id = jel.class_of_business_id " +
             "WHERE jel.deleted_at IS NULL"),
 
         // Period Lock Audit Trail: every soft/hard/release event since inception.
@@ -148,7 +148,7 @@ public class ReportQueryBuilder {
             "g.cohort_year, g.onerousness, g.status AS group_status, g.created_at " +
             "FROM group_of_contracts g " +
             "JOIN portfolio p ON p.id = g.portfolio_id AND p.deleted_at IS NULL " +
-            "LEFT JOIN class_of_business cob ON cob.id = p.class_of_business_id " +
+            "LEFT JOIN classes_of_business cob ON cob.id = p.class_of_business_id " +
             "WHERE g.deleted_at IS NULL"),
 
         // IFRS 17 §103 movement analysis (V38 view — already shaped for disclosure).
