@@ -23,6 +23,8 @@ import com.nubeero.cia.setup.org.Broker;
 import com.nubeero.cia.setup.org.BrokerRepository;
 import com.nubeero.cia.setup.org.InsuranceCompany;
 import com.nubeero.cia.setup.org.InsuranceCompanyRepository;
+import com.nubeero.cia.setup.org.RelationshipManager;
+import com.nubeero.cia.setup.org.RelationshipManagerRepository;
 import com.nubeero.cia.setup.product.CommissionSetup;
 import com.nubeero.cia.setup.product.CommissionSetupRepository;
 import com.nubeero.cia.setup.product.CommissionSourceType;
@@ -66,7 +68,7 @@ public class PolicyService {
     private final CommissionSetupRepository commissionSetupRepository;
     private final BrokerRepository brokerRepository;
     private final AgentRepository agentRepository;
-    private final com.nubeero.cia.setup.org.RelationshipManagerRepository relationshipManagerRepository;
+    private final RelationshipManagerRepository relationshipManagerRepository;
     private final InsuranceCompanyRepository insuranceCompanyRepository;
     private final com.nubeero.cia.setup.product.ClassOfBusinessRepository classOfBusinessRepository;
     private final AuditService auditService;
@@ -118,9 +120,21 @@ public class PolicyService {
         // Quote-side agent attribution shipped in V55 (Slice B1a); propagate
         // both legs of broker XOR agent. The DB CHECK on quotes
         // (ck_quotes_broker_xor_agent) guarantees at most one is non-null.
+        // A direct (no broker/agent) quote converting for an RM-managed
+        // customer must credit the RM identically to create() — so read the
+        // customer's RM and feed it into the same broker→agent→RM derivation.
+        Customer customer = customerService.findOrThrow(quote.getCustomerId());
         CommissionSnapshot commission = resolveCommissionSnapshot(
-                quote.getProductId(), quote.getBrokerId(), quote.getAgentId(), null,
-                quote.getPolicyStartDate());
+                quote.getProductId(), quote.getBrokerId(), quote.getAgentId(),
+                customer.getRelationshipManagerId(), quote.getPolicyStartDate());
+
+        String relationshipManagerName = null;
+        if (commission.relationshipManagerId() != null) {
+            relationshipManagerName = relationshipManagerRepository
+                    .findById(commission.relationshipManagerId())
+                    .map(RelationshipManager::getName)
+                    .orElse(null);
+        }
 
         Policy policy = Policy.builder()
                 .quoteId(quote.getId())
@@ -140,6 +154,8 @@ public class PolicyService {
                 .agentName(quote.getAgentName())
                 .commissionSourceType(commission.sourceType())
                 .commissionRate(commission.rate())
+                .relationshipManagerId(commission.relationshipManagerId())
+                .relationshipManagerName(relationshipManagerName)
                 .businessType(quote.getBusinessType())
                 .niidRequired(isNiidProduct(quote.getClassOfBusinessName()))
                 .policyStartDate(quote.getPolicyStartDate())
@@ -224,7 +240,7 @@ public class PolicyService {
         if (commission.relationshipManagerId() != null) {
             relationshipManagerName = relationshipManagerRepository
                     .findById(commission.relationshipManagerId())
-                    .map(com.nubeero.cia.setup.org.RelationshipManager::getName)
+                    .map(RelationshipManager::getName)
                     .orElse(null);
         }
 
