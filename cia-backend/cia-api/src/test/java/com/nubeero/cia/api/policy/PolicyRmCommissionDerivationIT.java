@@ -187,14 +187,14 @@ class PolicyRmCommissionDerivationIT extends FinanceWebItSupport {
         assertThat(row.get("relationship_manager_id")).isNull();
     }
 
-    // The bindFromQuote (quote-conversion) RM-derivation case is intentionally
-    // omitted: seeding an APPROVED quote drives Hibernate's QuoteRisk fetch,
-    // whose entity maps a `gross_premium` column that no Flyway migration
-    // creates (entity↔schema drift in cia-quotation — pre-existing, unrelated
-    // to B2). Exercising bindFromQuote therefore fails on
-    // `column quote_risks.gross_premium does not exist`, not on the RM logic.
-    // Logged to the cia-log.md backlog (P2). The four create() cases above give
-    // full coverage of the broker→agent→RM→none fallback on the direct-entry
-    // path; both entry points share the identical resolveCommissionSnapshot
-    // routine, so the derivation logic itself is covered.
+    // The bindFromQuote (quote-conversion) RM-derivation case is omitted here.
+    // It was originally blocked by the quote-risk gross_premium entity↔schema
+    // drift (a seeded APPROVED quote drives a QuoteRisk fetch that failed on
+    // `column quote_risks.gross_premium does not exist`). That drift is now
+    // FIXED by V65 (backlog row quote-risk-gross-premium-drift), so the case is
+    // unblocked — adding it is a low-priority B2 coverage follow-up, not pulled
+    // into the V65 slice. The four create() cases above already give full
+    // coverage of the broker→agent→RM→none fallback on the direct-entry path;
+    // both entry points share the identical resolveCommissionSnapshot routine,
+    // so the derivation logic itself is covered.
 }
