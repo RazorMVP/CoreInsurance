@@ -35,53 +35,10 @@ public class ReportQueryBuilder {
     // ORDER BY / GROUP BY). The filter loop in execute() appends ` AND <expr>`
     // for each user-supplied filter; if the source needs GROUP BY it lives in
     // BASE_QUERY_TAILS below. Map.ofEntries because we exceed Map.of's 10-pair cap.
+    // NOTE: The 6 business sources (POLICIES/CLAIMS/FINANCE/REINSURANCE/CUSTOMERS/
+    // ENDORSEMENTS) are NOT in this map — they use dynamic per-field projection via
+    // buildBusinessSql() + SOURCE_FROM + SOURCE_COLUMNS below.
     private static final Map<DataSource, String> BASE_QUERIES = Map.ofEntries(
-        Map.entry(DataSource.POLICIES,
-            "SELECT p.policy_number, c.full_name AS customer_name, " +
-            "cob.name AS class_of_business, pr.name AS product_name, " +
-            "p.sum_insured, p.premium, p.status, p.start_date, p.end_date, " +
-            "p.inception_date, p.created_at FROM policy p " +
-            "LEFT JOIN customer c ON c.id = p.customer_id " +
-            "LEFT JOIN class_of_business cob ON cob.id = p.class_of_business_id " +
-            "LEFT JOIN product pr ON pr.id = p.product_id WHERE p.deleted_at IS NULL"),
-
-        Map.entry(DataSource.CLAIMS,
-            "SELECT cl.claim_number, p.policy_number, c.full_name AS customer_name, " +
-            "cob.name AS class_of_business, cl.status, cl.reserve_amount, " +
-            "cl.total_paid, cl.incident_date, cl.registered_at, cl.created_at " +
-            "FROM claim cl " +
-            "LEFT JOIN policy p ON p.id = cl.policy_id " +
-            "LEFT JOIN customer c ON c.id = p.customer_id " +
-            "LEFT JOIN class_of_business cob ON cob.id = p.class_of_business_id " +
-            "WHERE cl.deleted_at IS NULL"),
-
-        Map.entry(DataSource.FINANCE,
-            "SELECT dn.debit_note_number, p.policy_number, c.full_name AS customer_name, " +
-            "dn.amount, dn.status, dn.due_date, dn.created_at FROM debit_note dn " +
-            "LEFT JOIN policy p ON p.id = dn.policy_id " +
-            "LEFT JOIN customer c ON c.id = p.customer_id " +
-            "WHERE dn.deleted_at IS NULL"),
-
-        Map.entry(DataSource.REINSURANCE,
-            "SELECT ria.id AS allocation_id, p.policy_number, t.name AS treaty_name, " +
-            "t.type AS treaty_type, ria.retained_amount, ria.ceded_amount, " +
-            "ria.status, ria.created_at FROM ri_allocation ria " +
-            "LEFT JOIN policy p ON p.id = ria.policy_id " +
-            "LEFT JOIN reinsurance_treaty t ON t.id = ria.treaty_id " +
-            "WHERE ria.deleted_at IS NULL"),
-
-        Map.entry(DataSource.CUSTOMERS,
-            "SELECT c.id, c.full_name, c.customer_type, c.kyc_status, " +
-            "c.channel, c.created_at FROM customer c WHERE c.deleted_at IS NULL"),
-
-        Map.entry(DataSource.ENDORSEMENTS,
-            "SELECT e.endorsement_number, p.policy_number, c.full_name AS customer_name, " +
-            "e.type AS endorsement_type, e.endorsement_premium, e.effective_date, " +
-            "e.status, e.created_at FROM endorsement e " +
-            "LEFT JOIN policy p ON p.id = e.policy_id " +
-            "LEFT JOIN customer c ON c.id = p.customer_id " +
-            "WHERE e.deleted_at IS NULL"),
-
         // ── Module 12 — Period-End Closures (CLOSURES category) ───────────────
         // Trial Balance: aggregated SELECT — GROUP BY supplied by BASE_QUERY_TAILS.
         // Only POSTED journal entries are counted; date_from / date_to clip on
@@ -222,6 +179,81 @@ public class ReportQueryBuilder {
             "WHERE p.commission_source_type = 'RELATIONSHIP_MANAGER' AND p.deleted_at IS NULL")
     );
 
+    // ── Business-source dynamic projection (Option A) ─────────────────────────
+    // The 6 business sources build their SELECT dynamically from each report's
+    // declared field keys (see buildBusinessSql). SOURCE_FROM holds the
+    // FROM/JOIN/WHERE skeleton; SOURCE_COLUMNS maps each declarable field key to a
+    // SQL expression. A declared key absent from the map projects NULL (so a report
+    // referencing an unbacked field — e.g. customers.channel — runs with an empty
+    // column rather than throwing). Most sources are single-table over denormalised
+    // columns; only REINSURANCE needs a join (for the treaty label).
+    private static final Map<DataSource, String> SOURCE_FROM = Map.of(
+        DataSource.POLICIES,     "FROM policies p WHERE p.deleted_at IS NULL",
+        DataSource.CLAIMS,       "FROM claims cl WHERE cl.deleted_at IS NULL",
+        DataSource.FINANCE,      "FROM debit_notes dn WHERE dn.deleted_at IS NULL",
+        DataSource.REINSURANCE,  "FROM ri_allocations ria "
+                               + "LEFT JOIN ri_treaties t ON t.id = ria.treaty_id "
+                               + "WHERE ria.deleted_at IS NULL",
+        DataSource.CUSTOMERS,    "FROM customers c WHERE c.deleted_at IS NULL",
+        DataSource.ENDORSEMENTS, "FROM endorsements e WHERE e.deleted_at IS NULL"
+    );
+
+    private static final Map<DataSource, Map<String, String>> SOURCE_COLUMNS = Map.of(
+        DataSource.POLICIES, Map.ofEntries(
+            Map.entry("policy_number",     "p.policy_number"),
+            Map.entry("customer_name",     "p.customer_name"),
+            Map.entry("class_of_business", "p.class_of_business_name"),
+            Map.entry("product_name",      "p.product_name"),
+            Map.entry("sum_insured",       "p.total_sum_insured"),
+            Map.entry("premium",           "p.total_premium"),
+            Map.entry("status",            "p.status"),
+            Map.entry("start_date",        "p.policy_start_date"),
+            Map.entry("end_date",          "p.policy_end_date"),
+            Map.entry("created_at",        "p.created_at")),
+        DataSource.CLAIMS, Map.ofEntries(
+            Map.entry("claim_number",      "cl.claim_number"),
+            Map.entry("policy_number",     "cl.policy_number"),
+            Map.entry("customer_name",     "cl.customer_name"),
+            Map.entry("class_of_business", "cl.class_of_business_name"),
+            Map.entry("status",            "cl.status"),
+            Map.entry("reserve_amount",    "cl.reserve_amount"),
+            Map.entry("total_paid",        "cl.approved_amount"),
+            Map.entry("registered_at",     "cl.reported_date"),
+            Map.entry("created_at",        "cl.created_at")),
+        DataSource.FINANCE, Map.ofEntries(
+            Map.entry("debit_note_number", "dn.debit_note_number"),
+            Map.entry("policy_number",     "dn.entity_reference"),
+            Map.entry("customer_name",     "dn.customer_name"),
+            Map.entry("amount",            "dn.amount"),
+            Map.entry("status",            "dn.status"),
+            Map.entry("due_date",          "dn.due_date"),
+            Map.entry("created_at",        "dn.created_at")),
+        DataSource.REINSURANCE, Map.ofEntries(
+            Map.entry("policy_number",     "ria.policy_number"),
+            Map.entry("treaty_name",       "COALESCE(t.description, ria.treaty_type)"),
+            Map.entry("treaty_type",       "ria.treaty_type"),
+            Map.entry("retained_amount",   "ria.retained_amount"),
+            Map.entry("ceded_amount",      "ria.ceded_amount"),
+            Map.entry("status",            "ria.status"),
+            Map.entry("created_at",        "ria.created_at")),
+        DataSource.CUSTOMERS, Map.ofEntries(
+            Map.entry("full_name",
+                "COALESCE(c.company_name, "
+                + "NULLIF(TRIM(CONCAT_WS(' ', c.first_name, c.other_names, c.last_name)), ''))"),
+            Map.entry("customer_type",     "c.customer_type"),
+            Map.entry("kyc_status",        "c.kyc_status"),
+            Map.entry("created_at",        "c.created_at")),
+        DataSource.ENDORSEMENTS, Map.ofEntries(
+            Map.entry("endorsement_number",  "e.endorsement_number"),
+            Map.entry("policy_number",       "e.policy_number"),
+            Map.entry("customer_name",       "e.customer_name"),
+            Map.entry("endorsement_type",    "e.endorsement_type"),
+            Map.entry("endorsement_premium", "e.premium_adjustment"),
+            Map.entry("effective_date",      "e.effective_date"),
+            Map.entry("status",              "e.status"),
+            Map.entry("created_at",          "e.created_at"))
+    );
+
     // GROUP BY / HAVING suffix per data source. Applied AFTER the filter
     // WHERE clauses and BEFORE the user-supplied ORDER BY. Sources not in
     // this map have no aggregation tail (the common case).
@@ -242,7 +274,10 @@ public class ReportQueryBuilder {
                                               Map<String, String> filterValues,
                                               int maxRows) {
         ReportConfig config = definition.getConfig();
-        StringBuilder sql = new StringBuilder(BASE_QUERIES.get(definition.getDataSource()));
+        DataSource ds = definition.getDataSource();
+        StringBuilder sql = new StringBuilder(SOURCE_COLUMNS.containsKey(ds)
+                ? buildBusinessSql(ds, config)
+                : BASE_QUERIES.get(ds));
         List<Object> params = new ArrayList<>();
         int paramIdx = 1;
 
@@ -254,30 +289,30 @@ public class ReportQueryBuilder {
 
                 switch (filter.getKey()) {
                     case "date_from" -> {
-                        sql.append(" AND ").append(createdAtCol(definition.getDataSource()))
+                        sql.append(" AND ").append(createdAtCol(ds))
                            .append(" >= ?").append(paramIdx++);
                         params.add(LocalDate.parse(value).atStartOfDay());
                     }
                     case "date_to" -> {
-                        sql.append(" AND ").append(createdAtCol(definition.getDataSource()))
+                        sql.append(" AND ").append(createdAtCol(ds))
                            .append(" < ?").append(paramIdx++);
                         params.add(LocalDate.parse(value).plusDays(1).atStartOfDay());
                     }
                     case "class_of_business_id" -> {
-                        // Only datasources that JOIN class_of_business support this filter
-                        if (hasCobJoin(definition.getDataSource())) {
-                            sql.append(" AND cob.id = ?").append(paramIdx++);
+                        String cobCol = cobFilterCol(ds);
+                        if (cobCol != null) {
+                            sql.append(" AND ").append(cobCol).append(" = ?").append(paramIdx++);
                             params.add(UUID.fromString(value));
                         }
                     }
                     case "product_id" -> {
-                        if (definition.getDataSource() == DataSource.POLICIES) {
-                            sql.append(" AND pr.id = ?").append(paramIdx++);
+                        if (ds == DataSource.POLICIES) {
+                            sql.append(" AND p.product_id = ?").append(paramIdx++);
                             params.add(UUID.fromString(value));
                         }
                     }
                     case "status" -> {
-                        String col = statusCol(definition.getDataSource());
+                        String col = statusCol(ds);
                         if (col != null) {
                             sql.append(" AND ").append(col)
                                .append(" = ?").append(paramIdx++);
@@ -287,21 +322,20 @@ public class ReportQueryBuilder {
                     // ── Closures filters (Module 12) ─────────────────────────
                     case "account_code" -> {
                         // Sources that JOIN chart_of_account expose coa.code
-                        if (definition.getDataSource() == DataSource.GENERAL_LEDGER
-                                || definition.getDataSource() == DataSource.TRIAL_BALANCE) {
+                        if (ds == DataSource.GENERAL_LEDGER || ds == DataSource.TRIAL_BALANCE) {
                             sql.append(" AND coa.code = ?").append(paramIdx++);
                             params.add(value);
                         }
                     }
                     case "source_module" -> {
-                        if (definition.getDataSource() == DataSource.GENERAL_LEDGER) {
+                        if (ds == DataSource.GENERAL_LEDGER) {
                             sql.append(" AND je.source_module = ?").append(paramIdx++);
                             params.add(value);
                         }
                     }
                     case "classification" -> {
                         // IFRS 9 reports — AC / FVOCI_DEBT / FVOCI_EQUITY / FVPL
-                        String col = switch (definition.getDataSource()) {
+                        String col = switch (ds) {
                             case IFRS9_HOLDINGS, IFRS9_CARRYING -> "h.classification";
                             case IFRS9_MOVEMENT                 -> "imv.classification";
                             default                             -> null;
@@ -318,13 +352,15 @@ public class ReportQueryBuilder {
         }
 
         // Apply aggregation tail (GROUP BY / HAVING) before ORDER BY
-        String tail = BASE_QUERY_TAILS.get(definition.getDataSource());
+        String tail = BASE_QUERY_TAILS.get(ds);
         if (tail != null && !tail.isBlank()) {
             sql.append(' ').append(tail);
         }
 
-        // Apply sort
-        if (config.getSortBy() != null && !config.getSortBy().isBlank()) {
+        // Apply sort — skip if sortBy is a computed field (the alias only exists in the
+        // Java result map, never in SQL; ordering by it would cause a DB error).
+        if (config.getSortBy() != null && !config.getSortBy().isBlank()
+                && !isComputedField(config, config.getSortBy())) {
             String dir = "ASC".equalsIgnoreCase(config.getSortDir()) ? "ASC" : "DESC";
             sql.append(" ORDER BY ").append(sanitizeColumnName(config.getSortBy()))
                .append(" ").append(dir);
@@ -468,13 +504,65 @@ public class ReportQueryBuilder {
         };
     }
 
-    /** Returns true only for datasources whose base query JOINs class_of_business. */
-    private boolean hasCobJoin(DataSource ds) {
-        return ds == DataSource.POLICIES
-                || ds == DataSource.CLAIMS
-                || ds == DataSource.ENDORSEMENTS
-                || ds == DataSource.GENERAL_LEDGER
-                || ds == DataSource.PAA_GROUPS;
+    /** Returns true if the given key matches a computed field in the config. */
+    private boolean isComputedField(ReportConfig config, String key) {
+        if (config.getFields() == null || key == null) return false;
+        return config.getFields().stream()
+                .anyMatch(f -> f.isComputed() && key.equals(f.getKey()));
+    }
+
+    /** Column the class_of_business_id filter targets, or null if the source has none. */
+    private String cobFilterCol(DataSource ds) {
+        return switch (ds) {
+            case POLICIES     -> "p.class_of_business_id";
+            case CLAIMS       -> "cl.class_of_business_id";
+            case ENDORSEMENTS -> "e.class_of_business_id";
+            case GENERAL_LEDGER -> "cob.id";   // joins classes_of_business
+            case PAA_GROUPS     -> "cob.id";   // joins classes_of_business
+            default           -> null;
+        };
+    }
+
+    /**
+     * Builds the SELECT + FROM/JOIN/WHERE prefix for a business source by projecting
+     * the report's declared non-computed field keys, in order, through SOURCE_COLUMNS.
+     * The filter loop in execute() appends ` AND <expr>` after this; there is no
+     * GROUP BY tail for business sources. Emitting columns in declared-field order
+     * is what makes the positional applyComputedFields() correct.
+     *
+     * A field key with no SOURCE_COLUMNS entry projects {@code NULL AS <key>} so a
+     * report referencing an unbacked field (e.g. customers.channel) still runs.
+     */
+    private String buildBusinessSql(DataSource ds, ReportConfig config) {
+        Map<String, String> columns = SOURCE_COLUMNS.get(ds);
+        List<String> selects = new ArrayList<>();
+        Set<String> projectedKeys = new LinkedHashSet<>();
+        if (config.getFields() != null) {
+            for (ReportField f : config.getFields()) {
+                if (f.isComputed()) continue;
+                String expr = columns.getOrDefault(f.getKey(), "NULL");
+                // Sanitize the alias before interpolating into SQL: a CUSTOM report's
+                // field key is persisted unvalidated by ReportDefinitionService, so an
+                // unsanitized `AS <key>` would be a SQL-injection vector for privileged
+                // report authors. The alias is cosmetic — applyComputedFields keys the
+                // result map by the raw config key positionally, not by this alias — so
+                // sanitizing it is pure hardening with no behavioural effect.
+                String alias = sanitizeColumnName(f.getKey());
+                selects.add(expr + " AS " + alias);
+                projectedKeys.add(alias);
+            }
+        }
+        // If the report's sortBy references a column not in fields, project it as a
+        // trailing SELECT expression so the ORDER BY alias resolves in PostgreSQL.
+        String sortBy = config.getSortBy();
+        if (sortBy != null && !sortBy.isBlank()) {
+            String sortKey = sanitizeColumnName(sortBy);
+            if (!projectedKeys.contains(sortKey) && columns.containsKey(sortKey)) {
+                selects.add(columns.get(sortKey) + " AS " + sortKey);
+            }
+        }
+        if (selects.isEmpty()) selects.add("1");  // degenerate guard: report with no raw fields
+        return "SELECT " + String.join(", ", selects) + " " + SOURCE_FROM.get(ds);
     }
 
     /** Whitelist-based column name sanitizer — prevents SQL injection in ORDER BY. */
