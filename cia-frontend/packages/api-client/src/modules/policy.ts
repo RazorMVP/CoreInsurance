@@ -125,6 +125,11 @@ export const PolicyDtoSchema = z.object({
   agentId:                  z.string().nullable().optional(),
   agentName:                z.string().nullable().optional(),
 
+  // Relationship Manager attribution (B2 Task 5.1). RM is an accrual-only
+  // commission source (no payment/CreditNote) — surfaced on the Financial tab.
+  relationshipManagerId:    z.string().nullable().optional(),
+  relationshipManagerName:  z.string().nullable().optional(),
+
   businessType:             BusinessTypeSchema,
   niidRequired:             z.boolean(),
 

@@ -42,6 +42,12 @@ public class PolicyResponse {
     private UUID agentId;
     private String agentName;
 
+    // ── Relationship Manager (B2 — Task 5.1) ─────────────────────────────
+    // Snapshotted at policy creation. RM is an accrual-only commission source
+    // (Dr 5130 / Cr 2520) — payroll-paid, never producing a CreditNote/payment.
+    private UUID relationshipManagerId;
+    private String relationshipManagerName;
+
     private BusinessType businessType;
     private boolean niidRequired;
 

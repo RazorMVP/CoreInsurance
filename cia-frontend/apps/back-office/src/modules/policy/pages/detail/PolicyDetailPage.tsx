@@ -591,7 +591,19 @@ export default function PolicyDetailPage() {
                   <Row label="Source"     value={COMMISSION_SOURCE_LABEL[p.commissionSourceType]} />
                   <Row label="Rate"       value={`${p.commissionRate}%`} />
                   <Row label="Amount"     value={`₦${p.commissionAmount.toLocaleString()}`} />
-                  {commissionCn ? (
+                  {p.commissionSourceType === 'RELATIONSHIP_MANAGER' ? (
+                    // RM commission is accrual-only (Dr 5130 / Cr 2520) — paid via
+                    // payroll, never producing a credit note / finance payment.
+                    <>
+                      {p.relationshipManagerName && (
+                        <Row label="Relationship Manager" value={p.relationshipManagerName} />
+                      )}
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Relationship-manager commission is accrued to payroll (no credit note or
+                        finance payment is raised).
+                      </p>
+                    </>
+                  ) : commissionCn ? (
                     <>
                       <Row label="Credit Note No." value={commissionCn.creditNoteNumber} />
                       <Row label="Beneficiary"     value={commissionCn.beneficiaryName ?? undefined} />

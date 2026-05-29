@@ -1020,6 +1020,8 @@ public class PolicyService {
                 .classOfBusinessCode(p.getClassOfBusinessCode())
                 .brokerId(p.getBrokerId()).brokerName(p.getBrokerName())
                 .agentId(p.getAgentId()).agentName(p.getAgentName())
+                .relationshipManagerId(p.getRelationshipManagerId())
+                .relationshipManagerName(p.getRelationshipManagerName())
                 .businessType(p.getBusinessType()).niidRequired(p.isNiidRequired())
                 .policyStartDate(p.getPolicyStartDate()).policyEndDate(p.getPolicyEndDate())
                 .totalSumInsured(p.getTotalSumInsured()).totalPremium(p.getTotalPremium())
