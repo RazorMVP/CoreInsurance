@@ -12,12 +12,18 @@ import org.jsoup.nodes.Node;
 import org.jsoup.nodes.TextNode;
 import org.springframework.stereotype.Component;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+@Slf4j
 @Component
 public class HtmlToPdfConverter {
 
@@ -141,6 +147,59 @@ public class HtmlToPdfConverter {
         s.vSpace(4f);
     }
 
+    // ─── Glyph guard ──────────────────────────────────────────────────────
+
+    /**
+     * Replace any code point the given font cannot encode with a safe fallback
+     * ('?'), so {@code wrap()}'s {@code getStringWidth} and {@code showText}
+     * never throw "No glyph for U+XXXX". Logs a single deduped WARN listing the
+     * substituted code points when it has to sanitise. Returns the input
+     * unchanged (same reference) when every glyph is encodable — the
+     * overwhelmingly common path — so there is zero allocation for normal text.
+     *
+     * <p>Detection primitive: {@link PDFont#getStringWidth(String)} encodes the
+     * string to measure it and throws {@link IllegalArgumentException} for an
+     * unmappable code point (it also declares {@link IOException}). PDType0Font's
+     * {@code encode(String)} is {@code protected} in PDFBox 3.x, so width-probing
+     * is the accessible equivalent and detects the same condition with no side
+     * effect on the document.
+     */
+    static String sanitizeToFont(String text, PDFont font) {
+        if (text == null || text.isEmpty()) return text;
+        StringBuilder sb = null;            // lazily allocated only on first miss
+        Set<Integer> substituted = null;    // deduped code points for the WARN
+        int i = 0;
+        while (i < text.length()) {
+            int cp = text.codePointAt(i);
+            int charCount = Character.charCount(cp);
+            boolean encodable;
+            try {
+                font.getStringWidth(new String(Character.toChars(cp)));
+                encodable = true;
+            } catch (IllegalArgumentException | IOException e) {
+                encodable = false;
+            }
+            if (!encodable) {
+                if (sb == null) {
+                    sb = new StringBuilder(text.length()).append(text, 0, i);
+                    substituted = new LinkedHashSet<>();
+                }
+                sb.append('?');
+                substituted.add(cp);
+            } else if (sb != null) {
+                sb.appendCodePoint(cp);
+            }
+            i += charCount;
+        }
+        if (sb == null) return text;        // all encodable — no change, no alloc
+        log.warn("PDF render: {} unsupported glyph(s) replaced with '?': {}",
+                substituted.size(),
+                substituted.stream()
+                        .map(c -> String.format("U+%04X", c))
+                        .collect(Collectors.joining(", ")));
+        return sb.toString();
+    }
+
     // ─── Render state ─────────────────────────────────────────────────────
 
     private static final class RenderState {
@@ -182,6 +241,12 @@ public class HtmlToPdfConverter {
 
         void writeText(String text, int fontSize, boolean useBold, float lineH) throws IOException {
             PDFont font = useBold ? bold : regular;
+            // Sanitise once against the font this segment renders with, BEFORE wrap()
+            // (font.getStringWidth) and showText() — both throw "No glyph for U+XXXX"
+            // on an unencodable code point. This is the single chokepoint: wrap()
+            // receives the sanitised text, so every line handed to showText() is
+            // already safe.
+            text = sanitizeToFont(text, font);
             for (String line : wrap(text, font, fontSize)) {
                 if (y - lineH < MARGIN) newPage();
                 cs.beginText();

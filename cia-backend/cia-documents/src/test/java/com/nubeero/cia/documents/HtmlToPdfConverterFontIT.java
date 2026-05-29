@@ -68,6 +68,31 @@ class HtmlToPdfConverterFontIT {
     }
 
     @Test
+    @DisplayName("Unsupported symbol glyph (✓ U+2713) is replaced with '?', render does not throw")
+    void unsupportedGlyphIsReplacedNotThrown() throws IOException {
+        // ✓ (U+2713) is a symbol glyph NotoSans-Regular does not encode; without
+        // the guard, font.getStringWidth/showText would throw "No glyph for U+2713"
+        // and fail the whole render.
+        String html = "<p>Status: ✓ done</p>";
+
+        byte[] pdfBytes = converter.convert(html);
+        assertThat(pdfBytes)
+            .as("guard must let the render succeed rather than throw on the unsupported glyph")
+            .isNotEmpty();
+        assertThat(new String(pdfBytes, 0, 5, java.nio.charset.StandardCharsets.ISO_8859_1))
+            .as("valid PDF magic header")
+            .startsWith("%PDF");
+
+        try (PDDocument doc = Loader.loadPDF(pdfBytes)) {
+            String text = new PDFTextStripper().getText(doc);
+            assertThat(text)
+                .as("the ✓ should have been substituted with the '?' fallback")
+                .contains("Status: ? done")
+                .doesNotContain("✓");
+        }
+    }
+
+    @Test
     @DisplayName("Non-WinAnsi Latin glyphs (e.g. Ł U+0141) survive end-to-end — sanitise() removed")
     void nonWinAnsiGlyphSurvives() throws IOException {
         // Ł (U+0141, Latin Extended-A) is outside WinAnsi (0x20-0x7E + 0xA0-0xFF),
