@@ -7,6 +7,7 @@ import com.nubeero.cia.reports.service.ReportRunnerService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -15,15 +16,23 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * Per-business-source value assertions: seed minimal rows, run a representative
  * SYSTEM report, and assert the projected columns carry the right values — proving
  * the SOURCE_COLUMNS fieldKey->expr mapping is correct, not merely non-crashing.
- * Complements {@link SystemReportSmokeIT} (which proves all 68 execute).
+ * Complements {@link SystemReportSmokeIT} (which proves every SYSTEM report executes).
+ *
+ * <p>{@code @Transactional} so the JDBC-seeded rows roll back per method — these ITs
+ * share a singleton Postgres with {@code SystemReportSmokeIT} + {@code RmCommissionReportIT}
+ * via Spring's context cache, and rollback keeps them hermetic (no residue that could
+ * skew another report IT's row-count assertion). The report query joins the test's
+ * transaction, so the uncommitted seeds are visible to it before rollback.
  *
  * @since reports-base-query-table-drift fix (Option A)
  */
+@Transactional
 class BusinessReportValueIT extends FinanceWebItSupport {
 
     private static final Map<String, String> WIDE =
@@ -194,5 +203,21 @@ class BusinessReportValueIT extends FinanceWebItSupport {
         Map<String, Object> ind = rows.stream()
             .filter(r -> "Ada Lovelace".equals(r.get("full_name"))).findFirst().orElseThrow();
         assertThat(ind.get("customer_type")).isEqualTo("INDIVIDUAL");
+    }
+
+    /**
+     * Exercises the {@code account_code} + {@code source_module} filter-injection
+     * branches in {@code ReportQueryBuilder.execute()} for a GENERAL_LEDGER report
+     * ("Account Movement Statement" declares both filters). No GL data is seeded — the
+     * assertion is that both branches inject valid SQL and the query executes (an empty
+     * result is correct). Closes the smoke IT's coverage gap on these two filter keys.
+     */
+    @Test
+    void generalLedgerReportAppliesAccountCodeAndSourceModuleFilters() {
+        Map<String, String> filters = Map.of(
+            "date_from", "2000-01-01", "date_to", "2100-01-01",
+            "account_code", "5130", "source_module", "POLICY");
+        assertThatCode(() -> run("Account Movement Statement", filters))
+            .doesNotThrowAnyException();
     }
 }

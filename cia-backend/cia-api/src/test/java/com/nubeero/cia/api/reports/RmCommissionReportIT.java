@@ -7,6 +7,7 @@ import com.nubeero.cia.reports.service.ReportRunnerService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -41,7 +42,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * exclude. All policies approved within the report's [date_from, date_to] window.
  *
  * @since B2 Task 4.3 — per-RM report integration test
+ *
+ * <p>{@code @Transactional} so the JDBC-seeded RMs + policies roll back per method —
+ * the exact {@code hasSize(2)} assertion would otherwise be fragile against residue
+ * committed by sibling ITs on the shared singleton Postgres. The report query joins
+ * the test transaction, so the uncommitted seeds are visible before rollback.
  */
+@Transactional
 class RmCommissionReportIT extends FinanceWebItSupport {
 
     /** Fixed approval date inside the report window (2026-01-01 .. 2026-12-31). */

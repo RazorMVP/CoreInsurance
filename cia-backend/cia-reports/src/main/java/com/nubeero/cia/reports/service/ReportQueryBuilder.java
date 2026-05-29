@@ -536,7 +536,7 @@ public class ReportQueryBuilder {
     private String buildBusinessSql(DataSource ds, ReportConfig config) {
         Map<String, String> columns = SOURCE_COLUMNS.get(ds);
         List<String> selects = new ArrayList<>();
-        Set<String> projectedKeys = new LinkedHashSet<>();
+        Set<String> projectedKeys = new HashSet<>();
         if (config.getFields() != null) {
             for (ReportField f : config.getFields()) {
                 if (f.isComputed()) continue;
