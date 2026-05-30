@@ -111,6 +111,48 @@ class BusinessReportValueIT extends FinanceWebItSupport {
             "Agg test claim");
     }
 
+    /** Like insertClaimForAgg but returns the generated claim id (for expense FK). */
+    private UUID insertClaimReturningId(String claimNumber, UUID policyId, String className, String reserve) {
+        UUID claimId = UUID.randomUUID();
+        jdbc.update(
+            "INSERT INTO claims (id, claim_number, policy_id, policy_number, "
+                + "policy_start_date, policy_end_date, customer_id, customer_name, "
+                + "product_id, product_name, class_of_business_id, class_of_business_name, "
+                + "status, reserve_amount, approved_amount, reported_date, incident_date, description) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            claimId, claimNumber, policyId, "POL-FOR-" + claimNumber,
+            LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
+            UUID.randomUUID(), "AggCo", UUID.randomUUID(), className,
+            UUID.randomUUID(), className, "APPROVED", new BigDecimal(reserve),
+            new BigDecimal("0.00"), LocalDate.of(2026, 3, 1), LocalDate.of(2026, 2, 20),
+            "Agg test claim");
+        return claimId;
+    }
+
+    /** Insert a claim_expenses row (NOT-NULL set: claim_id, expense_type, status, vendor_name, amount, description). */
+    private void insertClaimExpense(UUID claimId, String amount, String status) {
+        jdbc.update(
+            "INSERT INTO claim_expenses (claim_id, expense_type, status, vendor_name, amount, description) "
+                + "VALUES (?, ?, ?, ?, ?, ?)",
+            claimId, "ADJUSTER", status, "Test Vendor", new BigDecimal(amount), "Adjuster fee");
+    }
+
+    /** Like insertClaimForAgg but with an explicit reported_date (the CLAIMS-branch event_date). */
+    private void insertClaimDated(String claimNumber, UUID policyId, String className,
+                                  String reserve, LocalDate reportedDate) {
+        jdbc.update(
+            "INSERT INTO claims (claim_number, policy_id, policy_number, "
+                + "policy_start_date, policy_end_date, customer_id, customer_name, "
+                + "product_id, product_name, class_of_business_id, class_of_business_name, "
+                + "status, reserve_amount, approved_amount, reported_date, incident_date, description) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            claimNumber, policyId, "POL-FOR-" + claimNumber,
+            LocalDate.of(2010, 1, 1), LocalDate.of(2010, 12, 31),
+            UUID.randomUUID(), "AggCo", UUID.randomUUID(), className,
+            UUID.randomUUID(), className, "APPROVED", new BigDecimal(reserve),
+            new BigDecimal("0.00"), reportedDate, reportedDate, "Out-of-window claim");
+    }
+
     @Test
     void netWrittenPremiumAggregatesSumByClass() {
         insertPolicyForAgg("POL-AGG-1", "ZZ-AGG-FIRE", "Fire Special", "100000.00");
@@ -319,5 +361,45 @@ class BusinessReportValueIT extends FinanceWebItSupport {
             "account_code", "5130", "source_module", "POLICY");
         assertThatCode(() -> run("Account Movement Statement", filters))
             .doesNotThrowAnyException();
+    }
+
+    @Test
+    void combinedRatioIncludesApprovedExpensesOnly() {
+        // priced policy gross 1,000,000; claims 300k + 200k = 500k incurred;
+        // expenses 50k APPROVED (counts) + 99,999 PENDING (excluded).
+        UUID host = insertMinimalPolicy("POL-CR-HOST");          // claims FK target (class "Fire")
+        insertPolicyForAgg("POL-CR-1", "ZZ-CR-PERF", "Fire Special", "1000000.00");
+        UUID c1 = insertClaimReturningId("CLM-CR-1", host, "ZZ-CR-PERF", "300000.00");
+        insertClaimReturningId("CLM-CR-2", host, "ZZ-CR-PERF", "200000.00");
+        insertClaimExpense(c1, "50000.00", "APPROVED");
+        insertClaimExpense(c1, "99999.00", "PENDING");
+
+        List<Map<String, Object>> rows = run("Combined Ratio Report", WIDE).stream()
+            .filter(r -> "ZZ-CR-PERF".equals(r.get("class_of_business"))).toList();
+
+        assertThat(rows).hasSize(1);
+        assertThat(new BigDecimal(rows.get(0).get("expenses").toString()))
+            .as("only APPROVED expense counts").isEqualByComparingTo("50000.00");
+        assertThat(new BigDecimal(rows.get(0).get("loss_ratio").toString()))
+            .isEqualByComparingTo("50.00");
+        assertThat(new BigDecimal(rows.get(0).get("combined_ratio").toString()))
+            .as("(500000 + 50000) / 1000000 × 100").isEqualByComparingTo("55.00");
+    }
+
+    @Test
+    void periodFilterExcludesOutOfWindowClaims() {
+        UUID host = insertMinimalPolicy("POL-PF-HOST");          // claims FK target (class "Fire")
+        insertPolicyForAgg("POL-PF-1", "ZZ-PF-PERF", "Fire Special", "1000000.00");
+        insertClaimForAgg("CLM-PF-IN", host, "ZZ-PF-PERF", "100000.00");          // reported 2026-03-01 (in window)
+        insertClaimDated("CLM-PF-OUT", host, "ZZ-PF-PERF", "999999.00",
+                         LocalDate.of(2010, 1, 1));                                // reported 2010 (excluded)
+
+        Map<String, String> window = Map.of("date_from", "2026-01-01", "date_to", "2026-12-31");
+        List<Map<String, Object>> rows = run("Loss Ratio Report", window).stream()
+            .filter(r -> "ZZ-PF-PERF".equals(r.get("class_of_business"))).toList();
+
+        assertThat(rows).hasSize(1);
+        assertThat(new BigDecimal(rows.get(0).get("claims_incurred").toString()))
+            .as("2010 claim excluded by ev.event_date window").isEqualByComparingTo("100000.00");
     }
 }
