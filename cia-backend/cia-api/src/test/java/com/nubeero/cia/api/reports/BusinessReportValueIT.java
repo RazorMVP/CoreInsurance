@@ -153,20 +153,26 @@ class BusinessReportValueIT extends FinanceWebItSupport {
     }
 
     @Test
-    void lossRatioReportAggregatesReserveButRatioStaysZero() {
-        UUID p1 = insertMinimalPolicy("POL-LR-1");
-        UUID p2 = insertMinimalPolicy("POL-LR-2");
-        insertClaimForAgg("CLM-LR-1", p1, "ZZ-LR-CLASS", "300000.00");
-        insertClaimForAgg("CLM-LR-2", p2, "ZZ-LR-CLASS", "200000.00");
+    void lossRatioReportComputesNonZeroRatio() {
+        // 1 priced policy (total_premium = 1,000,000) in the test class supplies the
+        // premium leg; 2 claims (300k + 200k = 500k incurred) supply the claims leg.
+        // The "host" policy (class "Fire", premium 0) only satisfies the claims FK —
+        // a different class, so it's invisible to the ZZ-LR-PERF filter.
+        UUID host = insertMinimalPolicy("POL-LR-HOST");
+        insertPolicyForAgg("POL-LR-1", "ZZ-LR-PERF", "Fire Special", "1000000.00");
+        insertClaimForAgg("CLM-LR-1", host, "ZZ-LR-PERF", "300000.00");
+        insertClaimForAgg("CLM-LR-2", host, "ZZ-LR-PERF", "200000.00");
 
         List<Map<String, Object>> rows = run("Loss Ratio Report", WIDE).stream()
-            .filter(r -> "ZZ-LR-CLASS".equals(r.get("class_of_business"))).toList();
+            .filter(r -> "ZZ-LR-PERF".equals(r.get("class_of_business"))).toList();
 
-        assertThat(rows).as("2 claims aggregate to 1 row").hasSize(1);
-        assertThat(new BigDecimal(rows.get(0).get("reserve_amount").toString()))
+        assertThat(rows).as("class aggregates to 1 row").hasSize(1);
+        assertThat(new BigDecimal(rows.get(0).get("premium_earned").toString()))
+            .isEqualByComparingTo("1000000.00");
+        assertThat(new BigDecimal(rows.get(0).get("claims_incurred").toString()))
             .isEqualByComparingTo("500000.00");
         assertThat(new BigDecimal(rows.get(0).get("loss_ratio").toString()))
-            .as("loss_ratio uncomputable on CLAIMS source → 0").isEqualByComparingTo("0.00");
+            .as("500000 / 1000000 × 100").isEqualByComparingTo("50.00");
     }
 
     @Test
