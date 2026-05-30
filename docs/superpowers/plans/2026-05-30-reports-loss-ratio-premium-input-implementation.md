@@ -300,7 +300,7 @@ VALUES (
 - [ ] **Step 7: Run the loss-ratio test — verify it passes**
 
 Run: `cd cia-backend && mvn -q -pl cia-api test -Dtest=BusinessReportValueIT#lossRatioReportComputesNonZeroRatio`
-Expected: PASS (`premium_earned=2,000,000`, `claims_incurred=500,000`, `loss_ratio=25.00`).
+Expected: PASS (`premium_earned=1,000,000`, `claims_incurred=500,000`, `loss_ratio=50.00`).
 
 - [ ] **Step 8: Commit**
 
@@ -318,83 +318,69 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ### Task 3: Combined-ratio (APPROVED expenses) + period-filter tests
 
 **Files:**
-- Modify: `cia-backend/cia-api/src/test/java/com/nubeero/cia/api/reports/BusinessReportValueIT.java` (add 2 helpers + 2 tests before the final `}`)
+- Modify: `cia-backend/cia-api/src/test/java/com/nubeero/cia/api/reports/BusinessReportValueIT.java` (add 3 helpers + 2 tests before the final `}`)
 
-- [ ] **Step 1: Add two seed helpers**
+- [ ] **Step 1: Add three seed helpers**
 
-Add after the existing `insertClaimForAgg` method (~line 94):
+These mirror the existing `insertClaimForAgg` column set exactly (the schema's NOT-NULL set) and use `jdbc.update(...)` — the IT autowires `JdbcTemplate jdbc`, not an `EntityManager`. Add after the existing `insertClaimForAgg` method (~line 112):
 
 ```java
+    /** Like insertClaimForAgg but returns the generated claim id (for expense FK). */
     private UUID insertClaimReturningId(String claimNumber, UUID policyId, String className, String reserve) {
         UUID claimId = UUID.randomUUID();
-        entityManager.createNativeQuery(
-            "INSERT INTO claims (id, claim_number, status, policy_id, policy_number, " +
-            "policy_start_date, policy_end_date, customer_id, customer_name, " +
-            "product_id, product_name, class_of_business_id, class_of_business_name, " +
-            "incident_date, reported_date, description, reserve_amount, created_at) " +
-            "VALUES (?, ?, 'APPROVED', ?, ?, '2026-01-01', '2026-12-31', ?, 'Test Cust', " +
-            "?, 'Test Prod', ?, ?, '2026-02-01', '2026-02-02', 'Loss', ?, now())")
-            .setParameter(1, claimId)
-            .setParameter(2, claimNumber)
-            .setParameter(3, policyId)
-            .setParameter(4, "POL-FOR-" + claimNumber)
-            .setParameter(5, UUID.randomUUID())
-            .setParameter(6, UUID.randomUUID())
-            .setParameter(7, UUID.randomUUID())
-            .setParameter(8, className)
-            .setParameter(9, new BigDecimal(reserve))
-            .executeUpdate();
+        jdbc.update(
+            "INSERT INTO claims (id, claim_number, policy_id, policy_number, "
+                + "policy_start_date, policy_end_date, customer_id, customer_name, "
+                + "product_id, product_name, class_of_business_id, class_of_business_name, "
+                + "status, reserve_amount, approved_amount, reported_date, incident_date, description) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            claimId, claimNumber, policyId, "POL-FOR-" + claimNumber,
+            LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
+            UUID.randomUUID(), "AggCo", UUID.randomUUID(), className,
+            UUID.randomUUID(), className, "APPROVED", new BigDecimal(reserve),
+            new BigDecimal("0.00"), LocalDate.of(2026, 3, 1), LocalDate.of(2026, 2, 20),
+            "Agg test claim");
         return claimId;
     }
 
+    /** Insert a claim_expenses row (NOT-NULL set: claim_id, expense_type, status, vendor_name, amount, description). */
     private void insertClaimExpense(UUID claimId, String amount, String status) {
-        entityManager.createNativeQuery(
-            "INSERT INTO claim_expenses (id, claim_id, expense_type, status, vendor_name, " +
-            "amount, description, created_at) " +
-            "VALUES (?, ?, 'ADJUSTER', ?, 'Test Vendor', ?, 'Adjuster fee', now())")
-            .setParameter(1, UUID.randomUUID())
-            .setParameter(2, claimId)
-            .setParameter(3, status)
-            .setParameter(4, new BigDecimal(amount))
-            .executeUpdate();
+        jdbc.update(
+            "INSERT INTO claim_expenses (claim_id, expense_type, status, vendor_name, amount, description) "
+                + "VALUES (?, ?, ?, ?, ?, ?)",
+            claimId, "ADJUSTER", status, "Test Vendor", new BigDecimal(amount), "Adjuster fee");
     }
 
+    /** Like insertClaimForAgg but with an explicit reported_date (the CLAIMS-branch event_date). */
     private void insertClaimDated(String claimNumber, UUID policyId, String className,
-                                  String reserve, String reportedDate) {
-        entityManager.createNativeQuery(
-            "INSERT INTO claims (id, claim_number, status, policy_id, policy_number, " +
-            "policy_start_date, policy_end_date, customer_id, customer_name, " +
-            "product_id, product_name, class_of_business_id, class_of_business_name, " +
-            "incident_date, reported_date, description, reserve_amount, created_at) " +
-            "VALUES (?, ?, 'APPROVED', ?, ?, '2010-01-01', '2010-12-31', ?, 'Test Cust', " +
-            "?, 'Test Prod', ?, ?, ?, ?, 'Loss', ?, now())")
-            .setParameter(1, UUID.randomUUID())
-            .setParameter(2, claimNumber)
-            .setParameter(3, policyId)
-            .setParameter(4, "POL-FOR-" + claimNumber)
-            .setParameter(5, UUID.randomUUID())
-            .setParameter(6, UUID.randomUUID())
-            .setParameter(7, UUID.randomUUID())
-            .setParameter(8, className)
-            .setParameter(9, reportedDate)
-            .setParameter(10, reportedDate)
-            .setParameter(11, new BigDecimal(reserve))
-            .executeUpdate();
+                                  String reserve, LocalDate reportedDate) {
+        jdbc.update(
+            "INSERT INTO claims (claim_number, policy_id, policy_number, "
+                + "policy_start_date, policy_end_date, customer_id, customer_name, "
+                + "product_id, product_name, class_of_business_id, class_of_business_name, "
+                + "status, reserve_amount, approved_amount, reported_date, incident_date, description) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            claimNumber, policyId, "POL-FOR-" + claimNumber,
+            LocalDate.of(2010, 1, 1), LocalDate.of(2010, 12, 31),
+            UUID.randomUUID(), "AggCo", UUID.randomUUID(), className,
+            UUID.randomUUID(), className, "APPROVED", new BigDecimal(reserve),
+            new BigDecimal("0.00"), reportedDate, reportedDate, "Out-of-window claim");
     }
 ```
 
-> `insertClaimDated` parameterises both `incident_date` and `reported_date` to the same value (params 9 + 10) so the out-of-window row is unambiguously dated; the in-window helper keeps the hardcoded `'2026-02-02'`.
+> The CLAIMS branch of the UNION uses `reported_date` as `ev.event_date`, so `insertClaimDated` varies only `reported_date` (and `incident_date` for sanity); `created_at` is irrelevant to the claims-leg period filter.
 
 - [ ] **Step 2: Add the combined-ratio test (before the closing `}`)**
 
 ```java
     @Test
     void combinedRatioIncludesApprovedExpensesOnly() {
-        // 1 policy gross 1,000,000; claims 300k + 200k = 500k incurred;
+        // priced policy gross 1,000,000; claims 300k + 200k = 500k incurred;
         // expenses 50k APPROVED (counts) + 99,999 PENDING (excluded).
-        insertMinimalPolicyInClass("POL-CR-1", "ZZ-CR-PERF", "CRP");
-        UUID c1 = insertClaimReturningId("CLM-CR-1", null, "ZZ-CR-PERF", "300000.00");
-        insertClaimReturningId("CLM-CR-2", null, "ZZ-CR-PERF", "200000.00");
+        UUID host = insertMinimalPolicy("POL-CR-HOST");          // claims FK target (class "Fire")
+        insertPolicyForAgg("POL-CR-1", "ZZ-CR-PERF", "Fire Special", "1000000.00");
+        UUID c1 = insertClaimReturningId("CLM-CR-1", host, "ZZ-CR-PERF", "300000.00");
+        insertClaimReturningId("CLM-CR-2", host, "ZZ-CR-PERF", "200000.00");
         insertClaimExpense(c1, "50000.00", "APPROVED");
         insertClaimExpense(c1, "99999.00", "PENDING");
 
@@ -411,19 +397,16 @@ Add after the existing `insertClaimForAgg` method (~line 94):
     }
 ```
 
-> `insertClaimReturningId` accepts `null` for `policyId` — the `claims.policy_id` FK is `NOT NULL REFERENCES policies(id)`. **Fix:** pass a real policy id. Capture it: change the first two seed lines to
-> `UUID pol = insertMinimalPolicyInClass("POL-CR-1", "ZZ-CR-PERF", "CRP");` then
-> `UUID c1 = insertClaimReturningId("CLM-CR-1", pol, "ZZ-CR-PERF", "300000.00");` and
-> `insertClaimReturningId("CLM-CR-2", pol, "ZZ-CR-PERF", "200000.00");` (both claims may reference the same policy).
-
 - [ ] **Step 3: Add the period-filter test**
 
 ```java
     @Test
     void periodFilterExcludesOutOfWindowClaims() {
-        UUID pol = insertMinimalPolicyInClass("POL-PF-1", "ZZ-PF-PERF", "PFP");
-        insertClaimForAgg("CLM-PF-IN", pol, "ZZ-PF-PERF", "100000.00");       // reported 2026-02-02
-        insertClaimDated("CLM-PF-OUT", pol, "ZZ-PF-PERF", "999999.00", "2010-01-01"); // excluded
+        UUID host = insertMinimalPolicy("POL-PF-HOST");          // claims FK target (class "Fire")
+        insertPolicyForAgg("POL-PF-1", "ZZ-PF-PERF", "Fire Special", "1000000.00");
+        insertClaimForAgg("CLM-PF-IN", host, "ZZ-PF-PERF", "100000.00");          // reported 2026-03-01 (in window)
+        insertClaimDated("CLM-PF-OUT", host, "ZZ-PF-PERF", "999999.00",
+                         LocalDate.of(2010, 1, 1));                                // reported 2010 (excluded)
 
         Map<String, String> window = Map.of("date_from", "2026-01-01", "date_to", "2026-12-31");
         List<Map<String, Object>> rows = run("Loss Ratio Report", window).stream()
@@ -435,7 +418,7 @@ Add after the existing `insertClaimForAgg` method (~line 94):
     }
 ```
 
-> The policy's `created_at = now()` (2026-05-30) falls inside the 2026 window, so `premium_earned = 1,000,000` and the in-window claim (reported 2026-02-02) counts; the 2010 claim is excluded. This proves the top-level `ev.event_date` filter clips each fact independently.
+> The priced policy's `created_at = now()` (2026-05-30) is inside the 2026 window so its premium counts; the in-window claim (reported 2026-03-01) counts; the 2010 claim is excluded. This proves the top-level `ev.event_date` filter clips each leg on its own date independently.
 
 - [ ] **Step 4: Run all three new tests**
 
