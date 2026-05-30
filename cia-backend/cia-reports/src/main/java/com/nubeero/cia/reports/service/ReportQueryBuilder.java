@@ -176,7 +176,35 @@ public class ReportQueryBuilder {
             "SUM(p.net_premium * p.commission_rate / 100) AS total_accrued " +
             "FROM policies p " +
             "JOIN relationship_managers rm ON rm.id = p.relationship_manager_id " +
-            "WHERE p.commission_source_type = 'RELATIONSHIP_MANAGER' AND p.deleted_at IS NULL")
+            "WHERE p.commission_source_type = 'RELATIONSHIP_MANAGER' AND p.deleted_at IS NULL"),
+
+        // Underwriting performance (cross-entity by-class aggregate): UNION-ALL event
+        // stream over policies (gross written premium), claims (reserve = incurred),
+        // and APPROVED claim_expenses, summed per class. Feeds loss_ratio /
+        // combined_ratio. GROUP BY supplied by BASE_QUERY_TAILS. The string ENDS at
+        // WHERE 1=1 so the filter loop appends ` AND <expr>` before the GROUP BY tail.
+        Map.entry(DataSource.UNDERWRITING_PERFORMANCE,
+            "SELECT ev.cob AS class_of_business, " +
+            "SUM(ev.premium_earned) AS premium_earned, " +
+            "SUM(ev.claims_incurred) AS claims_incurred, " +
+            "SUM(ev.expenses) AS expenses " +
+            "FROM ( " +
+            "  SELECT class_of_business_name AS cob, class_of_business_id AS cob_id, " +
+            "         total_premium AS premium_earned, " +
+            "         CAST(0 AS DECIMAL(18,2)) AS claims_incurred, " +
+            "         CAST(0 AS DECIMAL(18,2)) AS expenses, " +
+            "         created_at AS event_date " +
+            "    FROM policies WHERE deleted_at IS NULL " +
+            "  UNION ALL " +
+            "  SELECT class_of_business_name, class_of_business_id, " +
+            "         CAST(0 AS DECIMAL(18,2)), reserve_amount, CAST(0 AS DECIMAL(18,2)), reported_date " +
+            "    FROM claims WHERE deleted_at IS NULL " +
+            "  UNION ALL " +
+            "  SELECT cl.class_of_business_name, cl.class_of_business_id, " +
+            "         CAST(0 AS DECIMAL(18,2)), CAST(0 AS DECIMAL(18,2)), ce.amount, ce.created_at " +
+            "    FROM claim_expenses ce JOIN claims cl ON cl.id = ce.claim_id " +
+            "    WHERE ce.deleted_at IS NULL AND ce.status = 'APPROVED' " +
+            ") ev WHERE 1=1")
     );
 
     // ── Business-source dynamic projection (Option A) ─────────────────────────
@@ -261,7 +289,9 @@ public class ReportQueryBuilder {
         DataSource.TRIAL_BALANCE,
             "GROUP BY coa.code, coa.name, coa.account_type",
         DataSource.RM_COMMISSION,
-            "GROUP BY rm.name"
+            "GROUP BY rm.name",
+        DataSource.UNDERWRITING_PERFORMANCE,
+            "GROUP BY ev.cob"
     );
 
     public List<Map<String, Object>> execute(ReportDefinition definition,
@@ -476,6 +506,9 @@ public class ReportQueryBuilder {
             // RM commission: accrual-recognition date = policy approval date.
             // Injected ` AND p.approved_at >= ?` lands BEFORE the GROUP BY tail.
             case RM_COMMISSION    -> "p.approved_at";
+            // Underwriting performance: each unioned fact carries its own booking date
+            // as ev.event_date (policy created_at / claim reported_date / expense created_at).
+            case UNDERWRITING_PERFORMANCE -> "ev.event_date";
         };
     }
 
@@ -505,6 +538,8 @@ public class ReportQueryBuilder {
             // RM commission is grouped by rm.name — no single per-row status
             // column is meaningful as a filter (mirrors TRIAL_BALANCE → null).
             case RM_COMMISSION    -> null;
+            // Aggregate over a UNION stream — no single per-row status filter.
+            case UNDERWRITING_PERFORMANCE -> null;
         };
     }
 
@@ -523,6 +558,7 @@ public class ReportQueryBuilder {
             case ENDORSEMENTS -> "e.class_of_business_id";
             case GENERAL_LEDGER -> "cob.id";   // joins classes_of_business
             case PAA_GROUPS     -> "cob.id";   // joins classes_of_business
+            case UNDERWRITING_PERFORMANCE -> "ev.cob_id"; // narrows event stream pre-aggregation
             default           -> null;
         };
     }

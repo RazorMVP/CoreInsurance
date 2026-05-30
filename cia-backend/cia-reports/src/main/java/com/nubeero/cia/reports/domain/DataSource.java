@@ -23,5 +23,10 @@ public enum DataSource {
     IFRS9_MOVEMENT,
 
     // ── Module 11 — RM commission (per-RM accrual aggregation, B2 Task 4.1) ────
-    RM_COMMISSION
+    RM_COMMISSION,
+
+    // ── Module 11 — Underwriting performance (cross-entity by-class aggregate) ─
+    // UNION-ALL event stream: policies (gross written premium) + claims (reserve =
+    // incurred) + APPROVED claim_expenses, GROUP BY class. Feeds loss/combined ratio.
+    UNDERWRITING_PERFORMANCE
 }
