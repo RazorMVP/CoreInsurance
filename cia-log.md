@@ -49,7 +49,7 @@ GREEN commit — both ✅, only Minor findings.
   reports onto the new source with non-computed fields in SELECT-column order
   `[class_of_business, premium_earned, claims_incurred, (expenses)]`; ARA's stale
   `sortBy:reserve_amount` corrected to `premium_earned`.
-- **`38be8f9` — combined-ratio + period-filter ITs.** `combinedRatioIncludesApprovedExpensesOnly`
+- **`cfe6760` — combined-ratio + period-filter ITs.** `combinedRatioIncludesApprovedExpensesOnly`
   proves the `ce.status='APPROVED'` filter (50k counts, 99,999 PENDING excluded →
   `combined_ratio = 55.00`); `periodFilterExcludesOutOfWindowClaims` proves a 2010 claim is
   excluded by the 2026 `ev.event_date` window. 3 jdbc seed helpers added.
