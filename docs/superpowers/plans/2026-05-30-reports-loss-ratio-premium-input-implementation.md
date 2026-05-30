@@ -17,8 +17,11 @@
 - **Modify** `cia-backend/cia-reports/src/main/java/com/nubeero/cia/reports/domain/DataSource.java` — add `UNDERWRITING_PERFORMANCE` enum value.
 - **Modify** `cia-backend/cia-reports/src/main/java/com/nubeero/cia/reports/service/ReportQueryBuilder.java` — add `BASE_QUERIES` + `BASE_QUERY_TAILS` entries and the 3 switch cases (`createdAtCol`, `statusCol`, `cobFilterCol`).
 - **Create** `cia-backend/cia-api/src/main/resources/db/migration/V66__reseed_ratio_reports_underwriting_performance.sql` — re-seed the 3 reports.
-- **Modify** `cia-backend/cia-api/src/test/java/com/nubeero/cia/api/reports/BusinessReportValueIT.java` — replace the obsolete `lossRatioReportAggregatesReserveButRatioStaysZero` test; add combined-ratio + period-filter tests + 2 helpers; bump `spring.flyway.target` 64 → 66.
+- **Modify** `cia-backend/cia-api/src/test/java/com/nubeero/cia/api/finance/FinanceWebItSupport.java:136` — bump the shared `spring.flyway.target` from `"64"` → `"66"`. This is the ONLY place the target is set for `BusinessReportValueIT` (it's a `@DynamicPropertySource`, which outranks any `@TestPropertySource` a subclass could add). The base is shared by ~6 finance-web ITs; V65 (additive column) + V66 (data re-seed) are additive, so they are behavior-neutral for the others.
+- **Modify** `cia-backend/cia-api/src/test/java/com/nubeero/cia/api/reports/BusinessReportValueIT.java` — replace the obsolete `lossRatioReportAggregatesReserveButRatioStaysZero` test; add combined-ratio + period-filter tests + 3 id/date helpers.
 - **Modify** `CLAUDE.md`, `cia-log.md` — docs + backlog reconciliation.
+
+**Real seed helpers (verified against the file):** `insertMinimalPolicy(num)→UUID` (hardcoded class "Fire", `total_premium` defaults to 0), `insertPolicyForAgg(num, class, product, premium)→void` (`total_premium` = the premium arg, `created_at` defaults to `now()`), `insertClaimForAgg(num, polId, class, reserve)→void` (`reported_date` hardcoded `2026-03-01`). None return a claim id (DB-generated). The plan adds `insertClaimReturningId`, `insertClaimExpense`, `insertClaimDated`.
 
 **No frontend change:** `@cia/api-client` reports module types `dataSource` as free-form `z.string()` ([reports.ts:27](../../../cia-frontend/packages/api-client/src/modules/reports.ts#L27)) — a new enum value validates without edit. Per spec, `UNDERWRITING_PERFORMANCE` is deliberately NOT added to the Custom Report Builder picker.
 
@@ -29,46 +32,55 @@
 ### Task 1: Failing test — loss ratio must compute 50.00 (RED)
 
 **Files:**
-- Modify: `cia-backend/cia-api/src/test/java/com/nubeero/cia/api/reports/BusinessReportValueIT.java:24-27` (flyway target) and `:113-128` (replace test)
+- Modify: `cia-backend/cia-api/src/test/java/com/nubeero/cia/api/finance/FinanceWebItSupport.java:136` (flyway target)
+- Modify: `cia-backend/cia-api/src/test/java/com/nubeero/cia/api/reports/BusinessReportValueIT.java:155-170` (replace test)
 
-- [ ] **Step 1: Bump the Flyway target to 66**
+- [ ] **Step 1: Bump the shared Flyway target to 66**
 
-Replace the `@TestPropertySource` block (currently lines 24-26):
+In `FinanceWebItSupport.java`, change line 136 from:
 
 ```java
-@org.springframework.test.context.TestPropertySource(properties = {
-    "spring.flyway.target=66"
-})
+        registry.add("spring.flyway.target", () -> "64");
 ```
+
+to:
+
+```java
+        registry.add("spring.flyway.target", () -> "66");
+```
+
+> This `@DynamicPropertySource` is the authoritative target for every IT extending `FinanceWebItSupport` (incl. `BusinessReportValueIT`). A class-level `@TestPropertySource` on the IT would NOT override it — `@DynamicPropertySource` has higher precedence. Bumping the base from 64 → 66 brings the shared singleton container through V65 (additive `quote_risks.gross_premium` column) + V66 (data re-seed); both additive, so the other finance-web ITs are behavior-neutral.
 
 - [ ] **Step 2: Replace the obsolete loss-ratio test**
 
-The report will no longer declare `reserve_amount`; it declares `premium_earned` + `claims_incurred`. Replace the entire `lossRatioReportAggregatesReserveButRatioStaysZero` method (lines 113-128) with:
+The report no longer declares `reserve_amount`; it declares `premium_earned` + `claims_incurred`. Replace the entire `lossRatioReportAggregatesReserveButRatioStaysZero` method (lines 155-170) with:
 
 ```java
     @Test
     void lossRatioReportComputesNonZeroRatio() {
-        // 1 policy (gross written premium = total_premium = 1,000,000) + 2 claims
-        // (reserves 300k + 200k = 500k incurred) in the same class.
-        insertMinimalPolicyInClass("POL-LR-1", "ZZ-LR-PERF", "LRP");
-        UUID p2 = insertMinimalPolicyInClass("POL-LR-CLAIMHOST", "ZZ-LR-PERF", "LRP");
-        insertClaimForAgg("CLM-LR-1", p2, "ZZ-LR-PERF", "300000.00");
-        insertClaimForAgg("CLM-LR-2", p2, "ZZ-LR-PERF", "200000.00");
+        // 1 priced policy (total_premium = 1,000,000) in the test class supplies the
+        // premium leg; 2 claims (300k + 200k = 500k incurred) supply the claims leg.
+        // The "host" policy (class "Fire", premium 0) only satisfies the claims FK —
+        // a different class, so it's invisible to the ZZ-LR-PERF filter.
+        UUID host = insertMinimalPolicy("POL-LR-HOST");
+        insertPolicyForAgg("POL-LR-1", "ZZ-LR-PERF", "Fire Special", "1000000.00");
+        insertClaimForAgg("CLM-LR-1", host, "ZZ-LR-PERF", "300000.00");
+        insertClaimForAgg("CLM-LR-2", host, "ZZ-LR-PERF", "200000.00");
 
         List<Map<String, Object>> rows = run("Loss Ratio Report", WIDE).stream()
             .filter(r -> "ZZ-LR-PERF".equals(r.get("class_of_business"))).toList();
 
         assertThat(rows).as("class aggregates to 1 row").hasSize(1);
         assertThat(new BigDecimal(rows.get(0).get("premium_earned").toString()))
-            .as("2 policies × gross 1,000,000").isEqualByComparingTo("2000000.00");
+            .isEqualByComparingTo("1000000.00");
         assertThat(new BigDecimal(rows.get(0).get("claims_incurred").toString()))
             .isEqualByComparingTo("500000.00");
         assertThat(new BigDecimal(rows.get(0).get("loss_ratio").toString()))
-            .as("500000 / 2000000 × 100").isEqualByComparingTo("25.00");
+            .as("500000 / 1000000 × 100").isEqualByComparingTo("50.00");
     }
 ```
 
-> Note: `insertMinimalPolicyInClass` seeds `total_premium = 1000000` per policy. Two policies in the class → `premium_earned = 2,000,000`, so `loss_ratio = 500000 / 2000000 × 100 = 25.00`. (Both policies share the class so the second can also host the claims via FK; claims group by class *name*, independent of policy FK.)
+> Why a separate "host" policy: `insertClaimForAgg` needs a real `policies.id` for the NOT-NULL FK, but `insertPolicyForAgg` returns `void` (no id). `insertMinimalPolicy` returns an id — its hardcoded "Fire" class and 0 premium land in a *different* class bucket, so they never touch the `ZZ-LR-PERF` assertion. Claims aggregate by class *name*, independent of which policy they FK to.
 
 - [ ] **Step 3: Run the test — verify it fails**
 
@@ -78,7 +90,8 @@ Expected: FAIL — Flyway refuses `target=66` (no V66 migration yet): `FlywayExc
 - [ ] **Step 4: Commit**
 
 ```bash
-git add cia-backend/cia-api/src/test/java/com/nubeero/cia/api/reports/BusinessReportValueIT.java
+git add cia-backend/cia-api/src/test/java/com/nubeero/cia/api/finance/FinanceWebItSupport.java \
+        cia-backend/cia-api/src/test/java/com/nubeero/cia/api/reports/BusinessReportValueIT.java
 git commit -m "test(reports): failing loss-ratio non-zero IT + target bump to 66 (red)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -424,7 +437,7 @@ Add after the existing `insertClaimForAgg` method (~line 94):
 
 > The policy's `created_at = now()` (2026-05-30) falls inside the 2026 window, so `premium_earned = 1,000,000` and the in-window claim (reported 2026-02-02) counts; the 2010 claim is excluded. This proves the top-level `ev.event_date` filter clips each fact independently.
 
-- [ ] **Step 4: Apply the policyId fix from Step 2's note, then run all three new tests**
+- [ ] **Step 4: Run all three new tests**
 
 Run: `cd cia-backend && mvn -q -pl cia-api test -Dtest=BusinessReportValueIT#lossRatioReportComputesNonZeroRatio+combinedRatioIncludesApprovedExpensesOnly+periodFilterExcludesOutOfWindowClaims`
 Expected: PASS (3 tests).
@@ -502,8 +515,10 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - §7 CLAUDE.md update → Task 5 Step 1 ✓
 - §8 backlog: drain, no new row → Task 5 Step 2 ✓
 
-**Placeholder scan:** No TBD/TODO; all SQL, Java, and commands are concrete. The one "fix-up" note (Task 3 Step 2 policyId) is called out explicitly with the exact replacement lines and folded into Step 4 before the run.
+**Placeholder scan:** No TBD/TODO; all SQL, Java, and commands are concrete. No fix-up notes remain (the earlier null-policyId wart was removed — every test passes a real `host` policy id).
 
-**Type consistency:** `UNDERWRITING_PERFORMANCE` spelled identically in enum, 3 switch cases, BASE_QUERIES, BASE_QUERY_TAILS, and V66 `data_source`. Field keys `premium_earned`/`claims_incurred`/`expenses`/`class_of_business` match the `applyComputedFields` reads (`computeRatio("claims_incurred","premium_earned")`, `computeCombinedRatio` reads `claims_incurred`/`expenses`/`premium_earned`) verified against `ReportQueryBuilder.java:399-402,434-447`. Helper names (`insertClaimReturningId`, `insertClaimExpense`, `insertClaimDated`, `insertMinimalPolicyInClass`, `insertClaimForAgg`) consistent across tasks.
+**Type consistency:** `UNDERWRITING_PERFORMANCE` spelled identically in enum, 3 switch cases, BASE_QUERIES, BASE_QUERY_TAILS, and V66 `data_source`. Field keys `premium_earned`/`claims_incurred`/`expenses`/`class_of_business` match the `applyComputedFields` reads (`computeRatio("claims_incurred","premium_earned")`, `computeCombinedRatio` reads `claims_incurred`/`expenses`/`premium_earned`) verified against `ReportQueryBuilder.java:399-402,434-447`. Test helpers are only the ones that exist in the file (`insertMinimalPolicy→UUID`, `insertPolicyForAgg`, `insertClaimForAgg`) plus three the plan adds (`insertClaimReturningId`, `insertClaimExpense`, `insertClaimDated`) — all `jdbc.update`-based, matching the file's autowired `JdbcTemplate jdbc` (there is no `EntityManager` in the IT). The invented `insertMinimalPolicyInClass` was removed everywhere.
 
-**One divergence from spec, intentional & documented:** spec §6 test 1 seeds "1 policy" → `loss_ratio = 50.00`; this plan seeds 2 policies in-class (the second hosts the claims FK) → `premium_earned = 2,000,000`, `loss_ratio = 25.00`. Same proof (non-zero, exact, cross-entity); the arithmetic is adjusted to the actual seed and asserted exactly.
+**Flyway-target mechanism:** verified the target is set in `FinanceWebItSupport.java:136` via `@DynamicPropertySource` (`() -> "64"`), which outranks `@TestPropertySource`; Task 1 Step 1 edits that line to `"66"` (the only mechanism that works). Base is shared by the finance-web ITs; V65+V66 are additive → behavior-neutral.
+
+**Arithmetic matches spec §6:** 1 priced policy (premium 1,000,000) + claims 500,000 → `loss_ratio = 50.00`; + 50,000 APPROVED expense → `combined_ratio = 55.00`. The "host" policy is a different class (zero premium, "Fire"), invisible to the test-class filter.
