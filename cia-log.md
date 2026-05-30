@@ -21,6 +21,57 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-05-30 — Session 136 (`main`): reports loss-ratio premium input (UNDERWRITING_PERFORMANCE)
+
+Drains `reports-loss-ratio-premium-input` (P3). The 3 ratio reports (Loss Ratio Report,
+Combined Ratio Report, Annual Revenue Account (NAICOM)) rendered their computed
+`loss_ratio`/`combined_ratio` columns as `0.00`: they ran on the CLAIMS source, which has
+no premium column, so `applyComputedFields`' `premium_earned` denominator was always
+absent. Spec `docs/superpowers/specs/2026-05-30-reports-loss-ratio-premium-input-design.md`
+(`e56d573`); plan `…-implementation.md`. Executed subagent-driven over 5 tasks (RED →
+GREEN → more ITs → regression → docs), two-stage review (spec + code-quality) on the core
+GREEN commit — both ✅, only Minor findings.
+
+### What landed (by commit)
+- **`fd5968a` — failing IT (red).** Replaced `BusinessReportValueIT`'s obsolete
+  `lossRatioReportAggregatesReserveButRatioStaysZero` (which documented the bug at 0.00)
+  with `lossRatioReportComputesNonZeroRatio` asserting `loss_ratio = 50.00`; bumped the
+  shared `FinanceWebItSupport` Flyway target 64 → 66 (a `@DynamicPropertySource`, the only
+  override that takes effect — outranks `@TestPropertySource`). Red was a clean
+  `FlywayException: No migration with a target version 66` (no V66 yet).
+- **`9e6c4cb` — new `UNDERWRITING_PERFORMANCE` source + V66 (green).** A fixed-aggregate
+  `BASE_QUERIES` source (NOT a `SOURCE_COLUMNS` business source) = UNION-ALL event stream
+  over `policies.total_premium` (gross written) + `claims.reserve_amount` (incurred) +
+  APPROVED `claim_expenses.amount`, each row carrying its own `ev.event_date` so the
+  existing top-level date filter clips each leg independently; `GROUP BY ev.cob` in
+  `BASE_QUERY_TAILS`; the 3 exhaustive switches (`createdAtCol`/`statusCol`/`cobFilterCol`)
+  gained the case (compiler-enforced for the first two). V66 idempotently re-seeds the 3
+  reports onto the new source with non-computed fields in SELECT-column order
+  `[class_of_business, premium_earned, claims_incurred, (expenses)]`; ARA's stale
+  `sortBy:reserve_amount` corrected to `premium_earned`.
+- **`38be8f9` — combined-ratio + period-filter ITs.** `combinedRatioIncludesApprovedExpensesOnly`
+  proves the `ce.status='APPROVED'` filter (50k counts, 99,999 PENDING excluded →
+  `combined_ratio = 55.00`); `periodFilterExcludesOutOfWindowClaims` proves a 2010 claim is
+  excluded by the 2026 `ev.event_date` window. 3 jdbc seed helpers added.
+
+### Outcome
+All 3 ratio reports now compute correctly. Verification: 16 reports ITs green
+(`BusinessReportValueIT` 12/12, `SystemReportSmokeIT` 2/2 — runs every SYSTEM report incl.
+the 3 re-seeded against a real DB, `RmCommissionReportIT` 2/2); `cia-api -am` reactor
+compiles.
+
+### Known follow-ups + backlog reconciliation
+- **Backlog row DRAINED (1):** `reports-loss-ratio-premium-input`.
+- **No backlog rows added.** Per the adopted spec §8, the written-vs-earned premium is a
+  documented proxy and the expense scope (loss-adjustment expenses only; acquisition/
+  management expenses are GL/Module-12 domain) is a documented definition — neither is a
+  tracked gap. Code-quality review's Minor findings (implicit prefix-order contract;
+  accounting-term labels; claims-status asymmetry) were noted, not promoted: the
+  prefix-order contract is now documented in CLAUDE.md, the rest match spec decisions.
+- **Unchanged:** `bindFromQuote-rm-derivation-it`, `R7-termii-prod`, `R7-twilio-prod` (all P3).
+
+---
+
 ## 2026-05-30 — Session 136 (`main`): reports aggregation semantics (GROUP BY + SUM)
 
 Drains `reports-aggregation-semantics-gap` (P3). The 6 business SYSTEM reports that
