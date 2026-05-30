@@ -14,6 +14,7 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 |---|---|---|---|
 | R7-termii-prod | P3 | Termii SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): user opted for "Logging stub only" in the R7 slice. The SPI ships ready for prod impls; this row tracks the first one — `TermiiSmsService` (Nigeria-native, listed in CLAUDE.md candidate set). Adds `TERMII_API_KEY` + `TERMII_SENDER_ID` envs, `@ConditionalOnProperty(havingValue="termii")` gating, Termii rate-limit guard, Testcontainers IT against a wiremock stub. Pickup when a tenant signs up needing real SMS delivery. |
 | R7-twilio-prod | P3 | Twilio SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): same as `R7-termii-prod` but for non-Nigerian tenants. `TwilioSmsService` against the Twilio Programmable SMS API; `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_FROM_NUMBER` envs. Lower priority than Termii because the platform is Nigeria-first; ship only when the first non-NG tenant onboards. |
+| reports-frontend-datasource-union-sync | P3 | Frontend `DataSource` union lags the backend enum | The frontend string-union `DataSource` in `cia-frontend/apps/back-office/src/modules/reports/types/report.types.ts` is two values behind the backend `cia-reports` enum: missing `RM_COMMISSION` (V64) and `UNDERWRITING_PERFORMANCE` (V66). Harmless today — the ReportViewer never reads `dataSource`, no zod parse validates report responses (TS unions aren't runtime-enforced), and the custom-report-builder picker is driven by a separate `DATA_SOURCE_OPTIONS` list (these two aggregate sources are deliberately excluded from the builder). The gap was set by the V64 RM_COMMISSION slice and not worsened by V66. Becomes real only if someone adds a runtime zod parse of report responses or another exhaustive `Record<DataSource,...>` consumed for SYSTEM reports. Fix: add both values to the union (keep them out of `DATA_SOURCE_OPTIONS`). Trivial; do when next touching reports FE types. |
 | bindFromQuote-rm-derivation-it | P3 | `bindFromQuote` RM-derivation IT now unblocked | Was blocked by `quote-risk-gross-premium-drift` (a seeded APPROVED quote drove a `QuoteRisk` fetch that failed on the missing `gross_premium` column). That drift is fixed by V65 (Session 136), so the quote-conversion RM-derivation case in `PolicyRmCommissionDerivationIT` can now be added. Low priority: the four `create()` direct-entry cases already cover the broker→agent→RM→none fallback, and both entry points share `resolveCommissionSnapshot`, so the logic is covered; this is purely a second-entry-point coverage nicety. |
 | reports-loss-ratio-premium-input | P3 | Loss/Combined/Annual-Revenue ratio columns are uncomputable | The 3 CLAIMS-source ratio reports compute `loss_ratio` = claims ÷ premium and `combined_ratio`, but the CLAIMS source carries no premium column and the reports don't declare a premium field, so `applyComputedFields` returns `0.00`. The aggregation slice (Session 136) correctly SUMs their `reserve_amount` by class but leaves the ratio columns at 0. Real fix: a combined premium+claims-by-class data source (JOIN `policies`+`claims` or a dedicated `DataSource`) + re-seed the 3 ratio configs with premium/claims measure fields. Larger data-model change; deliberately excluded from the aggregation slice (user-confirmed scope cap). |
 
@@ -62,12 +63,19 @@ compiles.
 
 ### Known follow-ups + backlog reconciliation
 - **Backlog row DRAINED (1):** `reports-loss-ratio-premium-input`.
-- **No backlog rows added.** Per the adopted spec §8, the written-vs-earned premium is a
-  documented proxy and the expense scope (loss-adjustment expenses only; acquisition/
-  management expenses are GL/Module-12 domain) is a documented definition — neither is a
-  tracked gap. Code-quality review's Minor findings (implicit prefix-order contract;
-  accounting-term labels; claims-status asymmetry) were noted, not promoted: the
-  prefix-order contract is now documented in CLAUDE.md, the rest match spec decisions.
+- **Backlog row ADDED (1, P3):** `reports-frontend-datasource-union-sync` — the frontend
+  `DataSource` string-union now lags the backend enum by two values (`RM_COMMISSION` from
+  V64, `UNDERWRITING_PERFORMANCE` from this slice). Surfaced by the final holistic review;
+  harmless at runtime (no zod parse of report responses; builder picker uses a separate
+  options list) but logged for type-purity. The slice neither introduced nor worsened the
+  gap beyond the V64 precedent.
+- **Spec-§8 "no new rows" superseded.** The adopted spec said no rows would be added (the
+  written-vs-earned premium is a documented proxy and the expense scope is a documented
+  definition — neither a tracked gap). That still holds for the premium/expense items; the
+  one row added is the unrelated FE-union type-purity gap the review surfaced. Code-quality
+  review's other Minor findings (implicit prefix-order contract; accounting-term labels;
+  claims-status asymmetry) were noted, not promoted: the prefix-order contract is now
+  documented in CLAUDE.md, the rest match spec decisions.
 - **Unchanged:** `bindFromQuote-rm-derivation-it`, `R7-termii-prod`, `R7-twilio-prod` (all P3).
 
 ---
