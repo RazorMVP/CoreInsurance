@@ -17,8 +17,56 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | R7-twilio-prod | P3 | Twilio SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): same as `R7-termii-prod` but for non-Nigerian tenants. `TwilioSmsService` against the Twilio Programmable SMS API; `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_FROM_NUMBER` envs. Lower priority than Termii because the platform is Nigeria-first; ship only when the first non-NG tenant onboards. |
 | reports-frontend-datasource-union-sync | P3 | Frontend `DataSource` union lags the backend enum | The frontend string-union `DataSource` in `cia-frontend/apps/back-office/src/modules/reports/types/report.types.ts` is two values behind the backend `cia-reports` enum: missing `RM_COMMISSION` (V64) and `UNDERWRITING_PERFORMANCE` (V66). Harmless today — the ReportViewer never reads `dataSource`, no zod parse validates report responses (TS unions aren't runtime-enforced), and the custom-report-builder picker is driven by a separate `DATA_SOURCE_OPTIONS` list (these two aggregate sources are deliberately excluded from the builder). The gap was set by the V64 RM_COMMISSION slice and not worsened by V66. Becomes real only if someone adds a runtime zod parse of report responses or another exhaustive `Record<DataSource,...>` consumed for SYSTEM reports. Fix: add both values to the union (keep them out of `DATA_SOURCE_OPTIONS`). Trivial; do when next touching reports FE types. |
 | bindFromQuote-rm-derivation-it | P3 | `bindFromQuote` RM-derivation IT now unblocked | Was blocked by `quote-risk-gross-premium-drift` (a seeded APPROVED quote drove a `QuoteRisk` fetch that failed on the missing `gross_premium` column). That drift is fixed by V65 (Session 136), so the quote-conversion RM-derivation case in `PolicyRmCommissionDerivationIT` can now be added. Low priority: the four `create()` direct-entry cases already cover the broker→agent→RM→none fallback, and both entry points share `resolveCommissionSnapshot`, so the logic is covered; this is purely a second-entry-point coverage nicety. |
+| keycloak-bootstrap-creates-back-office-client | P2 | Tenant realm provisioning must create the `cia-back-office` (+ partner) client, not just realm config | Surfaced Session 138 while wiring real login locally: the `cia` realm existed but had **no `cia-back-office` client and no users**, so the SPA login failed with "Client not found". `KeycloakTenantBootstrap` (CLAUDE.md §Security) currently only ensures the realm + `UnmanagedAttributePolicy=ENABLED`; it does NOT create the public SPA client, its PKCE/redirect/web-origin config, the `tenant_id` protocol mapper, or the partner OAuth2 client. For prod each tenant realm needs these provisioned idempotently. I created them by hand via the admin API for dev (public client, PKCE S256, redirect `localhost:5173/*`, `tenant_id` mapper, `admin/admin` user). Fix: extend `KeycloakTenantBootstrap`/`KeycloakTenantProvisioner` to upsert the back-office client + mapper (and the partner client) on startup. Tie into the production-readiness deployability phase. |
+| keycloak-custom-login-theme | P3 | Tenant-facing Keycloak login is unbranded stock theme | The hosted login (the only "login page" — auth is fully delegated to Keycloak, there is no in-app login component) renders default Keycloak chrome (dark polygon bg, "KEYCLOAK"/realm display name, generic blue button) with no NubSure branding. For prod a custom Keycloak login theme (logo, Nubeero teal `oklch(0.65 0.13 197)`, NubSure wordmark) should be packaged and set per tenant realm. Cosmetic; do during deployability/branding phase. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-31 — Session 138 (`main`): fix `configureKeycloak` env override (keycloak-js v26) — auth bug
+
+While auditing for production readiness and demonstrating the real login flow, found
+that the app **ignored every `VITE_KEYCLOAK_*` env var** and always used the hardcoded
+defaults — a latent **production auth bug**, since prod relies on this exact env →
+`configureKeycloak` path to point each tenant at its realm.
+
+### Root cause
+`packages/auth/src/keycloak.ts` constructed `export const keycloak = new Keycloak(defaults)`
+once, then `configureKeycloak()` tried to override it with `Object.assign(keycloak, config)`
++ a manual `authServerUrl` poke. **keycloak-js v26 captures its config at construction**
+and ignores later property mutation, so `createLoginUrl()` kept using the build-time
+defaults. Symptom: with `VITE_KEYCLOAK_URL=http://localhost:8280` / realm `cia` set, the
+SPA still redirected to the stale default `http://localhost:8180/realms/cia-dev` (the other
+project's Keycloak) → "Page not found".
+
+### Fix
+- `export let keycloak` (was `const`); `configureKeycloak()` now **reconstructs** the
+  instance (`keycloak = new Keycloak(activeConfig)`) instead of mutating it. All consumers
+  (`main.tsx`, `AuthProvider`) reference `keycloak` through the ESM **live binding** at
+  call-time, so they transparently pick up the new instance — verified by grep + a clean
+  back-office `tsc --noEmit` (exit 0).
+- Corrected the stale hardcoded defaults `8180`/`cia-dev` → `8280`/`cia` (matches the
+  backend `issuer-uri` default `${KEYCLOAK_URL:...8280}/realms/${KEYCLOAK_REALM:cia}` and
+  the docker-compose Keycloak port).
+
+### Verification
+- End-to-end real login proven locally: `localhost:5173` → Keycloak `cia` realm login form
+  → `admin`/`admin` → `/dashboard` signed in as the **real** JWT user (`CIA Admin /
+  admin@cia.local`), not the `DevAuthProvider` mock. (Dev still defaults to the mock —
+  real auth is opt-in via the gitignored `.env.local`, which is NOT committed.)
+- The realm/client/user/mapper were provisioned by hand via the Keycloak admin API for this
+  dev session; that provisioning gap is logged as a backlog row (it is not in the commit).
+
+### Known follow-ups + backlog reconciliation
+- **Backlog rows ADDED (2):** `keycloak-bootstrap-creates-back-office-client` (P2 — bootstrap
+  must create the SPA + partner clients, not just realm config) and
+  `keycloak-custom-login-theme` (P3 — branded login theme).
+- **No row drained** — this came from the production-readiness audit, not a pre-existing row.
+- **Unchanged:** the 5 pre-existing P3 rows.
+- **Commit scope:** only `cia-frontend/packages/auth/src/keycloak.ts` + this log/backlog
+  entry. The `.env.local` (gitignored) and the hand-provisioned Keycloak objects are dev-only
+  and intentionally not committed.
 
 ---
 

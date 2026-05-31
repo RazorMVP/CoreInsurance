@@ -7,18 +7,22 @@ interface KeycloakConfig {
 }
 
 const defaults: KeycloakConfig = {
-  url:      'http://localhost:8180',
-  realm:    'cia-dev',
+  url:      'http://localhost:8280',
+  realm:    'cia',
   clientId: 'cia-back-office',
 };
 
-export const keycloak = new Keycloak(defaults);
+let activeConfig: KeycloakConfig = { ...defaults };
+
+// `let` (not `const`) so configureKeycloak can REPLACE the instance. ESM live
+// bindings mean consumers that `import { keycloak }` see the new instance at
+// call time. keycloak-js v26 captures its config at construction and ignores
+// later property mutation, so we must reconstruct rather than Object.assign.
+export let keycloak = new Keycloak(activeConfig);
 
 export function configureKeycloak(config: Partial<KeycloakConfig>) {
-  // Keycloak stores the URL as authServerUrl internally — assign both so the
-  // instance uses the correct server regardless of keycloak-js version.
-  if (config.url) (keycloak as unknown as Record<string, unknown>).authServerUrl = config.url;
-  Object.assign(keycloak, config);
+  activeConfig = { ...activeConfig, ...config };
+  keycloak = new Keycloak(activeConfig);
 }
 
 export async function initKeycloak(): Promise<boolean> {
