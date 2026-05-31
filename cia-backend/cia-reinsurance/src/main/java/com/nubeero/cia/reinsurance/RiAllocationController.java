@@ -1,5 +1,6 @@
 package com.nubeero.cia.reinsurance;
 
+import com.nubeero.cia.common.api.ApiMeta;
 import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.reinsurance.dto.*;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,8 +43,14 @@ public class RiAllocationController {
     public ApiResponse<List<AllocationResponse>> list(
             @RequestParam(required = false) UUID policyId,
             @RequestParam(required = false) AllocationStatus status,
-            @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.success(service.list(policyId, status, pageable).map(this::toResponse).getContent());
+            @PageableDefault(size = 2000) Pageable pageable) {
+        var page = service.list(policyId, status, pageable);
+        return ApiResponse.success(page.map(this::toResponse).getContent(),
+                ApiMeta.builder()
+                        .total(page.getTotalElements())
+                        .page(page.getNumber())
+                        .size(page.getSize())
+                        .build());
     }
 
     @GetMapping("/{id}")

@@ -1,5 +1,6 @@
 package com.nubeero.cia.endorsement;
 
+import com.nubeero.cia.common.api.ApiMeta;
 import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.endorsement.dto.*;
 import com.nubeero.cia.policy.Policy;
@@ -48,9 +49,14 @@ public class EndorsementController {
             @RequestParam(required = false) UUID policyId,
             @RequestParam(required = false) EndorsementStatus status,
             @RequestParam(required = false) UUID customerId,
-            @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.success(
-                service.list(policyId, status, customerId, pageable).map(this::toResponse).getContent());
+            @PageableDefault(size = 2000) Pageable pageable) {
+        var page = service.list(policyId, status, customerId, pageable);
+        return ApiResponse.success(page.map(this::toResponse).getContent(),
+                ApiMeta.builder()
+                        .total(page.getTotalElements())
+                        .page(page.getNumber())
+                        .size(page.getSize())
+                        .build());
     }
 
     @GetMapping("/{id}")

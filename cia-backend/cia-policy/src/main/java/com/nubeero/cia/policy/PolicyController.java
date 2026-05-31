@@ -1,5 +1,6 @@
 package com.nubeero.cia.policy;
 
+import com.nubeero.cia.common.api.ApiMeta;
 import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.policy.dto.*;
 import io.swagger.v3.oas.annotations.Operation;
@@ -48,8 +49,14 @@ public class PolicyController {
     public ApiResponse<List<PolicySummaryResponse>> list(
             @RequestParam(required = false) PolicyStatus status,
             @RequestParam(required = false) UUID customerId,
-            @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.success(service.list(status, customerId, pageable).getContent());
+            @PageableDefault(size = 2000) Pageable pageable) {
+        var page = service.list(status, customerId, pageable);
+        return ApiResponse.success(page.getContent(),
+                ApiMeta.builder()
+                        .total(page.getTotalElements())
+                        .page(page.getNumber())
+                        .size(page.getSize())
+                        .build());
     }
 
     @GetMapping("/search")
@@ -64,8 +71,14 @@ public class PolicyController {
     })
     public ApiResponse<List<PolicySummaryResponse>> search(
             @RequestParam String q,
-            @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.success(service.search(q, pageable).getContent());
+            @PageableDefault(size = 2000) Pageable pageable) {
+        var page = service.search(q, pageable);
+        return ApiResponse.success(page.getContent(),
+                ApiMeta.builder()
+                        .total(page.getTotalElements())
+                        .page(page.getNumber())
+                        .size(page.getSize())
+                        .build());
     }
 
     @GetMapping("/{id}")

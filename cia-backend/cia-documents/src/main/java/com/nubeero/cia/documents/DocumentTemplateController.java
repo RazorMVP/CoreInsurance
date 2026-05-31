@@ -1,5 +1,6 @@
 package com.nubeero.cia.documents;
 
+import com.nubeero.cia.common.api.ApiMeta;
 import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.documents.dto.DocumentTemplateResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,8 +42,14 @@ public class DocumentTemplateController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden", content = @Content)
     })
     public ApiResponse<List<DocumentTemplateResponse>> list(
-            @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.success(service.list(pageable).map(this::toResponse).getContent());
+            @PageableDefault(size = 2000) Pageable pageable) {
+        var page = service.list(pageable);
+        return ApiResponse.success(page.map(this::toResponse).getContent(),
+                ApiMeta.builder()
+                        .total(page.getTotalElements())
+                        .page(page.getNumber())
+                        .size(page.getSize())
+                        .build());
     }
 
     @GetMapping("/{id}")

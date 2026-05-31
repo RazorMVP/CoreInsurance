@@ -2,6 +2,7 @@ package com.nubeero.cia.claims;
 
 import com.nubeero.cia.claims.dto.AddClaimCommentRequest;
 import com.nubeero.cia.claims.dto.ClaimCommentResponse;
+import com.nubeero.cia.common.api.ApiMeta;
 import com.nubeero.cia.common.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -42,8 +43,14 @@ public class ClaimCommentController {
     })
     public ApiResponse<List<ClaimCommentResponse>> list(
             @PathVariable UUID claimId,
-            @PageableDefault(size = 50) Pageable pageable) {
-        return ApiResponse.success(service.list(claimId, pageable).map(this::toResponse).getContent());
+            @PageableDefault(size = 2000) Pageable pageable) {
+        var page = service.list(claimId, pageable);
+        return ApiResponse.success(page.map(this::toResponse).getContent(),
+                ApiMeta.builder()
+                        .total(page.getTotalElements())
+                        .page(page.getNumber())
+                        .size(page.getSize())
+                        .build());
     }
 
     @PostMapping

@@ -1,5 +1,6 @@
 package com.nubeero.cia.customer;
 
+import com.nubeero.cia.common.api.ApiMeta;
 import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.customer.dto.*;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,8 +46,14 @@ public class CustomerController {
     public ApiResponse<List<CustomerSummaryResponse>> list(
             @RequestParam(required = false) CustomerType type,
             @RequestParam(required = false) KycStatus kycStatus,
-            @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.success(service.list(type, kycStatus, pageable).getContent());
+            @PageableDefault(size = 2000) Pageable pageable) {
+        var page = service.list(type, kycStatus, pageable);
+        return ApiResponse.success(page.getContent(),
+                ApiMeta.builder()
+                        .total(page.getTotalElements())
+                        .page(page.getNumber())
+                        .size(page.getSize())
+                        .build());
     }
 
     @GetMapping("/search")
@@ -61,8 +68,14 @@ public class CustomerController {
     })
     public ApiResponse<List<CustomerSummaryResponse>> search(
             @RequestParam String q,
-            @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.success(service.search(q, pageable).getContent());
+            @PageableDefault(size = 2000) Pageable pageable) {
+        var page = service.search(q, pageable);
+        return ApiResponse.success(page.getContent(),
+                ApiMeta.builder()
+                        .total(page.getTotalElements())
+                        .page(page.getNumber())
+                        .size(page.getSize())
+                        .build());
     }
 
     @GetMapping("/{id}")

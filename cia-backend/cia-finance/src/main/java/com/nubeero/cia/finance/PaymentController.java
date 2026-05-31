@@ -1,5 +1,6 @@
 package com.nubeero.cia.finance;
 
+import com.nubeero.cia.common.api.ApiMeta;
 import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import com.nubeero.cia.common.tenant.TenantContext;
@@ -56,9 +57,14 @@ public class PaymentController {
     })
     public ApiResponse<List<PaymentResponse>> list(
             @PathVariable UUID creditNoteId,
-            @PageableDefault(size = 20) Pageable pageable) {
-        return ApiResponse.success(
-                service.findByCreditNote(creditNoteId, pageable).map(this::toResponse).getContent());
+            @PageableDefault(size = 2000) Pageable pageable) {
+        var page = service.findByCreditNote(creditNoteId, pageable);
+        return ApiResponse.success(page.map(this::toResponse).getContent(),
+                ApiMeta.builder()
+                        .total(page.getTotalElements())
+                        .page(page.getNumber())
+                        .size(page.getSize())
+                        .build());
     }
 
     @GetMapping("/{id}")

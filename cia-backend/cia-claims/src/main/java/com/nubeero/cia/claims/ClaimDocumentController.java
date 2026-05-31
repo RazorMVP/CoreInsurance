@@ -1,5 +1,6 @@
 package com.nubeero.cia.claims;
 
+import com.nubeero.cia.common.api.ApiMeta;
 import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.claims.dto.ClaimDocumentResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -50,11 +51,16 @@ public class ClaimDocumentController {
     public ApiResponse<List<ClaimDocumentResponse>> list(
             @PathVariable UUID claimId,
             @RequestParam(required = false) ClaimDocumentType documentType,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @PageableDefault(size = 2000) Pageable pageable) {
         Page<ClaimDocument> page = documentType != null
                 ? service.findByClaimIdAndType(claimId, documentType, pageable)
                 : service.findByClaimId(claimId, pageable);
-        return ApiResponse.success(page.map(this::toResponse).getContent());
+        return ApiResponse.success(page.map(this::toResponse).getContent(),
+                ApiMeta.builder()
+                        .total(page.getTotalElements())
+                        .page(page.getNumber())
+                        .size(page.getSize())
+                        .build());
     }
 
     @GetMapping("/{id}/content")

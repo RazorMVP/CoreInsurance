@@ -1,5 +1,6 @@
 package com.nubeero.cia.finance;
 
+import com.nubeero.cia.common.api.ApiMeta;
 import com.nubeero.cia.common.api.ApiResponse;
 import com.nubeero.cia.finance.dto.CreditNoteResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,13 +44,18 @@ public class CreditNoteController {
     public ApiResponse<List<CreditNoteResponse>> list(
             @RequestParam(required = false) CreditNoteStatus status,
             @RequestParam(required = false) UUID entityId,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @PageableDefault(size = 2000) Pageable pageable) {
         Page<CreditNote> page = status != null
                 ? service.findByStatus(status, pageable)
                 : entityId != null
                         ? service.findByEntity(entityId, pageable)
                         : service.findAll(pageable);
-        return ApiResponse.success(page.map(this::toResponse).getContent());
+        return ApiResponse.success(page.map(this::toResponse).getContent(),
+                ApiMeta.builder()
+                        .total(page.getTotalElements())
+                        .page(page.getNumber())
+                        .size(page.getSize())
+                        .build());
     }
 
     @GetMapping("/{id}")
