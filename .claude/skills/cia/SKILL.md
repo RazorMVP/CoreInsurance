@@ -112,9 +112,12 @@ HTTP Request (Bearer JWT)
 ReportRunnerService
   ├── load: ReportDefinitionService.get(reportId)
   ├── execute: ReportQueryBuilder.execute(definition, filterValues)
-  │     ├── BASE_QUERIES map (one native SQL per DataSource)
+  │     ├── DUAL MODEL per DataSource (isBusinessSource predicate):
+  │     │     6 business sources → dynamic per-field SELECT (SOURCE_FROM + SOURCE_COLUMNS);
+  │     │     all others (closures views, RM_COMMISSION, UNDERWRITING_PERFORMANCE) → fixed BASE_QUERIES
+  │     ├── aggregate mode (report has non-blank groupBy): SUM measures + GROUP BY dimensions
   │     ├── dynamic WHERE clauses from config.filters + user-supplied values
-  │     ├── sanitised ORDER BY (whitelist: [a-zA-Z0-9_.] only)
+  │     ├── sanitised ORDER BY + projection alias (whitelist: [a-zA-Z0-9_.] only)
   │     └── post-processing: computed fields (loss_ratio, combined_ratio, etc.)
   └── render:
         ├── JSON  → ReportResultDto { columns, rows, totalRows }
@@ -133,7 +136,14 @@ Domain (tenant schema)
   └── report_access_policy (access_group_id + category? + report_id? + can_view + can_export_csv + can_export_pdf)
 ```
 
-**Key architectural constraint:** `cia-reports` has **zero dependency on any business module**. `ReportQueryBuilder` uses `EntityManager.createNativeQuery()` directly against the tenant schema. Adding a new pre-built report is a Flyway data migration (`V18+`), not a code change.
+**Key architectural constraint:** `cia-reports` has **zero dependency on any business module**. `ReportQueryBuilder` uses `EntityManager.createNativeQuery()` directly against the tenant schema. Adding a new pre-built report on an **existing** source is a Flyway data migration (`V18+`), not a code change; a report needing a **new substrate** also adds a `DataSource` enum value + a `BASE_QUERIES`/`SOURCE_COLUMNS` entry.
+
+**`ReportQueryBuilder` dual model (post-refactor, the V18/V44 business-source breakage fix + V66 cross-entity source):**
+
+- The **6 business sources** (POLICIES, CLAIMS, FINANCE, REINSURANCE, CUSTOMERS, ENDORSEMENTS) build their SELECT **dynamically** from each report's declared non-computed field keys via `SOURCE_FROM` (FROM/JOIN/WHERE skeleton) + `SOURCE_COLUMNS` (`fieldKey → SQL expr`, mostly single-table over denormalised columns; REINSURANCE has one LEFT JOIN for the treaty label). Emitting columns in declared-field order makes the positional `applyComputedFields()` correct-by-construction. An unmapped field key projects `NULL`. This replaced the original fixed-SELECT-for-all model, whose queries referenced phantom singular tables (`policy`, `customer`, …) and broke all 55 V18 + 4 V44 business/closures SYSTEM reports at runtime.
+- **All other sources keep a fixed `BASE_QUERIES` SELECT**: the closures views (TRIAL_BALANCE, GENERAL_LEDGER, GL_PERIOD_LOCK, PAA_LRC, PAA_GROUPS, IFRS17_MOVEMENT, IFRS9_HOLDINGS, IFRS9_CARRYING, IFRS9_MOVEMENT), the **`RM_COMMISSION`** per-RM accrual aggregate (V64), and the **`UNDERWRITING_PERFORMANCE`** cross-entity aggregate (V66).
+- **`UNDERWRITING_PERFORMANCE` (V66)** is a UNION-ALL event stream over `policies` (gross written premium = `total_premium`), `claims` (`reserve_amount` = claims incurred), and APPROVED `claim_expenses`, each row carrying a single `ev.event_date` so the top-level `date_from`/`date_to` filter works unchanged; `GROUP BY ev.cob` (in `BASE_QUERY_TAILS`) feeds `premium_earned`/`claims_incurred`/`expenses` to the computed `loss_ratio`/`combined_ratio`. It fixed the 3 ratio reports (Loss Ratio, Combined Ratio, Annual Revenue Account) which previously rendered `0.00` on the premium-less CLAIMS source. Premium is written-not-earned (documented proxy); reports on this source declare non-computed fields as a prefix of `[class_of_business, premium_earned, claims_incurred, expenses]`.
+- The business-vs-fixed split is the single `isBusinessSource(ds)` predicate (`SOURCE_COLUMNS` and `BASE_QUERIES` are exact complements). Aggregate mode (SQL `SUM` + `GROUP BY`) fires for any source whose report declares a non-blank `groupBy`; computed fields stay Java-post-processed. Guarded by `SystemReportSmokeIT` (every SYSTEM report against a real DB) + `BusinessReportValueIT` (per-source value assertions). The custom-report-builder picker exposes **15** of the 17 enum sources — `RM_COMMISSION` and `UNDERWRITING_PERFORMANCE` are fixed-shape substrates deliberately excluded.
 
 **ReportConfig JSONB shape:**
 ```json
@@ -163,17 +173,19 @@ Domain (tenant schema)
 | `utilisation_pct` | `capacity_used / total_capacity × 100` |
 | `conversion_pct` | `bound_quotes / total_quotes × 100` |
 
-**67 SYSTEM report catalogue summary:**
+**68 SYSTEM report catalogue summary** (V18 = 55, V44 = +12 closures, V64 = +1 RM commission; V66 re-seeds 3 in place, net 0):
 
 | Category | Count | IDs / Coverage | Notable |
 |---|---|---|---|
 | Underwriting | 12 | U01–U12 | GWP, NWP, Policy Register, Renewal Due, Quote-to-Bind |
 | Claims | 13 | C01–C13 | Loss Ratio, Claims Ageing, Large Loss, Reserve Movement |
-| Finance | 9 | F01–F09 | Receivables Ageing, Collections, Commission Statement, Combined Ratio |
+| Finance | 10 | F01–F09 + RM Commission Accrual (V64) | Receivables Ageing, Collections, Commission Statement, Combined Ratio, **RM Commission Accrual** (`RM_COMMISSION` source, per-RM aggregation — B2/V64) |
 | Reinsurance | 8 | R01–R08 | RI Bordereaux, Treaty Utilisation, Cession Statement |
 | Customer | 5 | K01–K05 | Active Customers, Customer Loss Ratio, Broker Performance |
 | Regulatory | 8 | N01–N08 | NAICOM Annual Revenue, Prudential Return, Premium/Claims Bordereaux; `is_pinnable=false` |
 | **Closures (V44)** | **12** | GL × 4 + PAA × 4 + IFRS 9 × 4 | Trial Balance, General Journal Listing, Account Movement Statement, Period Lock Audit Trail, LRC/LIC Roll-forward, ISR Summary, Contract Groups Listing, Investment Holdings, Investment Carrying Value, Premium Receivable ECL, §B5.5.39 Combined Movement |
+
+> **Ratio reports (V66):** Loss Ratio (CLAIMS cat), Combined Ratio (FINANCE cat), and Annual Revenue Account (REGULATORY cat) were re-seeded onto the `UNDERWRITING_PERFORMANCE` cross-entity source so their `loss_ratio`/`combined_ratio` columns compute non-zero — previously they ran on the premium-less CLAIMS source and always rendered `0.00`. This is a re-seed of existing reports (net 0 to the 68 total), not new reports.
 
 ---
 
@@ -350,6 +362,7 @@ Quotes support multiple per-item loadings and discounts, plus quote-level adjust
 ## Development Conventions
 
 - All REST endpoints are tenant-scoped via `X-Tenant-ID` header (resolved from Keycloak JWT).
+- **List-endpoint envelope (all internal `/api/v1` list controllers):** the array goes directly in `data`; pagination metadata (`total`, `page`, `size`) goes in `meta` — never serialise Spring's `Page<T>` into `data` (the frontend unwraps `res.data.data` as an array). Canonical idiom: `ApiResponse.success(page.getContent(), ApiMeta.builder().total(page.getTotalElements()).page(page.getNumber()).size(page.getSize()).build())`. As of Session 137 every `Page`-backed internal list endpoint populates `ApiMeta` and defaults to `@PageableDefault(size = 2000)` (Spring's `max-page-size` ceiling) so a single unbounded fetch returns the full list; true server-side pagination UI is a tracked follow-up (`list-endpoints-true-pagination`). `.map(toResponse)` endpoints read meta off the **source** `Page`. Partner API (`/partner/v1`) is a separate surface with its own contracts.
 - All write operations log to an audit table: `entity_type`, `entity_id`, `action`, `user_id`, `timestamp`, `old_value`, `new_value`.
 - Approval workflows are modelled as Temporal workflows — not ad-hoc state machines.
 - Bulk operations (upload, batch registration) use async Temporal workflows with progress tracking.
