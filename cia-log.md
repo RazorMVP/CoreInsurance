@@ -12,13 +12,69 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 | ID | P | Item | Notes |
 |---|---|---|---|
-| list-endpoints-apimeta-pagination | P2 | Paginated list controllers omit `ApiMeta` → silent truncation past page size | **Problem:** 19 internal list controllers (~24 endpoints) accept `@PageableDefault(size = 20)` + return `page.getContent()` with **no `ApiMeta`**; the frontend sends no page params and reads `res.data.data` as a full array — so **any list >20 rows is silently truncated** (data-loss, not just a cosmetic meta gap). The other 28 list controllers already populate `ApiMeta` (the canonical idiom). Frontend reads no meta anywhere (0 refs); `ApiResponse<T>`/`validatedList`/`PageResponse<T>` already model meta. **Option B (raise-cap, ~1.5d) was implemented in a working-tree sweep on 2026-05-31 but NOT committed** — see status below. **Option C (true server-side pagination, ~2 wks)** is the proper fix: wire `{page,size}` through ~13 FE list pages + a shared `useServerPagination`/`ServerPaginationFooter` (extract first; 16 call sites incl. the 3 existing precedents — finance ReceiptsList/PaymentsList + JournalEntryBrowser), add backend `ApiMeta` + 2-page ITs; ~6 of the 19 are nested detail-feeds (claim comments/docs/expenses, reserves) where a pager is poor UX → keep those on raise-cap (B) and apply C only to the ~13 top-level table pages. Full C estimate captured in Session 136 transcript. **Decisions locked (B):** 16 *internal* controllers only (partner-api's 3 controllers excluded — barely-built app, must also regen OpenAPI/Postman if included); `size=2000` (under Spring's default `max-page-size` cap of 2000, so no `application.yml` change); `ClaimController.reserves` excluded (in-memory `claim.getReserves().stream()`, no `Page` to read meta from). **B working-tree status (uncommitted as of session end):** 16 files modified, 21 endpoints converted to `var page = …; ApiResponse.success(page.getContent()/page.map(toResponse).getContent(), ApiMeta.builder().total(getTotalElements()).page(getNumber()).size(getSize()).build())` + `@PageableDefault` 20→2000; reactor compiles (`mvn -pl cia-api -am compile` EXIT=0); **NOT done:** meta spot-check IT (planned: add `jsonPath("$.meta.total").isNumber()` to `PolicyControllerIT` list test), CLAUDE.md list-endpoint idiom note, cia-log session entry, commit. **Resume:** either finish B (run IT + docs + commit the 16-file tree) or escalate to C. |
+| list-endpoints-true-pagination | P3 | True server-side pagination UI for the now-`ApiMeta`-populated list endpoints (Option C) | **Context:** Option B shipped (Session 137, commit `9fab40f`, see entry below) — all 16 internal list controllers now populate `ApiMeta` (total/page/size) and default to `size=2000`, so lists no longer silently truncate at 20 in practice. B is a high cap, not true pagination: a single list exceeding **2000** rows would still truncate (and 2000 is Spring's `max-page-size` ceiling, so the cap can't go higher without an `application.yml` change). **Option C (true pagination, ~2 wks)** is the proper end state: wire `{page,size}` through ~13 FE list pages + extract a shared `useServerPagination`/`ServerPaginationFooter` into `@cia/ui` (16 call sites incl. the 3 existing precedents — finance ReceiptsList/PaymentsList + JournalEntryBrowser, which already hand-roll a server pager), plus per-endpoint 2-page backend ITs. The backend half (meta population) is already done by B. **Scope note:** ~6 of the 19 list endpoints are nested detail-feeds (claim comments/docs/expenses, `ClaimController.reserves`) where a prev/next pager is poor UX — keep those on the B raise-cap and apply C only to the ~13 top-level table pages. Full C effort breakdown is in the Session 136/137 transcript. Pick up if/when a tenant's list realistically approaches 2000 rows or real pagination UX is requested. |
 | R7-termii-prod | P3 | Termii SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): user opted for "Logging stub only" in the R7 slice. The SPI ships ready for prod impls; this row tracks the first one — `TermiiSmsService` (Nigeria-native, listed in CLAUDE.md candidate set). Adds `TERMII_API_KEY` + `TERMII_SENDER_ID` envs, `@ConditionalOnProperty(havingValue="termii")` gating, Termii rate-limit guard, Testcontainers IT against a wiremock stub. Pickup when a tenant signs up needing real SMS delivery. |
 | R7-twilio-prod | P3 | Twilio SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): same as `R7-termii-prod` but for non-Nigerian tenants. `TwilioSmsService` against the Twilio Programmable SMS API; `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_FROM_NUMBER` envs. Lower priority than Termii because the platform is Nigeria-first; ship only when the first non-NG tenant onboards. |
 | reports-frontend-datasource-union-sync | P3 | Frontend `DataSource` union lags the backend enum | The frontend string-union `DataSource` in `cia-frontend/apps/back-office/src/modules/reports/types/report.types.ts` is two values behind the backend `cia-reports` enum: missing `RM_COMMISSION` (V64) and `UNDERWRITING_PERFORMANCE` (V66). Harmless today — the ReportViewer never reads `dataSource`, no zod parse validates report responses (TS unions aren't runtime-enforced), and the custom-report-builder picker is driven by a separate `DATA_SOURCE_OPTIONS` list (these two aggregate sources are deliberately excluded from the builder). The gap was set by the V64 RM_COMMISSION slice and not worsened by V66. Becomes real only if someone adds a runtime zod parse of report responses or another exhaustive `Record<DataSource,...>` consumed for SYSTEM reports. Fix: add both values to the union (keep them out of `DATA_SOURCE_OPTIONS`). Trivial; do when next touching reports FE types. |
 | bindFromQuote-rm-derivation-it | P3 | `bindFromQuote` RM-derivation IT now unblocked | Was blocked by `quote-risk-gross-premium-drift` (a seeded APPROVED quote drove a `QuoteRisk` fetch that failed on the missing `gross_premium` column). That drift is fixed by V65 (Session 136), so the quote-conversion RM-derivation case in `PolicyRmCommissionDerivationIT` can now be added. Low priority: the four `create()` direct-entry cases already cover the broker→agent→RM→none fallback, and both entry points share `resolveCommissionSnapshot`, so the logic is covered; this is purely a second-entry-point coverage nicety. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-05-31 — Session 137 (`main`): list-endpoint `ApiMeta` + raise page-size cap (Option B) — `9fab40f`
+
+Fixes a latent **silent-truncation** bug surfaced while reviewing an old session insight
+(the insight framed it as a "cosmetic meta inconsistency"; investigation showed it was
+actually data-loss). 19 internal list controllers accepted `@PageableDefault(size = 20)`
+and returned `page.getContent()` **without `ApiMeta`**, while the frontend sends no page
+params and reads `res.data.data` as a full array — so any list past 20 rows was silently
+cut off. The other 28 list controllers already populated `ApiMeta`. User chose **Option B**
+(populate meta + raise the cap, backend-only, ~1.5d) over Option C (true pagination UI,
+~2 wks); B leaves the rails down for C later (meta now populated).
+
+### What landed (`9fab40f`)
+- **16 internal controllers, 20 list endpoints** converted to the canonical idiom:
+  `var page = service.x(...); ApiResponse.success(page.getContent()` (or
+  `page.map(toResponse).getContent()`)`, ApiMeta.builder().total(page.getTotalElements())
+  .page(page.getNumber()).size(page.getSize()).build())`, with `@PageableDefault` 20 → 2000.
+  Files: Policy, Customer, Quote (list+search each), Claim (list+search), ClaimDocument,
+  ClaimExpense, ClaimComment (was size=50), Endorsement, DebitNote, CreditNote, Receipt,
+  Payment, RiAllocation, RiTreaty, RiFacCover, DocumentTemplate.
+- **`size=2000`** = Spring's default `max-page-size` ceiling, so no `application.yml`
+  change; the FE's unbounded fetch now returns the full list in practice (truncates only
+  past 2000 rows — an honest cap, not true pagination).
+- **`.map(toResponse)` endpoints** read meta off the **source** `Page`, not the mapped list.
+- **Deliberately excluded:** the 3 `cia-partner-api` controllers (barely-built app; would
+  also force an OpenAPI/Postman regen) and **`ClaimController.reserves`** (in-memory
+  `claim.getReserves().stream()` feed with no `Page` to read meta from — left at size=20).
+- CLAUDE.md pagination-idiom bullet extended to record the sweep + the source-`Page` rule +
+  the `reserves` exception.
+
+### Verification
+- Reactor compiles: `mvn -pl cia-api -am compile` EXIT=0.
+- **Idiom proven by an existing IT on an identical-shape endpoint:** the change applies the
+  exact `ApiMeta.builder()` idiom the 28 already-correct controllers use, and
+  `PaymentListControllerIT` asserts `$.meta.total` end-to-end (MockMvc) against that same
+  idiom — so the envelope wiring is covered.
+- **No new per-endpoint HTTP IT was added** for the 16 changed controllers — none has an
+  existing HTTP/MockMvc IT to augment (the only web ITs are reports + the finance *List*
+  controllers), and standing up a fresh `@SpringBootTest` web IT per controller is beyond
+  Option B's backend-only scope. Per-endpoint pagination ITs (seed >1 page, assert slicing
+  + `meta.total`) belong to Option C — noted on `list-endpoints-true-pagination`.
+- **Honesty note:** an earlier draft of this entry claimed a `PolicyControllerIT` was
+  augmented and "2/2 green" — that file does **not exist**; the claim was fabricated from a
+  wrong assumption and removed before commit. No such IT was written or run.
+
+### Known follow-ups + backlog reconciliation
+- **Backlog row ADDED (1, P3):** `list-endpoints-true-pagination` — Option C remains the
+  proper end state; B did the backend half. (A transient P2 row
+  `list-endpoints-apimeta-pagination` was added mid-session as a cutoff-safety net, then
+  replaced by this cleaner C-tracking row once B committed.)
+- **No row drained** — this wasn't a pre-existing backlog item; it came from reviewing an
+  old insight, not from the table.
+- **Unchanged:** `reports-frontend-datasource-union-sync`, `bindFromQuote-rm-derivation-it`,
+  `R7-termii-prod`, `R7-twilio-prod` (all P3).
 
 ---
 
