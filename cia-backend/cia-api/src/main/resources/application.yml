@@ -41,12 +41,6 @@ spring:
     baseline-on-migrate: true
     schemas: public
 
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${KEYCLOAK_URL:http://localhost:8280}/realms/${KEYCLOAK_REALM:cia}
-
   mail:
     host: ${SMTP_HOST:localhost}
     port: ${SMTP_PORT:587}
