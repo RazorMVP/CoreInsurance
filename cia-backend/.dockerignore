@@ -1,0 +1,10 @@
+.git
+.github
+.mvn/wrapper/maven-wrapper.jar
+**/target
+**/.classpath
+**/.project
+**/.settings
+**/*.iml
+**/.DS_Store
+README.md

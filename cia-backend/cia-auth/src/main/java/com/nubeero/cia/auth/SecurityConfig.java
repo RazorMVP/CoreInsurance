@@ -28,6 +28,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 new AntPathRequestMatcher("/actuator/health"),
+                                // Liveness/readiness probe sub-paths (k8s + Docker
+                                // HEALTHCHECK) — health.probes.enabled=true exposes
+                                // /actuator/health/{liveness,readiness}.
+                                new AntPathRequestMatcher("/actuator/health/**"),
                                 new AntPathRequestMatcher("/actuator/info"),
                                 // Swagger UI + OpenAPI specs — the actual mount is
                                 // under /partner/* (see application.yml). The

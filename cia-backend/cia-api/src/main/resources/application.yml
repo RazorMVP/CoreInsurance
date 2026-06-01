@@ -65,6 +65,14 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+      # Kubernetes / Docker liveness + readiness probes. Exposes
+      # /actuator/health/liveness and /actuator/health/readiness. The Docker
+      # HEALTHCHECK (cia-backend/Dockerfile) and k8s probes hit these. The
+      # readiness group also gates on the Temporal-worker readiness indicator
+      # once present (observability slice); liveness stays a pure
+      # process-alive signal.
+      probes:
+        enabled: true
 
 cia:
   temporal:

@@ -17,7 +17,7 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | naicom-niid-live-integration | P2 | NAICOM + NIID **live** REST services throw `UnsupportedOperationException` | Re-rated P1→**P2** (Session 142): verified **launch-safe** — `StubNaicomService`/`StubNiidService` are `@ConditionalOnProperty(matchIfMissing=true)` so they're the active beans by default; policy approval issues a cert with `naicom_uid="PENDING"` then the async `PolicyNaicomUploadActivityImpl`/`...Niid...` Temporal activity fills the real UID. Approval never blocks. Only the `live` path (`NaicomRestService.java:18`/`NiidRestService.java:18`, `havingValue="live"`) is a skeleton, dormant unless `NAICOM_MODE/NIID_MODE=live`. **Gated on NAICOM/NIID sandbox+prod credentials (Open Q#4)** — implement the real REST clients when creds arrive; until then the stub is the correct launch posture. |
 | kyc-live-provider | P2 | No working **live** KYC provider (Dojah/Prembly skeletons throw; NIBSS absent) | Re-rated P1→**P2** (Session 142): the **launch-blocker is fixed** — `MockKycService` re-gated from `@Profile("dev\|test")` to `@ConditionalOnProperty(name="cia.kyc.provider", havingValue="mock", matchIfMissing=true)`, so onboarding is now launch-safe with no provider configured (commit in S142; mirrors the NAICOM stub). What remains is the genuine **live** integration: `DojahKycService`/`PremblyKycService` throw `UnsupportedOperationException` on all 3 methods; no `NibssKycService`. Implement at least one (Dojah — Nigeria-native) against its REST API + wiremock IT. **Gated on provider credentials.** |
 | kyc-deferred-pending-status | P3 | `mock`/default KYC auto-PASSes rather than marking deferred (`PENDING`) | Surfaced S142. The launch-safe `MockKycService` returns `verified=true` → customer `kyc_status=PASSED`, which over-attests (no real verification happened). The honest state is `KycStatus.PENDING` ("onboarded, KYC deferred until a provider is wired"). Deferred because threading a true 3rd "deferred" signal through the binary `KycResult.verified` + the intertwined corporate/director flow (`allDirectorsPassed`) is past the S142 "small fix" scope. Fix: add a `deferred`/`pending` outcome to `KycResult` + map it to `KycStatus.PENDING` in `applyKycResult`/corporate/director paths. Do when KYC live work (`kyc-live-provider`) is picked up. |
-| prod-deployability-image-k8s | P1 | No backend Dockerfile / image / K8s manifests / deploy pipeline on `main` | Re-audit. cia-api cannot be containerized or deployed from main (compose service commented out; no Dockerfile, no k8s/Helm, CI builds+tests but never publishes an image or deploys the backend — only FE→Vercel). The unmerged `production-readiness-phase-0` branch (34 commits) already has Dockerfile/.dockerignore/prod-compose/Prometheus-alerts/runbooks — triage + reconcile vs V66 rather than rebuild. ~1–2 wk. |
+| prod-deployability-k8s-manifests | P1 | No Kubernetes/Helm manifests or backend deploy-to-prod automation | **Slice 1 done (S143):** backend Dockerfile + `.dockerignore` + `backend-image.yml` CI (GHCR build + Trivy CVE gate) landed and verified — image builds against current `main` (V66), container boots, liveness/readiness probes 200, Docker HEALTHCHECK healthy. **Remaining:** k8s manifests / Helm chart (Deployment, Service, Ingress, HPA, probes, secrets) — the phase-0 branch stops at docker-compose and has NONE, so this is net-new. Plus a deploy-to-prod step (apply/Helm-release) once a cluster target exists. `docker/production/docker-compose.yml` + `production.env.example` salvageable from phase-0 as an interim non-k8s deploy. ~1 wk. |
 | ndpr-dsar-and-retention | P1 | NDPR DSAR export endpoint + PII retention/purge workflow absent (claimed in CLAUDE.md §8) | Re-audit. No data-subject-access export endpoint exists; the only retention workflow is `PdfDownloadLogRetentionWorkflow` (PDF-log purge), not a tenant-config-driven customer-PII purge. Both are regulatory obligations stated as present. Build: a DSAR export endpoint (customer + related records) and a scheduled Temporal PII-retention purge keyed to per-tenant retention config. ~1 wk, self-contained. |
 | money-math-test-coverage | P1 | Core money-math + RI allocation untested | Re-audit. No dedicated tests for premium `SI×Rate−Discount` (`QuoteService`/`PolicyService`), pro-rata endorsement `(Annual/365)×Days`, or claims DV/reserves/settlement amounts; **`AllocationService` (surplus/quota-share/XOL) has zero test references anywhere** — RI ceding math is regulatory-impacting. Add focused unit tests for each formula + an allocation IT. ~3–5d. GL/IFRS/period-lock are already well covered. |
 | e2e-playwright-golden-paths | P2 | No E2E tests exist (CLAUDE.md standard unmet) | Re-audit. Zero Playwright config/specs on main; `@playwright/test` in no package.json. No golden-path coverage (login→quote→policy→claim→finance). The `production-readiness-phase-0` branch has a planned smoke (unmerged). Stand up Playwright + one golden path per module. |
@@ -42,6 +42,65 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | bindFromQuote-rm-derivation-it | P3 | `bindFromQuote` RM-derivation IT now unblocked | Was blocked by `quote-risk-gross-premium-drift` (a seeded APPROVED quote drove a `QuoteRisk` fetch that failed on the missing `gross_premium` column). That drift is fixed by V65 (Session 136), so the quote-conversion RM-derivation case in `PolicyRmCommissionDerivationIT` can now be added. Low priority: the four `create()` direct-entry cases already cover the broker→agent→RM→none fallback, and both entry points share `resolveCommissionSnapshot`, so the logic is covered; this is purely a second-entry-point coverage nicety. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-06-01 — Session 143 (`main`): deployability Slice 1 — backend container image + CI + probes (+ latent S141 partner-auth bug fix)
+
+First slice of the deployability P1. Triaged the unmerged `production-readiness-phase-0`
+branch (34 commits, forked 2026-05-06, `main` now 421 ahead): verdict **do not merge** — it
+carries a `V31__reporting_query_indexes.sql` colliding with `main`'s `V31__create_gl_foundation`
+(main is at V66), and it independently re-did work already on `main` *differently* (its own
+`ProductionSafetyValidator` registered via the **same broken `.imports` mechanism** we fixed in
+S140 — i.e. a latent no-op). Decision: **salvage its infra assets in focused slices**, each
+re-validated against current `main`, rather than merge.
+
+### Slice 1 — backend container image (this session)
+- **`cia-backend/Dockerfile`** (adapted from phase-0) — multi-stage (maven:3.9.9-temurin-21
+  builder → temurin-21-jre-jammy runtime), non-root `cia` user, `mvn -pl cia-api -am package
+  -DskipTests` with a BuildKit `~/.m2` cache mount, liveness HEALTHCHECK. Added Maven
+  **download-retry flags** (`-Dmaven.wagon.http.retryHandler.count=3`) after the first build
+  hit a transient Maven Central truncation on `testcontainers:1.21.4`.
+- **`cia-backend/.dockerignore`** — excludes `.git`, `**/target`, IDE files.
+- **`.github/workflows/backend-image.yml`** — GHCR build on main/tags + Trivy CRITICAL/HIGH
+  CVE gate; PRs build+scan but don't push. Security-reviewed (the one `run:` step reads
+  metadata via `env:`, no untrusted event input).
+- **Liveness/readiness probes** — `application.yml` `management.endpoint.health.probes.enabled=
+  true`; `SecurityConfig` permitAll extended to `/actuator/health/**` (probe sub-paths). The
+  Dockerfile HEALTHCHECK + future k8s probes hit `/actuator/health/liveness`.
+
+### Latent S141 bug fixed (surfaced by containerizing)
+The full app **failed to boot in a container**: `PartnerSecurityConfig.partnerFilterChain`
+used `.jwt(...)` which requires a `JwtDecoder` bean — but S141 deleted that bean (internal
+chain moved to the per-issuer resolver) AND removed the `issuer-uri` property autoconfig would
+have used. The partner chain had no decoder source → `APPLICATION FAILED TO START`. This never
+showed in tests: finance `@SpringBootTest` ITs `@MockBean JwtDecoder` (supplying the bean) and
+`@DataJpaTest` boot ITs don't load the web-security layer. **Fix:** `PartnerSecurityConfig`
+now uses the same `TenantIssuerJwtAuthenticationManagerResolver` (`.authenticationManagerResolver(...)`)
+as the internal chain — partner client-credentials tokens validate against their realm's JWKS.
+This is the value of containerization as a verification gate: it boots both security filter
+chains together without mocking, which no existing test did.
+
+### Verification
+- Image **builds against current `main` (V66)**: `docker build` EXIT=0, 674 MB.
+- **Container smoke test:** `docker run` (dev profile, host-networked to the compose stack) →
+  `Started CiaApplication`, `/actuator/health/liveness` 200, `/readiness` 200, `/health` UP,
+  Docker HEALTHCHECK **healthy**.
+- cia-auth tests green (probe permitAll); cia-partner-api compile + tests green (decoder fix);
+  full-context `ReconciliationGateIT` 2/2.
+
+### Known follow-ups + backlog reconciliation
+- **Row REWORDED (P1):** `prod-deployability-image-k8s` → `prod-deployability-k8s-manifests` —
+  Slice 1 (image + CI + probes) done; remaining = k8s/Helm manifests (net-new; phase-0 has
+  none) + deploy-to-prod automation. Stays P1.
+- **No row drained** (deployability is multi-slice; the image is one slice of it).
+- **Bonus fix (not a backlog row):** the `PartnerSecurityConfig` `JwtDecoder` boot failure — a
+  latent S141 regression caught by the container smoke test, fixed in this commit.
+- **Salvage queue (informational, from the phase-0 triage):** observability (Prometheus
+  registry + alerts/Grafana — maps to P2 `prod-observability`), upload-security SPI (maps to P2
+  `file-upload-validation`), tenant-provisioning API, health indicators, prod docker-compose +
+  env-validation scripts, deploy/migration runbooks. Each its own future slice, re-validated
+  vs `main`.
 
 ---
 

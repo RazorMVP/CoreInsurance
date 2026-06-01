@@ -1,7 +1,7 @@
 package com.nubeero.cia.partner.config;
 
-import com.nubeero.cia.auth.JwtAuthConverter;
 import com.nubeero.cia.auth.TenantContextFilter;
+import com.nubeero.cia.auth.TenantIssuerJwtAuthenticationManagerResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,9 +16,12 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 @RequiredArgsConstructor
 public class PartnerSecurityConfig {
 
-    private final JwtAuthConverter jwtAuthConverter;
     private final TenantContextFilter tenantContextFilter;
     private final PartnerScopeFilter partnerScopeFilter;
+    // Realm-per-tenant resolver (S141) — replaces the removed shared JwtDecoder
+    // bean. Partner tokens (OAuth2 client-credentials) are validated against
+    // their own realm's JWKS, same as the internal chain.
+    private final TenantIssuerJwtAuthenticationManagerResolver authenticationManagerResolver;
 
     @Bean
     @Order(1)
@@ -36,7 +39,7 @@ public class PartnerSecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter))
+                        .authenticationManagerResolver(authenticationManagerResolver)
                 )
                 .addFilterBefore(tenantContextFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(partnerScopeFilter, TenantContextFilter.class)
