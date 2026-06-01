@@ -10,6 +10,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -45,6 +46,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(controllers = GlobalExceptionHandlerMvcTest.FakeController.class)
 @Import({GlobalExceptionHandler.class, GlobalExceptionHandlerMvcTest.FakeController.class})
 @AutoConfigureMockMvc(addFilters = false)
+// PiiKeyValidator is a real EnvironmentPostProcessor (registered via
+// META-INF/spring.factories) and runs whenever a Spring context boots — so
+// this @WebMvcTest slice must supply a charset-valid pii-key or startup fails.
+@TestPropertySource(properties = "cia.security.pii-key=test-pii-key-not-the-dev-default-AAAAAAAA")
 class GlobalExceptionHandlerMvcTest {
 
     @Autowired

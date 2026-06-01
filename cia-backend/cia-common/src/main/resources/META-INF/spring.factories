@@ -1,0 +1,9 @@
+# EnvironmentPostProcessors must be registered here (spring.factories), NOT in
+# an `org.springframework.boot.env.EnvironmentPostProcessor.imports` file.
+# Spring Boot's EnvironmentPostProcessorApplicationListener loads EPPs only via
+# EnvironmentPostProcessorsFactory.fromSpringFactories(), which reads
+# META-INF/spring.factories. The `.imports` mechanism is for AutoConfiguration
+# only — an EPP listed there is silently never run at boot.
+org.springframework.boot.env.EnvironmentPostProcessor=\
+com.nubeero.cia.common.config.PiiKeyValidator,\
+com.nubeero.cia.common.config.ProductionSafetyValidator

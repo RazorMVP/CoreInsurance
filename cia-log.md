@@ -12,6 +12,27 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 | ID | P | Item | Notes |
 |---|---|---|---|
+| prod-realm-per-tenant-jwt-resolver | P1 | Resource server validates a single fixed issuer — realm-per-tenant auth isolation not wired | Re-audit (Session 140). `SecurityConfig` binds `JwtDecoder` via `JwtDecoders.fromIssuerLocation(issuer-uri)` to ONE realm (`${KEYCLOAK_REALM:cia}`); `target-realm` is the same single realm. The S139 hardcoded `tenant_id` mapper emits claim=realm-name, which is sound ONLY under true realm-per-tenant — but with one fixed issuer every user gets the same tenant and a 2nd tenant cannot be isolated by realm. CLAUDE.md §6 promises realm-per-tenant; not delivered at the resource-server layer. Fix: `JwtIssuerAuthenticationManagerResolver` (multi-issuer) + per-tenant issuer registry; then the S139 mapper pays off. ~1 wk. Blocks true multi-tenant prod. |
+| naicom-niid-live-integration | P1 | NAICOM + NIID live REST services throw `UnsupportedOperationException` | Re-audit. `NaicomRestService.java:18` / `NiidRestService.java:18` are skeletons ("pending credentials"); only stubs work. No policy can be registered with the regulator in live mode. Gated on NAICOM/NIID sandbox+prod credentials (Open Q#4). Implement real REST clients + the post-approval Temporal upload already wired. Nigeria-first → hard launch blocker once creds arrive. |
+| kyc-live-provider | P1 | No working live KYC provider | Re-audit. `DojahKycService` + `PremblyKycService` throw on all 3 methods; `NibssKycService` class absent. Customer onboarding KYC is mock-only — a regulated requirement. Implement at least one live provider (Dojah is Nigeria-native) against its REST API + wiremock IT. Gated on provider credentials. |
+| prod-deployability-image-k8s | P1 | No backend Dockerfile / image / K8s manifests / deploy pipeline on `main` | Re-audit. cia-api cannot be containerized or deployed from main (compose service commented out; no Dockerfile, no k8s/Helm, CI builds+tests but never publishes an image or deploys the backend — only FE→Vercel). The unmerged `production-readiness-phase-0` branch (34 commits) already has Dockerfile/.dockerignore/prod-compose/Prometheus-alerts/runbooks — triage + reconcile vs V66 rather than rebuild. ~1–2 wk. |
+| ndpr-dsar-and-retention | P1 | NDPR DSAR export endpoint + PII retention/purge workflow absent (claimed in CLAUDE.md §8) | Re-audit. No data-subject-access export endpoint exists; the only retention workflow is `PdfDownloadLogRetentionWorkflow` (PDF-log purge), not a tenant-config-driven customer-PII purge. Both are regulatory obligations stated as present. Build: a DSAR export endpoint (customer + related records) and a scheduled Temporal PII-retention purge keyed to per-tenant retention config. ~1 wk, self-contained. |
+| money-math-test-coverage | P1 | Core money-math + RI allocation untested | Re-audit. No dedicated tests for premium `SI×Rate−Discount` (`QuoteService`/`PolicyService`), pro-rata endorsement `(Annual/365)×Days`, or claims DV/reserves/settlement amounts; **`AllocationService` (surplus/quota-share/XOL) has zero test references anywhere** — RI ceding math is regulatory-impacting. Add focused unit tests for each formula + an allocation IT. ~3–5d. GL/IFRS/period-lock are already well covered. |
+| e2e-playwright-golden-paths | P2 | No E2E tests exist (CLAUDE.md standard unmet) | Re-audit. Zero Playwright config/specs on main; `@playwright/test` in no package.json. No golden-path coverage (login→quote→policy→claim→finance). The `production-readiness-phase-0` branch has a planned smoke (unmerged). Stand up Playwright + one golden path per module. |
+| frontend-tests-in-ci + coverage-gates | P2 | FE Vitest never runs in CI; no JaCoCo / Vitest coverage anywhere | Re-audit. `ci.yml` runs typecheck+build but not `pnpm test`, so the 5 existing Vitest files gate nothing. No JaCoCo in any pom, no Vitest coverage config — the "80% business-logic" standard is unenforced/unmeasured. Add `pnpm test` to CI + JaCoCo (with a starting threshold) + Vitest coverage. |
+| zero-test-modules | P2 | 4 compliance/money modules have zero tests | Re-audit. `cia-customer` (KYC + NDPR PII encryption), `cia-audit` (audit trail), `cia-auth` (JWT/tenant resolution — indirectly hit by cia-api Keycloak ITs), `cia-integrations` (NAICOM/NIID/KYC adapters), plus `cia-storage`. Add module-level unit/IT coverage for the security- and compliance-critical paths. |
+| partner-ratelimit-per-client | P2 | Partner API rate limit is a single global bucket, not per-client | Re-audit. `application.yml` bucket4j defines one filter on `/partner/v1/.*` with no cache-key → all partners share one 1000/min bucket; `RateLimitConfig` comment claiming per-client is false. One abusive partner DoSes all; PRD Default/Standard/Premium tiers unimplemented. Key the bucket by `client_id` from the JWT + per-tenant tier config. |
+| file-upload-validation | P2 | KYC/claim/template uploads have no MIME allowlist, size cap, or virus scan | Re-audit. `CustomerService.uploadKycDocument:546` + `DocumentTemplateService` accept client-supplied content-type with no server-side validation; no `spring.servlet.multipart.max-file-size` in any yml. CLAUDE.md security standard requires all three. Add MIME allowlist + per-tenant size cap + pluggable scan hook. |
+| prod-observability | P2 | No metrics scraping, tracing, structured logging, or k8s health probes | Re-audit. Actuator exposes health/info/metrics only; no `micrometer-registry-prometheus` (nothing scrapeable), no Micrometer-tracing/OTel, no `logback-spring.xml` (plain console — no aggregation), no liveness/readiness probe config. Backend is unobservable in prod. The phase-0 branch adds Prometheus alerts/Grafana but nothing on main feeds them. |
+| hikari-pool-tuning + application-prod-yml | P2 | No Hikari pool tuning; no `application-prod.yml` | Re-audit. Only `connection-init-sql` set — default 10-conn pools × one-pool-per-tenant-schema → connection exhaustion at modest tenant counts. No prod Spring profile exists; prod relies on env overrides against the base profile. Add pool sizing (per-tenant-aware) + an `application-prod.yml` pinning non-dev defaults. |
+| db-backup-dr | P2 | No database backup / restore / DR codified | Re-audit. No backup tooling, replica routing, or DR runbook on main for the schema-per-tenant financial/regulated data. Mostly managed-Postgres territory, but the backup/restore/PITR strategy + a read-replica for the report-heavy `cia-reports` native-query workload should be codified. |
+| inward-fac-backend-or-hide | P3 | Inward FAC tab renders hardcoded `mockInward` data — no backend | Re-audit. `reinsurance/.../FACTab.tsx:92` displays fabricated inward-FAC rows; backend `RiFacCover` models outward only (the mock is `allow-mock`-sanctioned but is a whole feature surface on fake data). Either build the inward-FAC backend or hide the tab until it exists, so users don't act on fabricated data. |
+| quote-detail-uses-live-config | P3 | `QuoteDetailPage` hardcodes discount/loading types + validity via `MOCK_*` constants | Re-audit. `quote-config-types.ts` exports `MOCK_DISCOUNT_TYPES`/`MOCK_LOADING_TYPES`/`MOCK_QUOTE_CONFIG` consumed in `QuoteDetailPage` live render paths (CI-invisible because they live in a `*-types.ts` file, not a module file). A tenant's Setup→Quotes config isn't reflected in quote display/PDF. Wire to the live `/api/v1/setup/...` quote-config endpoints. |
+| setup-dead-shells | P3 | ClaimsConfigPage + VehicleRegistryPage are EmptyState-only with dead Add buttons | Re-audit. Both marked `[x]` in the build queue but render `<PlaceholderTab>` with non-wired Add buttons and no `useQuery`/`useMutation`. Claims reserve-categories/timelines/loss-types and the motor vehicle registry have no working UI despite being referenced by Claims + Policy. Build the CRUD or correct the build-queue status. |
+| keycloak-seed-admin-user | P3 | Tenant realm provisioning seeds no admin user (first-tenant chicken-and-egg) | Re-audit (follow-on to S139). `KeycloakTenantProvisioner` creates the realm + back-office client but no login-able user; `UserService`/admin proxy needs `cia.keycloak.admin.enabled=true`. A fresh prod realm has no one who can log in. Add optional first-admin seeding (env-gated) or document the bootstrap admin-API step in the runbook. |
+| login-failed-endpoint-abuse | P3 | Unauthenticated `POST /api/v1/auth/login/failed` allows audit/alert flooding | Re-audit. `LoginAuditController:69` is `permitAll`, takes attacker-controlled `userId`/`userName`, writes audit rows + drives alert detection — log-injection / alert-fatigue DoS, no rate limit. Restrict to internal callers or rate-limit + sanitize. |
+| ai-assist-feature | P3 | AI feature (AiAssistService / Claude) entirely absent | Re-audit. No `AiAssistService` interface, no `ClaudeAiAssistService`, no Anthropic SDK — the feature-flagged AI in the PRD/CLAUDE.md is unbuilt. Optional/feature-flagged, so not a core-launch blocker; build when prioritized. |
+| storage-gcs-azure-adapters | P3 | Storage GCS/Azure adapters claimed but missing | Re-audit. Only MinIO + S3 are real; selecting `gcs`/`azure` yields no bean. Fine if deploying on S3/MinIO; CLAUDE.md overstates coverage. Build the adapters or trim the documented set. |
 | list-endpoints-true-pagination | P3 | True server-side pagination UI for the now-`ApiMeta`-populated list endpoints (Option C) | **Context:** Option B shipped (Session 137, commit `9fab40f`, see entry below) — all 16 internal list controllers now populate `ApiMeta` (total/page/size) and default to `size=2000`, so lists no longer silently truncate at 20 in practice. B is a high cap, not true pagination: a single list exceeding **2000** rows would still truncate (and 2000 is Spring's `max-page-size` ceiling, so the cap can't go higher without an `application.yml` change). **Option C (true pagination, ~2 wks)** is the proper end state: wire `{page,size}` through ~13 FE list pages + extract a shared `useServerPagination`/`ServerPaginationFooter` into `@cia/ui` (16 call sites incl. the 3 existing precedents — finance ReceiptsList/PaymentsList + JournalEntryBrowser, which already hand-roll a server pager), plus per-endpoint 2-page backend ITs. The backend half (meta population) is already done by B. **Scope note:** ~6 of the 19 list endpoints are nested detail-feeds (claim comments/docs/expenses, `ClaimController.reserves`) where a prev/next pager is poor UX — keep those on the B raise-cap and apply C only to the ~13 top-level table pages. Full C effort breakdown is in the Session 136/137 transcript. Pick up if/when a tenant's list realistically approaches 2000 rows or real pagination UX is requested. |
 | R7-termii-prod | P3 | Termii SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): user opted for "Logging stub only" in the R7 slice. The SPI ships ready for prod impls; this row tracks the first one — `TermiiSmsService` (Nigeria-native, listed in CLAUDE.md candidate set). Adds `TERMII_API_KEY` + `TERMII_SENDER_ID` envs, `@ConditionalOnProperty(havingValue="termii")` gating, Termii rate-limit guard, Testcontainers IT against a wiremock stub. Pickup when a tenant signs up needing real SMS delivery. |
 | R7-twilio-prod | P3 | Twilio SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): same as `R7-termii-prod` but for non-Nigerian tenants. `TwilioSmsService` against the Twilio Programmable SMS API; `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_FROM_NUMBER` envs. Lower priority than Termii because the platform is Nigeria-first; ship only when the first non-NG tenant onboards. |
@@ -19,6 +40,81 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | bindFromQuote-rm-derivation-it | P3 | `bindFromQuote` RM-derivation IT now unblocked | Was blocked by `quote-risk-gross-premium-drift` (a seeded APPROVED quote drove a `QuoteRisk` fetch that failed on the missing `gross_premium` column). That drift is fixed by V65 (Session 136), so the quote-conversion RM-derivation case in `PolicyRmCommissionDerivationIT` can now be added. Low priority: the four `create()` direct-entry cases already cover the broker→agent→RM→none fallback, and both entry points share `resolveCommissionSnapshot`, so the logic is covered; this is purely a second-entry-point coverage nicety. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-06-01 — Session 140 (`main`): production-safety fail-fast guard (+ latent EPP-registration bug fix) + full re-audit backlog
+
+Production-readiness arc. After a full five-dimension re-audit of `main`, the user
+chose **A → C**: (A) implement the two cheapest-highest-impact hardening fixes now,
+(C) capture the rest of the re-audit as prioritized backlog rows.
+
+### A — `ProductionSafetyValidator` (fail-fast on dev defaults in a hardened env)
+New `EnvironmentPostProcessor` (`cia-common`) that refuses startup when
+`cia.deployment.environment` (env `CIA_DEPLOYMENT_ENVIRONMENT`) is a hardened
+marker (`production`/`prod`/`staging`) **and** either the `dev` Spring profile is
+active (→ `DevSecurityConfig permitAll` = open API) or any secret still holds its
+known-weak dev default (PII key, webhook signing secret, MinIO creds, DB password).
+Collects all violations into one exception. Defaults to `local` → **no-op for all
+dev/test** (the entire IT suite runs on the dev profile + dev pii-key and never sets
+the marker). This closes two re-audit P1s in one guard: "forgot
+`SPRING_PROFILES_ACTIVE` → open API" and "unset `PII_ENCRYPTION_KEY` → PII under a
+published key".
+
+**Why a dedicated marker, not the profile:** the risk IS that prod forgets to set
+the profile (defaulting to `dev`), so the profile can't be the trigger — a separate
+prod-only required env var gates everything else.
+
+### Latent bug uncovered + fixed (the important part)
+While proving the guard fires, a **wiring test** (`ProductionSafetyValidatorWiringTest`,
+boots a real `SpringApplication`) revealed it never ran at boot — and so did the
+**pre-existing `PiiKeyValidator`**. Root cause: both were registered in
+`META-INF/spring/org.springframework.boot.env.EnvironmentPostProcessor.imports`.
+Decompiling Boot 3.3.5 `EnvironmentPostProcessorsFactory.fromSpringFactories` showed
+it loads EPPs via `SpringFactoriesLoader.forDefaultResourceLocation` =
+**`META-INF/spring.factories`** only. The `.imports` mechanism is for
+**AutoConfiguration**, not EPPs — so `PiiKeyValidator` had been a **silent no-op in
+production since Session 51** (its only test called the method directly, masking it).
+Fix: registered BOTH validators in a new `META-INF/spring.factories` and deleted the
+ineffective `.imports` file. The wiring test now proves discovery end-to-end — a bug
+class a direct-call unit test structurally cannot catch.
+
+### Files
+- NEW `cia-common/.../config/ProductionSafetyValidator.java` + `ProductionSafetyValidatorTest`
+  (15 logic cases) + `ProductionSafetyValidatorWiringTest` (3 boot-discovery cases).
+- NEW `cia-common/src/main/resources/META-INF/spring.factories` (registers both EPPs);
+  DELETED the `EnvironmentPostProcessor.imports` file.
+- `cia-api/application.yml` — new `cia.deployment.environment` (`CIA_DEPLOYMENT_ENVIRONMENT`, default `local`).
+- `GlobalExceptionHandlerMvcTest` — `@TestPropertySource` supplies a charset-valid
+  pii-key (now that `PiiKeyValidator` actually runs when this `@WebMvcTest` boots a context).
+
+### Verification
+- `cia-common clean test` green: ProductionSafetyValidator 15/15, WiringTest 3/3,
+  PiiKeyValidator 17/17, GlobalExceptionHandlerMvcTest 3/3 (full module suite 0 fail/0 err).
+- Full-context boot IT (`ReconciliationGateIT`) 2/2 — EPPs fire but correctly no-op
+  under IT defaults (marker unset → local; dev key passes charset check). Zero startup failures.
+- (A transient red was the stale `target/test-classes/application.properties` from an
+  abandoned approach — fixed by `mvn clean`; the `@TestPropertySource` is the kept solution.)
+
+### C — re-audit backlog capture
+Added **22 prioritized rows** to the canonical table from the five-dimension re-audit:
+6×P1 (realm-per-tenant JWT resolver, NAICOM/NIID live, KYC live, deployability
+image+k8s, NDPR DSAR+retention, money-math+RI-allocation tests), 7×P2 (E2E, FE-tests-in-CI
++coverage, zero-test modules, partner per-client rate limit, file-upload validation,
+observability, Hikari+prod-yml, DB backup/DR), 9×P3 (inward-FAC, quote-detail live
+config, dead Setup shells, Keycloak seed admin, login-failed abuse, AI feature,
+GCS/Azure storage). The 5 pre-existing P3 rows are unchanged.
+
+### Known follow-ups + backlog reconciliation
+- **Rows ADDED (22):** the re-audit register above. Two re-audit P1s were NOT added
+  because A fixed them outright (dev-default secrets fail-fast; dev-profile-open-API
+  fail-fast — both now enforced by `ProductionSafetyValidator`).
+- **No rows drained** beyond those two A-fixed items (which were captured-and-closed
+  in the same slice, never sitting in the table).
+- **Bonus fix (not a backlog row):** the `PiiKeyValidator` `.imports`→`spring.factories`
+  registration bug — a pre-existing latent prod no-op, fixed here because A's wiring
+  test surfaced it and shipping a second EPP via the same broken mechanism would have
+  been pointless.
 
 ---
 

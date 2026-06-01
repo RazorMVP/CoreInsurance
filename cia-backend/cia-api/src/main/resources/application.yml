@@ -109,6 +109,16 @@ cia:
     webhook:
       signing-secret: ${WEBHOOK_SIGNING_SECRET:dev-secret-replace-in-prod}
 
+  deployment:
+    # Deployment-environment marker that gates ProductionSafetyValidator.
+    # Defaults to "local" — local dev and the Testcontainers IT suite leave it
+    # unset, so the validator is a no-op there. Set to "production" (or
+    # "staging") in the deployment manifest: the validator then fails startup
+    # if the `dev` Spring profile is active or if any secret (PII key, webhook
+    # signing secret, storage creds, DB password) still holds its known-weak
+    # development default. One required knob that enforces all the others.
+    environment: ${CIA_DEPLOYMENT_ENVIRONMENT:local}
+
   security:
     # NDPR PII encryption key for pgcrypto (pgp_sym_encrypt / pgp_sym_decrypt).
     # Used via current_setting('app.pii_key') on the Hibernate connection.
