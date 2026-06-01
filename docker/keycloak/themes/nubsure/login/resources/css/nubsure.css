@@ -1,0 +1,115 @@
+/*
+ * NubSure brand overrides for the Keycloak login page.
+ * Layered on top of the stock keycloak login.css (see theme.properties).
+ *
+ * Fonts mirror the back-office design tokens (packages/ui/src/tokens.css):
+ *   display: Bricolage Grotesque   body/UI: Geist
+ * loaded from Google Fonts with display=swap (same source as the SPA).
+ *
+ * Palette mirrors the design tokens:
+ *   --primary  Nubeero teal  oklch(0.65 0.13 197)  ≈ #16a7b8
+ *   --bg       warm off-white oklch(0.985 0.003 197) ≈ #f7fafa
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Geist:wght@100..900&display=swap");
+
+:root {
+  --nubsure-teal: #16a7b8;
+  --nubsure-teal-dark: #0f8a99;
+  --nubsure-ink: #14323a;
+  --nubsure-display: 'Bricolage Grotesque', 'Noto Sans', system-ui, sans-serif;
+  --nubsure-body: 'Geist', 'Noto Sans', system-ui, sans-serif;
+}
+
+/* Base body/UI font → Geist, across the whole login page. */
+body.login-pf,
+.login-pf body,
+.login-pf,
+input.form-control,
+.btn,
+label,
+#kc-form-login {
+  font-family: var(--nubsure-body);
+}
+
+/* Page background — replace the dark polygon image with a clean light wash. */
+.login-pf body,
+body.login-pf {
+  background: linear-gradient(160deg, #eef6f7 0%, #f7fafa 60%, #ffffff 100%) !important;
+  background-image: none !important;
+}
+
+/*
+ * Header: NubSure logo above a "NubSure" wordmark in the display font.
+ * The realm display name ("CIA Development") is suppressed and replaced with
+ * a CSS ::after wordmark — theme-only, no template/realm rename needed.
+ */
+#kc-header-wrapper {
+  background: url("../img/logo.png") no-repeat center top;
+  background-size: 56px 56px;
+  padding-top: 76px;
+  /* hide the realm display-name text without removing the element */
+  font-size: 0;
+  line-height: 0;
+}
+#kc-header-wrapper::after {
+  content: "NubSure";
+  display: block;
+  font-family: var(--nubsure-display);
+  font-size: 26px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--nubsure-ink);
+  /* base header applies uppercase — keep the brand's mixed case (matches the
+     SPA sidebar wordmark). */
+  text-transform: none;
+}
+
+/* Card title ("Sign in to your account") → display font. */
+#kc-page-title,
+.card-pf h1,
+#kc-form-login h1 {
+  font-family: var(--nubsure-display);
+  font-weight: 600;
+  color: var(--nubsure-ink);
+}
+
+/* Card: softer radius + shadow, teal top accent. */
+.card-pf {
+  border-top: 4px solid var(--nubsure-teal);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(20, 50, 58, 0.12);
+}
+
+/* Primary button (Sign In) → teal + body font. */
+.btn-primary,
+#kc-login {
+  background-color: var(--nubsure-teal) !important;
+  border-color: var(--nubsure-teal) !important;
+  font-family: var(--nubsure-body);
+  font-weight: 600;
+}
+.btn-primary:hover,
+#kc-login:hover {
+  background-color: var(--nubsure-teal-dark) !important;
+  border-color: var(--nubsure-teal-dark) !important;
+}
+
+/* Inputs: teal focus ring instead of Keycloak/PatternFly blue. The extra
+   selector specificity (input.form-control:focus) beats PatternFly's own
+   `.form-control:focus` border rule. */
+.form-control:focus,
+input.form-control:focus,
+#kc-form-login input:focus {
+  border-color: var(--nubsure-teal) !important;
+  box-shadow: 0 0 0 2px rgba(22, 167, 184, 0.25) !important;
+  outline: none !important;
+}
+
+/* Links (forgot password / register). */
+a,
+#kc-registration a,
+#kc-info-message a {
+  color: var(--nubsure-teal-dark);
+}

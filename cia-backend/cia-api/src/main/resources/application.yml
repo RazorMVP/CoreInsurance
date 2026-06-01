@@ -134,6 +134,16 @@ cia:
       # this becomes a TenantContext-derived lookup; today it's a single
       # shared realm matching the application's resource-server config.
       target-realm:  ${KEYCLOAK_REALM:cia}
+      # Back-office SPA public client the provisioner upserts into the target
+      # realm on boot (PKCE S256 + tenant_id claim mapper). Must match the
+      # frontend's VITE_KEYCLOAK_CLIENT_ID. Redirect URIs are per-tenant in
+      # prod (e.g. https://acme.cia.app/*); default is the local Vite origin.
+      back-office-client-id:     ${KEYCLOAK_BACK_OFFICE_CLIENT_ID:cia-back-office}
+      back-office-redirect-uris: ${KEYCLOAK_BACK_OFFICE_REDIRECT_URIS:http://localhost:5173/*}
+      # NubSure branded Keycloak login theme. Blank = leave the realm's login
+      # theme untouched (safe default — ITs + un-themed Keycloaks unaffected).
+      # Set to "nubsure" (mounted via docker-compose) to apply branding.
+      back-office-login-theme:   ${KEYCLOAK_BACK_OFFICE_LOGIN_THEME:}
 
 springdoc:
   api-docs:

@@ -17,10 +17,69 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | R7-twilio-prod | P3 | Twilio SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): same as `R7-termii-prod` but for non-Nigerian tenants. `TwilioSmsService` against the Twilio Programmable SMS API; `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_FROM_NUMBER` envs. Lower priority than Termii because the platform is Nigeria-first; ship only when the first non-NG tenant onboards. |
 | reports-frontend-datasource-union-sync | P3 | Frontend `DataSource` union lags the backend enum | The frontend string-union `DataSource` in `cia-frontend/apps/back-office/src/modules/reports/types/report.types.ts` is two values behind the backend `cia-reports` enum: missing `RM_COMMISSION` (V64) and `UNDERWRITING_PERFORMANCE` (V66). Harmless today — the ReportViewer never reads `dataSource`, no zod parse validates report responses (TS unions aren't runtime-enforced), and the custom-report-builder picker is driven by a separate `DATA_SOURCE_OPTIONS` list (these two aggregate sources are deliberately excluded from the builder). The gap was set by the V64 RM_COMMISSION slice and not worsened by V66. Becomes real only if someone adds a runtime zod parse of report responses or another exhaustive `Record<DataSource,...>` consumed for SYSTEM reports. Fix: add both values to the union (keep them out of `DATA_SOURCE_OPTIONS`). Trivial; do when next touching reports FE types. |
 | bindFromQuote-rm-derivation-it | P3 | `bindFromQuote` RM-derivation IT now unblocked | Was blocked by `quote-risk-gross-premium-drift` (a seeded APPROVED quote drove a `QuoteRisk` fetch that failed on the missing `gross_premium` column). That drift is fixed by V65 (Session 136), so the quote-conversion RM-derivation case in `PolicyRmCommissionDerivationIT` can now be added. Low priority: the four `create()` direct-entry cases already cover the broker→agent→RM→none fallback, and both entry points share `resolveCommissionSnapshot`, so the logic is covered; this is purely a second-entry-point coverage nicety. |
-| keycloak-bootstrap-creates-back-office-client | P2 | Tenant realm provisioning must create the `cia-back-office` (+ partner) client, not just realm config | Surfaced Session 138 while wiring real login locally: the `cia` realm existed but had **no `cia-back-office` client and no users**, so the SPA login failed with "Client not found". `KeycloakTenantBootstrap` (CLAUDE.md §Security) currently only ensures the realm + `UnmanagedAttributePolicy=ENABLED`; it does NOT create the public SPA client, its PKCE/redirect/web-origin config, the `tenant_id` protocol mapper, or the partner OAuth2 client. For prod each tenant realm needs these provisioned idempotently. I created them by hand via the admin API for dev (public client, PKCE S256, redirect `localhost:5173/*`, `tenant_id` mapper, `admin/admin` user). Fix: extend `KeycloakTenantBootstrap`/`KeycloakTenantProvisioner` to upsert the back-office client + mapper (and the partner client) on startup. Tie into the production-readiness deployability phase. |
-| keycloak-custom-login-theme | P3 | Tenant-facing Keycloak login is unbranded stock theme | The hosted login (the only "login page" — auth is fully delegated to Keycloak, there is no in-app login component) renders default Keycloak chrome (dark polygon bg, "KEYCLOAK"/realm display name, generic blue button) with no NubSure branding. For prod a custom Keycloak login theme (logo, Nubeero teal `oklch(0.65 0.13 197)`, NubSure wordmark) should be packaged and set per tenant realm. Cosmetic; do during deployability/branding phase. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-06-01 — Session 139 (`main`): Keycloak provisioner upserts back-office client + branded login theme
+
+Drains the two backlog rows added in Session 138 — instead of leaving them
+queued, the user asked to fix them now (production-readiness arc). Both verified
+against a real Testcontainers / docker Keycloak.
+
+### What landed
+- **`KeycloakTenantProvisioner.ensureBackOfficeClient`** — idempotent upsert of
+  the back-office SPA public client (`cia.keycloak.admin.back-office-client-id`,
+  default `cia-back-office`): auth-code + **PKCE(S256)**, public, standard-flow
+  on / direct-access-grants off, realm-scoped redirect URIs + web origins
+  (`back-office-redirect-uris`, default `http://localhost:5173/*`), plus a
+  **hardcoded `tenant_id` claim mapper** (`oidc-hardcoded-claim-mapper`, value =
+  realm name — realm-per-tenant means realm name IS the tenant id, so no
+  per-user attribute needed). Create-then-reconcile: first run creates client
+  with the mapper embedded; later runs heal public/standard-flow/redirects/PKCE
+  drift and ensure exactly one `tenant_id` mapper. **Not** provisioned here:
+  per-partner OAuth2 clients (created on demand by Partner Management).
+- **Branded login theme** — `KeycloakTenantProvisioner.ensureLoginTheme` sets
+  the realm `loginTheme` to `back-office-login-theme` when non-blank (default
+  blank = leave untouched, so ITs + un-themed Keycloaks unaffected). New theme
+  `docker/keycloak/themes/nubsure/login/` extends the stock `keycloak` theme:
+  `theme.properties` (parent=keycloak, styles = parent login.css + our
+  nubsure.css) + `nubsure.css` + the NubSure logo (256px). Mirrors the SPA
+  design tokens — **Bricolage Grotesque** display + **Geist** body (same Google
+  Fonts the SPA loads), Nubeero teal `#16a7b8` accent, mixed-case **"NubSure"**
+  wordmark (CSS `::after`, `text-transform:none` to beat the base uppercase),
+  teal Sign In button + teal input focus ring. Mounted into the Keycloak
+  container via `docker-compose.yml` (+ `--spi-theme-cache-*=false` so theme
+  edits hot-reload in dev).
+- **`KeycloakAdminProperties`** gains `backOfficeClientId`,
+  `backOfficeRedirectUris` (List), `backOfficeLoginTheme`; **`application.yml`**
+  exposes them as `KEYCLOAK_BACK_OFFICE_{CLIENT_ID,REDIRECT_URIS,LOGIN_THEME}`
+  envs. **`CLAUDE.md`** §Security tenant-provisioning paragraph extended (S139).
+
+### Verification
+- **`KeycloakTenantProvisionerIT` 5/5 green** (added 2 cases: client created
+  with PKCE S256 + `tenant_id` mapper value = realm name; client upsert
+  idempotent — one client, one mapper after 3 runs). All Keycloak ITs green:
+  Provisioner 5/5, RealmRoleSyncer 4/4, PasswordPolicySyncer 4/4 (IT_EXIT=0).
+- **Theme verified in-browser** (Playwright): `nubsure.css` + `login.css` +
+  `logo.png` all HTTP 200; computed styles confirm Sign In bg
+  `rgb(22,167,184)`, header `::after` content `"NubSure"` + `text-transform:none`
+  in Bricolage Grotesque, `document.fonts.check` true for both Bricolage + Geist,
+  focused input border `rgb(22,167,184)` + teal shadow.
+- `cia-setup -am install` + `cia-api test-compile` EXIT=0.
+
+### Known follow-ups + backlog reconciliation
+- **Backlog rows DRAINED (2):** `keycloak-bootstrap-creates-back-office-client`
+  (P2) and `keycloak-custom-login-theme` (P3) — both landed this session.
+- **No rows added.**
+- **Unchanged:** the 5 pre-existing P3 rows.
+- **Dev provisioning note:** the local docker Keycloak `cia` realm was set up by
+  hand in S138 (client/user/mapper) and the theme applied via admin API this
+  session; on a clean boot with `KEYCLOAK_ADMIN_ENABLED=true` +
+  `KEYCLOAK_BACK_OFFICE_LOGIN_THEME=nubsure` the provisioner now does all of it
+  automatically. The `.env.local` flipping the SPA to real auth remains
+  gitignored / uncommitted.
 
 ---
 

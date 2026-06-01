@@ -25,7 +25,7 @@ services:
     # the box — see docker/keycloak/cia-realm.json. The master admin
     # (admin/admin) drives the UserService admin client via password grant
     # against admin-cli; no service-account client setup needed in dev.
-    command: start-dev --import-realm
+    command: start-dev --import-realm --spi-theme-static-max-age=-1 --spi-theme-cache-themes=false --spi-theme-cache-templates=false
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
@@ -37,6 +37,10 @@ services:
       - "8280:8080"
     volumes:
       - ./docker/keycloak/cia-realm.json:/opt/keycloak/data/import/cia-realm.json:ro
+      # NubSure branded login theme — mounted into Keycloak's themes dir.
+      # The provisioner sets the realm's loginTheme to "nubsure" when
+      # cia.keycloak.admin.back-office-login-theme is set (see application.yml).
+      - ./docker/keycloak/themes/nubsure:/opt/keycloak/themes/nubsure:ro
     depends_on:
       postgres:
         condition: service_healthy

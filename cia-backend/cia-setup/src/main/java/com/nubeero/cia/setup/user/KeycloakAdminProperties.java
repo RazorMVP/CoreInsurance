@@ -1,5 +1,6 @@
 package com.nubeero.cia.setup.user;
 
+import java.util.List;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -60,4 +61,30 @@ public class KeycloakAdminProperties {
      * default and TenantContext drives the real lookup.
      */
     private String targetRealm;
+
+    /**
+     * Client id of the back-office SPA public client that
+     * {@code KeycloakTenantProvisioner} upserts into the target realm on
+     * boot. Must match the frontend's {@code VITE_KEYCLOAK_CLIENT_ID}.
+     */
+    private String backOfficeClientId = "cia-back-office";
+
+    /**
+     * Valid redirect URIs for the back-office SPA client. Production sets
+     * these per-tenant (e.g. {@code https://acme.cia.app/*}); the default is
+     * the local Vite dev origin so a developer who flips
+     * {@code KEYCLOAK_ADMIN_ENABLED=true} gets a working client without extra
+     * config. Web origins are derived from these (Keycloak {@code "+"}).
+     */
+    private List<String> backOfficeRedirectUris = List.of("http://localhost:5173/*");
+
+    /**
+     * Keycloak login theme name to set on the target realm. When blank
+     * (default), the provisioner leaves the realm's login theme untouched —
+     * so ITs against ephemeral realms and any Keycloak without the theme
+     * mounted are unaffected. Set to {@code nubsure} (the theme under
+     * {@code docker/keycloak/themes/}) to apply NubSure branding to the
+     * hosted login page.
+     */
+    private String backOfficeLoginTheme = "";
 }

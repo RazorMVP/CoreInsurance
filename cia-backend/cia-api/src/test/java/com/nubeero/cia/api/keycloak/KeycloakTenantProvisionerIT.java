@@ -8,10 +8,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.keycloak.admin.client.Keycloak;
+import org.keycloak.representations.idm.ClientRepresentation;
+import org.keycloak.representations.idm.ProtocolMapperRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.userprofile.config.UPConfig;
 
 import jakarta.ws.rs.NotFoundException;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -132,5 +135,54 @@ class KeycloakTenantProvisionerIT extends KeycloakItSupport {
         UPConfig upc = ADMIN.realm(testRealmName).users().userProfile().getConfiguration();
         assertThat(upc.getUnmanagedAttributePolicy())
                 .isEqualTo(UPConfig.UnmanagedAttributePolicy.ENABLED);
+    }
+
+    @Test
+    @DisplayName("provisionTenantRealm — creates the back-office client with PKCE S256 + tenant_id mapper")
+    void createsBackOfficeClient() {
+        newProvisioner().provisionTenantRealm(testRealmName);
+
+        List<ClientRepresentation> clients =
+                ADMIN.realm(testRealmName).clients().findByClientId("cia-back-office");
+        assertThat(clients).hasSize(1);
+
+        ClientRepresentation c = clients.get(0);
+        assertThat(c.isPublicClient()).isTrue();
+        assertThat(c.isStandardFlowEnabled()).isTrue();
+        assertThat(c.isDirectAccessGrantsEnabled()).isFalse();
+        assertThat(c.getRedirectUris()).contains("http://localhost:5173/*");
+        assertThat(c.getAttributes()).containsEntry("pkce.code.challenge.method", "S256");
+
+        // The hardcoded tenant_id mapper emits the realm name as the claim.
+        List<ProtocolMapperRepresentation> mappers = ADMIN.realm(testRealmName)
+                .clients().get(c.getId()).getProtocolMappers().getMappers();
+        ProtocolMapperRepresentation tenantId = mappers.stream()
+                .filter(m -> "tenant_id".equals(m.getName()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("tenant_id mapper missing"));
+        assertThat(tenantId.getProtocolMapper()).isEqualTo("oidc-hardcoded-claim-mapper");
+        assertThat(tenantId.getConfig()).containsEntry("claim.name", "tenant_id");
+        assertThat(tenantId.getConfig()).containsEntry("claim.value", testRealmName);
+        assertThat(tenantId.getConfig()).containsEntry("access.token.claim", "true");
+    }
+
+    @Test
+    @DisplayName("provisionTenantRealm — back-office client creation is idempotent (one client, one mapper)")
+    void backOfficeClientIdempotent() {
+        KeycloakTenantProvisioner p = newProvisioner();
+        p.provisionTenantRealm(testRealmName);
+        p.provisionTenantRealm(testRealmName);
+        p.provisionTenantRealm(testRealmName);
+
+        // Exactly one client, exactly one tenant_id mapper — no duplicates
+        // accumulate across re-runs.
+        List<ClientRepresentation> clients =
+                ADMIN.realm(testRealmName).clients().findByClientId("cia-back-office");
+        assertThat(clients).hasSize(1);
+
+        List<ProtocolMapperRepresentation> tenantIdMappers = ADMIN.realm(testRealmName)
+                .clients().get(clients.get(0).getId()).getProtocolMappers().getMappers()
+                .stream().filter(m -> "tenant_id".equals(m.getName())).toList();
+        assertThat(tenantIdMappers).hasSize(1);
     }
 }
