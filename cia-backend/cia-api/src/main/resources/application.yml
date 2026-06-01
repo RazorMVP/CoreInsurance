@@ -128,6 +128,10 @@ cia:
     pii-key: ${PII_ENCRYPTION_KEY:dev-pii-key-do-not-use-in-prod-CHANGE-ME}
 
   keycloak:
+    # Base Keycloak URL whose realms this resource server trusts (realm-per-tenant).
+    # An incoming JWT's `iss` must be {server-url}/realms/{realm}. Mirrors the
+    # frontend VITE_KEYCLOAK_URL and the partner token-url host.
+    server-url: ${KEYCLOAK_URL:http://localhost:8280}
     # Admin-client config for UserService (Module 1 Users page). The admin
     # client authenticates with service-account credentials against the
     # `master` realm, then performs user CRUD against the tenant realm
