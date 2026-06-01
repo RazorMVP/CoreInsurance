@@ -230,7 +230,16 @@ class RetroactiveJournalBackfillActivitiesImplTest {
                 Date.valueOf(LocalDate.of(2026, 4, 12)),                    // 10 policy_start_date
                 Date.valueOf(LocalDate.of(2027, 4, 11)),                    // 11 policy_end_date
                 new BigDecimal("5000000.00"),                               // 12 total_sum_insured
-                UUID.randomUUID()                                           // 13 class_of_business_id
+                UUID.randomUUID(),                                          // 13 class_of_business_id
+                // 14-17 added by slices 84c/84d (commission source + agent
+                // attribution). The impl SELECTs 18 columns and reads
+                // row[14..17]; this double had lagged at 14 elements, causing
+                // Index-14-out-of-bounds. Null = a pre-attribution policy that
+                // skips the commission/agent chain (matches the impl comment).
+                null,                                                       // 14 commission_source_type
+                null,                                                       // 15 commission_rate
+                null,                                                       // 16 agent_id
+                null                                                        // 17 agent_name
         };
     }
 
