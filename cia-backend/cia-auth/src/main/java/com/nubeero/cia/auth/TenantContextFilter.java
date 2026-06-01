@@ -25,7 +25,13 @@ public class TenantContextFilter extends OncePerRequestFilter {
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
-                String tenantId = jwt.getClaimAsString("tenant_id");
+                // Realm parsed from the validated `iss` is authoritative (it is
+                // what the signature was checked against); fall back to the
+                // tenant_id claim for tokens without a parseable realm issuer.
+                String tenantId = KeycloakRealms.realmOf(jwt.getClaimAsString("iss"));
+                if (tenantId == null || tenantId.isBlank()) {
+                    tenantId = jwt.getClaimAsString("tenant_id");
+                }
                 if (tenantId != null && !tenantId.isBlank()) {
                     TenantContext.setTenantId(tenantId);
                 }
