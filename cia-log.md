@@ -14,8 +14,9 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 |---|---|---|---|
 | jwt-resolver-registry-allowlist | P2 | Auth path does not check `public.tenants` — a lingering Keycloak realm for a deleted/suspended tenant is still accepted | Follow-on to S141 (realm-per-tenant resolver shipped with base-URL trust = "any realm on our Keycloak"). Hardening: after resolving realm from `iss`, require `public.tenants.schema_name = realm AND active = true`, else 401. Fails closed today at the schema layer (queries hit a nonexistent schema → error, not a cross-tenant leak), so this is defence-in-depth, not a live hole. Adds a cached tenant-registry lookup + a `cia-auth`→registry dependency. Pick up when tenant lifecycle (suspend/delete) is operationalised. |
 | jwt-resolver-2realm-live-it | P3 | Live 2-realm Testcontainers IT for the JWT resolver | S141 covered the resolver contract with unit tests (trusted/untrusted/cache) + a full-context boot IT, but did not add a live IT that mints a real second Keycloak realm, signs a token in it, and asserts (a) it authenticates + scopes to realm B and (b) a token from an untrusted issuer → 401. Desirable end-to-end proof; deferred because the Keycloak IT harness doesn't trivially mint+sign for a 2nd realm. Pick up if/when multi-realm provisioning lands an IT fixture. |
-| naicom-niid-live-integration | P1 | NAICOM + NIID live REST services throw `UnsupportedOperationException` | Re-audit. `NaicomRestService.java:18` / `NiidRestService.java:18` are skeletons ("pending credentials"); only stubs work. No policy can be registered with the regulator in live mode. Gated on NAICOM/NIID sandbox+prod credentials (Open Q#4). Implement real REST clients + the post-approval Temporal upload already wired. Nigeria-first → hard launch blocker once creds arrive. |
-| kyc-live-provider | P1 | No working live KYC provider | Re-audit. `DojahKycService` + `PremblyKycService` throw on all 3 methods; `NibssKycService` class absent. Customer onboarding KYC is mock-only — a regulated requirement. Implement at least one live provider (Dojah is Nigeria-native) against its REST API + wiremock IT. Gated on provider credentials. |
+| naicom-niid-live-integration | P2 | NAICOM + NIID **live** REST services throw `UnsupportedOperationException` | Re-rated P1→**P2** (Session 142): verified **launch-safe** — `StubNaicomService`/`StubNiidService` are `@ConditionalOnProperty(matchIfMissing=true)` so they're the active beans by default; policy approval issues a cert with `naicom_uid="PENDING"` then the async `PolicyNaicomUploadActivityImpl`/`...Niid...` Temporal activity fills the real UID. Approval never blocks. Only the `live` path (`NaicomRestService.java:18`/`NiidRestService.java:18`, `havingValue="live"`) is a skeleton, dormant unless `NAICOM_MODE/NIID_MODE=live`. **Gated on NAICOM/NIID sandbox+prod credentials (Open Q#4)** — implement the real REST clients when creds arrive; until then the stub is the correct launch posture. |
+| kyc-live-provider | P2 | No working **live** KYC provider (Dojah/Prembly skeletons throw; NIBSS absent) | Re-rated P1→**P2** (Session 142): the **launch-blocker is fixed** — `MockKycService` re-gated from `@Profile("dev\|test")` to `@ConditionalOnProperty(name="cia.kyc.provider", havingValue="mock", matchIfMissing=true)`, so onboarding is now launch-safe with no provider configured (commit in S142; mirrors the NAICOM stub). What remains is the genuine **live** integration: `DojahKycService`/`PremblyKycService` throw `UnsupportedOperationException` on all 3 methods; no `NibssKycService`. Implement at least one (Dojah — Nigeria-native) against its REST API + wiremock IT. **Gated on provider credentials.** |
+| kyc-deferred-pending-status | P3 | `mock`/default KYC auto-PASSes rather than marking deferred (`PENDING`) | Surfaced S142. The launch-safe `MockKycService` returns `verified=true` → customer `kyc_status=PASSED`, which over-attests (no real verification happened). The honest state is `KycStatus.PENDING` ("onboarded, KYC deferred until a provider is wired"). Deferred because threading a true 3rd "deferred" signal through the binary `KycResult.verified` + the intertwined corporate/director flow (`allDirectorsPassed`) is past the S142 "small fix" scope. Fix: add a `deferred`/`pending` outcome to `KycResult` + map it to `KycStatus.PENDING` in `applyKycResult`/corporate/director paths. Do when KYC live work (`kyc-live-provider`) is picked up. |
 | prod-deployability-image-k8s | P1 | No backend Dockerfile / image / K8s manifests / deploy pipeline on `main` | Re-audit. cia-api cannot be containerized or deployed from main (compose service commented out; no Dockerfile, no k8s/Helm, CI builds+tests but never publishes an image or deploys the backend — only FE→Vercel). The unmerged `production-readiness-phase-0` branch (34 commits) already has Dockerfile/.dockerignore/prod-compose/Prometheus-alerts/runbooks — triage + reconcile vs V66 rather than rebuild. ~1–2 wk. |
 | ndpr-dsar-and-retention | P1 | NDPR DSAR export endpoint + PII retention/purge workflow absent (claimed in CLAUDE.md §8) | Re-audit. No data-subject-access export endpoint exists; the only retention workflow is `PdfDownloadLogRetentionWorkflow` (PDF-log purge), not a tenant-config-driven customer-PII purge. Both are regulatory obligations stated as present. Build: a DSAR export endpoint (customer + related records) and a scheduled Temporal PII-retention purge keyed to per-tenant retention config. ~1 wk, self-contained. |
 | money-math-test-coverage | P1 | Core money-math + RI allocation untested | Re-audit. No dedicated tests for premium `SI×Rate−Discount` (`QuoteService`/`PolicyService`), pro-rata endorsement `(Annual/365)×Days`, or claims DV/reserves/settlement amounts; **`AllocationService` (surplus/quota-share/XOL) has zero test references anywhere** — RI ceding math is regulatory-impacting. Add focused unit tests for each formula + an allocation IT. ~3–5d. GL/IFRS/period-lock are already well covered. |
@@ -41,6 +42,52 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | bindFromQuote-rm-derivation-it | P3 | `bindFromQuote` RM-derivation IT now unblocked | Was blocked by `quote-risk-gross-premium-drift` (a seeded APPROVED quote drove a `QuoteRisk` fetch that failed on the missing `gross_premium` column). That drift is fixed by V65 (Session 136), so the quote-conversion RM-derivation case in `PolicyRmCommissionDerivationIT` can now be added. Low priority: the four `create()` direct-entry cases already cover the broker→agent→RM→none fallback, and both entry points share `resolveCommissionSnapshot`, so the logic is covered; this is purely a second-entry-point coverage nicety. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-06-01 — Session 142 (`main`): launch-safe default KYC provider + re-rate regulator-integration backlog
+
+Investigated whether the two credential-gated re-audit P1s (NAICOM/NIID live, KYC live) were
+already "stubbed-for-launch" (user recalled this being designed during the policy module).
+Finding: **NAICOM/NIID are; KYC was not.**
+
+- **NAICOM/NIID** — `StubNaicomService`/`StubNiidService` are `@ConditionalOnProperty(...
+  matchIfMissing=true)`, so they're the active beans by default and return mock UIDs; the
+  approval flow sets `naicom_uid="PENDING"` and the async Temporal upload activity fills the
+  real UID later. Genuinely launch-safe → re-rated **P1→P2** (only the dormant `live` REST
+  skeletons remain, gated on credentials).
+- **KYC** — the working `MockKycService` was gated `@Profile("dev | test")`, so a **non-dev
+  prod boot had NO `KycVerificationService` bean** — and it's a hard constructor dependency of
+  `CustomerService` (called synchronously at onboarding). `DojahKycService`/`PremblyKycService`
+  (the only non-dev beans) throw on every method. So prod onboarding would break. This is the
+  fix this session.
+
+### What landed
+- **`MockKycService` re-gated** `@Profile("dev | test")` → `@ConditionalOnProperty(name=
+  "cia.kyc.provider", havingValue="mock", matchIfMissing=true)` — mirroring the NAICOM/NIID
+  stub pattern. Now the launch-safe default: with no provider configured, onboarding completes
+  instead of failing on a missing bean. Added a `@PostConstruct` WARN ("PASS-THROUGH STUB
+  performing NO real identity verification…") so running it outside dev is auditable, plus a
+  compliance Javadoc. No behavioural change in dev/test (it was already active there; `test`
+  profile defaults `cia.kyc.provider` unset → `matchIfMissing` keeps it active).
+- **`KycProviderWiringTest`** (new, cia-api, `ApplicationContextRunner`) proves the wiring
+  change independent of profiles: provider unset → single bean is `MockKycService`; `=mock` →
+  same; `=dojah` → Mock steps aside. This is the real proof — the existing `@DataJpaTest` boot
+  ITs don't load `@Service` beans, so they never exercised the gap.
+
+### Verification
+- `cia-integrations -am compile` clean; `KycProviderWiringTest` 3/3; full-context
+  `ReconciliationGateIT` 2/2 (no regression).
+
+### Known follow-ups + backlog reconciliation
+- **Rows re-rated (2, P1→P2):** `naicom-niid-live-integration` (verified launch-safe; live path
+  awaits creds), `kyc-live-provider` (launch-blocker fixed here; live Dojah/Prembly/NIBSS still
+  awaits creds).
+- **Row ADDED (1, P3):** `kyc-deferred-pending-status` — the launch-safe mock auto-PASSes rather
+  than marking `KycStatus.PENDING` (honest "deferred"); threading a true deferred state through
+  the binary `KycResult` + corporate/director flow was past this slice's "small fix" scope.
+- **No row drained** (the launch-blocker was a sub-issue of `kyc-live-provider`, which remains
+  open at P2 for the live integration).
 
 ---
 
