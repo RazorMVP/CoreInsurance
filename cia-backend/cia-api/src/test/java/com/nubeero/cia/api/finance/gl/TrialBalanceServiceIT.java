@@ -215,6 +215,12 @@ class TrialBalanceServiceIT {
     @DisplayName("Reversal pairs net to zero in the trial balance (D2=A model)")
     void reversalNetsToZero() {
         LocalDate businessDate = seedMay2026Period();
+        // JournalEntryService.reverse() stamps the reversal's business date as
+        // LocalDate.now(), so a MONTH period must cover today too — otherwise
+        // this fails once the wall clock leaves May 2026. seedMonthlyPeriod is
+        // idempotent (find-or-create FY), so seeding the current month is safe.
+        LocalDate today = LocalDate.now();
+        seedMonthlyPeriod(today.withDayOfMonth(1), today.withDayOfMonth(today.lengthOfMonth()), today);
         JournalEntryResponse original = post(businessDate, "RT-rev-1", "750.00", "1110", "4110");
         journalEntryService.reverse(original.id(), "Trial balance test");
         entityManager.flush();

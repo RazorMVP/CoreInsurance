@@ -142,6 +142,29 @@ class PeriodLockInterceptorIT {
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             periodId, fyId, "MONTH",
             LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31), "OPEN", "test");
+        // Also seed a MONTH period covering today: lock-grace tests post entries
+        // whose business date defaults to LocalDate.now(), which fails once the
+        // wall clock leaves May 2026. periodId stays the May period (the
+        // period_lock UPDATEs below target it); this just adds a current-month
+        // period under the same FY2026 (no-op when today is already May 2026).
+        LocalDate today = LocalDate.now();
+        if (!(today.getYear() == 2026 && today.getMonthValue() == 5)) {
+            // Current month lives in FY2026 for any 2026 date; for 2027+ create the FY too.
+            UUID curFyId = fyId;
+            if (today.getYear() != 2026) {
+                curFyId = UUID.randomUUID();
+                jdbcTemplate.update(
+                    "INSERT INTO fiscal_year (id, name, start_date, end_date, status, created_by) " +
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    curFyId, "FY" + today.getYear(),
+                    LocalDate.of(today.getYear(), 1, 1), LocalDate.of(today.getYear(), 12, 31), "ACTIVE", "test");
+            }
+            jdbcTemplate.update(
+                "INSERT INTO fiscal_period (id, fiscal_year_id, period_type, start_date, end_date, status, created_by) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                UUID.randomUUID(), curFyId, "MONTH",
+                today.withDayOfMonth(1), today.withDayOfMonth(today.lengthOfMonth()), "OPEN", "test");
+        }
     }
 
     @AfterEach

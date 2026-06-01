@@ -124,17 +124,40 @@ class JournalEntryServiceIT {
         // period for the business date so the resolver can find a MONTH row.
         // Using JDBC keeps this independent of FiscalYearService (Slice 1.6).
         businessDate = LocalDate.of(2026, 5, 14);
-        UUID fyId = UUID.randomUUID();
-        UUID periodId = UUID.randomUUID();
-        jdbcTemplate.update(
-            "INSERT INTO fiscal_year (id, name, start_date, end_date, status, created_by) " +
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            fyId, "FY2026", LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31), "ACTIVE", "test");
-        jdbcTemplate.update(
-            "INSERT INTO fiscal_period (id, fiscal_year_id, period_type, start_date, end_date, status, created_by) " +
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            periodId, fyId, "MONTH",
-            LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31), "OPEN", "test");
+        // Seed the fixed May-2026 period the dated tests use, plus a period
+        // covering today — the happy-path post() uses businessDate, but
+        // guarding against the wall clock leaving 2026 keeps this date-proof.
+        // (The negative test deliberately posts to 2027, which stays unseeded.)
+        ensureMonthPeriod(businessDate);
+        ensureMonthPeriod(LocalDate.now());
+    }
+
+    /** Idempotent find-or-create of an ACTIVE fiscal_year + OPEN MONTH period covering {@code date}. */
+    private void ensureMonthPeriod(LocalDate date) {
+        int year = date.getYear();
+        LocalDate fyStart = LocalDate.of(year, 1, 1);
+        LocalDate fyEnd = LocalDate.of(year, 12, 31);
+        UUID fyId = jdbcTemplate.query(
+            "SELECT id FROM fiscal_year WHERE start_date = ? AND end_date = ? LIMIT 1",
+            rs -> rs.next() ? UUID.fromString(rs.getString("id")) : null, fyStart, fyEnd);
+        if (fyId == null) {
+            fyId = UUID.randomUUID();
+            jdbcTemplate.update(
+                "INSERT INTO fiscal_year (id, name, start_date, end_date, status, created_by) " +
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                fyId, "FY" + year, fyStart, fyEnd, "ACTIVE", "test");
+        }
+        LocalDate monthStart = date.withDayOfMonth(1);
+        LocalDate monthEnd = date.withDayOfMonth(date.lengthOfMonth());
+        Integer existing = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM fiscal_period WHERE fiscal_year_id = ? AND period_type = 'MONTH' AND start_date = ?",
+            Integer.class, fyId, monthStart);
+        if (existing == null || existing == 0) {
+            jdbcTemplate.update(
+                "INSERT INTO fiscal_period (id, fiscal_year_id, period_type, start_date, end_date, status, created_by) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                UUID.randomUUID(), fyId, "MONTH", monthStart, monthEnd, "OPEN", "test");
+        }
     }
 
     @Test
