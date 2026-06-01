@@ -12,7 +12,8 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 | ID | P | Item | Notes |
 |---|---|---|---|
-| prod-realm-per-tenant-jwt-resolver | P1 | Resource server validates a single fixed issuer — realm-per-tenant auth isolation not wired | Re-audit (Session 140). `SecurityConfig` binds `JwtDecoder` via `JwtDecoders.fromIssuerLocation(issuer-uri)` to ONE realm (`${KEYCLOAK_REALM:cia}`); `target-realm` is the same single realm. The S139 hardcoded `tenant_id` mapper emits claim=realm-name, which is sound ONLY under true realm-per-tenant — but with one fixed issuer every user gets the same tenant and a 2nd tenant cannot be isolated by realm. CLAUDE.md §6 promises realm-per-tenant; not delivered at the resource-server layer. Fix: `JwtIssuerAuthenticationManagerResolver` (multi-issuer) + per-tenant issuer registry; then the S139 mapper pays off. ~1 wk. Blocks true multi-tenant prod. |
+| jwt-resolver-registry-allowlist | P2 | Auth path does not check `public.tenants` — a lingering Keycloak realm for a deleted/suspended tenant is still accepted | Follow-on to S141 (realm-per-tenant resolver shipped with base-URL trust = "any realm on our Keycloak"). Hardening: after resolving realm from `iss`, require `public.tenants.schema_name = realm AND active = true`, else 401. Fails closed today at the schema layer (queries hit a nonexistent schema → error, not a cross-tenant leak), so this is defence-in-depth, not a live hole. Adds a cached tenant-registry lookup + a `cia-auth`→registry dependency. Pick up when tenant lifecycle (suspend/delete) is operationalised. |
+| jwt-resolver-2realm-live-it | P3 | Live 2-realm Testcontainers IT for the JWT resolver | S141 covered the resolver contract with unit tests (trusted/untrusted/cache) + a full-context boot IT, but did not add a live IT that mints a real second Keycloak realm, signs a token in it, and asserts (a) it authenticates + scopes to realm B and (b) a token from an untrusted issuer → 401. Desirable end-to-end proof; deferred because the Keycloak IT harness doesn't trivially mint+sign for a 2nd realm. Pick up if/when multi-realm provisioning lands an IT fixture. |
 | naicom-niid-live-integration | P1 | NAICOM + NIID live REST services throw `UnsupportedOperationException` | Re-audit. `NaicomRestService.java:18` / `NiidRestService.java:18` are skeletons ("pending credentials"); only stubs work. No policy can be registered with the regulator in live mode. Gated on NAICOM/NIID sandbox+prod credentials (Open Q#4). Implement real REST clients + the post-approval Temporal upload already wired. Nigeria-first → hard launch blocker once creds arrive. |
 | kyc-live-provider | P1 | No working live KYC provider | Re-audit. `DojahKycService` + `PremblyKycService` throw on all 3 methods; `NibssKycService` class absent. Customer onboarding KYC is mock-only — a regulated requirement. Implement at least one live provider (Dojah is Nigeria-native) against its REST API + wiremock IT. Gated on provider credentials. |
 | prod-deployability-image-k8s | P1 | No backend Dockerfile / image / K8s manifests / deploy pipeline on `main` | Re-audit. cia-api cannot be containerized or deployed from main (compose service commented out; no Dockerfile, no k8s/Helm, CI builds+tests but never publishes an image or deploys the backend — only FE→Vercel). The unmerged `production-readiness-phase-0` branch (34 commits) already has Dockerfile/.dockerignore/prod-compose/Prometheus-alerts/runbooks — triage + reconcile vs V66 rather than rebuild. ~1–2 wk. |
@@ -40,6 +41,47 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | bindFromQuote-rm-derivation-it | P3 | `bindFromQuote` RM-derivation IT now unblocked | Was blocked by `quote-risk-gross-premium-drift` (a seeded APPROVED quote drove a `QuoteRisk` fetch that failed on the missing `gross_premium` column). That drift is fixed by V65 (Session 136), so the quote-conversion RM-derivation case in `PolicyRmCommissionDerivationIT` can now be added. Low priority: the four `create()` direct-entry cases already cover the broker→agent→RM→none fallback, and both entry points share `resolveCommissionSnapshot`, so the logic is covered; this is purely a second-entry-point coverage nicety. |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-06-01 — Session 141 (`main`): realm-per-tenant JWT validation (multi-issuer resolver)
+
+Drains backlog P1 `prod-realm-per-tenant-jwt-resolver`. The resource server validated a
+single fixed issuer (`SecurityConfig.jwtDecoder()` → `JwtDecoders.fromIssuerLocation(/realms/cia)`),
+so every authenticated user resolved to the same realm and a 2nd tenant could not be isolated
+by realm — the realm-per-tenant promise (CLAUDE.md §6) was undelivered at the resource-server
+layer. Spec `docs/superpowers/specs/2026-06-01-realm-per-tenant-jwt-resolver-design.md`;
+plan `…-realm-per-tenant-jwt-resolver.md`. Trust model **A — base-URL** (user-chosen):
+any realm on our Keycloak is a tenant. Executed subagent-driven over 6 tasks (5 TDD impl +
+1 regression gate), final adversarial code review.
+
+### What landed (by commit)
+- **`3bcb6ca`** — `KeycloakRealms.realmOf(issuer)` static parser (`{server}/realms/{realm}` → realm; null on missing/blank/realmless). 8 unit cases.
+- **`2fb0f5a`** — `KeycloakProperties` (`@ConfigurationProperties("cia.keycloak")`, `serverUrl` + `normalisedServerUrl()`) + `cia.keycloak.server-url` (`${KEYCLOAK_URL}`) in application.yml. No prefix clash with `cia.keycloak.admin`.
+- **`87e8170`** — `TenantIssuerJwtAuthenticationManagerResolver` (`AuthenticationManagerResolver<HttpServletRequest>`): wraps `JwtIssuerAuthenticationManagerResolver(AuthenticationManagerResolver<String>)`; trust gate (`isTrusted` = exact `{serverUrl}/realms/{realm}` match) runs BEFORE the lazy per-issuer decoder build (`ConcurrentHashMap.computeIfAbsent` → `JwtDecoders.fromIssuerLocation` + reused `JwtAuthConverter`); untrusted/blank → `InvalidBearerTokenException` (401). 6 unit cases incl. cache-once, distinct-realms, no-build-on-untrusted. (Implementer corrected the interface method `resolve`, not `resolveForContext`.)
+- **`4e0daf6`** — `SecurityConfig`: `.jwt(...)` → `.authenticationManagerResolver(...)`; deleted the `jwtDecoder()` bean + `@Value issuer-uri` field; **removed the `spring.security.oauth2.resourceserver.jwt.issuer-uri` property** (else Boot autoconfig would build an eager startup decoder — an OIDC call we must avoid). This last point was a mid-execution discovery folded into the task.
+- **`02d43c8`** — `TenantContextFilter`: tenant from validated `iss` realm (authoritative) → fall back to `tenant_id` claim → clear in `finally`. 4 unit cases.
+
+### Verification
+- `cia-auth` suite green (14 → 18 across the new tests: KeycloakRealms 8, Resolver 6, TenantContextFilter 4).
+- Reactor test-compile clean; full-context boot IT `ReconciliationGateIT` 2/2 (proves the new
+  `.authenticationManagerResolver(...)` wiring boots, no startup OIDC call); `@WithMockUser`
+  controller IT `PaymentListControllerIT` 5/5 (the IT base's `@MockBean JwtDecoder` over the
+  now-absent bean is harmless — `@WithMockUser` never hits the resolver). No IT-base edit needed.
+- **Final adversarial review: APPROVE-WITH-NITS.** Reviewer tried host-suffix spoof
+  (`…8280.evil.com`), path traversal (`/realms/x/../../realms/y`), double-slash, scheme/case —
+  all rejected by the exact-match gate. Confirmed against the actual Spring jar that the chosen
+  constructor does NOT create Spring's internal `TrustedIssuer…` cache, so our `ConcurrentHashMap`
+  + trust gate is the sole path (no cache-bypass). 3 minor nits (computeIfAbsent-throwing-factory,
+  mutable test-seam field, spec-over-stated double-cache) — no changes required.
+
+### Known follow-ups + backlog reconciliation
+- **Row DRAINED (1, P1):** `prod-realm-per-tenant-jwt-resolver`.
+- **Rows ADDED (2):** `jwt-resolver-registry-allowlist` (P2 — `public.tenants` allowlist gate;
+  today fails closed at the schema layer, defence-in-depth) and `jwt-resolver-2realm-live-it`
+  (P3 — live 2-realm Testcontainers IT, deferred — harness can't trivially mint+sign a 2nd realm).
+- **CLAUDE.md** §6 + §8 updated (realm-per-tenant now wired; new S141 paragraph); the S140
+  re-audit rows otherwise unchanged.
 
 ---
 
