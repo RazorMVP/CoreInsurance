@@ -8,7 +8,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.3.5</version>
+    <version>3.5.14</version>
     <relativePath/>
   </parent>
 
@@ -50,7 +50,12 @@
     <mapstruct.version>1.5.5.Final</mapstruct.version>
     <springdoc.version>2.5.0</springdoc.version>
     <pdfbox.version>3.0.2</pdfbox.version>
-    <minio.version>8.5.11</minio.version>
+    <minio.version>8.6.0</minio.version>
+    <!-- OkHttp is no longer managed by the Spring Boot BOM as of 3.5 (Boot
+         dropped it). minio 8.6.0 brings okhttp 5.1.0 transitively; pin our
+         explicit cia-storage dependency to the same version to avoid a 4.x/5.x
+         split on the classpath. -->
+    <okhttp.version>5.1.0</okhttp.version>
     <aws-sdk.version>2.25.60</aws-sdk.version>
     <bucket4j-starter.version>0.12.7</bucket4j-starter.version>
     <bucket4j.version>8.10.1</bucket4j.version>
@@ -232,6 +237,13 @@
         <groupId>io.minio</groupId>
         <artifactId>minio</artifactId>
         <version>${minio.version}</version>
+      </dependency>
+
+      <!-- ── OkHttp (minio transitive; unmanaged by Boot 3.5+) ──────── -->
+      <dependency>
+        <groupId>com.squareup.okhttp3</groupId>
+        <artifactId>okhttp</artifactId>
+        <version>${okhttp.version}</version>
       </dependency>
 
       <!-- ── AWS SDK v2 BOM ─────────────────────────────────────────── -->
