@@ -46,7 +46,20 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <lombok.version>1.18.46</lombok.version>
-    <temporal.version>1.25.0</temporal.version>
+    <!-- 1.25.0 -> 1.35.0 to pull fixed grpc (1.54->1.75) + protobuf
+         (3.21->3.25): clears the Temporal-transitive image CVEs
+         (CVE-2025-55163, CVE-2023-32731, CVE-2024-7254). -->
+    <temporal.version>1.35.0</temporal.version>
+    <!-- Spring Boot 3.5.14 BOM overrides — bump to the latest patch in each
+         line to clear 2026-dated image CVEs whose fixes post-date the BOM pins
+         (Tomcat 10.1.54->.55 CVE-2026-41293 CRITICAL; netty 4.1.132->.134
+         CVE-2026-42583/42579/42584; pgjdbc 42.7.10->.11 CVE-2026-42198;
+         bouncycastle 1.81->1.84 CVE-2026-5598). Property names match the
+         spring-boot-dependencies BOM so they override the managed versions. -->
+    <tomcat.version>10.1.55</tomcat.version>
+    <netty.version>4.1.134.Final</netty.version>
+    <postgresql.version>42.7.11</postgresql.version>
+    <bouncy-castle.version>1.84</bouncy-castle.version>
     <mapstruct.version>1.5.5.Final</mapstruct.version>
     <springdoc.version>2.5.0</springdoc.version>
     <pdfbox.version>3.0.2</pdfbox.version>
