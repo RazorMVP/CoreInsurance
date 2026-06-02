@@ -60,13 +60,13 @@ cia-api (assembly)                          cia-setup
 
 ## 5. Per-tenant provisioning sequence
 
-For each configured tenant (idempotent — safe every boot):
+For each configured tenant (idempotent — safe every boot). The service generates the **Administrators access-group UUID** up front and threads it into both the DB seed and the Keycloak admin attribute:
 
-1. **Keycloak** (`KeycloakTenantProvisioner`): ensure realm → ensure back-office client (existing) → **ensure realm roles** (full `{module}_create/view/update/approve` authority set) → **ensure first-admin user** (temp password from config, `temporary=true` → `UPDATE_PASSWORD` forced reset; `accessGroupId` attribute; all roles assigned).
-2. **Schema**: `CREATE SCHEMA IF NOT EXISTS <schema>`.
-3. **Migrate**: programmatic Flyway against `<schema>` (§6).
-4. **Seed**: idempotent seed SQL into `<schema>` (§7), incl. matching `users` row + Administrators access group.
-5. **Register**: upsert `public.tenants (schema_name, name, subdomain, active)`.
+1. **Schema**: `CREATE SCHEMA IF NOT EXISTS <schema>`.
+2. **Migrate**: programmatic Flyway against `<schema>` (§6).
+3. **Seed**: idempotent seed into `<schema>` (§7) — Administrators access group (with the generated UUID) + permissions, NGN currency, customer-number-format singleton.
+4. **Keycloak** (`KeycloakTenantProvisioner`): ensure realm → ensure back-office client (existing) → **ensure realm roles** (the full canonical authority set — §6a) → **ensure first-admin user** (temp password from config, `temporary=true` → `UPDATE_PASSWORD` forced reset; `accessGroupId` attribute = the generated UUID; all canonical roles assigned directly).
+5. **Register**: upsert `public.tenants (schema_name, name, subdomain, active)` via `JdbcTemplate` (no JPA entity exists for the registry).
 
 After the config list is processed, **sweep `public.tenants WHERE active = true`** and run step 3 against each — making "all subsequent migrations run against every schema on startup" true.
 
@@ -87,18 +87,50 @@ Flyway.configure()
 - **V2 is a harmless no-op for tenant schemas**: it `SET search_path TO template_`, so its tables land in `template_` (idempotent), not the tenant — but those same tables are re-created *unqualified* by V12/V13/V16, which land in the tenant schema. So every tenant schema ends complete (V3…V66 all run schema-relative against it).
 - Each tenant gets its own `<schema>.flyway_schema_history`.
 - **No existing migration is edited.**
+- **`beforeEachMigrate` callback re-pins search_path (load-bearing).** V2 ends with `RESET search_path`, which would drop the connection back to the default (`public`) and cause V3…V66's *unqualified* DDL to land in `public` instead of the tenant schema. The migrator registers a Flyway `Callback` on `BEFORE_EACH_MIGRATE` that runs `SET search_path TO "<schema>"` before every migration, neutralising V2's reset. This is verified empirically by the migrator IT (asserts a V31+ table exists in the tenant schema and **not** in `public`).
+
+## 6a. Canonical bootstrap role set
+
+Authorization is Keycloak-realm-role-driven (`JwtAuthConverter` maps `realm_access.roles` → `ROLE_*`). A full-permission first admin needs every role created in its realm and assigned directly. Two naming conventions exist:
+
+**Pattern A — `{module}_{action}` (synced-style, created with a `CIA-managed:` description to match `KeycloakRealmRoleSyncer`):**
+
+```
+setup_view setup_create setup_update setup_delete
+claims_view claims_create claims_update claims_approve
+customer_view customer_create customer_update
+underwriting_view underwriting_create underwriting_update underwriting_approve
+quotation_view quotation_create quotation_update quotation_approve
+reinsurance_view reinsurance_create reinsurance_update reinsurance_approve
+audit_view
+notification_templates_view notification_templates_update
+reports_view reports_create_custom reports_export_csv reports_export_pdf reports_manage_access
+```
+
+**Pattern B — SCREAMING_CASE (hardcoded, not syncer-managed):**
+
+```
+FINANCE_VIEW FINANCE_CREATE FINANCE_UPDATE FINANCE_APPROVE
+FINANCE_APPROVE_PPA FINANCE_REOPEN_PERIOD FINANCE_OVERRIDE_LOCK
+PLATFORM_ADMIN
+```
+
+The implementation pins this set as a `BootstrapRoles.ALL` constant and a drift-guard test greps every `hasRole(...)` / `hasAuthority(...)` / `@PreAuthorize` across the reactor and fails if any authority is missing from the constant — so the list cannot silently drift as new endpoints are added.
 
 ## 7. Seed contents (sensible defaults)
 
-Idempotent SQL (`ON CONFLICT DO NOTHING` / `IF NOT EXISTS`) into the tenant schema after migrate:
+Idempotent SQL (guarded by existence checks) into the tenant schema after migrate:
 
-- **Administrators access group** (full module permissions) — the first-admin's `accessGroupId`.
-- **First-admin `users` row** — matches the Keycloak user; carries the access-group FK.
-- **NGN currency** default.
-- **`customer_number_format`** singleton (sensible default prefix/sequence) — removes the `CUSTOMER_NUMBER_FORMAT_NOT_CONFIGURED` footgun.
-- **`policy_number_format`** singleton.
+- **Administrators access group** — one `access_groups` row (deterministic UUID generated by the service) **+** one `access_group_permissions` row per granted permission (the join-table model; `permission` is `VARCHAR(100)`).
+- **NGN currency** — one `currencies` row, `is_default = TRUE`.
+- **`customer_number_format`** singleton (sensible default prefix `CUST`, `include_year`/`include_type` true, `sequence_length` 8) — removes the `CUSTOMER_NUMBER_FORMAT_NOT_CONFIGURED` footgun.
 
-*Not seeded* (admin configures via Setup UI): products, classes of business, approval groups.
+**Corrections from research (post-approval):**
+
+- **No `users` row** — there is no `users` table; users live entirely in Keycloak. The first admin is a Keycloak-only user with an `accessGroupId` attribute pointing at the seeded Administrators group UUID.
+- **No `policy_number_format` seed** — `policy_number_formats.product_id` is a UNIQUE FK to `products`, so a format cannot exist without a product, and products are deliberately not seeded (Q5=B). Policy-number-format configuration happens during product setup. (This is not a footgun at tenant-creation: no policies can exist until the admin creates a product.)
+
+*Not seeded* (admin configures via Setup UI): products, classes of business, approval groups, per-product policy-number formats.
 
 ## 8. Configuration & gating
 
