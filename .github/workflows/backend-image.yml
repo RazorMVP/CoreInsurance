@@ -95,20 +95,19 @@ jobs:
         with:
           sarif_file: trivy-results.sarif
 
-      # CVE gate is REPORT-ONLY for now (exit-code: 0) — it prints the
-      # CRITICAL/HIGH table to the job log and the SARIF is uploaded to the
-      # Security tab above, but it does NOT fail the build. Rationale: the
-      # current findings are application-dependency CVEs rooted in the Spring
-      # Boot 3.3.5 BOM (Tomcat/Netty/spring-security/pgjdbc/etc.), whose
-      # remediation is a deliberate dependency-bump slice with cross-IT
-      # regression risk — tracked as backlog `remediate-backend-image-cves`
-      # (P1). Flip exit-code back to '1' once that slice lands so the gate
-      # blocks regressions thereafter.
-      - name: Report high and critical CVEs (non-blocking)
+      # CVE gate is ENFORCING (exit-code: 1) — fails the build on any
+      # CRITICAL/HIGH finding (OS or library). The remediation slice
+      # `remediate-backend-image-cves` landed: Spring Boot 3.3.5 -> 3.5.14
+      # (45 -> 16 CVEs) plus the long-tail bumps (Temporal 1.35, Tomcat
+      # 10.1.55, netty 4.1.134, pgjdbc 42.7.11, bcprov-jdk18on 1.84) drove the
+      # image to 0 CRITICAL/HIGH. The SARIF still uploads to the Security tab
+      # for the full (incl. LOW/MEDIUM) picture; this step is the hard gate
+      # that blocks regressions going forward.
+      - name: Report high and critical CVEs
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: ${{ steps.scan-image.outputs.ref }}
           format: table
           vuln-type: os,library
           severity: CRITICAL,HIGH
-          exit-code: '0'
+          exit-code: '1'

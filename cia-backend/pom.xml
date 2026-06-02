@@ -50,15 +50,21 @@
          (3.21->3.25): clears the Temporal-transitive image CVEs
          (CVE-2025-55163, CVE-2023-32731, CVE-2024-7254). -->
     <temporal.version>1.35.0</temporal.version>
-    <!-- Spring Boot 3.5.14 BOM overrides — bump to the latest patch in each
-         line to clear 2026-dated image CVEs whose fixes post-date the BOM pins
-         (Tomcat 10.1.54->.55 CVE-2026-41293 CRITICAL; netty 4.1.132->.134
-         CVE-2026-42583/42579/42584; pgjdbc 42.7.10->.11 CVE-2026-42198;
-         bouncycastle 1.81->1.84 CVE-2026-5598). Property names match the
-         spring-boot-dependencies BOM so they override the managed versions. -->
+    <!-- Spring Boot 3.5.14 BOM overrides — these three property names match the
+         spring-boot-dependencies BOM, so setting them here overrides the managed
+         versions to the latest patch in each line, clearing 2026-dated image CVEs
+         whose fixes post-date the BOM pins (Tomcat 10.1.54->.55 CVE-2026-41293
+         CRITICAL; netty 4.1.132->.134 CVE-2026-42583/42579/42584; pgjdbc
+         42.7.10->.11 CVE-2026-42198). -->
     <tomcat.version>10.1.55</tomcat.version>
     <netty.version>4.1.134.Final</netty.version>
     <postgresql.version>42.7.11</postgresql.version>
+    <!-- bcprov-jdk18on is NOT a Boot BOM property; minio 8.6.0 pins it
+         transitively at 1.81 (CVE-2026-5598 HIGH — non-constant-time comparison
+         private-key leak). A <properties> value alone is a no-op here; it must be
+         forced via an explicit <dependencyManagement> entry (see below, next to
+         the okhttp pin — another minio transitive Boot doesn't manage). 1.84
+         carries the fix. -->
     <bouncy-castle.version>1.84</bouncy-castle.version>
     <mapstruct.version>1.5.5.Final</mapstruct.version>
     <springdoc.version>2.5.0</springdoc.version>
@@ -260,6 +266,16 @@
         <groupId>com.squareup.okhttp3</groupId>
         <artifactId>okhttp</artifactId>
         <version>${okhttp.version}</version>
+      </dependency>
+
+      <!-- ── BouncyCastle (minio transitive; not BOM-managed) ────────
+           minio 8.6.0 pins bcprov-jdk18on 1.81 (CVE-2026-5598 HIGH). Force the
+           fixed 1.84 — the <properties> override above does nothing without this
+           explicit management entry. -->
+      <dependency>
+        <groupId>org.bouncycastle</groupId>
+        <artifactId>bcprov-jdk18on</artifactId>
+        <version>${bouncy-castle.version}</version>
       </dependency>
 
       <!-- ── AWS SDK v2 BOM ─────────────────────────────────────────── -->
