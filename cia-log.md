@@ -19,7 +19,6 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | kyc-deferred-pending-status | P3 | `mock`/default KYC auto-PASSes rather than marking deferred (`PENDING`) | Surfaced S142. The launch-safe `MockKycService` returns `verified=true` → customer `kyc_status=PASSED`, which over-attests (no real verification happened). The honest state is `KycStatus.PENDING` ("onboarded, KYC deferred until a provider is wired"). Deferred because threading a true 3rd "deferred" signal through the binary `KycResult.verified` + the intertwined corporate/director flow (`allDirectorsPassed`) is past the S142 "small fix" scope. Fix: add a `deferred`/`pending` outcome to `KycResult` + map it to `KycStatus.PENDING` in `applyKycResult`/corporate/director paths. Do when KYC live work (`kyc-live-provider`) is picked up. |
 | prod-deployability-k8s-manifests | P1 | No Kubernetes/Helm manifests or backend deploy-to-prod automation | **Slice 1 done (S143):** backend Dockerfile + `.dockerignore` + `backend-image.yml` CI (GHCR build + Trivy CVE gate) landed and verified — image builds against current `main` (V66), container boots, liveness/readiness probes 200, Docker HEALTHCHECK healthy. **Remaining:** k8s manifests / Helm chart (Deployment, Service, Ingress, HPA, probes, secrets) — the phase-0 branch stops at docker-compose and has NONE, so this is net-new. Plus a deploy-to-prod step (apply/Helm-release) once a cluster target exists. `docker/production/docker-compose.yml` + `production.env.example` salvageable from phase-0 as an interim non-k8s deploy. ~1 wk. |
 | ndpr-dsar-and-retention | P1 | NDPR DSAR export endpoint + PII retention/purge workflow absent (claimed in CLAUDE.md §8) | Re-audit. No data-subject-access export endpoint exists; the only retention workflow is `PdfDownloadLogRetentionWorkflow` (PDF-log purge), not a tenant-config-driven customer-PII purge. Both are regulatory obligations stated as present. Build: a DSAR export endpoint (customer + related records) and a scheduled Temporal PII-retention purge keyed to per-tenant retention config. ~1 wk, self-contained. |
-| remediate-backend-image-cves | P1 | Backend image has 45 CRITICAL/HIGH dependency CVEs (Trivy) | Surfaced S143 by the first `backend-image.yml` CI run: Trivy flagged **45 (11 CRITICAL, 34 HIGH)**, almost all `cia-api.jar` library CVEs rooted in the **Spring Boot 3.3.5 BOM** — embedded Tomcat 10.1.31 (CVE-2025-24813 CRITICAL RCE), Netty 4.1.114, `spring-security-web` (CVE-2026-22732 CRITICAL policy bypass), `spring-boot` (CVE-2026-40973 ACE), pgjdbc 42.7.4, BouncyCastle 1.78, protobuf, minio-java, grpc. Fix: bump the Spring Boot BOM to the latest 3.3.x (≥3.3.11; consider 3.4.x) + pin any transitive deps not covered, then run the full failsafe suite (274 ITs) for regression. Some 2026-dated CVEs may lack a 3.3.x fix → may force a minor bump. **The CVE gate was softened to report-only (exit-code 0) in S143** so it doesn't block all backend CI; **flip `backend-image.yml` back to `exit-code: '1'` once this lands.** SARIF still uploads to the Security tab. ~3–5d (dep bump + IT regression). |
 | money-math-test-coverage | P1 | Core money-math + RI allocation untested | Re-audit. No dedicated tests for premium `SI×Rate−Discount` (`QuoteService`/`PolicyService`), pro-rata endorsement `(Annual/365)×Days`, or claims DV/reserves/settlement amounts; **`AllocationService` (surplus/quota-share/XOL) has zero test references anywhere** — RI ceding math is regulatory-impacting. Add focused unit tests for each formula + an allocation IT. ~3–5d. GL/IFRS/period-lock are already well covered. |
 | e2e-playwright-golden-paths | P2 | No E2E tests exist (CLAUDE.md standard unmet) | Re-audit. Zero Playwright config/specs on main; `@playwright/test` in no package.json. No golden-path coverage (login→quote→policy→claim→finance). The `production-readiness-phase-0` branch has a planned smoke (unmerged). Stand up Playwright + one golden path per module. |
 | frontend-tests-in-ci + coverage-gates | P2 | FE Vitest never runs in CI; no JaCoCo / Vitest coverage anywhere | Re-audit. `ci.yml` runs typecheck+build but not `pnpm test`, so the 5 existing Vitest files gate nothing. No JaCoCo in any pom, no Vitest coverage config — the "80% business-logic" standard is unenforced/unmeasured. Add `pnpm test` to CI + JaCoCo (with a starting threshold) + Vitest coverage. |
@@ -36,6 +35,7 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | login-failed-endpoint-abuse | P3 | Unauthenticated `POST /api/v1/auth/login/failed` allows audit/alert flooding | Re-audit. `LoginAuditController:69` is `permitAll`, takes attacker-controlled `userId`/`userName`, writes audit rows + drives alert detection — log-injection / alert-fatigue DoS, no rate limit. Restrict to internal callers or rate-limit + sanitize. |
 | ai-assist-feature | P3 | AI feature (AiAssistService / Claude) entirely absent | Re-audit. No `AiAssistService` interface, no `ClaudeAiAssistService`, no Anthropic SDK — the feature-flagged AI in the PRD/CLAUDE.md is unbuilt. Optional/feature-flagged, so not a core-launch blocker; build when prioritized. |
 | storage-gcs-azure-adapters | P3 | Storage GCS/Azure adapters claimed but missing | Re-audit. Only MinIO + S3 are real; selecting `gcs`/`azure` yields no bean. Fine if deploying on S3/MinIO; CLAUDE.md overstates coverage. Build the adapters or trim the documented set. |
+| mockbean-to-mockitobean | P3 | `@MockBean`/`@SpyBean` deprecated in Boot 3.4 (still functional in 3.5) | Surfaced S144 during the Boot 3.3.5→3.5.14 bump. `org.springframework.boot.test.mock.mockito.@MockBean` (15 test files) is deprecated for removal in favour of `org.springframework.test.context.bean.override.mockito.@MockitoBean`. Still compiles + runs on 3.5, so deferred per the remediation spec (pure mechanical churn, no behaviour change). Do a find-replace sweep when convenient or when a future Boot bump removes the old annotation. |
 | list-endpoints-true-pagination | P3 | True server-side pagination UI for the now-`ApiMeta`-populated list endpoints (Option C) | **Context:** Option B shipped (Session 137, commit `9fab40f`, see entry below) — all 16 internal list controllers now populate `ApiMeta` (total/page/size) and default to `size=2000`, so lists no longer silently truncate at 20 in practice. B is a high cap, not true pagination: a single list exceeding **2000** rows would still truncate (and 2000 is Spring's `max-page-size` ceiling, so the cap can't go higher without an `application.yml` change). **Option C (true pagination, ~2 wks)** is the proper end state: wire `{page,size}` through ~13 FE list pages + extract a shared `useServerPagination`/`ServerPaginationFooter` into `@cia/ui` (16 call sites incl. the 3 existing precedents — finance ReceiptsList/PaymentsList + JournalEntryBrowser, which already hand-roll a server pager), plus per-endpoint 2-page backend ITs. The backend half (meta population) is already done by B. **Scope note:** ~6 of the 19 list endpoints are nested detail-feeds (claim comments/docs/expenses, `ClaimController.reserves`) where a prev/next pager is poor UX — keep those on the B raise-cap and apply C only to the ~13 top-level table pages. Full C effort breakdown is in the Session 136/137 transcript. Pick up if/when a tenant's list realistically approaches 2000 rows or real pagination UX is requested. |
 | R7-termii-prod | P3 | Termii SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): user opted for "Logging stub only" in the R7 slice. The SPI ships ready for prod impls; this row tracks the first one — `TermiiSmsService` (Nigeria-native, listed in CLAUDE.md candidate set). Adds `TERMII_API_KEY` + `TERMII_SENDER_ID` envs, `@ConditionalOnProperty(havingValue="termii")` gating, Termii rate-limit guard, Testcontainers IT against a wiremock stub. Pickup when a tenant signs up needing real SMS delivery. |
 | R7-twilio-prod | P3 | Twilio SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): same as `R7-termii-prod` but for non-Nigerian tenants. `TwilioSmsService` against the Twilio Programmable SMS API; `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_FROM_NUMBER` envs. Lower priority than Termii because the platform is Nigeria-first; ship only when the first non-NG tenant onboards. |
@@ -46,7 +46,7 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
-## 2026-06-02 — Session 144 (`main`): Spring Boot 3.5.14 CVE remediation (IN PROGRESS) + 2 pre-existing time-bomb test fixes
+## 2026-06-02 — Session 144 (`main`): Spring Boot 3.5.14 CVE remediation (COMPLETE — 45→0 CRITICAL/HIGH) + 2 pre-existing time-bomb test fixes
 
 Working `remediate-backend-image-cves` (P1): bump Spring Boot 3.3.5 → 3.5.14 to clear the 45
 CRITICAL/HIGH image CVEs (S143). User-approved target 3.5.14 — the minimum that clears the two
@@ -80,19 +80,50 @@ meaningful:
   (the `cia-backend/pom.xml` okhttp-4.12 edit is **stashed** pending that result — not committed
   until verify confirms green, so the bump checkpoint isn't a false "verified").
 
-### Remaining (next continuation)
-- Confirm full `mvn verify` green at 3.5.14 → commit the okhttp-4.12 pin.
-- Stage 3: rebuild image + Trivy rescan; pin grpc/protobuf/bouncycastle (transitive via Temporal)
-  or bump Temporal; `.trivyignore` any truly-unfixable residual (none of the 2 original CRITICALs
-  may remain).
-- Stage 4: re-arm `backend-image.yml` CVE gate (exit-code 0 → 1); update CLAUDE.md (Boot version,
-  Flyway if moved); finalize this S144 entry; push; watch CI green.
+### Stage 2 — core bump committed + verified (`45e6503`)
+- **`45e6503`** — parent `spring-boot-starter-parent` 3.3.5 → 3.5.14 + `minio` 8.6.0 + `okhttp`
+  4.12.0 pin. Full `mvn verify` green on the host; **`backend-image.yml` CI green** (image builds,
+  boots, probes 200). Trivy: **45 → 16 CRITICAL/HIGH**, **both original CRITICALs cleared**
+  (spring-security-web CVE-2026-22732 + spring-boot CVE-2026-40973). Gate still report-only.
 
-### Backlog reconciliation (interim)
-- **No row drained yet** — `remediate-backend-image-cves` stays open until the gate is re-armed
-  and CI is green.
-- **Row to ADD on completion (P3):** `mockbean-to-mockitobean` — `@MockBean` (15 files) is
-  deprecated in 3.4 but functional in 3.5; deferred per spec (pure churn).
+### Stage 3 — long-tail bumps (`bb0138a`) + the local-Keycloak-IT red herring
+- **`bb0138a`** — `temporal` 1.25.0 → 1.35.0 (pulls fixed grpc 1.54→1.75 + protobuf 3.21→3.25:
+  CVE-2025-55163, CVE-2023-32731, CVE-2024-7254) + three **real** Boot-BOM property overrides:
+  `tomcat` 10.1.55 (CVE-2026-41293 CRITICAL), `netty` 4.1.134.Final (CVE-2026-42583/42579/42584),
+  `postgresql` 42.7.11 (CVE-2026-42198). Also set `bouncy-castle.version` 1.84 — **but that one was
+  a silent no-op** (see Stage 3b).
+- **Local-env red herring (resolved by controlled experiment):** the full `mvn verify` with these
+  bumps failed on **only** the 4 Keycloak-container ITs (`KeycloakTenantProvisionerIT` et al.) with
+  `HTTP 403 Forbidden` on the admin token grant (5 tests: 1F/4E), 181 other classes green. Ran the
+  **scientific control**: the *identical* IT fails with the *identical* signature at the CI-green
+  baseline commit (temporal 1.25, `45e6503`) on the same loaded local Docker host (11 containers +
+  a concurrent `baas-card` Maven build). **Failure is independent of the bumps → purely local Docker
+  env** (Keycloak-24 admin-bootstrap 403 under host load); the same commit + same ITs are **green in
+  CI's clean Docker**. Decision: push and let CI be the authoritative gate for those 4 ITs. CI on
+  `bb0138a` confirmed green.
+
+### Stage 3b — last CVE: bcprov-jdk18on (`bbbac7b`)
+- CI Trivy on `bb0138a` reported the image down to **exactly 1** finding (OS: 0, jar: 1):
+  `org.bouncycastle:bcprov-jdk18on` **1.81** CVE-2026-5598 (HIGH — non-constant-time comparison
+  private-key leak), pulled transitively by `io.minio:minio` 8.6.0.
+- **Why the `bb0138a` property didn't help:** bouncycastle is **not** a spring-boot-dependencies BOM
+  property, so `<bouncy-castle.version>` interpolated nothing — a silent no-op (unlike tomcat/netty/
+  pgjdbc, which *are* real BOM property names → confirmed by the otherwise-clean Java layer).
+- **`bbbac7b`** — fixed with an explicit `<dependencyManagement>` entry for `bcprov-jdk18on`
+  (`${bouncy-castle.version}` = 1.84), same mechanism as the okhttp minio-transitive pin;
+  `dependency:tree` now resolves 1.84. Corrected the misleading properties comment.
+
+### Stage 4 — gate re-armed + CI confirms 0 (`bbbac7b`)
+- Re-armed `backend-image.yml` CVE gate **exit-code 0 → 1** (enforcing) in the same commit.
+- **CI on `bbbac7b` green with the enforcing gate** ⇒ machine-proven **0 CRITICAL/HIGH** (Report
+  Summary: ubuntu 0, `app/cia-api.jar` 0). The gate now **blocks any future CRITICAL/HIGH** regression.
+- **Final tally: 45 → 16 (Boot 3.5.14) → 0.** Both original CRITICALs gone; OS + Java layers clean.
+
+### Backlog reconciliation
+- **Row DRAINED (P1):** `remediate-backend-image-cves` — done. Boot 3.5.14 + long-tail bumps +
+  bcprov pin drove the image to 0 CRITICAL/HIGH; CVE gate re-armed to enforcing (CI green proof).
+- **Row ADDED (P3):** `mockbean-to-mockitobean` — `@MockBean` (15 files) deprecated in Boot 3.4,
+  still functional in 3.5; deferred per spec (pure churn, no behaviour change).
 
 ---
 
