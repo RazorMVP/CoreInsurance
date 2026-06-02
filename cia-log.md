@@ -46,6 +46,56 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-06-02 — Session 144 (`main`): Spring Boot 3.5.14 CVE remediation (IN PROGRESS) + 2 pre-existing time-bomb test fixes
+
+Working `remediate-backend-image-cves` (P1): bump Spring Boot 3.3.5 → 3.5.14 to clear the 45
+CRITICAL/HIGH image CVEs (S143). User-approved target 3.5.14 — the minimum that clears the two
+CRITICALs (spring-security-web CVE-2026-22732 needs Security 6.5.9; spring-boot CVE-2026-40973
+fix is 3.5.14). Spec/plan: `docs/superpowers/{specs,plans}/2026-06-01-spring-boot-3.5-cve-remediation*`.
+
+### Stage 0 caught TWO pre-existing reds on `main` (unrelated to the bump or recent work)
+Both are **clock/schema-drift time-bomb fixtures** that were green when written and rotted —
+surfaced by the first full `mvn verify` in a while (the bump's baseline gate), NOT introduced
+by it. Fixed as separate scoped commits BEFORE the bump so the bump's "all green" gate stays
+meaningful:
+- **`41efc16`** — `RetroactiveJournalBackfillActivitiesImplTest` stale test double: `policyRow()`
+  returned 14 elements but the impl SELECTs 18 cols + reads row[14..17] (commission/agent cols
+  added by slices 84c/84d). `Index 14 out of bounds`. Added the 4 cols as null. 7/7 green.
+- **`2e5a6a3`** — 4 GL ITs (`SubledgerPostingServiceIT`, `JournalEntryServiceIT`,
+  `TrialBalanceServiceIT`, `PeriodLockInterceptorIT`) seeded only a May-2026 MONTH fiscal period
+  but post some events at `LocalDate.now()` (events with no explicit date; `JournalEntryService.reverse()`
+  stamps now()). Went red on 2026-06-01 ("No active MONTH fiscal period covers 2026-06-01", 11
+  errors). Added idempotent find-or-create seeding of a current-month period. 31 GL cases green.
+- Baseline #3 then fully green (`BASELINE3_MVN_EXIT=0`).
+
+### The bump (in progress)
+- **`976de82`** — parent `spring-boot-starter-parent` 3.3.5 → 3.5.14 + `minio` 8.5.11 → 8.6.0
+  (minio CVE-2025-59952) + pin `okhttp` (Boot 3.5 dropped okhttp from its managed BOM). Reactor
+  compiles.
+- **okhttp breaking change:** minio 8.6.0 declares okhttp **5.1.0** transitively, whose Kotlin
+  HttpUrl split broke `cia-storage` compile (`cannot access okhttp3.HttpUrl`). okhttp itself had
+  **zero CVEs**, so pinned **okhttp 4.12.0** (minio-compatible, CVE-clean) to avoid the okhttp-5
+  migration — fixing the minio CVE without inheriting an unrelated major bump. `cia-storage`
+  compiles; full `mvn verify` at 3.5.14 + okhttp 4.12.0 was running at session-gate time
+  (the `cia-backend/pom.xml` okhttp-4.12 edit is **stashed** pending that result — not committed
+  until verify confirms green, so the bump checkpoint isn't a false "verified").
+
+### Remaining (next continuation)
+- Confirm full `mvn verify` green at 3.5.14 → commit the okhttp-4.12 pin.
+- Stage 3: rebuild image + Trivy rescan; pin grpc/protobuf/bouncycastle (transitive via Temporal)
+  or bump Temporal; `.trivyignore` any truly-unfixable residual (none of the 2 original CRITICALs
+  may remain).
+- Stage 4: re-arm `backend-image.yml` CVE gate (exit-code 0 → 1); update CLAUDE.md (Boot version,
+  Flyway if moved); finalize this S144 entry; push; watch CI green.
+
+### Backlog reconciliation (interim)
+- **No row drained yet** — `remediate-backend-image-cves` stays open until the gate is re-armed
+  and CI is green.
+- **Row to ADD on completion (P3):** `mockbean-to-mockitobean` — `@MockBean` (15 files) is
+  deprecated in 3.4 but functional in 3.5; deferred per spec (pure churn).
+
+---
+
 ## 2026-06-01 — Session 143 (`main`): deployability Slice 1 — backend container image + CI + probes (+ latent S141 partner-auth bug fix)
 
 First slice of the deployability P1. Triaged the unmerged `production-readiness-phase-0`
