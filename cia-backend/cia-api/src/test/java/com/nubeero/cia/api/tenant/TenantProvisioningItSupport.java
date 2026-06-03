@@ -2,15 +2,15 @@ package com.nubeero.cia.api.tenant;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import javax.sql.DataSource;
 
 /**
- * Spins up a real PostgreSQL once for the data-plane provisioning ITs and exposes a DataSource.
- * No Spring context — these units take a DataSource directly, so the IT is fast and focused.
+ * Real PostgreSQL shared by the data-plane provisioning ITs (no Spring context — units take a
+ * DataSource directly). Container starts once for the JVM via the static initializer; Ryuk handles
+ * teardown — mirrors FinanceWebItSupport so multiple IT subclasses share one container safely.
+ * Each IT uses a distinct tenant schema name, so they do not collide.
  */
 abstract class TenantProvisioningItSupport {
 
@@ -21,25 +21,19 @@ abstract class TenantProvisioningItSupport {
             .withUsername("ciaprov")
             .withPassword("ciaprov");
 
-    static HikariDataSource dataSource;
+    static final HikariDataSource DATA_SOURCE;
 
-    @BeforeAll
-    static void startDb() {
+    static {
         POSTGRES.start();
         HikariConfig cfg = new HikariConfig();
         cfg.setJdbcUrl(POSTGRES.getJdbcUrl());
         cfg.setUsername(POSTGRES.getUsername());
         cfg.setPassword(POSTGRES.getPassword());
         cfg.setMaximumPoolSize(4);
-        dataSource = new HikariDataSource(cfg);
-    }
-
-    @AfterAll
-    static void stopDb() {
-        if (dataSource != null) dataSource.close();
+        DATA_SOURCE = new HikariDataSource(cfg);
     }
 
     DataSource dataSource() {
-        return dataSource;
+        return DATA_SOURCE;
     }
 }

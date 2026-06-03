@@ -16,11 +16,14 @@ import java.sql.Statement;
  *
  * <p>Flyway is configured with baselineVersion=1 and {@code baseline()} is called explicitly
  * before {@code migrate()} so V1 (the shared public.tenants registry) is recorded as
- * already-applied and never runs inside a tenant schema; migration begins at V2. (Flyway 10+
- * ignores {@code baselineOnMigrate} for empty schemas — explicit {@code baseline()} is required.)
- * A BEFORE_EACH_MIGRATE callback re-pins search_path to the target schema before every migration,
- * neutralising V2's trailing {@code RESET search_path} (which would otherwise drop V3..V66 into
- * public). Postgres DDL is transactional, so a failed migration rolls back to the prior version.
+ * already-applied and never runs inside a tenant schema; migration begins at V2 onwards (to the
+ * current migration tip). (Flyway 10+ ignores {@code baselineOnMigrate} for empty schemas —
+ * explicit {@code baseline()} is required.) A BEFORE_EACH_MIGRATE callback re-pins search_path to
+ * the target schema before every migration, neutralising V2's trailing {@code RESET search_path}
+ * (which would otherwise drop V3 onwards into public). Note: V2 internally does
+ * {@code SET search_path TO template_} so V2's own objects intentionally land in the template_
+ * schema; the callback governs the migrations around V2 and neutralises V2's trailing RESET.
+ * Postgres DDL is transactional, so a failed migration rolls back to the prior version.
  */
 @Slf4j
 @Component
@@ -43,13 +46,12 @@ public class TenantSchemaMigrator {
         }
     }
 
-    /** Run V2..V66 against the tenant schema (V1 baselined out). Throws on failure (fail-fast). */
+    /** Run V2 onwards against the tenant schema (V1 baselined out). Throws on failure (fail-fast). */
     public void migrate(String schema) {
         validate(schema);
         Flyway flyway = Flyway.configure()
             .dataSource(dataSource)
-            .schemas(schema)
-            .defaultSchema(schema)
+            .schemas(schema)          // first entry is already the default schema in Flyway 10+
             .baselineVersion("1")
             .locations("classpath:db/migration")
             .callbacks(new SearchPathCallback(schema))
@@ -78,6 +80,7 @@ public class TenantSchemaMigrator {
             return true;
         }
         @Override public void handle(Event event, Context context) {
+            // schema is pre-validated by migrate()/ensureSchema() before this record is constructed.
             try (Statement st = context.getConnection().createStatement()) {
                 st.execute("SET search_path TO \"" + schema + "\"");
             } catch (SQLException e) {
