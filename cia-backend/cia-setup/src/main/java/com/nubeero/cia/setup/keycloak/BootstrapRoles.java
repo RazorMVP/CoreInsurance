@@ -1,49 +1,64 @@
 package com.nubeero.cia.setup.keycloak;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Canonical Keycloak realm-role set assigned to a freshly provisioned tenant's first admin.
  *
- * <p>Pattern A roles ({@code module_action}) mirror the {@code module:action} permission model
- * synced by {@link KeycloakRealmRoleSyncer}; Pattern B roles (SCREAMING_CASE) are hardcoded
- * authorities used directly in {@code @PreAuthorize} on the finance / platform-admin surfaces and
- * are NOT derived from the permission model.
+ * <p>Pattern A roles are derived from (module, action) pairs: the Keycloak role name is
+ * {@code module_action} and the access-group permission string is {@code module:action}.
+ * Deriving both from the same pairs avoids the positional ambiguity that bites when a module
+ * name (notification_templates) OR an action (create_custom) contains an underscore.
  *
- * <p>Drift is enforced by {@code BootstrapRolesDriftTest}, which fails the build if any controller
- * references an authority absent from {@link #ALL}.
+ * <p>Pattern B roles (SCREAMING_CASE) are hardcoded authorities used directly in
+ * {@code @PreAuthorize} on the finance / platform-admin surfaces; they are NOT permission-derived.
+ *
+ * <p>Drift is enforced by {@code BootstrapRolesDriftTest}.
  */
 public final class BootstrapRoles {
 
     private BootstrapRoles() {}
 
-    /** Pattern A — created with a "CIA-managed:" description to match the role syncer's convention. */
-    public static final List<String> PATTERN_A = List.of(
-        "setup_view", "setup_create", "setup_update", "setup_delete",
-        "claims_view", "claims_create", "claims_update", "claims_approve",
-        "customer_view", "customer_create", "customer_update",
-        "underwriting_view", "underwriting_create", "underwriting_update", "underwriting_approve",
-        "quotation_view", "quotation_create", "quotation_update", "quotation_approve",
-        "reinsurance_view", "reinsurance_create", "reinsurance_update", "reinsurance_approve",
-        "audit_view",
-        "notification_templates_view", "notification_templates_update",
-        "reports_view", "reports_create_custom", "reports_export_csv",
-        "reports_export_pdf", "reports_manage_access"
+    /** (module, action) pairs — single source of truth for Pattern-A roles + permissions. */
+    private record Perm(String module, String action) {
+        String roleName()   { return module + "_" + action; }   // notification_templates_view
+        String permission() { return module + ":" + action; }   // notification_templates:view
+    }
+
+    private static final List<Perm> PATTERN_A_PERMS = List.of(
+        new Perm("setup", "view"), new Perm("setup", "create"),
+        new Perm("setup", "update"), new Perm("setup", "delete"),
+        new Perm("claims", "view"), new Perm("claims", "create"),
+        new Perm("claims", "update"), new Perm("claims", "approve"),
+        new Perm("customer", "view"), new Perm("customer", "create"), new Perm("customer", "update"),
+        new Perm("underwriting", "view"), new Perm("underwriting", "create"),
+        new Perm("underwriting", "update"), new Perm("underwriting", "approve"),
+        new Perm("quotation", "view"), new Perm("quotation", "create"),
+        new Perm("quotation", "update"), new Perm("quotation", "approve"),
+        new Perm("reinsurance", "view"), new Perm("reinsurance", "create"),
+        new Perm("reinsurance", "update"), new Perm("reinsurance", "approve"),
+        new Perm("audit", "view"),
+        new Perm("notification_templates", "view"), new Perm("notification_templates", "update"),
+        new Perm("reports", "view"), new Perm("reports", "create_custom"),
+        new Perm("reports", "export_csv"), new Perm("reports", "export_pdf"),
+        new Perm("reports", "manage_access")
     );
 
-    /** Pattern B — hardcoded realm roles, not syncer-managed. */
+    /** Pattern A — module_action role names (syncer-managed; "CIA-managed:" description). */
+    public static final List<String> PATTERN_A = PATTERN_A_PERMS.stream().map(Perm::roleName).toList();
+
+    /** Pattern B — hardcoded SCREAMING_CASE realm roles, not syncer-managed. */
     public static final List<String> PATTERN_B = List.of(
         "FINANCE_VIEW", "FINANCE_CREATE", "FINANCE_UPDATE", "FINANCE_APPROVE",
         "FINANCE_APPROVE_PPA", "FINANCE_REOPEN_PERIOD", "FINANCE_OVERRIDE_LOCK",
         "PLATFORM_ADMIN"
     );
 
-    /** Every role the bootstrap admin must hold. */
-    public static final List<String> ALL =
-        java.util.stream.Stream.concat(PATTERN_A.stream(), PATTERN_B.stream()).toList();
+    /** Every realm role the bootstrap admin must hold. */
+    public static final List<String> ALL = Stream.concat(PATTERN_A.stream(), PATTERN_B.stream()).toList();
 
-    /** The {@code module:action} permission strings seeded into the Administrators access group. */
-    public static final List<String> ADMIN_PERMISSIONS = PATTERN_A.stream()
-        .map(r -> r.replaceFirst("_", ":"))   // setup_view -> setup:view (first underscore only)
-        .toList();
+    /** module:action permission strings seeded into the Administrators access group. */
+    public static final List<String> ADMIN_PERMISSIONS =
+        PATTERN_A_PERMS.stream().map(Perm::permission).toList();
 }

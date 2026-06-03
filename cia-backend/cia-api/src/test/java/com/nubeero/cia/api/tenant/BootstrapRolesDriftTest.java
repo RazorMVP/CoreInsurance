@@ -14,8 +14,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class BootstrapRolesDriftTest {
 
-    private static final Pattern AUTHORITY =
-            Pattern.compile("has(?:Role|Authority)\\(\\s*'([A-Za-z0-9_:]+)'");
+    /**
+     * Outer pattern: captures the full argument list inside has[Any](Role|Authority)(...).
+     * Group 1 = the raw argument string (everything between the outermost parens).
+     */
+    private static final Pattern HAS_AUTH_CALL =
+            Pattern.compile("has(?:Any)?(?:Role|Authority)\\(([^)]+)\\)");
+
+    /** Inner pattern: extracts each quoted token from the argument list. */
+    private static final Pattern QUOTED_TOKEN =
+            Pattern.compile("'([A-Za-z0-9_:]+)'");
 
     @Test
     void everyReferencedAuthorityIsCoveredByBootstrapRoles() throws IOException {
@@ -32,6 +40,10 @@ class BootstrapRolesDriftTest {
                  .forEach(p -> scan(p, referenced));
         }
 
+        assertThat(referenced)
+            .as("file walk found no authorities — check user.dir path resolution")
+            .hasSizeGreaterThan(20);
+
         Set<String> missing = new TreeSet<>();
         for (String auth : referenced) {
             if (!covered.contains(normalise(auth))) missing.add(auth);
@@ -46,8 +58,14 @@ class BootstrapRolesDriftTest {
     private static void scan(Path file, Set<String> out) {
         try {
             String src = Files.readString(file);
-            Matcher m = AUTHORITY.matcher(src);
-            while (m.find()) out.add(m.group(1));
+            Matcher callMatcher = HAS_AUTH_CALL.matcher(src);
+            while (callMatcher.find()) {
+                String argGroup = callMatcher.group(1);
+                Matcher tokenMatcher = QUOTED_TOKEN.matcher(argGroup);
+                while (tokenMatcher.find()) {
+                    out.add(tokenMatcher.group(1));
+                }
+            }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
