@@ -1,6 +1,7 @@
 package com.nubeero.cia.api.tenant;
 
 import lombok.Data;
+import lombok.ToString;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
@@ -24,6 +25,7 @@ public class TenantBootstrapProperties {
         private String subdomain;
         private String adminUsername;
         private String adminEmail;
+        @ToString.Exclude
         private String adminTempPassword;
     }
 }

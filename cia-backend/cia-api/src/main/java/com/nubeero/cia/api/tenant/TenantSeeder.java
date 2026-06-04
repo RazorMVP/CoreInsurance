@@ -39,15 +39,21 @@ public class TenantSeeder {
         // SingleConnectionDataSource(conn, suppressClose=true) wraps the live connection so that
         // JdbcTemplate operations never close it — every seed*() call executes on the same socket.
         try (Connection conn = dataSource.getConnection()) {
-            try (Statement st = conn.createStatement()) {
-                st.execute("SET search_path TO \"" + schema + "\"");
+            try {
+                try (Statement st = conn.createStatement()) {
+                    st.execute("SET search_path TO \"" + schema + "\"");
+                }
+                // suppressClose=true so JdbcTemplate operations don't close the real connection;
+                // every seed*() call now runs on the SAME physical connection, so search_path holds.
+                JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(conn, true));
+                seedAdminGroup(jdbc, adminGroupId);
+                seedCurrency(jdbc);
+                seedCustomerNumberFormat(jdbc);
+            } finally {
+                // Reset search_path so this pooled connection isn't returned to Hikari poisoned.
+                // conn.setSchema mirrors MultiTenantConnectionProvider.releaseConnection behaviour.
+                conn.setSchema("public");
             }
-            // suppressClose=true so JdbcTemplate operations don't close the real connection;
-            // every seed*() call now runs on the SAME physical connection, so search_path holds.
-            JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(conn, true));
-            seedAdminGroup(jdbc, adminGroupId);
-            seedCurrency(jdbc);
-            seedCustomerNumberFormat(jdbc);
         } catch (SQLException e) {
             throw new IllegalStateException("Failed to seed tenant schema " + schema, e);
         }
