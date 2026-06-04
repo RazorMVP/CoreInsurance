@@ -44,7 +44,7 @@ class KeycloakFirstAdminProvisioningIT extends KeycloakItSupport {
             .containsExactly("22222222-2222-2222-2222-222222222222");
 
         var assigned = admin.realm(TEST_REALM).users().get(user.getId())
-            .roles().realmLevel().listEffective().stream().map(r -> r.getName()).toList();
+            .roles().realmLevel().listAll().stream().map(r -> r.getName()).toList();
         assertThat(assigned).containsAll(com.nubeero.cia.setup.keycloak.BootstrapRoles.ALL);
     }
 }

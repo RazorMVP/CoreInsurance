@@ -337,6 +337,10 @@ public class KeycloakTenantProvisioner {
                         + " for realm " + realmName);
             }
             String location = resp.getHeaderString("Location");
+            if (location == null) {
+                throw new IllegalStateException(
+                    "Keycloak created the first-admin user but returned no Location header for realm " + realmName);
+            }
             userId = location.substring(location.lastIndexOf('/') + 1);
         }
 
