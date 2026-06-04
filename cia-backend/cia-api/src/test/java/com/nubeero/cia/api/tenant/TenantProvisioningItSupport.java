@@ -5,35 +5,39 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import javax.sql.DataSource;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Real PostgreSQL per IT subclass — each concrete class gets its own container so that the shared
- * template_ schema created by V2 during migration never collides across sibling IT classes.
- * Containers start lazily on first use and are cleaned up by Ryuk on JVM exit.
- * Each IT uses a distinct tenant schema name within its own isolated container.
+ * Real PostgreSQL shared by the data-plane provisioning ITs (no Spring context — units take a
+ * DataSource directly). Container starts once for the JVM via the static initializer; Ryuk handles
+ * teardown — mirrors FinanceWebItSupport so multiple IT subclasses share one container safely.
+ * Each IT uses a distinct tenant schema name so they do not collide. V2 (which targets the shared
+ * {@code template_} schema and has non-idempotent {@code CREATE INDEX} statements) is now baselined
+ * out by {@code TenantSchemaMigrator}, so provisioning multiple tenants in the same DB is safe —
+ * exactly what this shared container proves. ITs that touch the shared {@code public.tenants}
+ * registry manage their own rows in {@code @BeforeEach}.
  */
 abstract class TenantProvisioningItSupport {
 
-    private static final ConcurrentHashMap<Class<?>, HikariDataSource> DATA_SOURCES =
-        new ConcurrentHashMap<>();
+    @SuppressWarnings("resource")
+    static final PostgreSQLContainer<?> POSTGRES =
+        new PostgreSQLContainer<>("postgres:16-alpine")
+            .withDatabaseName("ciaprov")
+            .withUsername("ciaprov")
+            .withPassword("ciaprov");
+
+    static final HikariDataSource DATA_SOURCE;
+
+    static {
+        POSTGRES.start();
+        HikariConfig cfg = new HikariConfig();
+        cfg.setJdbcUrl(POSTGRES.getJdbcUrl());
+        cfg.setUsername(POSTGRES.getUsername());
+        cfg.setPassword(POSTGRES.getPassword());
+        cfg.setMaximumPoolSize(4);
+        DATA_SOURCE = new HikariDataSource(cfg);
+    }
 
     DataSource dataSource() {
-        return DATA_SOURCES.computeIfAbsent(getClass(), ignored -> {
-            @SuppressWarnings("resource")
-            PostgreSQLContainer<?> postgres =
-                new PostgreSQLContainer<>("postgres:16-alpine")
-                    .withDatabaseName("ciaprov")
-                    .withUsername("ciaprov")
-                    .withPassword("ciaprov");
-            postgres.start();
-
-            HikariConfig cfg = new HikariConfig();
-            cfg.setJdbcUrl(postgres.getJdbcUrl());
-            cfg.setUsername(postgres.getUsername());
-            cfg.setPassword(postgres.getPassword());
-            cfg.setMaximumPoolSize(4);
-            return new HikariDataSource(cfg);
-        });
+        return DATA_SOURCE;
     }
 }
