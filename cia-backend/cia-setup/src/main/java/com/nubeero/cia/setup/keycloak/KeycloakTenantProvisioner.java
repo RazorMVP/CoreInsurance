@@ -3,6 +3,7 @@ package com.nubeero.cia.setup.keycloak;
 import com.nubeero.cia.setup.user.KeycloakAdminProperties;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.core.Response;
+import org.keycloak.representations.idm.RoleRepresentation;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -256,6 +257,33 @@ public class KeycloakTenantProvisioner {
                 }
             }
             log.info("Tenant realm '{}' — added tenant_id claim mapper to back-office client", realmName);
+        }
+    }
+
+    /**
+     * Idempotently creates every canonical bootstrap realm role ({@link BootstrapRoles#ALL}).
+     * Roles that already exist are left untouched (DEBUG). New roles are created with a
+     * {@code "CIA-managed: bootstrap role"} description — the same {@code CIA-managed:} prefix
+     * used by {@link KeycloakRealmRoleSyncer} — so the syncer recognises them as managed roles
+     * and the two components don't fight over ownership.
+     *
+     * <p>Called explicitly by provisioning tasks and integration tests. Not wired into
+     * {@link #provisionTenantRealm} yet — the next task (ensureFirstAdminUser) adds the
+     * call-site there once the user-creation path depends on the roles existing.
+     */
+    public void ensureRealmRoles(Keycloak client, String realmName) {
+        var roles = client.realm(realmName).roles();
+        for (String roleName : BootstrapRoles.ALL) {
+            try {
+                roles.get(roleName).toRepresentation();   // exists → no-op
+                log.debug("Tenant realm '{}' — role '{}' already present", realmName, roleName);
+            } catch (NotFoundException nfe) {
+                RoleRepresentation rep = new RoleRepresentation();
+                rep.setName(roleName);
+                rep.setDescription("CIA-managed: bootstrap role");
+                roles.create(rep);
+                log.info("Tenant realm '{}' — created role '{}'", realmName, roleName);
+            }
         }
     }
 }

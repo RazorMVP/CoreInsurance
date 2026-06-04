@@ -129,6 +129,33 @@ public abstract class KeycloakItSupport {
     }
 
     /**
+     * Returns the Keycloak admin client connected to the running test container.
+     * Polls until the admin user is reachable (same as {@link #ensureTestRealm()}).
+     * Subclasses use this to make direct admin-API assertions without re-building
+     * the connection from scratch.
+     */
+    protected static Keycloak adminClient() {
+        return pollUntilAdminReady();
+    }
+
+    /**
+     * Constructs a {@link KeycloakTenantProvisioner} pointed at the running test
+     * container, using the same wiring as {@link #ensureTestRealm()}. Subclasses
+     * use this to invoke provisioner methods under test without a Spring context.
+     */
+    protected static KeycloakTenantProvisioner newProvisioner(Keycloak k) {
+        KeycloakAdminProperties props = new KeycloakAdminProperties();
+        props.setEnabled(true);
+        props.setServerUrl(KEYCLOAK.getAuthServerUrl());
+        props.setAdminRealm("master");
+        props.setClientId("admin-cli");
+        props.setUsername(KEYCLOAK.getAdminUsername());
+        props.setPassword(KEYCLOAK.getAdminPassword());
+        props.setTargetRealm(TEST_REALM);
+        return new KeycloakTenantProvisioner(new StaticObjectProviderForTests<>(k), props);
+    }
+
+    /**
      * Inline minimal {@link org.springframework.beans.factory.ObjectProvider}
      * adapter — same as the test-package {@code StaticObjectProvider}, kept
      * here to keep {@link KeycloakItSupport} self-contained (the provisioner
@@ -147,7 +174,52 @@ public abstract class KeycloakItSupport {
         @Override public java.util.stream.Stream<T> orderedStream() { return java.util.stream.Stream.of(value); }
     }
 
+    /**
+     * Disables {@code sslRequired} on the master realm by running
+     * {@code kcadm.sh} inside the container. This is required because
+     * Keycloak 24 {@code start-dev} still sets {@code sslRequired=external}
+     * on the master realm, which causes the token endpoint to return
+     * HTTP 403 for any client connecting via the Docker bridge IP
+     * (e.g. {@code 172.17.0.1}) — even though the admin user exists and
+     * the credentials are correct.
+     *
+     * <p>Running via {@code execInContainer} connects from {@code localhost}
+     * (inside the container), so the token grant succeeds regardless of the
+     * SSL policy. Once SSL is set to {@code none}, external token grants
+     * (from the test JVM via the mapped port) work too.
+     *
+     * <p>Idempotent — kcadm.sh silently no-ops if the policy is already
+     * {@code none}.
+     */
+    private static void disableMasterRealmSsl() {
+        try {
+            org.testcontainers.containers.Container.ExecResult result = KEYCLOAK.execInContainer(
+                "/opt/keycloak/bin/kcadm.sh", "update", "realms/master",
+                "-s", "sslRequired=none",
+                "--no-config",
+                "--server",   "http://localhost:8080",
+                "--realm",    "master",
+                "--user",     "admin",
+                "--password", "admin"
+            );
+            if (result.getExitCode() != 0) {
+                // Not fatal — log and continue; the poll loop will catch the
+                // 403 if SSL is still blocking.
+                System.err.println("[KeycloakItSupport] kcadm.sh sslRequired=none exit="
+                        + result.getExitCode() + " stderr=" + result.getStderr());
+            }
+        } catch (Exception e) {
+            System.err.println("[KeycloakItSupport] disableMasterRealmSsl failed: " + e.getMessage());
+        }
+    }
+
     private static Keycloak pollUntilAdminReady() {
+        // Keycloak 24 start-dev keeps sslRequired=external on the master realm,
+        // so token grants from the Docker-bridge IP (non-localhost) are rejected
+        // with HTTP 403. Run kcadm.sh inside the container (where it's localhost)
+        // to set sslRequired=none before the first external token grant.
+        disableMasterRealmSsl();
+
         Keycloak admin = KEYCLOAK.getKeycloakAdminClient();
         long deadline = System.currentTimeMillis() + 90_000L;
         RuntimeException lastErr = null;
@@ -163,7 +235,7 @@ public abstract class KeycloakItSupport {
                 }
             }
         }
-        throw new IllegalStateException("Keycloak admin client did not become ready within 30s", lastErr);
+        throw new IllegalStateException("Keycloak admin client did not become ready within 90s", lastErr);
     }
 
     /**
