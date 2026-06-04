@@ -18,6 +18,19 @@ All variables have defaults for local development. Production values must be sup
 | `DB_PASSWORD` | `cia_dev` | PostgreSQL password |
 | `KEYCLOAK_URL` | `http://localhost:8180` | Keycloak server base URL |
 
+### Tenant Provisioning
+
+| Variable | Default (dev) | Description |
+| --- | --- | --- |
+| `CIA_TENANT_BOOTSTRAP_ENABLED` | `false` | Master switch for `TenantBootstrapRunner`. Set `true` to provision tenants on startup. Requires `KEYCLOAK_ADMIN_ENABLED=true`; startup fails fast if that flag is absent. **Never enable in the IT suite or local dev unless you intend to provision.** |
+| `cia.tenants.bootstrap.tenants[n].schema` | — | PostgreSQL schema name for this tenant (e.g. `tenant_acme`). Also used as the Flyway target. |
+| `cia.tenants.bootstrap.tenants[n].realm` | — | Keycloak realm name. Convention: same as `schema`. |
+| `cia.tenants.bootstrap.tenants[n].display-name` | — | Human-readable name shown in the UI (e.g. `"Acme Insurance"`). |
+| `cia.tenants.bootstrap.tenants[n].subdomain` | — | Subdomain component for this tenant (e.g. `acme` → `acme.cia.app`). |
+| `cia.tenants.bootstrap.tenants[n].admin-username` | — | Username for the first-admin Keycloak user created during provisioning. |
+| `cia.tenants.bootstrap.tenants[n].admin-email` | — | Email address for the first-admin user. |
+| `cia.tenants.bootstrap.tenants[n].admin-temp-password` | — | **Secret.** Temporary password for the first-admin user. Keycloak forces `UPDATE_PASSWORD` on first login — this value is never a long-lived credential. Supply via vault or a per-tenant `${ENV_VAR}` reference. |
+
 ### Temporal
 
 | Variable | Default (dev) | Description |
