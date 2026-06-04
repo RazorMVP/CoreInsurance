@@ -3,7 +3,9 @@ package com.nubeero.cia.setup.keycloak;
 import com.nubeero.cia.setup.user.KeycloakAdminProperties;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.core.Response;
+import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
+import org.keycloak.representations.idm.UserRepresentation;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -285,5 +287,86 @@ public class KeycloakTenantProvisioner {
                 log.info("Tenant realm '{}' — created role '{}'", realmName, roleName);
             }
         }
+    }
+
+    /**
+     * Idempotently create the bootstrap first-admin user: temporary password (forces
+     * UPDATE_PASSWORD on first login), accessGroupId attribute, and every canonical
+     * realm role assigned directly.
+     *
+     * <p>Mirrors {@code UserService.create} but uses a temp password instead of an
+     * email action — no SMTP dependency at first boot.
+     *
+     * <p>Requires {@link #ensureUnmanagedAttributePolicy} to have run on the realm
+     * first; otherwise Keycloak 24's default DISABLED policy silently drops the
+     * {@code accessGroupId} attribute. {@link #provisionTenantAuth} guarantees this
+     * ordering; callers that invoke this method directly (e.g. ITs) must ensure the
+     * policy is set beforehand (the shared test realm has it set by
+     * {@code ensureTestRealm()}).
+     */
+    public void ensureFirstAdminUser(Keycloak client, String realmName, FirstAdminSpec spec) {
+        var realm = client.realm(realmName);
+        var existing = realm.users().search(spec.username(), true);
+        if (!existing.isEmpty()) {
+            log.debug("Tenant realm '{}' — first-admin '{}' already present", realmName, spec.username());
+            return;
+        }
+
+        UserRepresentation rep = new UserRepresentation();
+        rep.setUsername(spec.username());
+        rep.setEmail(spec.email());
+        rep.setFirstName(spec.firstName());
+        rep.setLastName(spec.lastName());
+        rep.setEnabled(true);
+        rep.setEmailVerified(false);
+        rep.setRequiredActions(List.of("UPDATE_PASSWORD"));
+        rep.setAttributes(Map.of(
+                "accessGroupId", List.of(spec.accessGroupId().toString())));
+
+        CredentialRepresentation cred = new CredentialRepresentation();
+        cred.setType(CredentialRepresentation.PASSWORD);
+        cred.setValue(spec.tempPassword());
+        cred.setTemporary(true);   // forces reset on first login
+        rep.setCredentials(List.of(cred));
+
+        String userId;
+        try (Response resp = realm.users().create(rep)) {
+            if (resp.getStatus() >= 300) {
+                throw new IllegalStateException(
+                        "Keycloak first-admin create returned HTTP " + resp.getStatus()
+                        + " for realm " + realmName);
+            }
+            String location = resp.getHeaderString("Location");
+            userId = location.substring(location.lastIndexOf('/') + 1);
+        }
+
+        List<RoleRepresentation> realmRoles = BootstrapRoles.ALL.stream()
+                .map(name -> realm.roles().get(name).toRepresentation())
+                .toList();
+        realm.users().get(userId).roles().realmLevel().add(realmRoles);
+        log.info("Tenant realm '{}' — created first-admin '{}' with {} roles",
+                realmName, spec.username(), realmRoles.size());
+    }
+
+    /**
+     * Full auth-plane provisioning for one tenant: realm + unmanaged-attribute policy
+     * + back-office client + login theme + realm roles + first admin user.
+     *
+     * <p>This is the single entry point the tenant-provisioning orchestrator calls.
+     * Throws immediately if the Keycloak admin client is unavailable (fail-fast),
+     * unlike {@link #provisionTenantRealm} which logs-and-returns.
+     */
+    public void provisionTenantAuth(String realmName, FirstAdminSpec spec) {
+        Keycloak client = keycloak.getIfAvailable();
+        if (client == null) {
+            throw new IllegalStateException(
+                    "Keycloak admin client unavailable — cannot provision tenant auth for " + realmName);
+        }
+        ensureRealm(client, realmName);
+        ensureUnmanagedAttributePolicy(client, realmName);
+        ensureBackOfficeClient(client, realmName);
+        ensureLoginTheme(client, realmName);
+        ensureRealmRoles(client, realmName);
+        ensureFirstAdminUser(client, realmName, spec);
     }
 }
