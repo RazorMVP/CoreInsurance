@@ -161,6 +161,22 @@ cia:
       # Set to "nubsure" (mounted via docker-compose) to apply branding.
       back-office-login-theme:   ${KEYCLOAK_BACK_OFFICE_LOGIN_THEME:}
 
+  tenants:
+    bootstrap:
+      # Master switch — OFF by default so dev + the IT suite never provision tenants.
+      # Set CIA_TENANT_BOOTSTRAP_ENABLED=true in a real deployment.
+      enabled: ${CIA_TENANT_BOOTSTRAP_ENABLED:false}
+      tenants: []
+      # Example (supply via the deployment manifest / secret store):
+      # tenants:
+      #   - schema: tenant_acme
+      #     realm: tenant_acme
+      #     display-name: "Acme Insurance"
+      #     subdomain: acme
+      #     admin-username: admin
+      #     admin-email: admin@acme.example
+      #     admin-temp-password: ${ACME_ADMIN_TEMP_PASSWORD}
+
 springdoc:
   api-docs:
     path: /partner/v3/api-docs
