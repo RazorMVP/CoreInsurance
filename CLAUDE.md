@@ -331,17 +331,30 @@ Manual trigger:
     → signals running workflow OR starts new workflow if missing
 ```
 
-#### 5.4 New Tenant Provisioning
+#### 5.4 New Tenant Provisioning (Slice A — `cia-api/tenant/`)
+
+Implemented as a **gated `ApplicationRunner`** (`TenantBootstrapRunner`, `@ConditionalOnProperty(cia.tenants.bootstrap.enabled=true)` — **off by default**, so dev + the IT suite never provision). On boot it drives `TenantProvisioningService.provision(spec)` per configured tenant, then sweeps `public.tenants WHERE active` and re-migrates every schema. **Fail-fast**: any step throwing aborts startup (k8s keeps the prior pod). Requires `cia.keycloak.admin.enabled=true` (the orchestrator fails fast if the admin client is absent).
 
 ```
-Super-admin creates tenant (admin API or super-admin console):
-  1. Keycloak   — create realm, create admin user, configure roles and groups
-  2. PostgreSQL — CREATE SCHEMA {tenant_id}
-  3. Flyway     — run all migrations against {tenant_id} schema
-  4. Seed       — insert defaults: currencies, policy number format, approval groups
-  5. Config     — set KYC provider, storage type, notification provider, AI flag
-  Tenant is live. Subdomain routes to their isolated schema.
+TenantBootstrapRunner (gated, on boot)
+  └── per configured tenant → TenantProvisioningService.provision(spec):
+        0. generate deterministic Administrators access-group UUID from the schema name
+        1. TenantSchemaMigrator.ensureSchema(schema)   — CREATE SCHEMA IF NOT EXISTS
+        2. TenantSchemaMigrator.migrate(schema)        — programmatic Flyway-per-schema:
+             baselineVersion=2 (skips V1 public.tenants registry + V2 vestigial template_);
+             BEFORE_EACH_MIGRATE callback pins search_path to "<schema>", public;
+             pgcrypto pre-installed in public; each tenant gets its own flyway_schema_history
+        3. TenantSeeder.seed(schema, adminGroupId)     — Administrators access group (+ perms),
+             NGN currency, customer_number_format singleton (single pinned connection)
+        4. KeycloakTenantProvisioner.provisionTenantAuth(realm, FirstAdminSpec):
+             realm + back-office client + unmanaged-attr policy + ALL BootstrapRoles.ALL realm
+             roles + first-admin user (temp password → UPDATE_PASSWORD forced reset; accessGroupId
+             attribute = the generated UUID; no SMTP dependency)
+        5. TenantRegistry.upsert(schema, name, subdomain)  — public.tenants (registry LAST)
+  └── then sweep public.tenants WHERE active → migrate each (idempotent)
 ```
+
+Tenants are declared under `cia.tenants.bootstrap.tenants[]` (schema, realm, display-name, subdomain, admin-username, admin-email, admin-temp-password). Adding a tenant = edit config + restart. A REST admin provisioning API is deferred (needs a platform-admin/super-admin auth story). **Note (`migration-not-edited`):** no existing migration was changed — `baselineVersion=2` is what skips V1/V2 cleanly; the three tables V2 would create (`audit_log`, `partner_apps`, `webhook_registrations`) are re-created unqualified by V12/V13 into each tenant schema.
 
 ---
 
@@ -352,7 +365,7 @@ Super-admin creates tenant (admin API or super-admin console):
 - Keycloak realm per tenant for complete auth isolation — a token from Tenant A cannot authenticate against Tenant B. **Wired at the resource-server layer (S141):** `TenantIssuerJwtAuthenticationManagerResolver` validates each JWT against *its own realm's* JWKS (resolved from the `iss` claim), not a single fixed issuer — so a second tenant is genuinely isolated by realm.
 - All ORM queries are tenant-scoped via Hibernate's `MultiTenantConnectionProvider` and `CurrentTenantIdentifierResolver` — no cross-schema query is possible through the application layer.
 - Per-tenant configuration (stored in tenant schema): products, classes of business, approval groups, policy number formats, AI feature flag, KYC provider, notification providers.
-- Tenant schemas provisioned by Flyway at tenant creation time; all subsequent migrations run against every schema on API startup.
+- Tenant schemas provisioned + migrated + seeded at boot by the gated `TenantBootstrapRunner` → `TenantProvisioningService` (§5.4, Slice A); all subsequent migrations run against every active tenant schema on API startup via the registry sweep (Flyway-per-schema, baselined past V1/V2). **`public` is the system/registry schema** (holds `public.tenants`); the `template_` schema created by V2 is vestigial and skipped for tenant schemas. **Runtime gap (`runtime-pgcrypto-search-path`, P1):** `MultiTenantConnectionProvider.setSchema(tenant)` sets search_path to the tenant schema only, but pgcrypto now lives in `public`, so `pgp_sym_encrypt`/`pgp_sym_decrypt` won't resolve for a real (non-`public`) tenant at runtime — NDPR PII encryption would break until the connection provider includes `public` in the per-tenant search_path. Latent (no real multi-tenant runtime exercised yet); tracked in the backlog.
 
 ---
 
@@ -1103,6 +1116,8 @@ node cia-frontend/scripts/check-dto-drift.mjs
 | `KEYCLOAK_ADMIN_USERNAME` | Admin username (dev password grant). Matches docker-compose's `KEYCLOAK_ADMIN`. Defaults to unset; if set, the admin client uses PASSWORD grant. | env |
 | `KEYCLOAK_ADMIN_PASSWORD` | Admin password (dev password grant). Pair with `KEYCLOAK_ADMIN_USERNAME`. | env / vault |
 | `KEYCLOAK_ADMIN_REALM` | Realm the admin client authenticates against. Defaults to `master` — that's where service accounts typically live. | env |
+| `CIA_TENANT_BOOTSTRAP_ENABLED` | Master switch for the Slice A `TenantBootstrapRunner` (§5.4). `false` by default — dev + the IT suite never provision tenants. Set `true` in a real deployment to provision the configured tenants on boot + sweep-migrate all active tenant schemas. **Requires `KEYCLOAK_ADMIN_ENABLED=true`** (the orchestrator fails fast otherwise). | env |
+| `CIA_TENANTS_BOOTSTRAP_TENANTS_<n>_*` | Per-tenant bootstrap declaration list (`cia.tenants.bootstrap.tenants[n].{schema,realm,display-name,subdomain,admin-username,admin-email,admin-temp-password}`). Supplied via the deployment manifest / secret store; the admin temp-password is a secret (forces `UPDATE_PASSWORD` on first login). | env / vault |
 
 **Frontend environment variables (Vite — prefix `VITE_`):**
 
