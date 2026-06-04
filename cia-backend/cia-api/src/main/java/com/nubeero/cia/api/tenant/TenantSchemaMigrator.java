@@ -37,7 +37,7 @@ public class TenantSchemaMigrator {
 
     /** Idempotent CREATE SCHEMA. */
     public void ensureSchema(String schema) {
-        validate(schema);
+        TenantSchemas.validate(schema);
         try (var conn = dataSource.getConnection(); Statement st = conn.createStatement()) {
             st.execute("CREATE SCHEMA IF NOT EXISTS \"" + schema + "\"");
             log.info("Tenant schema '{}' ensured", schema);
@@ -48,7 +48,7 @@ public class TenantSchemaMigrator {
 
     /** Run V2 onwards against the tenant schema (V1 baselined out). Throws on failure (fail-fast). */
     public void migrate(String schema) {
-        validate(schema);
+        TenantSchemas.validate(schema);
         Flyway flyway = Flyway.configure()
             .dataSource(dataSource)
             .schemas(schema)          // first entry is already the default schema in Flyway 10+
@@ -63,12 +63,6 @@ public class TenantSchemaMigrator {
         flyway.baseline();
         flyway.migrate();
         log.info("Tenant schema '{}' migrated to current version", schema);
-    }
-
-    private static void validate(String schema) {
-        if (schema == null || !schema.matches("[a-z_][a-z0-9_]{0,62}")) {
-            throw new IllegalArgumentException("Illegal tenant schema name: " + schema);
-        }
     }
 
     /** Re-pins search_path to the tenant schema before each migration (beats V2's RESET). */

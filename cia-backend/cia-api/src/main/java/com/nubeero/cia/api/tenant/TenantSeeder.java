@@ -3,9 +3,13 @@ package com.nubeero.cia.api.tenant;
 import com.nubeero.cia.setup.keycloak.BootstrapRoles;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.UUID;
 
 /**
@@ -25,19 +29,34 @@ public class TenantSeeder {
     }
 
     public void seed(String schema, UUID adminGroupId) {
-        if (schema == null || !schema.matches("[a-z_][a-z0-9_]{0,62}")) {
-            throw new IllegalArgumentException("Illegal tenant schema name: " + schema);
+        TenantSchemas.validate(schema);            // FIX 3: shared validator (security boundary)
+        if (adminGroupId == null) {                // FIX 2: null guard
+            throw new IllegalArgumentException("adminGroupId must not be null");
         }
-        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        jdbc.execute("SET search_path TO \"" + schema + "\"");
-
-        seedAdminGroup(jdbc, adminGroupId);
-        seedCurrency(jdbc);
-        seedCustomerNumberFormat(jdbc);
+        // FIX 1: pin the entire seed body to ONE physical connection so SET search_path holds.
+        // JdbcTemplate normally borrows a pooled connection per statement; under pool
+        // eviction/concurrency the INSERTs could run on a different connection and write into public.
+        // SingleConnectionDataSource(conn, suppressClose=true) wraps the live connection so that
+        // JdbcTemplate operations never close it — every seed*() call executes on the same socket.
+        try (Connection conn = dataSource.getConnection()) {
+            try (Statement st = conn.createStatement()) {
+                st.execute("SET search_path TO \"" + schema + "\"");
+            }
+            // suppressClose=true so JdbcTemplate operations don't close the real connection;
+            // every seed*() call now runs on the SAME physical connection, so search_path holds.
+            JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(conn, true));
+            seedAdminGroup(jdbc, adminGroupId);
+            seedCurrency(jdbc);
+            seedCustomerNumberFormat(jdbc);
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to seed tenant schema " + schema, e);
+        }
         log.info("Tenant schema '{}' seeded (admin group {})", schema, adminGroupId);
     }
 
     private void seedAdminGroup(JdbcTemplate jdbc, UUID adminGroupId) {
+        // ON CONFLICT (id): re-seeding with the same adminGroupId is a no-op; a different id for
+        // 'Administrators' would be a caller contract violation and should fail loud.
         jdbc.update("""
             INSERT INTO access_groups (id, name, description, created_at, updated_at, created_by)
             VALUES (?, 'Administrators', 'Full system access (bootstrap)', NOW(), NOW(), 'system')
