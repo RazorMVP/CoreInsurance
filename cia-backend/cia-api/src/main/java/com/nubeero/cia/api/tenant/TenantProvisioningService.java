@@ -25,6 +25,14 @@ import java.util.UUID;
  *       in the registry once fully provisioned. A registry row is the signal to the
  *       migration sweep runner that this tenant exists and must be migrated on future boots.</li>
  * </ol>
+ *
+ * <p><strong>Keycloak provisioner is required when {@code provision()} is called.</strong>
+ * The {@code Optional<KeycloakTenantProvisioner>} field is present only for bean
+ * constructability in contexts where {@code cia.keycloak.admin.enabled=false} and the
+ * bootstrap runner is gated off (so {@code provision()} is never invoked). Calling
+ * {@code provision()} without the Keycloak admin client enabled is a configuration error
+ * and throws {@link IllegalStateException} immediately — a tenant with schema+seed but no
+ * Keycloak realm/admin is silently broken (nobody can log in).
  */
 @Slf4j
 @Service
@@ -49,7 +57,12 @@ public class TenantProvisioningService {
      * already-provisioned tenants. Throws on any step failure — the bootstrap runner
      * aborts startup so the operator can fix the problem before the app accepts traffic.
      *
+     * <p>Requires {@code cia.keycloak.admin.enabled=true}. If the Keycloak provisioner is
+     * absent (admin disabled) this method throws {@link IllegalStateException} immediately
+     * rather than silently leaving the tenant without an auth plane.
+     *
      * @param spec the tenant specification (schema, realm, display name, subdomain, admin credentials)
+     * @throws IllegalStateException if the Keycloak admin client is not enabled
      */
     public void provision(TenantBootstrapProperties.TenantSpec spec) {
         String schema = spec.getSchema();
@@ -61,15 +74,14 @@ public class TenantProvisioningService {
         migrator.migrate(schema);
         seeder.seed(schema, adminGroupId);
 
-        if (keycloak.isPresent()) {
-            keycloak.get().provisionTenantAuth(realm, new FirstAdminSpec(
+        KeycloakTenantProvisioner kc = keycloak.orElseThrow(() -> new IllegalStateException(
+                "Tenant bootstrap is enabled but cia.keycloak.admin.enabled is not true — "
+                + "cannot provision the realm/first-admin for tenant '" + schema + "'. "
+                + "Enable the Keycloak admin client to provision tenants."));
+        kc.provisionTenantAuth(realm, new FirstAdminSpec(
                 spec.getAdminUsername(), spec.getAdminEmail(),
                 "Tenant", "Administrator",
                 spec.getAdminTempPassword(), adminGroupId));
-        } else {
-            log.warn("Keycloak admin disabled (cia.keycloak.admin.enabled=false) — " +
-                     "skipping auth-plane provisioning for tenant '{}'", schema);
-        }
 
         registry.upsert(schema, spec.getDisplayName(), spec.getSubdomain());
         log.info("Tenant '{}' provisioned", schema);
