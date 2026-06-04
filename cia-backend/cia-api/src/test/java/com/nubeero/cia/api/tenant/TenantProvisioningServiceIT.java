@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -43,7 +44,7 @@ class TenantProvisioningServiceIT extends TenantProvisioningItSupport {
             return null;
         }).when(keycloak).provisionTenantAuth(anyString(), any(FirstAdminSpec.class));
 
-        var service = new TenantProvisioningService(migrator, seeder, registry, keycloak);
+        var service = new TenantProvisioningService(migrator, seeder, registry, Optional.of(keycloak));
         var spec = new TenantBootstrapProperties.TenantSpec();
         spec.setSchema("tenant_orch"); spec.setRealm("tenant_orch");
         spec.setDisplayName("Orch"); spec.setSubdomain("orch");

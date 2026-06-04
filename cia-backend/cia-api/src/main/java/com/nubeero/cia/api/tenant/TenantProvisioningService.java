@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -32,10 +33,11 @@ public class TenantProvisioningService {
     private final TenantSchemaMigrator migrator;
     private final TenantSeeder seeder;
     private final TenantRegistry registry;
-    private final KeycloakTenantProvisioner keycloak;
+    private final Optional<KeycloakTenantProvisioner> keycloak;
 
     public TenantProvisioningService(TenantSchemaMigrator migrator, TenantSeeder seeder,
-                                     TenantRegistry registry, KeycloakTenantProvisioner keycloak) {
+                                     TenantRegistry registry,
+                                     Optional<KeycloakTenantProvisioner> keycloak) {
         this.migrator = migrator;
         this.seeder = seeder;
         this.registry = registry;
@@ -59,10 +61,15 @@ public class TenantProvisioningService {
         migrator.migrate(schema);
         seeder.seed(schema, adminGroupId);
 
-        keycloak.provisionTenantAuth(realm, new FirstAdminSpec(
-            spec.getAdminUsername(), spec.getAdminEmail(),
-            "Tenant", "Administrator",
-            spec.getAdminTempPassword(), adminGroupId));
+        if (keycloak.isPresent()) {
+            keycloak.get().provisionTenantAuth(realm, new FirstAdminSpec(
+                spec.getAdminUsername(), spec.getAdminEmail(),
+                "Tenant", "Administrator",
+                spec.getAdminTempPassword(), adminGroupId));
+        } else {
+            log.warn("Keycloak admin disabled (cia.keycloak.admin.enabled=false) — " +
+                     "skipping auth-plane provisioning for tenant '{}'", schema);
+        }
 
         registry.upsert(schema, spec.getDisplayName(), spec.getSubdomain());
         log.info("Tenant '{}' provisioned", schema);
