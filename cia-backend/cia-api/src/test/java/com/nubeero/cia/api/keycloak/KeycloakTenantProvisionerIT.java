@@ -43,7 +43,11 @@ class KeycloakTenantProvisionerIT extends KeycloakItSupport {
     static void buildBase() {
         // Don't call ensureTestRealm() here — we don't want to share the
         // long-lived cia-test realm. Each @Test uses its own realm name.
-        ADMIN = KEYCLOAK.getKeycloakAdminClient();
+        // adminClient() calls pollUntilAdminReady() which runs
+        // disableMasterRealmSsl() first — required on this host because
+        // Keycloak 24 start-dev sets sslRequired=external on master, which
+        // causes HTTP 403 on token grants from the Docker-bridge IP.
+        ADMIN = adminClient();
         BASE_PROPS = new KeycloakAdminProperties();
         BASE_PROPS.setEnabled(true);
         BASE_PROPS.setServerUrl(KEYCLOAK.getAuthServerUrl());
