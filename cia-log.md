@@ -47,6 +47,28 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-06-05 — Slice C (`slice-a-tenant-provisioning` branch): Operability Config — DESIGN PHASE (brainstorm + spec committed, no code yet)
+
+**Goal (one slice, explicitly broadened):** make the single Spring Boot binary production-operable — thin `application-prod.yml`, tuned single shared HikariCP pool, Prometheus metrics + native ECS structured logging with tenant MDC — **and** the folded-in `runtime-pgcrypto-search-path` deploy-gate fix. Second sub-slice of the first-deployable milestone (A → C → B); A (tenant provisioning) is complete, B (k8s/Helm + deploy) follows.
+
+**This session = brainstorm → spec only.** No implementation has landed. Spec written + committed (`f8f8c72`) at `docs/superpowers/specs/2026-06-05-operability-config-design.md`. Next step: writing-plans → subagent-driven execution.
+
+**Design decisions (brainstorm Q&A):**
+
+- Q1 observability scope → **metrics + structured logging**; distributed tracing **deferred** (no collector backend until Slice B — YAGNI).
+- Q2 Hikari sizing → **conservative fixed-size single pool, fully tuned, env-overridable** (`max=min=10` default; safe at 3 replicas under PG's 100; `maxLifetime=29m`, `keepalive=5m`, `leakDetection=60s`, `connTimeout=30s`).
+- Q3 `application-prod.yml` → **thin override** (prod deltas + `${ENV}` placeholders only; base `application.yml` stays single source via Spring profile-merge).
+- Q4 pgcrypto fix → **fold into Slice C** (named broaden, permitted by slice discipline — same datasource layer, hard deploy-gate for first non-`public` tenant's NDPR PII writes).
+- A1 structured-logging mechanism → **native Spring Boot 3.4+ structured logging** (`logging.structured.format.console=ecs`); no `logstash-logback-encoder` dep, no `logback-spring.xml`. Profile-scoped so dev logs stay human-readable.
+
+**Ground truth verified against `main`:** Boot 3.5.14 (native structured logging available); `cia-api` has actuator but **not** `micrometer-registry-prometheus`; no `logback-spring.xml`; no `application-prod.yml`. **Connection model is a SINGLE shared HikariCP pool** (corrects CLAUDE.md §7's "one pool per tenant schema" — `MultiTenantConnectionProvider` borrows one connection + `setSchema(tenant)` per borrow). `ProductionSafetyValidator` already exists (cia-common EPP) keyed off `cia.deployment.environment` marker (not the Spring profile) — so prod deploy needs **both** `SPRING_PROFILES_ACTIVE=prod` + `CIA_DEPLOYMENT_ENVIRONMENT=production`. `TenantSchemas` validator lives in `cia-api` → must be promoted to `cia-common` for the connection-provider fix (cia-common can't depend on cia-api).
+
+**Planned components (5):** (1) `application-prod.yml` thin override; (2) `micrometer-registry-prometheus` + `/actuator/prometheus` (exposure `health,info,prometheus` only — no `metrics`/`env`/`beans` on the web surface); (3) `logging.structured.format.console=ecs` + tenant MDC in `TenantContextFilter`; (4) pgcrypto fix — promote `TenantSchemas` to cia-common, `MultiTenantConnectionProvider.getConnection` issues `SET search_path TO "<tenant>", public` (regex-guarded), load-bearing Testcontainers IT proving `pgp_sym_*` resolves under a non-`public` tenant; (5) doc corrections (CLAUDE.md §7 single-pool + §6 pgcrypto-closed) + backlog reconciliation.
+
+**Known follow-ups / backlog reconciliation:** **No backlog change this session** (design phase — nothing landed). The spec *targets* draining 4 rows **when the slice's code lands**: `hikari-pool-tuning + application-prod-yml` (P2), `prod-observability` (P2), and `runtime-pgcrypto-search-path` (P1, folded in per Q4). Those rows stay OPEN until implementation commits. No new rows surfaced during brainstorming.
+
+---
+
 ## 2026-06-03/04 — Slice A (`slice-a-tenant-provisioning`): Tenant Provisioning Runtime (COMPLETE — full reactor green, 440 ITs)
 
 **Goal (one slice):** make tenant provisioning real — schema creation + Flyway-per-schema migration + sensible-defaults seed + Keycloak realm/roles/first-admin + `public.tenants` registry, driven by a gated boot runner, idempotent, fail-fast, off by default. First sub-slice of the **first-deployable milestone** (A → C → B); C = operability config (`application-prod.yml` + Hikari + observability), B = k8s/Helm + deploy. Brainstorm + spec + plan under `docs/superpowers/{specs,plans}/2026-06-02-tenant-provisioning-runtime*`.
