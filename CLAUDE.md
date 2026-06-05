@@ -365,7 +365,7 @@ Tenants are declared under `cia.tenants.bootstrap.tenants[]` (schema, realm, dis
 - Keycloak realm per tenant for complete auth isolation — a token from Tenant A cannot authenticate against Tenant B. **Wired at the resource-server layer (S141):** `TenantIssuerJwtAuthenticationManagerResolver` validates each JWT against *its own realm's* JWKS (resolved from the `iss` claim), not a single fixed issuer — so a second tenant is genuinely isolated by realm.
 - All ORM queries are tenant-scoped via Hibernate's `MultiTenantConnectionProvider` and `CurrentTenantIdentifierResolver` — no cross-schema query is possible through the application layer.
 - Per-tenant configuration (stored in tenant schema): products, classes of business, approval groups, policy number formats, AI feature flag, KYC provider, notification providers.
-- Tenant schemas provisioned + migrated + seeded at boot by the gated `TenantBootstrapRunner` → `TenantProvisioningService` (§5.4, Slice A); all subsequent migrations run against every active tenant schema on API startup via the registry sweep (Flyway-per-schema, baselined past V1/V2). **`public` is the system/registry schema** (holds `public.tenants`); the `template_` schema created by V2 is vestigial and skipped for tenant schemas. **Runtime gap (`runtime-pgcrypto-search-path`, P1):** `MultiTenantConnectionProvider.setSchema(tenant)` sets search_path to the tenant schema only, but pgcrypto now lives in `public`, so `pgp_sym_encrypt`/`pgp_sym_decrypt` won't resolve for a real (non-`public`) tenant at runtime — NDPR PII encryption would break until the connection provider includes `public` in the per-tenant search_path. Latent (no real multi-tenant runtime exercised yet); tracked in the backlog.
+- Tenant schemas provisioned + migrated + seeded at boot by the gated `TenantBootstrapRunner` → `TenantProvisioningService` (§5.4, Slice A); all subsequent migrations run against every active tenant schema on API startup via the registry sweep (Flyway-per-schema, baselined past V1/V2). **`public` is the system/registry schema** (holds `public.tenants`); the `template_` schema created by V2 is vestigial and skipped for tenant schemas. **Runtime pgcrypto (closed in Slice C):** `MultiTenantConnectionProvider.getConnection(tenant)` sets `search_path TO "<tenant>", public` (was `setSchema(tenant)` → tenant only), so `pgp_sym_encrypt`/`pgp_sym_decrypt` (in `public`) resolve for every real tenant — NDPR PII encryption works at multi-tenant runtime. The tenant identifier is regex-guarded (`TenantSchemas.validate`, promoted to `cia-common`) before interpolation. Proven by `MultiTenantConnectionProviderSearchPathIT`.
 
 ---
 
@@ -373,7 +373,7 @@ Tenants are declared under `cia.tenants.bootstrap.tenants[]` (schema, realm, dis
 
 **Schema strategy:** `public` schema holds only shared infrastructure (tenant registry). All business tables live in the tenant-specific schema.
 
-**Connection pooling:** HikariCP with one pool per tenant schema, lazily initialised on first request to that tenant.
+**Connection pooling:** A **single shared HikariCP pool** (not pool-per-tenant). `MultiTenantConnectionProvider` borrows one connection from the shared pool per unit of work and switches `search_path` to `"<tenant>", public` for the borrow (`public` included so shared extensions — pgcrypto — and the registry resolve), resetting to `public` on release. Pool sizing is tuned in `application-prod.yml` (env-overridable `DB_POOL_*`).
 
 **Flyway migrations** (`cia-api/src/main/resources/db/migration/`):
 
@@ -1118,6 +1118,10 @@ node cia-frontend/scripts/check-dto-drift.mjs
 | `KEYCLOAK_ADMIN_REALM` | Realm the admin client authenticates against. Defaults to `master` — that's where service accounts typically live. | env |
 | `CIA_TENANT_BOOTSTRAP_ENABLED` | Master switch for the Slice A `TenantBootstrapRunner` (§5.4). `false` by default — dev + the IT suite never provision tenants. Set `true` in a real deployment to provision the configured tenants on boot + sweep-migrate all active tenant schemas. **Requires `KEYCLOAK_ADMIN_ENABLED=true`** (the orchestrator fails fast otherwise). | env |
 | `CIA_TENANTS_BOOTSTRAP_TENANTS_<n>_*` | Per-tenant bootstrap declaration list (`cia.tenants.bootstrap.tenants[n].{schema,realm,display-name,subdomain,admin-username,admin-email,admin-temp-password}`). Supplied via the deployment manifest / secret store; the admin temp-password is a secret (forces `UPDATE_PASSWORD` on first login). | env / vault |
+| `SPRING_PROFILES_ACTIVE` | Set to `prod` in production — loads `application-prod.yml` (Hikari tuning, ECS structured logging, Prometheus exposure) and deactivates `DevSecurityConfig`. **Must be paired with `CIA_DEPLOYMENT_ENVIRONMENT=production`** (neither implies the other — the safety guard keys off the marker, not the profile). | env |
+| `CIA_DEPLOYMENT_ENVIRONMENT` | `local` (default) / `staging` / `production`. Arms `ProductionSafetyValidator` (fail-fast on active `dev` profile or any surviving weak-default secret). | env |
+| `DB_POOL_MAX` / `DB_POOL_MIN` | Hikari `maximum-pool-size` / `minimum-idle` for the single shared pool (prod profile). Default `10`/`10`. Keep `replicas × DB_POOL_MAX` under PostgreSQL `max_connections`. | env |
+| `DB_POOL_MAX_LIFETIME_MS` / `DB_POOL_KEEPALIVE_MS` / `DB_POOL_CONNECTION_TIMEOUT_MS` / `DB_POOL_LEAK_DETECTION_MS` | Hikari lifetime / keepalive / connection-timeout / leak-detection (prod profile). Defaults `1740000` / `300000` / `30000` / `60000`. | env |
 
 **Frontend environment variables (Vite — prefix `VITE_`):**
 
