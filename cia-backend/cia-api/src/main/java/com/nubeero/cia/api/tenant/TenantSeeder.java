@@ -1,5 +1,6 @@
 package com.nubeero.cia.api.tenant;
 
+import com.nubeero.cia.common.tenant.TenantSchemas;
 import com.nubeero.cia.setup.keycloak.BootstrapRoles;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;

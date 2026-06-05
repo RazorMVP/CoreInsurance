@@ -1,5 +1,6 @@
 package com.nubeero.cia.api.tenant;
 
+import com.nubeero.cia.common.tenant.TenantSchemas;
 import lombok.extern.slf4j.Slf4j;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.callback.Callback;

@@ -1,6 +1,6 @@
-package com.nubeero.cia.api.tenant;
+package com.nubeero.cia.common.tenant;
 
-/** Validation for tenant schema names — a security boundary (names are interpolated into DDL). */
+/** Validation for tenant schema names — a security boundary (names are interpolated into DDL/search_path). */
 public final class TenantSchemas {
     private TenantSchemas() {}
 
