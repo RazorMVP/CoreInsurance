@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -23,6 +24,7 @@ class TenantContextFilterTest {
     void clear() {
         SecurityContextHolder.clearContext();
         TenantContext.clear();
+        MDC.clear();
     }
 
     private Jwt jwtWith(String iss, String tenantClaim) {
@@ -70,5 +72,30 @@ class TenantContextFilterTest {
         FilterChain chain = (req, res) -> seen[0] = TenantContext.getTenantId();
         filter.doFilter(mock(HttpServletRequest.class), mock(HttpServletResponse.class), chain);
         assertThat(seen[0]).isNull();
+    }
+
+    @Test
+    @DisplayName("puts tenant into MDC during the chain and removes it after")
+    void mdcTenantSetDuringChainAndClearedAfter() throws Exception {
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(
+            jwtWith("http://localhost:8280/realms/acme", null)));
+        String[] mdcDuring = new String[1];
+        FilterChain chain = (req, res) -> mdcDuring[0] = MDC.get(TenantContextFilter.MDC_TENANT_KEY);
+        filter.doFilter(mock(HttpServletRequest.class), mock(HttpServletResponse.class), chain);
+        assertThat(mdcDuring[0]).isEqualTo("acme");
+        assertThat(MDC.get(TenantContextFilter.MDC_TENANT_KEY)).isNull();
+    }
+
+    @Test
+    @DisplayName("a non-resolving request leaves no stale tenant in MDC (no pooled-thread bleed)")
+    void mdcClearedWhenNoTenantResolves() throws Exception {
+        // Simulate a prior request on this pooled thread having left a tenant in MDC.
+        MDC.put(TenantContextFilter.MDC_TENANT_KEY, "stale");
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("u", "p"));
+        FilterChain chain = (req, res) -> { /* no-op */ };
+        filter.doFilter(mock(HttpServletRequest.class), mock(HttpServletResponse.class), chain);
+        // The unconditional MDC.remove in finally must wipe the stale value even
+        // though this request resolved no tenant.
+        assertThat(MDC.get(TenantContextFilter.MDC_TENANT_KEY)).isNull();
     }
 }

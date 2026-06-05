@@ -6,6 +6,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -17,6 +18,8 @@ import java.io.IOException;
 @Slf4j
 @Component
 public class TenantContextFilter extends OncePerRequestFilter {
+
+    static final String MDC_TENANT_KEY = "tenant";
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -34,11 +37,13 @@ public class TenantContextFilter extends OncePerRequestFilter {
                 }
                 if (tenantId != null && !tenantId.isBlank()) {
                     TenantContext.setTenantId(tenantId);
+                    MDC.put(MDC_TENANT_KEY, tenantId);
                 }
             }
             filterChain.doFilter(request, response);
         } finally {
             TenantContext.clear();
+            MDC.remove(MDC_TENANT_KEY);
         }
     }
 }
