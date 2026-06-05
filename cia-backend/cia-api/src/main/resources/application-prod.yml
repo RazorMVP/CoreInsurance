@@ -1,0 +1,48 @@
+# Production profile — THIN OVERRIDE.
+# Holds only the deltas that differ from the base application.yml. Spring merges
+# this over the base when SPRING_PROFILES_ACTIVE=prod. Secrets/URLs are already
+# ${ENV:default} in the base file and are NOT re-declared here; the deploy
+# manifest sets the env vars and ProductionSafetyValidator (armed by
+# CIA_DEPLOYMENT_ENVIRONMENT=production) fail-fasts if any weak default survives.
+#
+# A prod deploy MUST set BOTH:
+#   SPRING_PROFILES_ACTIVE=prod          -> loads this file, deactivates DevSecurityConfig
+#   CIA_DEPLOYMENT_ENVIRONMENT=production -> arms the secret/profile fail-fast guard
+spring:
+  datasource:
+    hikari:
+      # Single shared pool for ALL tenants (schema switched per borrow by
+      # MultiTenantConnectionProvider). Size so replicas x pool stays under
+      # PostgreSQL max_connections (default 100): 10 x 3 replicas = 30.
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN:10}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT_MS:30000}
+      # 29 min — retire connections before any PG/proxy idle reaper does, so the
+      # app never hands out a server-side-dead socket.
+      max-lifetime: ${DB_POOL_MAX_LIFETIME_MS:1740000}
+      keepalive-time: ${DB_POOL_KEEPALIVE_MS:300000}
+      # Log a stack trace if a borrowed connection isn't returned within 60s
+      # (catches a missing try-with-resources before it starves the pool).
+      leak-detection-threshold: ${DB_POOL_LEAK_DETECTION_MS:60000}
+      # base application.yml's connection-init-sql (pgcrypto pii-key) is inherited.
+
+logging:
+  level:
+    root: WARN
+    com.nubeero: INFO
+  structured:
+    format:
+      # Native Spring Boot structured logging (3.4+) — emits one JSON object per
+      # line (Elastic Common Schema), aggregatable across replicas. MDC keys
+      # (tenant) are included automatically. Dev keeps human-readable logs
+      # because this is only on the prod profile.
+      console: ecs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Add the Prometheus scrape surface; keep metrics/env/beans/configprops
+        # OFF the web surface (no config/secret leakage). prometheus IS the
+        # scrape endpoint at /actuator/prometheus.
+        include: health,info,prometheus
