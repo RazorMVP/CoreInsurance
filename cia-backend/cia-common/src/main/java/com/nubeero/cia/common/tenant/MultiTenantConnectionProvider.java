@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Statement;
 
 @Component
 public class MultiTenantConnectionProvider
@@ -28,15 +29,36 @@ public class MultiTenantConnectionProvider
 
     @Override
     public Connection getConnection(String tenantIdentifier) throws SQLException {
+        // Security boundary: the identifier is interpolated into the SET statement
+        // (schema names cannot be bound as JDBC parameters). It originates from the
+        // validated JWT realm, but we validate again for defence-in-depth.
+        TenantSchemas.validate(tenantIdentifier);
         Connection connection = getAnyConnection();
-        connection.setSchema(tenantIdentifier);
-        return connection;
+        try (Statement st = connection.createStatement()) {
+            // Tenant schema first so its tables resolve; public last so shared
+            // extensions (pgcrypto: pgp_sym_encrypt/decrypt) and the registry
+            // resolve for every tenant. setSchema(tenant) alone would set the
+            // search_path to the tenant only, breaking NDPR PII encryption.
+            st.execute("SET search_path TO \"" + tenantIdentifier + "\", public");
+            return connection;
+        } catch (SQLException e) {
+            // Don't leak the borrowed connection back to the caller's exception path.
+            releaseAnyConnection(connection);
+            throw e;
+        }
     }
 
     @Override
     public void releaseConnection(String tenantIdentifier, Connection connection) throws SQLException {
-        connection.setSchema("public");
-        releaseAnyConnection(connection);
+        // Defensive reset: getAnyConnection() callers borrow without setting a
+        // search_path, so return connections to a known-clean state. getConnection
+        // re-sets it on every borrow regardless. try/finally guarantees the
+        // connection returns to the pool even if the reset SET fails.
+        try (Statement st = connection.createStatement()) {
+            st.execute("SET search_path TO public");
+        } finally {
+            releaseAnyConnection(connection);
+        }
     }
 
     @Override
