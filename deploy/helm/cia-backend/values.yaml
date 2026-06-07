@@ -1,0 +1,64 @@
+# Non-secret defaults + placeholders. NEVER put secret values here (see secret.example.yaml).
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: ghcr.io/razormvp/coreinsurance/cia-backend
+  tag: ""                       # REQUIRED at deploy — pin to a commit SHA. Empty fails rendering on purpose.
+  pullPolicy: IfNotPresent
+
+replicaCount: 3
+
+# Name of the pre-existing, operator-managed Secret carrying all secret env (see secret.example.yaml).
+existingSecret: cia-backend-secrets
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}               # e.g. eks.amazonaws.com/role-arn for IRSA at go-live
+
+# Non-secret env -> ConfigMap (envFrom). Secret env comes from existingSecret.
+env:
+  SPRING_PROFILES_ACTIVE: prod
+  CIA_DEPLOYMENT_ENVIRONMENT: production
+  SERVER_PORT: "8090"
+  CIA_TENANT_BOOTSTRAP_ENABLED: "false"
+  CIA_KEYCLOAK_ADMIN_ENABLED: "false"
+  DB_POOL_MAX: "10"
+  DB_POOL_MIN: "10"
+  KEYCLOAK_URL: ""
+  TEMPORAL_HOST: ""
+  STORAGE_TYPE: s3
+  STORAGE_ENDPOINT: ""
+  STORAGE_BUCKET: cia-documents
+  PARTNER_API_RATE_LIMIT_STORE: in-memory
+
+javaOpts: "-XX:MaxRAMPercentage=70"
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "1"
+    memory: 1.5Gi
+
+service:
+  port: 8090
+
+ingress:
+  enabled: true
+  className: nginx
+  host: "*.cia.app"
+  tlsSecretName: cia-backend-tls
+  annotations: {}
+
+hpa:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: true
+  minAvailable: 2
