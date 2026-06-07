@@ -45,6 +45,30 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-06-07 — Slice B (`main`): K8s/Helm Deployment Artifact — DESIGN PHASE (brainstorm + spec committed, no code yet)
+
+**Goal (one slice):** a versioned, CI-validated **Helm chart for cia-api** that wires the Slice-C prod profile, with the 5 backing services (Postgres, Keycloak, Temporal, MinIO/S3, Redis) treated as **external** endpoints via an externally-managed `Secret`. Proven by a `kind` smoke that boots the real image against ephemeral Postgres + Temporal fixtures. **No live cloud provisioning.** Final piece of the first-deployable milestone (A ✓ → C ✓ → B).
+
+**This session = brainstorm → spec only.** No implementation landed. Spec written + committed (`c88204c`) at `docs/superpowers/specs/2026-06-07-k8s-helm-deploy-design.md`. Next: writing-plans → subagent-driven execution.
+
+**Pre-design product decision (user):** raised whether tenant onboarding/deployment needs a frontend. Resolved — "deployment" is CI/CD (no UI); **tenant onboarding** config+restart (Slice A `TenantBootstrapRunner`) is **launch-adequate**; a runtime Tenant-Onboarding-API + Platform-Admin-UI is a real but **separate next epic** (needs a platform-admin/super-admin auth story; adjacent to Module 12 Phase 6). Kept out of Slice B.
+
+**Design decisions (brainstorm Q&A):**
+
+- Q1 deliverable boundary → **authored + CI-validated artifacts; cia-api only; no live cloud provisioning** (going live is a separate ops step).
+- Q2 backing-services posture → **external/managed** via `Secret` (correct posture for regulated financial data; keeps the slice to "deploy the app").
+- Q3 manifest tooling → **Helm chart** (the documented target; `helm template` enables the local/CI validation gate).
+- Q4 secret delivery → **reference a pre-existing externally-managed `Secret`** via `envFrom: secretRef`; chart never templates secret *values* (keeps PII/keys out of Helm state; pairs with Slice C `ProductionSafetyValidator`).
+- Q5 validation gate → **B1 full-dep `kind` smoke** in CI: ephemeral Postgres + Temporal auto-setup fixtures → `helm install` → assert pod `Ready` + `/actuator/health` 200. Chosen over static-only (A) because a real apply-and-boot is the gold-standard proof; over B2 (make Temporal lazy) to avoid broadening the slice into a `cia-workflow` behavior change.
+
+**Ground truth verified against `main`:** backend image at `ghcr.io/RazorMVP/CoreInsurance/cia-backend` (S143, non-root, :8090, liveness healthcheck); `SecurityConfig.java:34` already `permitAll`s `/actuator/health/**` so kubelet probes work with **no app change**; `/actuator/prometheus` is auth-gated (kept off the public ingress). **Load-bearing finding:** `TemporalConfig.java:24` dials Temporal **eagerly/unguarded** at context init (the whole IT suite `@MockBean`s the 3 Temporal beans; no Temporal Testcontainer exists), so "pod Ready" needs **Postgres + Temporal** both reachable — which is why the B1 smoke must stand up a Temporal fixture. No k8s/Helm exists on `main` today (only the local-dev `docker-compose.yml`).
+
+**Planned components (per spec):** `deploy/helm/cia-backend/` chart (Chart/values/values-prod.example/secret.example + templates: configmap, deployment, service, ingress[/api+/partner only, NOT /actuator], hpa, pdb, serviceaccount); env split ConfigMap(non-secret)/Secret(secret); startup+liveness+readiness probes; HPA 3→10 @70% CPU; PDB minAvailable 2; readOnlyRootFilesystem + drop-all-caps securityContext; new `helm-chart.yml` CI (lint + kubeconform + B1 kind smoke, smoke runs `SPRING_PROFILES_ACTIVE=prod` + `CIA_DEPLOYMENT_ENVIRONMENT=local` so the prod profile boots while the weak-default guard stays disarmed; supplies the dev PII key so `PiiKeyValidator` passes).
+
+**Known follow-ups / backlog reconciliation:** **No backlog change this session** (design phase — nothing landed). The spec *targets*, when the slice's code lands: **drain** `prod-deployability-k8s-manifests` (P1); **add** `temporal-eager-boot-dial` (P2 — eager unguarded Temporal dial crashloops a pod if Temporal is briefly down at startup; the deferred B2 fix); **narrow** `prometheus-endpoint-authz` (P3) to the in-cluster scrape-auth/NetworkPolicy half (the public-ingress half is closed by routing only `/api`+`/partner`). Those rows stay as-is until implementation commits.
+
+---
+
 ## 2026-06-05 — Slice C (`slice-c-operability-config`): Operability Config — COMPLETE
 
 **Goal (one slice, explicitly broadened):** make the single Spring Boot binary production-operable — thin `application-prod.yml`, tuned single shared HikariCP pool, Prometheus metrics + native ECS structured logging with tenant MDC — **and** the folded-in `runtime-pgcrypto-search-path` deploy-gate fix. Second sub-slice of the first-deployable milestone (A → C → B); A (tenant provisioning) is complete, B (k8s/Helm + deploy) follows.
