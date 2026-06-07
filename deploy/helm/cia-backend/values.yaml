@@ -32,8 +32,7 @@ env:
   STORAGE_ENDPOINT: ""
   STORAGE_BUCKET: cia-documents
   PARTNER_API_RATE_LIMIT_STORE: in-memory
-
-javaOpts: "-XX:MaxRAMPercentage=70"
+  JAVA_OPTS: "-XX:MaxRAMPercentage=70"
 
 resources:
   requests:
