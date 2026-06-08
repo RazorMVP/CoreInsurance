@@ -1,0 +1,14 @@
+cia-backend deployed as release {{ .Release.Name }} (image tag {{ .Values.image.tag }}).
+
+REQUIRED before the pods become healthy:
+  1. The Secret "{{ .Values.existingSecret }}" must exist in namespace {{ .Release.Namespace }}.
+     See secret.example.yaml for the required keys.
+  2. The pod env sets SPRING_PROFILES_ACTIVE={{ .Values.env.SPRING_PROFILES_ACTIVE }} and
+     CIA_DEPLOYMENT_ENVIRONMENT={{ .Values.env.CIA_DEPLOYMENT_ENVIRONMENT }}.
+     For a real production deploy BOTH must be prod/production — the app fail-fasts otherwise.
+
+Backing services (Postgres, Keycloak, Temporal, object storage, Redis) are EXTERNAL —
+supply their endpoints via the ConfigMap env (URLs) and the Secret (credentials).
+
+The management surface (/actuator/**) is intentionally NOT exposed on the Ingress.
+Scrape metrics in-cluster via the Service at :{{ .Values.service.port }}/actuator/prometheus.

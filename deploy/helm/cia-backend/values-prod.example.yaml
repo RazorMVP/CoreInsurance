@@ -1,0 +1,33 @@
+# Example prod overrides: helm upgrade --install cia-api deploy/helm/cia-backend \
+#   -f deploy/helm/cia-backend/values-prod.example.yaml --set image.tag=<commit-sha>
+#
+# REQUIRED at deploy time (NOT committed here): the cia-backend-secrets Secret must exist,
+# and BOTH SPRING_PROFILES_ACTIVE=prod (below) AND CIA_DEPLOYMENT_ENVIRONMENT=production
+# (below) must be set — neither implies the other (ProductionSafetyValidator keys off the marker).
+image:
+  tag: ""                         # set via --set image.tag=<sha> on the command line
+replicaCount: 3
+existingSecret: cia-backend-secrets
+env:
+  SPRING_PROFILES_ACTIVE: prod
+  CIA_DEPLOYMENT_ENVIRONMENT: production
+  SERVER_PORT: "8090"
+  CIA_TENANT_BOOTSTRAP_ENABLED: "false"
+  CIA_KEYCLOAK_ADMIN_ENABLED: "true"
+  DB_POOL_MAX: "10"
+  DB_POOL_MIN: "10"
+  KEYCLOAK_URL: "https://auth.cia.app"
+  TEMPORAL_HOST: "temporal.internal:7233"
+  STORAGE_TYPE: s3
+  STORAGE_ENDPOINT: "https://s3.amazonaws.com"
+  STORAGE_BUCKET: cia-documents
+  PARTNER_API_RATE_LIMIT_STORE: redis
+  REDIS_HOST: "redis.internal"
+  REDIS_PORT: "6379"
+ingress:
+  enabled: true
+  className: nginx
+  host: "*.cia.app"
+  tlsSecretName: cia-backend-tls
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
