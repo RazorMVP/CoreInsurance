@@ -14,6 +14,7 @@ env:
   SERVER_PORT: "8090"
   CIA_TENANT_BOOTSTRAP_ENABLED: "false"
   CIA_KEYCLOAK_ADMIN_ENABLED: "true"
+  KEYCLOAK_ADMIN_REALM: master    # realm the admin client authenticates against (default master)
   DB_POOL_MAX: "10"
   DB_POOL_MIN: "10"
   KEYCLOAK_URL: "https://auth.cia.app"

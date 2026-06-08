@@ -31,7 +31,9 @@ Secrets Operator).
 ## Management surface
 
 `/actuator/**` is not routed on the Ingress (only `/api` and `/partner` are). Prometheus scrapes
-`/actuator/prometheus` in-cluster via the Service.
+`/actuator/prometheus` in-cluster via the Service. **That endpoint is auth-gated** — an
+unauthenticated scrape returns 401; wire a scrape credential + a `NetworkPolicy` restricting it to
+the monitoring namespace at go-live (tracked as backlog `prometheus-endpoint-authz`).
 
 ## Validate locally
 

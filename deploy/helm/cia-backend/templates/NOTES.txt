@@ -11,4 +11,6 @@ Backing services (Postgres, Keycloak, Temporal, object storage, Redis) are EXTER
 supply their endpoints via the ConfigMap env (URLs) and the Secret (credentials).
 
 The management surface (/actuator/**) is intentionally NOT exposed on the Ingress.
-Scrape metrics in-cluster via the Service at :{{ .Values.service.port }}/actuator/prometheus.
+Scrape metrics in-cluster via the Service at :{{ .Values.service.port }}/actuator/prometheus
+(the endpoint is AUTH-GATED — an unauthenticated scrape returns 401; wire a scrape credential /
+NetworkPolicy at go-live; tracked as backlog prometheus-endpoint-authz).
