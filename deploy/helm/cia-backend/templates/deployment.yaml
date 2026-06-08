@@ -25,9 +25,7 @@ spec:
     spec:
       serviceAccountName: {{ include "cia-backend.serviceAccountName" . }}
       securityContext:
-        runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: cia-api
           image: "{{ .Values.image.repository }}:{{ required "Set image.tag to a pinned image tag (commit SHA)" .Values.image.tag }}"
