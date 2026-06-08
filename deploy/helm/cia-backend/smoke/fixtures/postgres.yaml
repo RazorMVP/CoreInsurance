@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cia-smoke-postgres
+  labels: { app: cia-smoke-postgres }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: cia-smoke-postgres }
+  template:
+    metadata:
+      labels: { app: cia-smoke-postgres }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          env:
+            - { name: POSTGRES_USER, value: cia }
+            - { name: POSTGRES_PASSWORD, value: cia_dev }
+            - { name: POSTGRES_DB, value: cia }
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "cia"]
+            periodSeconds: 5
+            failureThreshold: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cia-smoke-postgres
+spec:
+  selector: { app: cia-smoke-postgres }
+  ports:
+    - port: 5432
+      targetPort: 5432

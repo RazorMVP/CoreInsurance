@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cia-smoke-temporal
+  labels: { app: cia-smoke-temporal }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: cia-smoke-temporal }
+  template:
+    metadata:
+      labels: { app: cia-smoke-temporal }
+    spec:
+      containers:
+        - name: temporal
+          image: temporalio/auto-setup:1.25.0
+          env:
+            - { name: DB, value: postgres12 }
+            - { name: DB_PORT, value: "5432" }
+            - { name: POSTGRES_USER, value: cia }
+            - { name: POSTGRES_PWD, value: cia_dev }
+            - { name: POSTGRES_SEEDS, value: cia-smoke-postgres }
+            - { name: BIND_ON_IP, value: 0.0.0.0 }
+          ports:
+            - containerPort: 7233
+          readinessProbe:
+            tcpSocket:
+              port: 7233
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            failureThreshold: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cia-smoke-temporal
+spec:
+  selector: { app: cia-smoke-temporal }
+  ports:
+    - port: 7233
+      targetPort: 7233
