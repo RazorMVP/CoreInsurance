@@ -45,11 +45,13 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
-## 2026-06-07 — Slice B (`main`): K8s/Helm Deployment Artifact — DESIGN PHASE (brainstorm + spec committed, no code yet)
+## 2026-06-07/08 — Slice B (`slice-b-k8s-helm-deploy`): K8s/Helm Deployment Artifact — IMPLEMENTATION IN PROGRESS
 
 **Goal (one slice):** a versioned, CI-validated **Helm chart for cia-api** that wires the Slice-C prod profile, with the 5 backing services (Postgres, Keycloak, Temporal, MinIO/S3, Redis) treated as **external** endpoints via an externally-managed `Secret`. Proven by a `kind` smoke that boots the real image against ephemeral Postgres + Temporal fixtures. **No live cloud provisioning.** Final piece of the first-deployable milestone (A ✓ → C ✓ → B).
 
-**This session = brainstorm → spec only.** No implementation landed. Spec written + committed (`c88204c`) at `docs/superpowers/specs/2026-06-07-k8s-helm-deploy-design.md`. Next: writing-plans → subagent-driven execution.
+**Design phase (2026-06-07):** brainstorm → spec committed (`c88204c`) at `docs/superpowers/specs/2026-06-07-k8s-helm-deploy-design.md`; plan committed (`9820d21`) at `docs/superpowers/plans/2026-06-07-k8s-helm-deploy.md`.
+
+**Implementation (2026-06-08, branch `slice-b-k8s-helm-deploy`, subagent-driven):** Tasks 1–7 of 8 landed (each implementer + spec-review + code-quality-review). Built `deploy/helm/cia-backend/` chart — skeleton + SA (`2f2f51d`), ConfigMap + hardened Deployment (`28abed4`), Service + Ingress api/partner-only (`3f26c7c`), HPA + PDB (`c4379f1`), secret-contract + prod-example + NOTES + README (`fa2284f`), kind smoke fixtures + driver script (`faad52c`), `helm-chart.yml` CI lint+kubeconform+kind-smoke (`9220c6a`). Reviews folded in: SA annotations hook, JAVA_OPTS duplicate-key fix + checksum/config + readiness timeout, ingress TLS-opt-out/named-port/classname guards, Redis+SMTP operator hints, smoke curl `--max-time`+pod pre-delete, CI permissions+timeout+action-pin. **Local end-to-end `kind` smoke running** (real image build → fixtures → helm install → `/actuator/health` 200) to authoritatively prove the chart deploys before finalizing. **Remaining:** Task 8 (CLAUDE.md §10 + backlog reconciliation), final whole-slice review, finish-branch. Backlog reconciliation (drain `prod-deployability-k8s-manifests`; add `temporal-eager-boot-dial`, `k8s-topology-spread`, `k8s-termination-grace`, `hpa-scaling-behavior`, `chart-values-schema`, `sendgrid-api-key-binding`, `kind-smoke-maven-cache`; narrow `prometheus-endpoint-authz`) finalizes in Task 8 once the smoke passes.
 
 **Pre-design product decision (user):** raised whether tenant onboarding/deployment needs a frontend. Resolved — "deployment" is CI/CD (no UI); **tenant onboarding** config+restart (Slice A `TenantBootstrapRunner`) is **launch-adequate**; a runtime Tenant-Onboarding-API + Platform-Admin-UI is a real but **separate next epic** (needs a platform-admin/super-admin auth story; adjacent to Module 12 Phase 6). Kept out of Slice B.
 
