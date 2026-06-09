@@ -51,15 +51,31 @@ helm upgrade --install cia-api "$CHART" \
   --set env.TEMPORAL_HOST='cia-smoke-temporal:7233' \
   --set env.KEYCLOAK_URL='http://unused.local' \
   --set env.STORAGE_TYPE=minio \
-  --set env.STORAGE_ENDPOINT='http://unused.local:9000'
+  --set env.STORAGE_ENDPOINT='http://unused.local:9000' \
+  --set env.MANAGEMENT_HEALTH_REDIS_ENABLED=false \
+  --set env.MANAGEMENT_HEALTH_MAIL_ENABLED=false
 
 echo "==> Waiting for cia-api rollout (proves the image boots against real Postgres + Temporal)"
 kubectl rollout status deploy/cia-api --timeout=300s
 
 echo "==> Asserting /actuator/health == 200"
+# The aggregate /actuator/health folds in db (must be UP) but NOT redis/mail —
+# those indicators are disabled above because the smoke deliberately omits Redis
+# and SMTP; otherwise an intentionally-absent optional service would 503 the
+# aggregate even though the app is healthy. Self-diagnosing: print the code, and
+# dump the body on mismatch so any remaining DOWN indicator is visible in the log.
 # Pre-delete in case a previous hard-killed run left the pod behind (--rm only cleans up on normal exit).
 kubectl delete pod smoke-curl --ignore-not-found
-kubectl run smoke-curl --rm -i --restart=Never --image=curlimages/curl:8.10.1 -- \
-  curl -sf --max-time 10 -o /dev/null -w '%{http_code}' http://cia-api:8090/actuator/health | grep -q 200
+code="$(kubectl run smoke-curl --rm -i --restart=Never --image=curlimages/curl:8.10.1 -- \
+  curl -s --max-time 10 -o /dev/null -w '%{http_code}' http://cia-api:8090/actuator/health 2>/dev/null)"
+echo "health HTTP code: ${code}"
+if ! printf '%s' "${code}" | grep -q 200; then
+  echo "Health endpoint did not return 200 — body for diagnosis:"
+  kubectl delete pod smoke-curl-body --ignore-not-found
+  kubectl run smoke-curl-body --rm -i --restart=Never --image=curlimages/curl:8.10.1 -- \
+    curl -s --max-time 10 http://cia-api:8090/actuator/health 2>/dev/null || true
+  echo
+  exit 1
+fi
 
 echo "==> SMOKE PASSED"
