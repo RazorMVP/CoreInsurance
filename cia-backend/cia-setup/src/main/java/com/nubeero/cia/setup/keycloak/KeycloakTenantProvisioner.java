@@ -303,8 +303,21 @@ public class KeycloakTenantProvisioner {
      * ordering; callers that invoke this method directly (e.g. ITs) must ensure the
      * policy is set beforehand (the shared test realm has it set by
      * {@code ensureTestRealm()}).
+     *
+     * <p>Delegates to {@link #ensureFirstAdminUser(Keycloak, String, FirstAdminSpec, List)}
+     * with {@link BootstrapRoles#ALL} — preserves the existing tenant-provisioning contract.
      */
     public void ensureFirstAdminUser(Keycloak client, String realmName, FirstAdminSpec spec) {
+        ensureFirstAdminUser(client, realmName, spec, BootstrapRoles.ALL);
+    }
+
+    /**
+     * Role-list overload — assigns only the supplied {@code roleNames} to the created user.
+     * Used by {@link #provisionPlatformRealm} to assign only {@link PlatformRoles#ALL}
+     * to the platform super-admin (keeping tenant roles out of the platform realm entirely).
+     */
+    public void ensureFirstAdminUser(Keycloak client, String realmName, FirstAdminSpec spec,
+                                     List<String> roleNames) {
         var realm = client.realm(realmName);
         var existing = realm.users().search(spec.username(), true);
         if (!existing.isEmpty()) {
@@ -344,8 +357,8 @@ public class KeycloakTenantProvisioner {
             userId = location.substring(location.lastIndexOf('/') + 1);
         }
 
-        List<RoleRepresentation> realmRoles = BootstrapRoles.ALL.stream()
-                .map(name -> realm.roles().get(name).toRepresentation())
+        List<RoleRepresentation> realmRoles = roleNames.stream()
+                .map(r -> realm.roles().get(r).toRepresentation())
                 .toList();
         realm.users().get(userId).roles().realmLevel().add(realmRoles);
         log.info("Tenant realm '{}' — created first-admin '{}' with {} roles",
@@ -372,5 +385,146 @@ public class KeycloakTenantProvisioner {
         ensureLoginTheme(client, realmName);
         ensureRealmRoles(client, realmName);
         ensureFirstAdminUser(client, realmName, spec);
+    }
+
+    // -------------------------------------------------------------------------
+    // Platform realm provisioning
+    // -------------------------------------------------------------------------
+
+    /**
+     * Provisions the platform realm: realm + unmanaged-attribute policy +
+     * SUPER_ADMIN role + cia-platform SPA client + first super-admin (assigned
+     * ONLY {@link PlatformRoles#ALL}, never tenant roles). Idempotent.
+     *
+     * <p>The platform realm is deliberately kept separate from every tenant
+     * realm. A token from a tenant realm will never carry SUPER_ADMIN because
+     * that role only exists in the platform realm. The platform realm carries
+     * no {@code tenant_id} claim. A platform-realm token still passes the
+     * base-URL issuer trust check in the tenant resource server, but fails
+     * closed at the schema/tenant-context layer (it resolves to no tenant
+     * schema); a registry allowlist gate at the auth layer is tracked as
+     * backlog item jwt-resolver-registry-allowlist.
+     */
+    public void provisionPlatformRealm(String realmName, String platformClientId,
+                                       List<String> redirectUris, FirstAdminSpec spec) {
+        Keycloak client = keycloak.getIfAvailable();
+        if (client == null) {
+            log.warn("Keycloak admin client unavailable — skipping platform realm provisioning for {}", realmName);
+            return;
+        }
+        ensureRealm(client, realmName);
+        ensureUnmanagedAttributePolicy(client, realmName);
+        ensurePlatformClient(client, realmName, platformClientId, redirectUris);
+        ensurePlatformRoles(client, realmName);
+        // spec.accessGroupId() has no backing access_group row in the platform realm
+        // (the platform realm has no tenant DB) — it is carried only because the shared
+        // FirstAdminSpec / ensureFirstAdminUser signature requires it.
+        ensureFirstAdminUser(client, realmName, spec, PlatformRoles.ALL);
+        log.info("Platform realm '{}' provisioned (SUPER_ADMIN + {} client)", realmName, platformClientId);
+    }
+
+    /**
+     * Seeds {@link PlatformRoles#ALL} into the given realm. MUST only be called
+     * on the platform realm — seeding SUPER_ADMIN into a tenant realm would
+     * create a cross-tenant escalation path. Idempotent.
+     *
+     * <p>Only {@code SUPER_ADMIN} today; the list may grow as new
+     * cross-tenant authorities are defined.
+     */
+    public void ensurePlatformRoles(Keycloak client, String realmName) {
+        var roles = client.realm(realmName).roles();
+        for (String roleName : PlatformRoles.ALL) {
+            try {
+                roles.get(roleName).toRepresentation();   // exists → no-op
+                log.debug("Platform realm '{}' — role '{}' already present", realmName, roleName);
+            } catch (NotFoundException nfe) {
+                RoleRepresentation rep = new RoleRepresentation();
+                rep.setName(roleName);
+                rep.setDescription("CIA-managed: platform role");
+                roles.create(rep);
+                log.info("Platform realm '{}' — created role '{}'", realmName, roleName);
+            }
+        }
+    }
+
+    /**
+     * Idempotent upsert of the platform SPA public client. Mirrors
+     * {@link #ensureBackOfficeClient} exactly in structure (create-then-reconcile,
+     * auth-code + PKCE S256, web origins derived from redirects via {@code "+"}),
+     * with two differences:
+     * <ol>
+     *   <li>Uses the caller-supplied {@code platformClientId} and {@code redirectUris}.</li>
+     *   <li>Does NOT attach a {@code tenant_id} protocol mapper — the platform realm
+     *       is not a tenant, so no tenant_id stamp is appropriate.</li>
+     * </ol>
+     */
+    private void ensurePlatformClient(Keycloak client, String realmName,
+                                      String platformClientId, List<String> redirectUris) {
+        RealmResource realm = client.realm(realmName);
+        List<ClientRepresentation> found = realm.clients().findByClientId(platformClientId);
+
+        if (found.isEmpty()) {
+            ClientRepresentation rep = desiredPlatformClient(platformClientId, redirectUris);
+            try (Response resp = realm.clients().create(rep)) {
+                if (resp.getStatus() >= 300) {
+                    log.warn("Platform realm '{}' — platform client '{}' create returned HTTP {}",
+                            realmName, platformClientId, resp.getStatus());
+                    return;
+                }
+            }
+            log.info("Platform realm '{}' — created platform client '{}' (PKCE S256, redirects {})",
+                    realmName, platformClientId, redirectUris);
+            return;
+        }
+
+        // Reconcile the existing client toward the desired shape.
+        ClientRepresentation existing = found.get(0);
+        ClientRepresentation desired = desiredPlatformClient(platformClientId, redirectUris);
+        boolean changed = false;
+
+        if (!Boolean.TRUE.equals(existing.isPublicClient())) { existing.setPublicClient(true); changed = true; }
+        if (!Boolean.TRUE.equals(existing.isStandardFlowEnabled())) { existing.setStandardFlowEnabled(true); changed = true; }
+        if (Boolean.TRUE.equals(existing.isDirectAccessGrantsEnabled())) {
+            existing.setDirectAccessGrantsEnabled(false);
+            changed = true;
+        }
+        if (!desired.getRedirectUris().equals(existing.getRedirectUris())) {
+            existing.setRedirectUris(desired.getRedirectUris()); changed = true;
+        }
+        if (!desired.getWebOrigins().equals(existing.getWebOrigins())) {
+            existing.setWebOrigins(desired.getWebOrigins()); changed = true;
+        }
+        Map<String, String> attrs = existing.getAttributes() != null
+                ? new HashMap<>(existing.getAttributes()) : new HashMap<>();
+        if (!"S256".equals(attrs.get("pkce.code.challenge.method"))) {
+            attrs.put("pkce.code.challenge.method", "S256");
+            existing.setAttributes(attrs);
+            changed = true;
+        }
+        if (changed) {
+            realm.clients().get(existing.getId()).update(existing);
+            log.info("Platform realm '{}' — reconciled platform client '{}'", realmName, platformClientId);
+        } else {
+            log.debug("Platform realm '{}' — platform client '{}' already conformant", realmName, platformClientId);
+        }
+        // No tenant_id mapper ensured — platform realm has no tenant identity.
+    }
+
+    private ClientRepresentation desiredPlatformClient(String platformClientId,
+                                                        List<String> redirectUris) {
+        ClientRepresentation rep = new ClientRepresentation();
+        rep.setClientId(platformClientId);
+        rep.setName("NubSure Platform Admin");
+        rep.setEnabled(true);
+        rep.setPublicClient(true);
+        rep.setStandardFlowEnabled(true);          // auth-code flow
+        rep.setDirectAccessGrantsEnabled(false);   // no password grant for the SPA
+        rep.setRedirectUris(redirectUris);
+        rep.setWebOrigins(List.of("+"));           // "+" = derive from redirect URIs
+        Map<String, String> attrs = new HashMap<>();
+        attrs.put("pkce.code.challenge.method", "S256");
+        attrs.put("post.logout.redirect.uris", "+"); // "+" = same as redirect URIs
+        rep.setAttributes(attrs);
+        return rep;
     }
 }
