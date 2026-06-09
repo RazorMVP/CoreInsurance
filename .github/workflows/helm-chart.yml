@@ -1,0 +1,75 @@
+name: Helm Chart
+
+# Validates the cia-backend Helm chart: lint + kubeconform schema validation on
+# every change, plus a full-dependency kind smoke that boots the real image
+# against ephemeral Postgres + Temporal and asserts /actuator/health == 200.
+
+on:
+  push:
+    branches: [main]
+    paths: ['deploy/helm/**', 'cia-backend/**', '.github/workflows/helm-chart.yml']
+  pull_request:
+    branches: [main]
+    paths: ['deploy/helm/**', 'cia-backend/**', '.github/workflows/helm-chart.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-validate:
+    name: helm lint + kubeconform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.2
+      - name: Install kubeconform
+        run: |
+          curl -sSL -o /tmp/kubeconform.tar.gz \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+          tar -xzf /tmp/kubeconform.tar.gz -C /tmp
+          sudo install /tmp/kubeconform /usr/local/bin/
+      - name: helm lint
+        run: helm lint deploy/helm/cia-backend --set image.tag=dummy
+      - name: helm template | kubeconform (default values)
+        run: |
+          helm template cia-api deploy/helm/cia-backend --set image.tag=dummy \
+            | kubeconform -strict -summary -
+      - name: helm template | kubeconform (prod example values)
+        run: |
+          helm template cia-api deploy/helm/cia-backend \
+            -f deploy/helm/cia-backend/values-prod.example.yaml --set image.tag=dummy \
+            | kubeconform -strict -summary -
+
+  kind-smoke:
+    name: kind smoke (Postgres + Temporal + chart)
+    runs-on: ubuntu-latest
+    needs: lint-and-validate
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.2
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: cia-smoke
+      - name: Run smoke test
+        env:
+          KIND_CLUSTER: cia-smoke
+          IMAGE: cia-backend:smoke
+        run: bash deploy/helm/cia-backend/smoke/smoke-test.sh
+      - name: Dump diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get pods -A
+          kubectl describe deploy/cia-api || true
+          # Pod-level describe + events surface CreateContainerConfigError / scheduling /
+          # securityContext rejections that a Deployment describe does not.
+          kubectl describe pods -l app.kubernetes.io/instance=cia-api || true
+          kubectl get events --sort-by=.lastTimestamp -A | tail -50 || true
+          kubectl logs deploy/cia-api --tail=200 || true
+          kubectl logs deploy/cia-smoke-temporal --tail=100 || true
