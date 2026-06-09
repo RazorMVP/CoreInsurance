@@ -66,10 +66,14 @@ echo "==> Asserting /actuator/health == 200"
 # dump the body on mismatch so any remaining DOWN indicator is visible in the log.
 # Pre-delete in case a previous hard-killed run left the pod behind (--rm only cleans up on normal exit).
 kubectl delete pod smoke-curl --ignore-not-found
-code="$(kubectl run smoke-curl --rm -i --restart=Never --image=curlimages/curl:8.10.1 -- \
-  curl -s --max-time 10 -o /dev/null -w '%{http_code}' http://cia-api:8090/actuator/health 2>/dev/null)"
-echo "health HTTP code: ${code}"
-if ! printf '%s' "${code}" | grep -q 200; then
+# Robust match: pipe the streamed pod stdout to grep so the http_code is matched
+# even alongside kubectl's "pod ... deleted" message (capturing into a var is
+# fragile — that message pollutes stdout). On mismatch, dump the body so any
+# DOWN indicator is visible directly in the CI log.
+if kubectl run smoke-curl --rm -i --restart=Never --image=curlimages/curl:8.10.1 -- \
+     curl -s --max-time 10 -o /dev/null -w '%{http_code}' http://cia-api:8090/actuator/health | grep -q 200; then
+  echo "==> SMOKE PASSED"
+else
   echo "Health endpoint did not return 200 — body for diagnosis:"
   kubectl delete pod smoke-curl-body --ignore-not-found
   kubectl run smoke-curl-body --rm -i --restart=Never --image=curlimages/curl:8.10.1 -- \
@@ -77,5 +81,3 @@ if ! printf '%s' "${code}" | grep -q 200; then
   echo
   exit 1
 fi
-
-echo "==> SMOKE PASSED"
