@@ -13,6 +13,7 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +49,11 @@ public class PlatformTenantService {
      * delegates to {@link TenantProvisioningService#provision}, then audits and returns the
      * registry summary + first-admin credentials.
      *
+     * <p>Onboard is safe to retry after a partial failure: every
+     * {@link TenantProvisioningService#provision} step (schema create, Flyway migrate, seed,
+     * Keycloak realm/admin, registry upsert) is idempotent, and the registry row is written
+     * last — so a retry resumes cleanly and only "succeeds" once the tenant is fully provisioned.
+     *
      * @param req        validated request body
      * @param actor      username of the super-admin calling the operation (from JWT)
      * @param actorRealm realm the super-admin authenticated against
@@ -58,6 +64,8 @@ public class PlatformTenantService {
     public OnboardTenantResponse onboard(
             OnboardTenantRequest req, String actor, String actorRealm, String ip) {
 
+        Objects.requireNonNull(actor, "actor must not be null");
+        Objects.requireNonNull(actorRealm, "actorRealm must not be null");
         TenantSchemas.validate(req.schema());
         String realm = (req.realm() == null || req.realm().isBlank()) ? req.schema() : req.realm();
 
@@ -125,6 +133,8 @@ public class PlatformTenantService {
 
     private void setActive(String schema, boolean active, String action,
                            String actor, String actorRealm, String ip) {
+        Objects.requireNonNull(actor, "actor must not be null");
+        Objects.requireNonNull(actorRealm, "actorRealm must not be null");
         if (!registry.setActive(schema, active)) {
             throw new TenantNotFoundException(schema);
         }

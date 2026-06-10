@@ -69,8 +69,10 @@ class PlatformTenantServiceIT extends TenantProvisioningItSupport {
             + ")");
 
         // Clean up any rows left by a previous run.
-        jdbc.update("DELETE FROM public.tenants WHERE schema_name = ?", SCHEMA);
-        jdbc.update("DELETE FROM public.platform_audit_log WHERE target_schema = ?", SCHEMA);
+        jdbc.update("DELETE FROM public.tenants WHERE schema_name IN (?, ?, ?)",
+                SCHEMA, "tenant_acme", "tenant_beta");
+        jdbc.update("DELETE FROM public.platform_audit_log WHERE target_schema IN (?, ?, ?)",
+                SCHEMA, "tenant_acme", "tenant_beta");
 
         registry = new TenantRegistry(dataSource());
         var migrator = new TenantSchemaMigrator(dataSource());
@@ -120,6 +122,23 @@ class PlatformTenantServiceIT extends TenantProvisioningItSupport {
         // Second onboard with same schema must throw 409.
         assertThatThrownBy(() -> service.onboard(
                 new OnboardTenantRequest(SCHEMA, null, "Plat Corp Again", SUBDOMAIN, "admin", "a@plat.test"),
+                "superadmin", "platform", "10.0.0.1"))
+                .isInstanceOf(TenantAlreadyExistsException.class);
+    }
+
+    @Test
+    @DisplayName("onboard — duplicate subdomain (different schema) throws TenantAlreadyExistsException (HTTP 409)")
+    void onboard_duplicateSubdomain_throws() {
+        // First onboard succeeds (schema tenant_acme, subdomain acme).
+        service.onboard(
+                new OnboardTenantRequest("tenant_acme", null, "Acme Corp", "acme", "admin", "a@acme.test"),
+                "superadmin", "platform", "10.0.0.1");
+
+        // Second onboard with a DIFFERENT schema but the SAME subdomain must throw 409 —
+        // exercises the registry.subdomainTaken(...) branch (the duplicate-schema test
+        // short-circuits on registry.exists(...) before subdomainTaken is reached).
+        assertThatThrownBy(() -> service.onboard(
+                new OnboardTenantRequest("tenant_beta", null, "Beta Corp", "acme", "admin", "a@beta.test"),
                 "superadmin", "platform", "10.0.0.1"))
                 .isInstanceOf(TenantAlreadyExistsException.class);
     }
