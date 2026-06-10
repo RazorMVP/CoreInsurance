@@ -8,6 +8,7 @@ import com.nubeero.cia.api.tenant.TenantBootstrapProperties.TenantSpec;
 import com.nubeero.cia.api.tenant.TenantProvisioningService;
 import com.nubeero.cia.api.tenant.TenantRegistry;
 import com.nubeero.cia.auth.TenantActivationLookup;
+import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.common.tenant.TenantSchemas;
 import java.security.SecureRandom;
 import java.util.Base64;
@@ -68,6 +69,16 @@ public class PlatformTenantService {
         Objects.requireNonNull(actorRealm, "actorRealm must not be null");
         TenantSchemas.validate(req.schema());
         String realm = (req.realm() == null || req.realm().isBlank()) ? req.schema() : req.realm();
+        // Realm-per-tenant routing invariant: the realm IS the tenant identifier. TenantContextFilter
+        // routes by the validated iss realm, the tenant_id mapper stamps the realm name, and the
+        // allowlist gate matches public.tenants.schema_name = realm — all of which assume realm ==
+        // schema. A divergent realm would silently produce a tenant whose JWTs route to a nonexistent
+        // schema and whose allowlist entry never matches, so reject it rather than provision a broken
+        // tenant. (Defaulting realm to schema when blank is the normal path.)
+        if (!realm.equals(req.schema())) {
+            throw new BusinessRuleException("REALM_SCHEMA_MISMATCH",
+                    "realm must equal schema (realm-per-tenant routing invariant); leave realm blank to default it");
+        }
 
         if (registry.exists(req.schema()) || registry.subdomainTaken(req.subdomain())) {
             throw new TenantAlreadyExistsException(req.schema(), req.subdomain());

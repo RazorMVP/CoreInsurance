@@ -7,6 +7,7 @@ import com.nubeero.cia.api.platform.RegistryTenantActivationLookup;
 import com.nubeero.cia.api.platform.TenantAlreadyExistsException;
 import com.nubeero.cia.api.platform.TenantNotFoundException;
 import com.nubeero.cia.api.platform.dto.OnboardTenantRequest;
+import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.setup.keycloak.KeycloakTenantProvisioner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -141,6 +142,22 @@ class PlatformTenantServiceIT extends TenantProvisioningItSupport {
                 new OnboardTenantRequest("tenant_beta", null, "Beta Corp", "acme", "admin", "a@beta.test"),
                 "superadmin", "platform", "10.0.0.1"))
                 .isInstanceOf(TenantAlreadyExistsException.class);
+    }
+
+    @Test
+    @DisplayName("onboard — a realm that differs from schema is rejected (REALM_SCHEMA_MISMATCH)")
+    void onboard_divergentRealm_throws() {
+        // The realm-per-tenant routing model requires realm == schema; a divergent realm would
+        // silently produce a tenant whose JWTs route to a nonexistent schema. Reject it before
+        // touching the registry or Keycloak.
+        assertThatThrownBy(() -> service.onboard(
+                new OnboardTenantRequest(SCHEMA, "different_realm", "Plat Corp", SUBDOMAIN, "admin", "a@plat.test"),
+                "superadmin", "platform", "10.0.0.1"))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "REALM_SCHEMA_MISMATCH");
+
+        // Nothing was provisioned — the guard fires before registry/Keycloak.
+        assertThat(registry.exists(SCHEMA)).isFalse();
     }
 
     @Test
