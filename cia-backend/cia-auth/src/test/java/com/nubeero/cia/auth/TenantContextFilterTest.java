@@ -18,7 +18,14 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 
 class TenantContextFilterTest {
 
-    private final TenantContextFilter filter = new TenantContextFilter();
+    private static PlatformRealmProperties defaultProps() {
+        PlatformRealmProperties p = new PlatformRealmProperties();
+        p.setRealm("platform");
+        p.getTenantAllowlist().setEnabled(false);
+        return p;
+    }
+
+    private final TenantContextFilter filter = new TenantContextFilter(defaultProps(), null);
 
     @AfterEach
     void clear() {
@@ -97,5 +104,12 @@ class TenantContextFilterTest {
         // The unconditional MDC.remove in finally must wipe the stale value even
         // though this request resolved no tenant.
         assertThat(MDC.get(TenantContextFilter.MDC_TENANT_KEY)).isNull();
+    }
+
+    @Test
+    @DisplayName("platform realm scopes the request to public, not a 'platform' schema")
+    void platformRealmScopesToPublic() throws Exception {
+        String t = capturedTenantDuringChain(jwtWith("http://localhost:8280/realms/platform", null));
+        assertThat(t).isEqualTo("public");
     }
 }
