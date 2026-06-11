@@ -30,7 +30,11 @@ FROM eclipse-temurin:21-jre-jammy AS runtime
 WORKDIR /app
 
 # curl for the HEALTHCHECK; a dedicated non-root system user for defence in depth.
+# apt-get upgrade pulls the latest jammy security patches at build time (e.g. the
+# OpenSSL/libssl3 fix for CVE-2026-45447) so the runtime image clears the enforcing
+# backend-image.yml Trivy gate even when the base tag lags behind a fresh disclosure.
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system cia \
