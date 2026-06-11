@@ -69,7 +69,7 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
-## 2026-06-09/10 — SP1 (`platform-admin-onboarding`): Platform-Admin Onboarding API — COMPLETE
+## 2026-06-09/11 — SP1 (`platform-admin-onboarding`): Platform-Admin Onboarding API — COMPLETE (PR #4 open)
 
 **Goal (one sub-project):** a cross-tenant **platform-admin plane** — a dedicated `platform` Keycloak realm holding a `SUPER_ADMIN` role *above* all tenants, plus a REST API (`/api/v1/platform/**`) for super-admins to onboard / list / suspend / activate tenants at runtime, with dual audit and a tenant-activation allowlist gate that operationalises tenant suspension. Executed via `superpowers:subagent-driven-development` (fresh implementer per task → spec-compliance review → code-quality review → triaged fixes). Design/plan: `docs/superpowers/specs/2026-06-09-platform-admin-onboarding-api-design.md`, `docs/superpowers/plans/2026-06-09-platform-admin-onboarding-api.md`.
 
@@ -93,6 +93,8 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 - **Removed:** `jwt-resolver-registry-allowlist` (P2) — the `public.tenants` allowlist gate is now shipped (`TenantContextFilter` + `TenantActivationLookup`, T3-5).
 - **Added:** `platform-admin-ui-sp2` (P2 — the `apps/platform` SPA, next sub-project), `platform-hard-delete-tenant` (P3 — NDPR/retention-aware purge vs suspend-only), `platform-invite-super-admin` (P3 — runtime super-admin invite vs config+restart). `backoffice-client-reconcile-direct-grants` (P2) was added earlier in T1.
 - **No Postman/partner-API changes** (no `/partner/v1/**` touched).
+
+**Branch finish + CI (2026-06-11):** full-reactor `mvn verify` green (BUILD SUCCESS, 472 failsafe ITs, 0F/0E/1 intentional skip); branch pushed, **PR #4** opened (`main` ← `platform-admin-onboarding`). PR CI: backend (Java 21 · Testcontainers, all ITs), kind smoke, helm lint/kubeconform, frontend, Trivy-SARIF all ✅; Docs skipped. **One red check — `Backend Image` "Build backend container image":** the image *builds*, but the **enforcing Trivy CVE gate** (`severity: CRITICAL,HIGH`, `exit-code 1`) failed on newly-disclosed HIGHs in **pins SP1 never touched** — `io.netty:netty-handler` + `io.netty:netty-resolver-dns` at the parent-pom-pinned `4.1.134.Final` (CVE-2026-44249/45416/45674/47691, fixed `4.1.135.Final`) and base-image `libssl3` CVE-2026-45447 (Ubuntu OpenSSL). `git diff main...HEAD` touches no `pom.xml`/`Dockerfile`/netty; the netty pin is byte-identical on `main` → **this gate is red on `main` too, not an SP1 regression** (Trivy DB advanced past the S144 "0 HIGH" baseline). **Resolved:** fixed via the standalone `chore/cve-bump` PR #5 (netty `4.1.135.Final` + base-image `apt-get upgrade -y` for the OpenSSL CVE), squash-merged to `main` (commit `7f05f5a`); this branch was then **rebased** onto the fixed `main` so its image gate clears, and the `image-cve-gate-netty-openssl-bump` backlog row is drained accordingly.
 
 ---
 
