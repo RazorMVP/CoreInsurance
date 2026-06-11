@@ -57,7 +57,8 @@ This is bigger than a typical slice but one cohesive sub-project (the platform-a
                  ▼              ▼                              ▼
    ┌─ public schema ──────────────────────────┐      ┌─ platform realm ───────────┐
    │ tenants (registry) · platform_audit_log  │      │ SUPER_ADMIN role            │
-   │   V68: target_schema → NULLABLE           │      │ super-admin user(s)         │
+   │   V68: NULLABLE target_schema +           │      │ super-admin user(s)         │
+   │        drop dead per-tenant copies        │      │                             │
    └──────────────────────────────────────────┘      └─────────────────────────────┘
 ```
 
@@ -117,17 +118,41 @@ All five endpoints stay under `PlatformTenantController` (`/api/v1/platform`) ex
   - `void removeSuperAdminRole(String realm, String username)` — find the user, remove the `SUPER_ADMIN` realm-role mapping. `boolean isOnlySuperAdmin(String realm, String username)` (or expose member-count to the service) backs the last-admin guard.
   - These mirror the existing `ensureFirstAdminUser` / `ensurePlatformRoles` shape; all Keycloak admin-client types stay encapsulated inside the provisioner (the project's hard rule).
 
-### (d) Flyway V68 — audit table accommodates user-targeted actions
+### (d) Flyway V68 — schema-aware: relax `target_schema` **and** clean up the tenant-copy pollution
 
-`platform_audit_log.target_schema` is `NOT NULL` and semantically a tenant schema; super-admin actions have no schema. **V68** (unqualified `ALTER`, matching V67's unqualified-create pattern — lands in `public` + each tenant schema; the tenant-copy pollution is the pre-existing `platform-audit-log-tenant-schema-pollution` backlog item, not fixed here):
+Two facts converge here:
+
+1. `platform_audit_log.target_schema` is `NOT NULL` and semantically a tenant schema; super-admin actions (invite/revoke) have no schema, so the column must allow `NULL`.
+2. `platform_audit_log` is a **public-only** table, but V67 introduced it as an *unqualified* `CREATE TABLE` **above the tenant baseline** (`baselineVersion=2`). Two Flyway runs cover `db/migration`: the **main** Spring Flyway (`schemas: public`) created the real `public.platform_audit_log`; the **per-tenant** `TenantSchemaMigrator` (search_path pinned to `"<tenant>", public`) cloned a dead copy into every tenant schema. The dead copies are never read or written (`PlatformAuditService` always qualifies `public.platform_audit_log`).
+
+A naïve unqualified `ALTER` would compound this (it would alter every dead copy too). Instead **V68 is schema-aware**, branching on `current_schema()` so each run does the right thing — relax the real table in the public run, drop the dead copy in each tenant run. This **fixes** the `platform-audit-log-tenant-schema-pollution` backlog item rather than feeding it.
 
 ```sql
-ALTER TABLE platform_audit_log ALTER COLUMN target_schema DROP NOT NULL;
-COMMENT ON COLUMN platform_audit_log.action IS
+-- V68: platform_audit_log is public-only. V67 was unqualified + above the tenant baseline,
+-- so it cloned a dead copy into every tenant schema. Drop those copies; and on the canonical
+-- public table only, relax target_schema to NULL so user-targeted platform actions
+-- (super-admin invite/revoke) can be audited without a tenant schema.
+DO $$
+BEGIN
+  IF current_schema() = 'public' THEN
+    ALTER TABLE public.platform_audit_log ALTER COLUMN target_schema DROP NOT NULL;
+  ELSE
+    -- Explicitly schema-qualified: can NEVER resolve to public.platform_audit_log.
+    EXECUTE format('DROP TABLE IF EXISTS %I.platform_audit_log', current_schema());
+  END IF;
+END
+$$;
+COMMENT ON COLUMN public.platform_audit_log.action IS
   'ONBOARD | SUSPEND | ACTIVATE | INVITE_SUPER_ADMIN | REVOKE_SUPER_ADMIN';
 ```
 
+Why this is safe: the `%I` qualification on the `DROP` is load-bearing — an *unqualified* drop in a tenant run could fall through search_path to `public` and drop the real table. `current_schema()` cleanly separates the runs (main = `public`; the tenant callback guarantees `<tenant>` is first; a tenant can never be named `public`). Newly-provisioned tenants after V68 briefly create the copy (V67) then drop it (V68) — forward-only, since V67 cannot be edited.
+
+**Go-forward convention** (documented in `CLAUDE.md` Data Architecture): any future public-only table must use `CREATE TABLE IF NOT EXISTS public.<name>` so the tenant sweep no-ops instead of cloning. The heavier structural fix (splitting `db/migration` into `common`/`public`/`tenant` locations) is deliberately **not** done — it touches the baseline model and all existing migrations for no behavioral gain over schema-awareness + the convention.
+
 Super-admin audit rows write `target_schema = NULL` and put the affected username/email in `detail` JSONB (`{"username":"...","email":"..."}`). `recentForSchema(schema)` naturally excludes them (null schema never matches). `PlatformAuditEntry.targetSchema` is already a plain `String` and maps `NULL` fine.
+
+**IT note:** any IT that asserts a tenant schema contains `platform_audit_log` must be updated (none is known to; the migration-target ITs only migrate to head). Add a positive IT asserting (a) `public.platform_audit_log` survives with `target_schema` nullable and (b) a freshly-migrated tenant schema has **no** `platform_audit_log`.
 
 ### Backend tests (failsafe ITs, following SP1's harness)
 
@@ -209,12 +234,13 @@ The plan (writing-plans) will sequence SP2 as four phases so each lands reviewab
 ## Out of scope → backlog
 
 - **Hard tenant delete** — regulated data; suspend-only stands (`platform-hard-delete-tenant`, P3).
-- **`platform_audit_log` tenant-schema pollution** — V67/V68 land unqualified into tenant schemas; cleanup is its own slice (`platform-audit-log-tenant-schema-pollution`, P3).
 - **Cursor pagination + a shared `useServerPagination`/`ServerPaginationFooter` in `@cia/ui`** — SP2 uses page/size + a local footer; the cross-app shared component is the existing `list-endpoints-true-pagination` item (P3). If SP2's footer is the second hand-rolled instance, note the rule-of-three.
+- **Structural migration split** (`db/migration` → `common`/`public`/`tenant` locations) — the general cure for public-vs-tenant DDL ambiguity; not warranted now (§3(d) handles the one known case via schema-awareness + the qualify-`public.` convention). Log only if a third public-only table forces the issue.
 - **Live platform Keycloak + backend deploy** (real, non-demo platform URL) — go-live infra step, not this slice.
 
 ## Backlog reconciliation
 
 - **Drains** the existing `platform-invite-super-admin` (P3) row — delivered here.
+- **Drains** `platform-audit-log-tenant-schema-pollution` (P3) — fixed by the schema-aware V68 (§3(d)), not deferred.
 - The other three folded-in items (`platform-admin-ui-vercel-deploy`, Dashboard landing, server-side pagination/audit-at-scale) were prospective backlog rows; they are delivered here and never become rows.
 - **Drains** `platform-admin-ui-sp2` (this *is* SP2).
