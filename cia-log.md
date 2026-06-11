@@ -51,6 +51,20 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-06-11 — `chore/cve-bump`: clear new HIGH image CVEs (netty 4.1.135 + base-image OpenSSL) — PR #5
+
+**Goal (one chore):** restore the backend container image to the S144 **0 CRITICAL/HIGH** Trivy posture after the vuln DB advanced and disclosed new HIGHs in **existing pins** (no feature change — `netty.version` + the Dockerfile were unchanged on `main`). Surfaced on the SP1 PR #4 image build, but the enforcing `backend-image.yml` gate is red on `main` itself, so this lands as a standalone fix off `main` (keeps SP1's slice clean; unblocks PR #4 on rebase).
+
+**Changes (`cia-backend/`):**
+- `pom.xml` — `<netty.version>` **4.1.134.Final → 4.1.135.Final** (parent-pom BOM-property override; bumps the whole netty stack uniformly). Clears `io.netty:netty-handler` CVE-2026-44249 (IPv6 subnet-filter bypass) + CVE-2026-45416 (SNI 16 MiB pre-alloc) and `io.netty:netty-resolver-dns` CVE-2026-45674 + CVE-2026-47691 (DNS cache poisoning / insufficient bailiwick).
+- `Dockerfile` — added `apt-get upgrade -y` to the `jammy` runtime stage so it pulls the patched `libssl3` (CVE-2026-45447, Ubuntu OpenSSL `3.0.2-0ubuntu1.23 → …1.25`) + any other pending OS security fixes at build time, even when the base tag lags a fresh disclosure.
+
+**Verification:** `mvn -pl cia-api -am package -DskipTests` → BUILD SUCCESS (clean assembly on 4.1.135); `dependency:tree -Dincludes=io.netty` confirms `netty-handler` + `netty-resolver-dns` (and the full stack) resolve to `4.1.135.Final`. **PR #5 CI all green** — the `Build backend container image` job (the enforcing `backend-image.yml` Trivy gate that was red on PR #4 / `main`) now **passes**, and the full backend Testcontainers IT suite is green on netty 4.1.135 (patch bump → API-compatible). No application code touched.
+
+**Known follow-ups:** no backlog change here (this IS the fix). On the SP1 branch the `image-cve-gate-netty-openssl-bump` (P1) row tracks the same finding and will be drained when SP1 rebases onto the merged `main`.
+
+---
+
 ## 2026-06-07/09 — Slice B (`slice-b-k8s-helm-deploy`): K8s/Helm Deployment Artifact — COMPLETE (PR #3, CI green)
 
 **Goal (one slice):** a versioned, CI-validated **Helm chart for cia-api** that wires the Slice-C prod profile, with the 5 backing services (Postgres, Keycloak, Temporal, MinIO/S3, Redis) treated as **external** endpoints via an externally-managed `Secret`. Proven by a `kind` smoke that boots the real image against ephemeral Postgres + Temporal fixtures. **No live cloud provisioning.** Final piece of the first-deployable milestone (A ✓ → C ✓ → B).
