@@ -69,7 +69,7 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
-## 2026-06-09/11 — SP1 (`platform-admin-onboarding`): Platform-Admin Onboarding API — COMPLETE (PR #4 open)
+## 2026-06-09/11 — SP1 (`platform-admin-onboarding`): Platform-Admin Onboarding API — COMPLETE (PR #4 merged → `main`)
 
 **Goal (one sub-project):** a cross-tenant **platform-admin plane** — a dedicated `platform` Keycloak realm holding a `SUPER_ADMIN` role *above* all tenants, plus a REST API (`/api/v1/platform/**`) for super-admins to onboard / list / suspend / activate tenants at runtime, with dual audit and a tenant-activation allowlist gate that operationalises tenant suspension. Executed via `superpowers:subagent-driven-development` (fresh implementer per task → spec-compliance review → code-quality review → triaged fixes). Design/plan: `docs/superpowers/specs/2026-06-09-platform-admin-onboarding-api-design.md`, `docs/superpowers/plans/2026-06-09-platform-admin-onboarding-api.md`.
 
