@@ -212,4 +212,23 @@ class PlatformTenantServiceIT extends TenantProvisioningItSupport {
         var all = service.list();
         assertThat(all).extracting("schema").contains(SCHEMA);
     }
+
+    @Test
+    @DisplayName("registry — paged findAll + counts reflect active/suspended split")
+    void registry_pagedAndCounts() {
+        registry.upsert("tenant_acme", "Acme", "acme");
+        registry.upsert("tenant_beta", "Beta", "beta");
+        registry.setActive("tenant_beta", false);
+
+        long total = registry.countAll();
+        long active = registry.countActive();
+        assertThat(total).isGreaterThanOrEqualTo(2);
+        assertThat(active).isLessThan(total); // beta is suspended
+
+        var firstPage = registry.findAll(0, 1);
+        assertThat(firstPage).hasSize(1);
+        var secondPage = registry.findAll(1, 1);
+        assertThat(secondPage).hasSize(1);
+        assertThat(firstPage.get(0).schema()).isNotEqualTo(secondPage.get(0).schema());
+    }
 }
