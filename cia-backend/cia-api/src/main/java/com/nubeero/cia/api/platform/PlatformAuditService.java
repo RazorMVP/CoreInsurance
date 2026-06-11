@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -14,6 +15,17 @@ public class PlatformAuditService {
     public record PlatformAuditEntry(UUID id, String action, String targetSchema,
                                      String actorUsername, String actorRealm, String detail,
                                      String sourceIp, Instant at) {}
+
+    /** Shared row-mapper for every read path — keeps the column→field mapping in one place. */
+    private static final RowMapper<PlatformAuditEntry> ROW_MAPPER = (rs, i) -> new PlatformAuditEntry(
+            rs.getObject("id", UUID.class),
+            rs.getString("action"),
+            rs.getString("target_schema"),
+            rs.getString("actor_username"),
+            rs.getString("actor_realm"),
+            rs.getString("detail"),
+            rs.getString("source_ip"),
+            rs.getTimestamp("at").toInstant());
 
     private final JdbcTemplate jdbc;
 
@@ -34,16 +46,40 @@ public class PlatformAuditService {
 
     public List<PlatformAuditEntry> recent(int limit) {
         return jdbc.query("SELECT id,action,target_schema,actor_username,actor_realm,detail,source_ip,at"
-            + " FROM public.platform_audit_log ORDER BY at DESC LIMIT ?",
-            (rs, i) -> new PlatformAuditEntry(
-                rs.getObject("id", UUID.class),
-                rs.getString("action"),
-                rs.getString("target_schema"),
-                rs.getString("actor_username"),
-                rs.getString("actor_realm"),
-                rs.getString("detail"),
-                rs.getString("source_ip"),
-                rs.getTimestamp("at").toInstant()),
-            limit);
+            + " FROM public.platform_audit_log ORDER BY at DESC, id DESC LIMIT ?",
+            ROW_MAPPER, limit);
+    }
+
+    /** Newest-first audit rows for a single target schema (backs the consolidated tenant detail). */
+    public List<PlatformAuditEntry> recentForSchema(String targetSchema, int limit) {
+        return jdbc.query("SELECT id,action,target_schema,actor_username,actor_realm,detail,source_ip,at"
+            + " FROM public.platform_audit_log WHERE target_schema = ? ORDER BY at DESC, id DESC LIMIT ?",
+            ROW_MAPPER, targetSchema, limit);
+    }
+
+    /**
+     * Paged audit trail, newest first. When {@code targetSchema} is non-null, filters to that
+     * tenant; when null, returns all actions (including user-targeted super-admin rows whose
+     * {@code target_schema} is NULL).
+     */
+    public List<PlatformAuditEntry> recent(int page, int size, String targetSchema) {
+        int offset = Math.max(0, page) * size;
+        if (targetSchema == null) {
+            return jdbc.query("SELECT id,action,target_schema,actor_username,actor_realm,detail,source_ip,at"
+                + " FROM public.platform_audit_log ORDER BY at DESC, id DESC LIMIT ? OFFSET ?",
+                ROW_MAPPER, size, offset);
+        }
+        return jdbc.query("SELECT id,action,target_schema,actor_username,actor_realm,detail,source_ip,at"
+            + " FROM public.platform_audit_log WHERE target_schema = ? ORDER BY at DESC, id DESC LIMIT ? OFFSET ?",
+            ROW_MAPPER, targetSchema, size, offset);
+    }
+
+    /** Total audit-row count, optionally filtered to one target schema (for pagination total). */
+    public long count(String targetSchema) {
+        Long n = (targetSchema == null)
+            ? jdbc.queryForObject("SELECT COUNT(*) FROM public.platform_audit_log", Long.class)
+            : jdbc.queryForObject("SELECT COUNT(*) FROM public.platform_audit_log WHERE target_schema = ?",
+                Long.class, targetSchema);
+        return n == null ? 0L : n;
     }
 }
