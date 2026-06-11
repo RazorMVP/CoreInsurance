@@ -3,6 +3,9 @@ package com.nubeero.cia.api.platform;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nubeero.cia.api.platform.dto.OnboardTenantRequest;
 import com.nubeero.cia.api.platform.dto.OnboardTenantResponse;
+import com.nubeero.cia.api.platform.dto.PagedResult;
+import com.nubeero.cia.api.platform.dto.TenantDetailResponse;
+import com.nubeero.cia.api.platform.dto.TenantStats;
 import com.nubeero.cia.api.platform.dto.TenantSummary;
 import com.nubeero.cia.api.tenant.TenantBootstrapProperties.TenantSpec;
 import com.nubeero.cia.api.tenant.TenantProvisioningService;
@@ -118,6 +121,24 @@ public class PlatformTenantService {
     /** Returns a single tenant by schema name, or {@link Optional#empty()} if not found. */
     public Optional<TenantSummary> get(String schema) {
         return registry.find(schema);
+    }
+
+    /** Consolidated detail: registry summary + the 20 most-recent audit rows for the schema. */
+    public Optional<TenantDetailResponse> detail(String schema) {
+        return registry.find(schema)
+                .map(summary -> new TenantDetailResponse(summary, audit.recentForSchema(schema, 20)));
+    }
+
+    /** A page of tenants for the list view. */
+    public PagedResult<TenantSummary> list(int page, int size) {
+        return new PagedResult<>(registry.findAll(page, size), registry.countAll(), page, size);
+    }
+
+    /** Dashboard counters. */
+    public TenantStats stats() {
+        long total = registry.countAll();
+        long active = registry.countActive();
+        return new TenantStats(total, active, total - active);
     }
 
     /**
