@@ -2,9 +2,13 @@ package com.nubeero.cia.api.platform;
 
 import com.nubeero.cia.api.platform.dto.OnboardTenantRequest;
 import com.nubeero.cia.api.platform.dto.OnboardTenantResponse;
+import com.nubeero.cia.api.platform.dto.PagedResult;
+import com.nubeero.cia.api.platform.dto.TenantDetailResponse;
+import com.nubeero.cia.api.platform.dto.TenantStats;
 import com.nubeero.cia.api.platform.dto.TenantSummary;
 import com.nubeero.cia.auth.KeycloakRealms;
 import com.nubeero.cia.auth.PlatformRealmProperties;
+import com.nubeero.cia.common.api.ApiMeta;
 import com.nubeero.cia.common.api.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -41,10 +45,11 @@ public class PlatformTenantController {
     private final PlatformAuditService audit;
     private final PlatformRealmProperties platformProps;
 
-    /** Default page size for the platform audit trail when the caller omits ?limit=. */
-    private static final String DEFAULT_AUDIT_LIMIT = "100";
-    /** Hard cap on audit-trail rows returned in one call, regardless of requested limit. */
-    private static final int MAX_AUDIT_LIMIT = 500;
+    /** Default page index/size for paginated platform list endpoints. */
+    private static final String DEFAULT_PAGE = "0";
+    private static final String DEFAULT_SIZE = "50";
+    /** Hard cap on page size, regardless of the requested size. */
+    private static final int MAX_PAGE_SIZE = 500;
 
     @PostMapping("/tenants")
     public ResponseEntity<ApiResponse<OnboardTenantResponse>> onboard(
@@ -56,15 +61,26 @@ public class PlatformTenantController {
     }
 
     @GetMapping("/tenants")
-    public ApiResponse<List<TenantSummary>> list(@AuthenticationPrincipal Jwt jwt) {
+    public ApiResponse<List<TenantSummary>> list(
+            @RequestParam(defaultValue = DEFAULT_PAGE) int page,
+            @RequestParam(defaultValue = DEFAULT_SIZE) int size,
+            @AuthenticationPrincipal Jwt jwt) {
         assertPlatformRealm(jwt);
-        return ApiResponse.success(service.list());
+        PagedResult<TenantSummary> result = service.list(page, Math.min(size, MAX_PAGE_SIZE));
+        return ApiResponse.success(result.items(), ApiMeta.builder()
+                .total(result.total()).page(result.page()).size(result.size()).build());
     }
 
     @GetMapping("/tenants/{schema}")
-    public ApiResponse<TenantSummary> get(@PathVariable String schema, @AuthenticationPrincipal Jwt jwt) {
+    public ApiResponse<TenantDetailResponse> detail(@PathVariable String schema, @AuthenticationPrincipal Jwt jwt) {
         assertPlatformRealm(jwt);
-        return ApiResponse.success(service.get(schema).orElseThrow(() -> new TenantNotFoundException(schema)));
+        return ApiResponse.success(service.detail(schema).orElseThrow(() -> new TenantNotFoundException(schema)));
+    }
+
+    @GetMapping("/stats")
+    public ApiResponse<TenantStats> stats(@AuthenticationPrincipal Jwt jwt) {
+        assertPlatformRealm(jwt);
+        return ApiResponse.success(service.stats());
     }
 
     @PostMapping("/tenants/{schema}/suspend")
@@ -83,9 +99,15 @@ public class PlatformTenantController {
 
     @GetMapping("/audit")
     public ApiResponse<List<PlatformAuditService.PlatformAuditEntry>> auditTrail(
-            @RequestParam(defaultValue = DEFAULT_AUDIT_LIMIT) int limit, @AuthenticationPrincipal Jwt jwt) {
+            @RequestParam(defaultValue = DEFAULT_PAGE) int page,
+            @RequestParam(defaultValue = DEFAULT_SIZE) int size,
+            @RequestParam(required = false) String targetSchema,
+            @AuthenticationPrincipal Jwt jwt) {
         assertPlatformRealm(jwt);
-        return ApiResponse.success(audit.recent(Math.min(limit, MAX_AUDIT_LIMIT)));
+        int capped = Math.min(size, MAX_PAGE_SIZE);
+        var rows = audit.recent(page, capped, targetSchema);
+        long total = audit.count(targetSchema);
+        return ApiResponse.success(rows, ApiMeta.builder().total(total).page(page).size(capped).build());
     }
 
     /** Defense-in-depth: SUPER_ADMIN should only ever be minted by the platform realm,
