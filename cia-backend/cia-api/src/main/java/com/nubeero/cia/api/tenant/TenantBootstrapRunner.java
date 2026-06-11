@@ -36,6 +36,10 @@ public class TenantBootstrapRunner implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         log.info("Tenant bootstrap: ensuring {} configured tenant(s)", props.getTenants().size());
         for (TenantBootstrapProperties.TenantSpec spec : props.getTenants()) {
+            if (spec.getAdminTempPassword() == null || spec.getAdminTempPassword().isBlank()) {
+                throw new IllegalStateException(
+                    "admin-temp-password must not be blank for bootstrap tenant '" + spec.getSchema() + "'");
+            }
             provisioningService.provision(spec);
         }
         for (String schema : registry.findActiveSchemas()) {

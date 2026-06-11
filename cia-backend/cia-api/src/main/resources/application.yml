@@ -177,6 +177,20 @@ cia:
       #     admin-email: admin@acme.example
       #     admin-temp-password: ${ACME_ADMIN_TEMP_PASSWORD}
 
+  platform:
+    realm: ${CIA_PLATFORM_REALM:platform}
+    client-id: ${CIA_PLATFORM_CLIENT_ID:cia-platform}
+    redirect-uris: ${CIA_PLATFORM_REDIRECT_URIS:http://localhost:5175/*}
+    bootstrap:
+      enabled: ${CIA_PLATFORM_BOOTSTRAP_ENABLED:false}
+      admin-username: ${CIA_PLATFORM_BOOTSTRAP_ADMIN_USERNAME:superadmin}
+      admin-email: ${CIA_PLATFORM_BOOTSTRAP_ADMIN_EMAIL:superadmin@cia.local}
+      admin-temp-password: ${CIA_PLATFORM_BOOTSTRAP_ADMIN_TEMP_PASSWORD:}
+    # Bound by cia-auth PlatformRealmProperties (added in a subsequent SP1 task on this branch);
+    # gates inactive-tenant JWTs at the auth layer. Unbound until that class lands.
+    tenant-allowlist:
+      enabled: ${CIA_PLATFORM_TENANT_ALLOWLIST_ENABLED:false}
+
 springdoc:
   api-docs:
     path: /partner/v3/api-docs

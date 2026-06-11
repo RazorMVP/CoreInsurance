@@ -1,6 +1,7 @@
 package com.nubeero.cia.api.tenant;
 
 import com.nubeero.cia.setup.keycloak.BootstrapRoles;
+import com.nubeero.cia.setup.keycloak.PlatformRoles;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -32,6 +33,15 @@ class BootstrapRolesDriftTest {
         for (String role : BootstrapRoles.ALL) {
             covered.add(normalise(role));
         }
+        // Platform-realm roles (e.g. SUPER_ADMIN) are provisioned ONLY into the dedicated
+        // platform realm via PlatformRoles.ALL — never into tenant realms (that separation
+        // is the whole point of a distinct PlatformRoles list). They are still real, seeded
+        // Keycloak roles, so a @PreAuthorize that references one is legitimately "covered".
+        // Including them here keeps the guard meaningful while ensuring SUPER_ADMIN never
+        // leaks into BootstrapRoles.ALL (which seeds every tenant realm + the tenant admin).
+        for (String role : PlatformRoles.ALL) {
+            covered.add(normalise(role));
+        }
 
         Set<String> referenced = new TreeSet<>();
         try (Stream<Path> files = Files.walk(backend)) {
@@ -50,8 +60,9 @@ class BootstrapRolesDriftTest {
         }
 
         assertThat(missing)
-            .as("authorities referenced in controllers but missing from BootstrapRoles.ALL — "
-                + "add them (and create the Keycloak role) so the bootstrap admin keeps full access")
+            .as("authorities referenced in @PreAuthorize but covered by neither BootstrapRoles.ALL "
+                + "(tenant realms) nor PlatformRoles.ALL (platform realm) — add the missing role to "
+                + "the correct list and create the Keycloak role")
             .isEmpty();
     }
 
