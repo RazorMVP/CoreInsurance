@@ -516,6 +516,7 @@ Managed / self-hosted services:
 - **Production URL:** `back-office-blush-six.vercel.app`
 - GitHub secrets required: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` (back-office project ID).
 - `VITE_API_BASE_URL`, `VITE_KEYCLOAK_URL`, `VITE_KEYCLOAK_REALM`, `VITE_KEYCLOAK_CLIENT_ID` set as Vercel environment variables per environment (dev / staging / prod).
+- **Platform console (`apps/platform`, SP2):** a **separate** Vercel project building `apps/platform` (dark-mode super-admin console). CI: `.github/workflows/vercel-deploy-platform.yml` (preview on PR, prod on push to `main`, filtered to `cia-frontend/**`; mirrors `vercel-deploy.yml`). `cia-frontend/apps/platform/vercel.json` carries `buildCommand: pnpm --filter @cia/platform build`, `outputDirectory: apps/platform/dist`, SPA rewrite, asset cache headers. Required GitHub secret: **`VERCEL_PLATFORM_PROJECT_ID`** (the platform project id; `VERCEL_TOKEN` / `VERCEL_ORG_ID` are shared with back-office). Env vars per environment: `VITE_API_BASE_URL`, `VITE_KEYCLOAK_URL`, `VITE_KEYCLOAK_REALM` (= `platform`), `VITE_KEYCLOAK_CLIENT_ID` (= `cia-platform`), and `VITE_DEMO_MODE=true` on the public preview only. **The platform app deliberately reuses the `VITE_KEYCLOAK_*` names** (scoped per-deployment, pointed at the `platform` realm + `cia-platform` client) because the shared `@cia/auth` `initKeycloak` keys `onLoad:'login-required'` off `VITE_KEYCLOAK_URL` — there are no `VITE_PLATFORM_KEYCLOAK_*` vars. **One-time setup (not code):** create the second Vercel project + set its Root Directory to `cia-frontend/` (monorepo root, so workspace packages resolve) + add the env vars/secret; the exact Root-Directory↔`vercel.json` reconciliation for a 2nd project sharing the monorepo root is settled at that dashboard step (back-office's `vercel.json` lives at `cia-frontend/`; the platform one lives at `apps/platform/`). Like back-office, the public URL is a frontend-only demo until real `platform` Keycloak + backend infra are deployed.
 
 ---
 
@@ -1147,6 +1148,8 @@ node cia-frontend/scripts/check-dto-drift.mjs
 **Local dev note:** When `import.meta.env.DEV` is true, `main.tsx` uses `DevAuthProvider` (mock user, no Keycloak) instead of `AuthProvider`. All `VITE_KEYCLOAK_*` vars are ignored in dev mode.
 
 **Production preview note:** The public Vercel URL (`back-office-blush-six.vercel.app`) runs in demo mode (`VITE_DEMO_MODE=true`). Until real Keycloak + backend infrastructure is deployed, this URL is a frontend-only demo; mutations succeed locally but data does not persist to a real tenant DB.
+
+**Platform console (`apps/platform`, SP2) note:** The platform super-admin console **reuses the same `VITE_KEYCLOAK_*` names** (scoped per-deployment, pointed at the `platform` realm + `cia-platform` client — `@cia/auth`'s `initKeycloak` keys `onLoad` off `VITE_KEYCLOAK_URL`), so there are no separate `VITE_PLATFORM_KEYCLOAK_*` vars. It is a separate Vercel project (secret `VERCEL_PLATFORM_PROJECT_ID`, workflow `vercel-deploy-platform.yml`) — see §10 Frontend deployment.
 
 ---
 
