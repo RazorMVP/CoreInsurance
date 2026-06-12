@@ -32,6 +32,8 @@ export default function SuperAdminsPage() {
 
   const admins = query.data ?? [];
   const onlyOne = admins.length <= 1;
+  // Best-effort self-match: AuthUser exposes only email/name (no Keycloak username), so this is a
+  // UI hint only — the backend CANNOT_REVOKE_SELF guard is authoritative if the heuristic misses.
   const isSelf = (a: SuperAdminSummary) => a.username === user?.email || a.username === user?.name;
 
   async function run() {
@@ -46,14 +48,18 @@ export default function SuperAdminsPage() {
     }
   }
 
-  // 503: the list query errors with KEYCLOAK_ADMIN_DISABLED → informational empty state.
+  // Distinguish the expected 503 (Keycloak admin client off) from a generic load failure, so the
+  // empty state doesn't send operators down the wrong diagnostic path on a transient network error.
   if (query.isError) {
+    const keycloakOff = platformErrorCode(query.error) === 'KEYCLOAK_ADMIN_DISABLED';
     return (
       <div className="p-6">
         <PageHeader title="Super-admins" />
         <EmptyState
-          title="Super-admin management unavailable"
-          description="This needs the Keycloak admin client enabled (cia.keycloak.admin.enabled=true)."
+          title={keycloakOff ? 'Super-admin management unavailable' : 'Couldn’t load super-admins'}
+          description={keycloakOff
+            ? 'This needs the Keycloak admin client enabled (cia.keycloak.admin.enabled=true).'
+            : 'Something went wrong loading the list. If this persists, the Keycloak admin client may be disabled.'}
         />
       </div>
     );
@@ -87,7 +93,7 @@ export default function SuperAdminsPage() {
                   const disabled = self || onlyOne;
                   return (
                     <tr key={a.username}>
-                      <td className="px-3 py-2 font-medium text-foreground"><span>{a.username}{self && ' (you)'}</span></td>
+                      <td className="px-3 py-2 font-medium text-foreground">{a.username}{self && <span className="ml-2 text-xs text-muted-foreground">(you)</span>}</td>
                       <td className="px-3 py-2">{a.email}</td>
                       <td className="px-3 py-2">
                         {a.enabled ? <Badge className="bg-primary/15 text-primary">Enabled</Badge> : <Badge className="bg-muted text-muted-foreground">Disabled</Badge>}

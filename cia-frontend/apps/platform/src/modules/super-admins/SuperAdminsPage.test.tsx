@@ -23,9 +23,11 @@ describe('SuperAdminsPage', () => {
   it('lists super-admins and disables Revoke on the current user row', () => {
     wrap(<SuperAdminsPage />);
     expect(screen.getByText('sa2')).toBeInTheDocument();
-    // The current user (matched by email) cannot revoke self → that row's button is disabled.
-    const selfRow = screen.getByText('root@x.test').closest('tr')!;
-    const selfRevoke = within(selfRow).getByRole('button', { name: /revoke/i });
-    expect(selfRevoke).toBeDisabled();
+    // Self row's Revoke is disabled (UI hint), found by its title — markup-agnostic, so it doesn't
+    // depend on the identical username/email cells in this fixture.
+    expect(screen.getByTitle(/cannot revoke your own access/i)).toBeDisabled();
+    // A non-self row (sa2) keeps Revoke enabled — the gate is selective.
+    const sa2Row = screen.getByText('sa2').closest('tr')!;
+    expect(within(sa2Row).getByRole('button', { name: /revoke/i })).toBeEnabled();
   });
 });
