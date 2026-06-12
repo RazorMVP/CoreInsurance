@@ -3,11 +3,11 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import AppShell from './layout/AppShell';
 import SuperAdminGate from './SuperAdminGate';
 
-const PlaceholderPage = lazy(() => import('../modules/_placeholder/PlaceholderPage'));
 const DashboardPage = lazy(() => import('../modules/dashboard/DashboardPage'));
 const TenantsListPage = lazy(() => import('../modules/tenants/TenantsListPage'));
 const TenantDetailPage = lazy(() => import('../modules/tenants/TenantDetailPage'));
 const AuditLogPage = lazy(() => import('../modules/audit/AuditLogPage'));
+const SuperAdminsPage = lazy(() => import('../modules/super-admins/SuperAdminsPage'));
 
 function Deferred({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>{children}</Suspense>;
@@ -23,7 +23,7 @@ export const router = createBrowserRouter([
       { path: 'tenants',        element: <Deferred><TenantsListPage /></Deferred> },
       { path: 'tenants/:schema',element: <Deferred><TenantDetailPage /></Deferred> },
       { path: 'audit',          element: <Deferred><AuditLogPage /></Deferred> },
-      { path: 'super-admins',   element: <Deferred><PlaceholderPage title="Super-admins" /></Deferred> },
+      { path: 'super-admins',   element: <Deferred><SuperAdminsPage /></Deferred> },
     ],
   },
 ]);
