@@ -4,6 +4,7 @@ import AppShell from './layout/AppShell';
 import SuperAdminGate from './SuperAdminGate';
 
 const PlaceholderPage = lazy(() => import('../modules/_placeholder/PlaceholderPage'));
+const DashboardPage = lazy(() => import('../modules/dashboard/DashboardPage'));
 const TenantsListPage = lazy(() => import('../modules/tenants/TenantsListPage'));
 const TenantDetailPage = lazy(() => import('../modules/tenants/TenantDetailPage'));
 const AuditLogPage = lazy(() => import('../modules/audit/AuditLogPage'));
@@ -18,7 +19,7 @@ export const router = createBrowserRouter([
     element: <SuperAdminGate><AppShell /></SuperAdminGate>,
     children: [
       { index: true,            element: <Navigate to="/dashboard" replace /> },
-      { path: 'dashboard',      element: <Deferred><PlaceholderPage title="Dashboard" /></Deferred> },
+      { path: 'dashboard',      element: <Deferred><DashboardPage /></Deferred> },
       { path: 'tenants',        element: <Deferred><TenantsListPage /></Deferred> },
       { path: 'tenants/:schema',element: <Deferred><TenantDetailPage /></Deferred> },
       { path: 'audit',          element: <Deferred><AuditLogPage /></Deferred> },
