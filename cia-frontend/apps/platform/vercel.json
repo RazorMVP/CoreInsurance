@@ -1,6 +1,6 @@
 {
   "buildCommand": "pnpm --filter @cia/platform build",
-  "outputDirectory": "apps/platform/dist",
+  "outputDirectory": "dist",
   "installCommand": "pnpm install --frozen-lockfile",
   "framework": "vite",
   "rewrites": [

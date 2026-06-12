@@ -137,11 +137,15 @@ Mirror whatever the back-office project does, for consistency.
 
 ## Troubleshooting
 
-**Build fails on the monorepo paths.** `apps/platform/vercel.json` assumes the project
-**Root Directory = `cia-frontend`** (so `outputDirectory: apps/platform/dist` resolves and pnpm finds
-the workspace root). If you instead set Root Directory = `cia-frontend/apps/platform`, change the output
-to `dist` and enable **Settings ▸ General ▸ "Include files outside the root directory"**. Mirroring
-back-office (Root = `cia-frontend`) is the safe choice and needs no `vercel.json` change.
+**`Error: No Output Directory named "dist" found` at the Build step.** This is the monorepo output-path
+gotcha and is already fixed in the committed `vercel.json`: **`outputDirectory` is `dist`, not
+`apps/platform/dist`.** Reason: the workflow runs `vercel build` with `working-directory:
+cia-frontend/apps/platform`, so the committed `apps/platform/vercel.json` IS the project root and
+`outputDirectory` is interpreted **relative to the app dir** — `pnpm --filter @cia/platform build`
+emits to `apps/platform/dist`, which is `dist` from that working directory. (Back-office doesn't hit
+this because *its* `vercel.json` lives at `cia-frontend/`, one level up, and isn't read by its own
+`vercel build` — it relies on dashboard settings instead.) `installCommand`/`buildCommand` need no
+change: pnpm walks up from `apps/platform` to find the workspace root, so workspace packages resolve.
 
 **Production build throws `VITE_KEYCLOAK_URL is required…`.** Working as designed — that environment is
 not in demo mode and has no Keycloak URL. Either set `VITE_DEMO_MODE=true` there, or finish the "Later"
