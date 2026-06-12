@@ -11,6 +11,7 @@ import com.nubeero.cia.setup.keycloak.KeycloakTenantProvisioner;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -88,7 +89,7 @@ class PlatformSuperAdminE2EIT extends KeycloakItSupport {
 
         var props = new PlatformRealmProperties();
         props.setRealm(REALM);
-        service = new PlatformSuperAdminService(provider, provisioner,
+        service = new PlatformSuperAdminService(provider, Optional.of(provisioner),
                 new PlatformAuditService(jdbc), props);
     }
 

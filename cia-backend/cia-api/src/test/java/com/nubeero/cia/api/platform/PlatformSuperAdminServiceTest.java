@@ -15,6 +15,7 @@ import com.nubeero.cia.auth.PlatformRealmProperties;
 import com.nubeero.cia.setup.keycloak.KeycloakTenantProvisioner;
 import com.nubeero.cia.setup.keycloak.KeycloakTenantProvisioner.SuperAdminView;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.keycloak.admin.client.Keycloak;
@@ -37,7 +38,7 @@ class PlatformSuperAdminServiceTest {
         provisioner = mock(KeycloakTenantProvisioner.class);
         audit = mock(PlatformAuditService.class);
         var props = new PlatformRealmProperties(); // realm defaults to "platform"
-        service = new PlatformSuperAdminService(keycloakProvider, provisioner, audit, props);
+        service = new PlatformSuperAdminService(keycloakProvider, Optional.of(provisioner), audit, props);
     }
 
     @Test
@@ -105,6 +106,18 @@ class PlatformSuperAdminServiceTest {
     void adminDisabled_throws503Marker() {
         when(keycloakProvider.getIfAvailable()).thenReturn(null);
         assertThatThrownBy(() -> service.list())
+                .isInstanceOf(SuperAdminExceptions.KeycloakAdminDisabled.class);
+    }
+
+    // Regression guard for the bean-wiring fix: KeycloakTenantProvisioner is
+    // @ConditionalOnProperty(cia.keycloak.admin.enabled=true), so it is absent (Optional.empty())
+    // in dev / the IT suite. The service must still construct, and a method that needs the
+    // provisioner must surface the 503 marker — not fail context startup with NoSuchBeanDefinition.
+    @Test
+    void provisionerAbsent_throws503Marker() {
+        var noProvisioner = new PlatformSuperAdminService(
+                keycloakProvider, Optional.empty(), audit, new PlatformRealmProperties());
+        assertThatThrownBy(noProvisioner::list)
                 .isInstanceOf(SuperAdminExceptions.KeycloakAdminDisabled.class);
     }
 }

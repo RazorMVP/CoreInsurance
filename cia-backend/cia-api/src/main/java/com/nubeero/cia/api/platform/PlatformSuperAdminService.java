@@ -10,6 +10,7 @@ import com.nubeero.cia.setup.keycloak.KeycloakTenantProvisioner.SuperAdminView;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.keycloak.admin.client.Keycloak;
 import org.springframework.beans.factory.ObjectProvider;
@@ -29,13 +30,17 @@ import org.springframework.stereotype.Service;
 public class PlatformSuperAdminService {
 
     private final ObjectProvider<Keycloak> keycloak;
-    private final KeycloakTenantProvisioner provisioner;
+    // KeycloakTenantProvisioner is @ConditionalOnProperty(cia.keycloak.admin.enabled=true), so it is
+    // ABSENT in dev and the IT suite (admin disabled). Inject it optionally — mirroring
+    // TenantProvisioningService — so this unconditional @Service can still be constructed when the
+    // admin client is off; every method that needs it resolves via provisioner() (throws 503 marker).
+    private final Optional<KeycloakTenantProvisioner> provisioner;
     private final PlatformAuditService audit;
     private final PlatformRealmProperties platformProps;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public PlatformSuperAdminService(ObjectProvider<Keycloak> keycloak,
-                                     KeycloakTenantProvisioner provisioner,
+                                     Optional<KeycloakTenantProvisioner> provisioner,
                                      PlatformAuditService audit,
                                      PlatformRealmProperties platformProps) {
         this.keycloak = keycloak;
@@ -47,7 +52,7 @@ public class PlatformSuperAdminService {
     /** Lists current super-admins. */
     public List<SuperAdminSummary> list() {
         Keycloak client = client();
-        return provisioner.listSuperAdmins(client, realm()).stream()
+        return provisioner().listSuperAdmins(client, realm()).stream()
                 .map(v -> new SuperAdminSummary(v.username(), v.email(), v.enabled()))
                 .toList();
     }
@@ -59,7 +64,7 @@ public class PlatformSuperAdminService {
         Keycloak client = client();
         String tempPassword = PlatformPasswords.generateTempPassword();
         try {
-            provisioner.createSuperAdmin(client, realm(), req.username(), req.email(), tempPassword);
+            provisioner().createSuperAdmin(client, realm(), req.username(), req.email(), tempPassword);
         } catch (KeycloakTenantProvisioner.SuperAdminExistsInRealm e) {
             throw new SuperAdminExceptions.AlreadyExists(req.username());
         }
@@ -77,7 +82,7 @@ public class PlatformSuperAdminService {
         Keycloak client = client();
         // One snapshot of membership backs both the last-admin and existence guards — avoids a
         // second Keycloak round trip and the TOCTOU window between separate list/count reads.
-        List<SuperAdminView> admins = provisioner.listSuperAdmins(client, realm());
+        List<SuperAdminView> admins = provisioner().listSuperAdmins(client, realm());
         if (admins.size() <= 1) {
             throw new SuperAdminExceptions.CannotRevokeLast();
         }
@@ -85,7 +90,7 @@ public class PlatformSuperAdminService {
         if (!exists) {
             throw new SuperAdminExceptions.NotFound(username);
         }
-        provisioner.removeSuperAdminRole(client, realm(), username);
+        provisioner().removeSuperAdminRole(client, realm(), username);
         audit.record("REVOKE_SUPER_ADMIN", null, actor, actorRealm,
                 toJson(Map.of("username", username)), ip);
     }
@@ -96,6 +101,11 @@ public class PlatformSuperAdminService {
             throw new SuperAdminExceptions.KeycloakAdminDisabled();
         }
         return c;
+    }
+
+    /** Resolves the provisioner, or throws the 503 marker when the Keycloak admin client is off. */
+    private KeycloakTenantProvisioner provisioner() {
+        return provisioner.orElseThrow(SuperAdminExceptions.KeycloakAdminDisabled::new);
     }
 
     private String realm() {
