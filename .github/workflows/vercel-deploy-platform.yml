@@ -58,6 +58,11 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PLATFORM_PROJECT_ID }}
+          # Demo-only build until a real `platform` Keycloak + backend exist. Baked at build time
+          # here (NOT a Vercel dashboard env var — that path is error-prone: an empty value silently
+          # ships a blank page via the main.tsx guard). REMOVE this line when wiring real auth and
+          # set VITE_KEYCLOAK_URL/REALM/CLIENT_ID + VITE_API_BASE_URL in Vercel instead.
+          VITE_DEMO_MODE: 'true'
 
       - name: Build (preview)
         if: github.ref != 'refs/heads/main'
@@ -67,6 +72,8 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PLATFORM_PROJECT_ID }}
+          # Demo-only preview build (see Build (production) note). Remove when real auth is wired.
+          VITE_DEMO_MODE: 'true'
 
       - name: Deploy to production
         if: github.ref == 'refs/heads/main'

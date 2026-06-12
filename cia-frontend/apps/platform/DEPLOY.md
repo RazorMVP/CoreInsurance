@@ -56,27 +56,34 @@ rm -rf .vercel                        # do NOT commit; CI links via the secret
 
 ## Step 2 — Set env vars (demo-only now, Keycloak deferred)
 
-In demo mode the app uses mocked auth (`DevAuthProvider`) and **never reads `VITE_KEYCLOAK_URL`**,
-so set the minimum now and defer the rest until real infra exists.
+In demo mode the app uses mocked auth (`DevAuthProvider`) and **never reads `VITE_KEYCLOAK_URL`**.
 
-### Now — the only var to add (cia-platform ▸ Settings ▸ Environment Variables)
+### Now — nothing to set in Vercel (the demo flag lives in the workflow)
 
-| Key | Value | Environment | Why |
-|---|---|---|---|
-| `VITE_DEMO_MODE` | `true` | **Preview** (and Production too if you want a public demo at the prod URL) | Flips to `DevAuthProvider`, renders the dark console + amber "Demo" banner, and bypasses the production guard that throws on a missing `VITE_KEYCLOAK_URL`. |
+**`VITE_DEMO_MODE: 'true'` is baked into the workflow's `Build (production)` and `Build (preview)`
+steps** (`.github/workflows/vercel-deploy-platform.yml`), NOT as a Vercel dashboard env var. This is
+deliberate: the dashboard path is error-prone — a `VITE_DEMO_MODE` var with an **empty value** silently
+ships a **blank page** (the `main.tsx` guard throws because `"" === 'true'` is false, and Vercel's CLI
+`env add` proved unreliable at storing the value). Baking it in the workflow is deterministic and
+version-controlled.
 
-Leave **`VITE_API_BASE_URL`, `VITE_KEYCLOAK_URL`, `VITE_KEYCLOAK_REALM`, `VITE_KEYCLOAK_CLIENT_ID` unset.**
-Data calls to `/api/v1/platform/**` will fail (no backend reachable) and list pages land in their
-empty/error states — the honest frontend-only-demo posture, same as back-office's public preview.
+So for a demo deploy: **do not add any `VITE_DEMO_MODE` env var in the Vercel dashboard.** If one
+exists, **delete it** — a Vercel-pulled env var overrides the workflow's value, so an empty one would
+re-break the build. Leave `VITE_API_BASE_URL`, `VITE_KEYCLOAK_URL`, `VITE_KEYCLOAK_REALM`,
+`VITE_KEYCLOAK_CLIENT_ID` unset too. Data calls to `/api/v1/platform/**` will fail (no backend) and list
+pages land in their empty states — the honest frontend-only-demo posture.
 
-> **Do not deploy a non-demo Production build yet.** With `VITE_DEMO_MODE` unset and no Keycloak vars,
-> `main.tsx` intentionally throws `VITE_KEYCLOAK_URL is required…` — a correct fail-safe that stops you
-> shipping a tenant-facing console with no auth. Deploy Preview (demo) only, or set `VITE_DEMO_MODE=true`
-> on Production for a public demo (what back-office does at `back-office-blush-six.vercel.app`).
+> **Verify the build actually baked it in.** After a deploy, the served JS must **not** contain the
+> string `VITE_KEYCLOAK_URL is required` (guard eliminated ⇒ demo on) and **should** contain
+> `Stakeholder preview` (the demo banner). One-liner:
+> `A=$(curl -s URL | grep -oE '/assets/index-[^"]+\.js' | head -1); curl -s "URL$A" | grep -c "Stakeholder preview"` — expect `1`.
 
 ### Later — when real `platform` Keycloak + backend are deployed
 
-Add these and **remove `VITE_DEMO_MODE`** from that environment:
+1. **Remove the two `VITE_DEMO_MODE: 'true'` lines** from the workflow's `Build (production)` +
+   `Build (preview)` steps (so the production guard re-arms — a non-demo build with no Keycloak URL will
+   correctly fail rather than silently mock auth).
+2. Add these as **Vercel** env vars (Production, and Preview if desired):
 
 | Key | Value (example) |
 |---|---|
@@ -84,6 +91,10 @@ Add these and **remove `VITE_DEMO_MODE`** from that environment:
 | `VITE_KEYCLOAK_URL` | `https://auth.<your-domain>` — your **deployed** Keycloak base (NOT `localhost:8280`, which only works for local `pnpm dev`) |
 | `VITE_KEYCLOAK_REALM` | `platform` |
 | `VITE_KEYCLOAK_CLIENT_ID` | `cia-platform` |
+
+> Set these via the **Vercel dashboard UI**, not `vercel env add` (which silently stored empty values in
+> this CLI version). After adding, confirm with `vercel pull --environment=production` →
+> `grep VITE_ .vercel/.env.production.local` shows the real values, not `""`.
 
 The app deliberately reuses the `VITE_KEYCLOAK_*` names (no `VITE_PLATFORM_KEYCLOAK_*`) because
 `@cia/auth`'s `initKeycloak` keys `onLoad:'login-required'` off `VITE_KEYCLOAK_URL`.
