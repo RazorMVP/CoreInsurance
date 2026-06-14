@@ -53,6 +53,22 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-06-14 — Build audit + money-math test plan (planning session — no code changes yet)
+
+**Build audit (remaining-work inventory).** Against the Frontend Build Queue + Module Summary + this backlog. Headline: the back-office (Modules 1–11 + Module 12 closures) and the platform-admin plane (SP1 backend + SP2 UI) are feature-complete; the **one major unbuilt product surface is the Partner Portal** (`apps/partner`, Phase 3 — **0/5** builds; the partner *backend* `cia-partner-api` is fully built). Other remaining work, by category: **P1 regulatory/correctness** — `ndpr-dsar-and-retention`, `money-math-test-coverage`; **credential-gated live integrations** — NAICOM/NIID (`naicom-niid-live-integration`), KYC (`kyc-live-provider`); **test/quality debt** — `e2e-playwright-golden-paths`, `frontend-tests-in-ci`, `zero-test-modules`; **security hardening** — `partner-ratelimit-per-client`, `file-upload-validation`, `login-failed-endpoint-abuse`, `backoffice-client-reconcile-direct-grants`; **go-live infra** — `db-backup-dr` + the Slice-B k8s/temporal rows; **open product questions** — Q#4 (NAICOM/NIID creds), Q#5 (NGN-only vs multi-currency), Q#6 (reporting BI). Overall build queue 16/21 (76%).
+
+**Chosen next:** `money-math-test-coverage` (P1) — picked first because it is gate-free (test-only, no design/brainstorm needed), it de-risks the Q#5 currency decision that will touch this exact math, and it closes the worst untested risk.
+
+**Money-math surface mapped (5 areas).** Critical finding confirmed: **`AllocationService` (surplus / quota-share / XOL cession + line distribution + reinsurer commission netting) has ZERO test references anywhere** — the single highest untested-risk surface. `EndorsementService.calculatePremiumAdjustment` (pro-rata `(new−old)×days/365`) and the `QuoteService` loading/discount *sequence* also have no direct coverage; claims money-defaults and `computeCommissionAmount` are only indirectly covered.
+
+**Plan authored:** [`docs/superpowers/plans/2026-06-14-money-math-test-coverage.md`](docs/superpowers/plans/2026-06-14-money-math-test-coverage.md). Scoped (slice discipline) to **2 infra-free pure-unit-test tasks**: (1) `AllocationServiceTest` — Mockito via the public `allocate()` seam (it returns the fully-computed `RiAllocation`, so no DB/Spring), covering surplus (normal / excess-tagging / no-cession), quota-share + line split + commission, XOL, and the not-active guard; (2) `EndorsementProRataTest` — pure-method increase/decrease/zero/null/rounding. **Test policy:** assert the documented-correct, hand-computed values; if production disagrees, surface it as a `@Disabled("BUG: …")` finding + new backlog row, never rubber-stamp. The other three areas (quote sequence, claims defaults, direct commission-amount) are **private methods that persist** → need Testcontainers ITs or a testability refactor, so they are a **separate planned slice** (documented in the plan's "Out of scope"), not folded in.
+
+**Execution:** awaiting approach choice (subagent-driven vs inline). The actual test code will land on a **fresh branch off `main`** (independent of SP2 / PR #6). This planning entry + the plan doc are committed on `platform-admin-ui` (the freshest cia-log).
+
+**Known follow-ups / backlog change:** **none** — the audit re-confirmed existing rows and surfaced no new ones. `money-math-test-coverage` (P1) stays; it will be refined to point at the IT remainder once this first slice lands.
+
+---
+
 ## 2026-06-12 — SP2 (`platform-admin-ui`): Platform-Admin UI + backend extensions — **COMPLETE** (branch `platform-admin-ui`, ready to merge)
 
 **One goal:** build the `apps/platform` super-admin console (the SP1 platform plane was API-only) + the backend extensions it needs. Executed via **subagent-driven-development** against `docs/superpowers/plans/2026-06-11-platform-admin-ui.md` (21 tasks, 4 phases). Every task ran fresh-implementer → spec-compliance review → code-quality review; **all 21 passed** (no open Important/Critical). Final state: **494 backend failsafe ITs green (0 fail / 0 err / 1 intentional skip)** + **9 platform Vitest tests green**, `pnpm --filter @cia/platform build`/`typecheck` clean, FE CI guards (api-wiring + dto-drift) pass.
