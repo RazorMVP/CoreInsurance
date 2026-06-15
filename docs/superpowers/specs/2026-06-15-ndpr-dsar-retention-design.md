@@ -65,7 +65,7 @@ A new Flyway migration **`Vnn__data_retention_policy.sql`** (next free version �
 | `last_purge_run_at` | TIMESTAMPTZ | NULL | Debounce — set when a window fires so the hourly cron runs a tenant's purge at most once per window |
 | `created_at`/`updated_at`/`created_by` | — | — | BaseEntity audit columns |
 
-Managed via `GET`/`PUT /api/v1/compliance/retention-policy` (`hasRole('DATA_PROTECTION')`). The service lazily creates the singleton with defaults on first read so every tenant has a row. The `PUT` validates `customer_pii_retention_days > 0`, `purge_frequency ∈ {WEEKLY, MONTHLY}`, `purge_day_of_week ∈ 0..6`, `purge_hour_utc ∈ 0..23` (400 on violation). **A schedule change is just a config write** — it takes effect at the next matching window; there is no Temporal re-registration, because a single global cron reads the per-tenant schedule each run (§6).
+Managed via `GET`/`PUT /api/v1/compliance/retention-policy` (`hasRole('DATA_PROTECTION')`). The service lazily creates the singleton with defaults on first read so every tenant has a row. The `PUT` validates `customer_pii_retention_days > 0`, `purge_frequency ∈ {WEEKLY, MONTHLY}`, `purge_day_of_week ∈ 0..6`, `purge_hour_utc ∈ 0..23` (rejected via `BusinessRuleException` → **HTTP 422** with `{errorCode, message}`, the codebase's well-formed-but-invalid convention). **A schedule change is just a config write** — it takes effect at the next matching window; there is no Temporal re-registration, because a single global cron reads the per-tenant schedule each run (§6).
 
 ---
 
