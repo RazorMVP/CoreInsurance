@@ -25,5 +25,12 @@ public final class TemporalQueues {
      */
     public static final String NOTIFICATIONS_QUEUE = "notifications-queue";
 
+    /**
+     * NDPR data-protection compliance queue (Slice B).
+     * Hosts the {@code CustomerPiiPurgeWorkflow} cron that anonymizes
+     * customers' PII past their per-tenant retention window.
+     */
+    public static final String COMPLIANCE_QUEUE = "compliance-queue";
+
     private TemporalQueues() {}
 }
