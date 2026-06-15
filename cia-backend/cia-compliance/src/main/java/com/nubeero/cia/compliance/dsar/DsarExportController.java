@@ -1,6 +1,5 @@
 package com.nubeero.cia.compliance.dsar;
 
-import com.nubeero.cia.common.tenant.TenantContext;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -27,7 +26,6 @@ public class DsarExportController {
     public ResponseEntity<byte[]> export(@PathVariable UUID id,
                                          @RequestParam(required = false) String format,
                                          @AuthenticationPrincipal Jwt jwt) {
-        String tenantId = TenantContext.getTenantId();
         String actor = jwt != null ? jwt.getClaimAsString("preferred_username") : "system";
 
         if ("json".equalsIgnoreCase(format)) {
@@ -36,7 +34,7 @@ public class DsarExportController {
         if ("pdf".equalsIgnoreCase(format)) {
             return file(service.renderPdf(id, actor), "dsar-" + id + ".pdf", MediaType.APPLICATION_PDF);
         }
-        byte[] zip = service.exportZip(tenantId, id, actor);
+        byte[] zip = service.exportZip(id, actor);
         return file(zip, "dsar-" + id + ".zip", MediaType.parseMediaType("application/zip"));
     }
 

@@ -33,7 +33,7 @@ public class DsarExportService {
     }
 
     /** Default DSAR download — a ZIP of both files. Writes the audit row exactly once. */
-    public byte[] exportZip(String tenantId, UUID customerId, String requestedBy) {
+    public byte[] exportZip(UUID customerId, String requestedBy) {
         DsarExport export = gather.gather(customerId);
         byte[] jsonBytes = json.render(export);
         byte[] pdfBytes = pdf.render(export);

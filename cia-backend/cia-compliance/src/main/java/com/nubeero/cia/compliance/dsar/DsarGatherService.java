@@ -134,7 +134,11 @@ public class DsarGatherService {
                 debitNotes, receipts, creditNotes, payments, auditHistory);
     }
 
-    /** Runs a native query whose SELECT aliases match {@code keys} (in order) and maps each row to a map. */
+    /**
+     * Runs a native query whose SELECT aliases match {@code keys} (in order) and maps each row to a map.
+     * Every gather query is multi-column, so each row is an {@code Object[]}. A single-column SELECT would
+     * make Hibernate return {@code List<Object>} (not {@code Object[]}) and break the cast — keep ≥2 columns.
+     */
     private List<Map<String, Object>> rows(String sql, List<String> keys, String id) {
         Query q = entityManager.createNativeQuery(sql);
         q.setParameter("id", id);

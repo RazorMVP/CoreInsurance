@@ -44,7 +44,7 @@ class DsarExportServiceIT extends ComplianceItSupport {
                 customerId, "CUST-ZIP-1", "INDIVIDUAL", "PASSED", "Ada", "Obi",
                 "NIN-SECRET-123", "12 Marina St");
 
-        byte[] zip = service.exportZip("test-tenant", customerId, "dpo-user");
+        byte[] zip = service.exportZip(customerId, "dpo-user");
 
         boolean hasJson = false, hasPdf = false;
         try (ZipInputStream zin = new ZipInputStream(new ByteArrayInputStream(zip))) {
