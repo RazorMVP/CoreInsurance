@@ -1,6 +1,6 @@
 package com.nubeero.cia.compliance.retention;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.nubeero.cia.common.exception.BusinessRuleException;
@@ -40,7 +40,7 @@ class RetentionPolicyValidationTest {
 
     @Test
     void acceptsValidRequest() {
-        service.validate(new RetentionPolicyRequest(365, true, "MONTHLY", 0, 2));  // no throw
-        assertThat(true).isTrue();
+        assertThatNoException().isThrownBy(() ->
+                service.validate(new RetentionPolicyRequest(365, true, "MONTHLY", 0, 2)));
     }
 }
