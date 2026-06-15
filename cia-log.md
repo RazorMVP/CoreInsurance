@@ -55,6 +55,14 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-06-15 — NDPR DSAR + PII retention (`feature/ndpr-dsar-retention`): brainstorming (in progress)
+
+Started the `ndpr-dsar-and-retention` P1 backlog item (DSAR export endpoint + per-tenant PII retention purge). Branched off `main`. **Recon:** the building blocks exist — `PdfDownloadLogRetentionWorkflow` + `NotificationsWorkerConfig` Temporal-cron registration (pattern to mirror), V24 `@ColumnTransformer`/pgcrypto PII encryption (`id_number`/`id_document_url`/`address` on customers + directors), `AuditService.logWithReason`, the CSV/PDF streaming export patterns (`AuditExportService`/`ReportCsvRenderer`/`ReportPdfRenderer`), `DocumentStorageService` (+ presigned URLs), and per-tenant config-table precedent (`TenantHoliday`/`TenantReopenRecipient`). **Genuinely missing:** the DSAR export endpoint, a customer-PII purge/anonymise workflow, and an enforced per-tenant retention-period config (today's `AuditAlertConfig.retention_years` is alert-only). **Core tension resolved by the existing snapshot architecture:** policies/claims/quotes/endorsements reference the customer via a denormalised `customer_id`+`customer_name` snapshot (no hard FK) and are never deleted, so customer PII can be erased/anonymised while NAICOM/NIID regulatory records stay intact. **Status:** brainstorming — design dialogue underway (scope, erasure mechanism, retention trigger); no code/spec yet (brainstorming gate).
+
+**Known follow-ups / backlog change:** none yet — `ndpr-dsar-and-retention` (P1) is being actively designed; it will be refined/decremented when the spec + implementation slices land.
+
+---
+
 ## 2026-06-11 — `chore/cve-bump`: clear new HIGH image CVEs (netty 4.1.135 + base-image OpenSSL) — PR #5
 
 **Goal (one chore):** restore the backend container image to the S144 **0 CRITICAL/HIGH** Trivy posture after the vuln DB advanced and disclosed new HIGHs in **existing pins** (no feature change — `netty.version` + the Dockerfile were unchanged on `main`). Surfaced on the SP1 PR #4 image build, but the enforcing `backend-image.yml` gate is red on `main` itself, so this lands as a standalone fix off `main` (keeps SP1's slice clean; unblocks PR #4 on rebase).
