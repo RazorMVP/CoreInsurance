@@ -28,6 +28,14 @@
       <groupId>com.nubeero.cia</groupId>
       <artifactId>cia-documents</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-workflow</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-storage</artifactId>
+    </dependency>
 
     <!-- OpenAPI documentation -->
     <dependency>

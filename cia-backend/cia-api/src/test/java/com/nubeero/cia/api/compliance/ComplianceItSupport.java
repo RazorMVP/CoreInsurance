@@ -46,7 +46,7 @@ public abstract class ComplianceItSupport {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.target", () -> "69");
+        registry.add("spring.flyway.target", () -> "70");   // was "69"
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
         registry.add("cia.security.pii-key", () -> "test-pii-key-do-not-use-in-prod");
         registry.add("spring.datasource.hikari.connection-init-sql",
