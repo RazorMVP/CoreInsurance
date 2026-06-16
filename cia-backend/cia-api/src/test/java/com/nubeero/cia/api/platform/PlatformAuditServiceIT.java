@@ -17,7 +17,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * is inlined here (mirroring {@code PlatformOnboardingE2EIT}) because the {@code tenant}-package
  * {@code TenantProvisioningItSupport} base is package-private. The {@code public.platform_audit_log}
  * table is created in {@code @BeforeEach} (idempotent, mirrors V67 DDL) with {@code target_schema}
- * relaxed to NULL (V68's public-run effect) because this IT does not run the Flyway sweep itself.
+ * relaxed to NULL (V71's public-run effect) because this IT does not run the Flyway sweep itself.
  * Every test starts from a fully-cleaned table so the per-schema and count assertions are
  * deterministic on the shared container.
  */
@@ -59,8 +59,8 @@ class PlatformAuditServiceIT {
             + " source_ip      VARCHAR(64),"
             + " at             TIMESTAMPTZ  NOT NULL DEFAULT now()"
             + ")");
-        // V68 (public run) relaxes the NOT NULL so super-admin (user-targeted) rows insert.
-        // This IT doesn't run V68 itself, so apply the relax idempotently here.
+        // V71 (public run) relaxes the NOT NULL so super-admin (user-targeted) rows insert.
+        // This IT doesn't run V71 itself, so apply the relax idempotently here.
         jdbc.execute("ALTER TABLE public.platform_audit_log ALTER COLUMN target_schema DROP NOT NULL");
 
         // Fully clean between tests so the per-schema + count assertions are deterministic.

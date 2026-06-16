@@ -1,4 +1,4 @@
--- V68: platform_audit_log is a public-only table. V67 introduced it as an unqualified
+-- V71: platform_audit_log is a public-only table. V67 introduced it as an unqualified
 -- CREATE TABLE above the tenant baseline (baselineVersion=2), so the per-tenant Flyway
 -- sweep cloned a dead copy into every tenant schema. Branch on current_schema():
 --   * public run  -> relax target_schema to NULL (super-admin invite/revoke audit rows

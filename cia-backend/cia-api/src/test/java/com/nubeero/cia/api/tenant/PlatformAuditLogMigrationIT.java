@@ -11,7 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 /**
- * Proves V68 is schema-aware: it relaxes {@code target_schema} to NULL on the canonical
+ * Proves V71 is schema-aware: it relaxes {@code target_schema} to NULL on the canonical
  * {@code public.platform_audit_log} and drops the dead per-tenant copies that V67's
  * unqualified above-baseline CREATE cloned into every tenant schema.
  *
@@ -57,7 +57,7 @@ class PlatformAuditLogMigrationIT {
     void v68_makesPublicColumnNullable_andDropsTenantCopy() {
         JdbcTemplate jdbc = new JdbcTemplate(DS);
 
-        // Main Flyway runs the full chain (V1..V68) against public — mirrors the app's
+        // Main Flyway runs the full chain (V1..V71) against public — mirrors the app's
         // spring.flyway.schemas=public, baseline-on-migrate=true.
         Flyway.configure()
                 .dataSource(DS)
@@ -67,20 +67,20 @@ class PlatformAuditLogMigrationIT {
                 .load()
                 .migrate();
 
-        // Per-tenant sweep runs V3..V68 against the tenant schema.
+        // Per-tenant sweep runs V3..V71 against the tenant schema.
         TenantSchemaMigrator migrator = new TenantSchemaMigrator(DS);
         migrator.ensureSchema("tenant_mig");
         migrator.migrate("tenant_mig");
 
         // public.platform_audit_log survives, with target_schema now nullable.
         assertThat(tableExists(jdbc, "public", "platform_audit_log"))
-                .as("public copy must survive V68").isTrue();
+                .as("public copy must survive V71").isTrue();
         assertThat(columnNullability(jdbc, "public", "platform_audit_log", "target_schema"))
-                .as("V68 relaxes target_schema to NULL on the public table").isEqualTo("YES");
+                .as("V71 relaxes target_schema to NULL on the public table").isEqualTo("YES");
 
         // The dead tenant copy is gone.
         assertThat(tableExists(jdbc, "tenant_mig", "platform_audit_log"))
-                .as("V68 drops the vestigial per-tenant copy").isFalse();
+                .as("V71 drops the vestigial per-tenant copy").isFalse();
 
         // A NULL-target_schema row (a user-targeted super-admin action) now inserts cleanly.
         assertThatCode(() -> jdbc.update(

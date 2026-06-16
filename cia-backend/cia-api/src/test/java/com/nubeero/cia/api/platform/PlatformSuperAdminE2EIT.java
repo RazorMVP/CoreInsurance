@@ -75,7 +75,7 @@ class PlatformSuperAdminE2EIT extends KeycloakItSupport {
     @BeforeEach
     void setup() {
         jdbc = new JdbcTemplate(DS);
-        // public.platform_audit_log with a NULLABLE target_schema (mirrors post-V68 — super-admin
+        // public.platform_audit_log with a NULLABLE target_schema (mirrors post-V71 — super-admin
         // actions are user-targeted, not schema-targeted, so they write a NULL target_schema).
         jdbc.execute("CREATE TABLE IF NOT EXISTS public.platform_audit_log ("
             + " id UUID PRIMARY KEY DEFAULT gen_random_uuid(),"
