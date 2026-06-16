@@ -42,6 +42,11 @@ public class CompliancePurgeActivitiesImpl implements CompliancePurgeActivities 
      * Public test seam — same logic with an injectable clock. PUBLIC because the IT lives in a different
      * package. All DB writes go through OTHER beans (purgeRepo, purgeService) so their @Transactional
      * proxies apply — a self-invoked @Transactional on this Temporal-invoked bean would be a no-op.
+     *
+     * <p>{@code now} gates the window/debounce only; the eligibility <em>retention cutoff</em> always uses
+     * the DB {@code current_date} (see {@link CustomerPurgeRepository#findEligibleCustomerIds}). They are
+     * consistent in production (where {@code now ≈ current_date}); a test passing a historical {@code now}
+     * shifts the window check but NOT the retention cutoff.
      */
     public PurgeTenantResult purgeTenantAt(String schema, Instant now) {
         TenantContext.setTenantId(schema);   // interceptor clears it in finally
