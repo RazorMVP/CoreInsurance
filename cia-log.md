@@ -55,6 +55,23 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-06-16 — SP2 platform-admin UI merged to `main` (`platform-admin-ui` → PR #6, reconciliation)
+
+**Goal:** land the long-open SP2 platform-admin console (built 2026-06-12, PR #6) onto `main`, which had advanced **33 commits** since the branch was cut (NDPR ×2, money-math, PRD reconciliation, CVE bumps). Picked from the build audit as highest value-per-effort ("built — just needs review + merge"), but the divergence required a real reconciliation.
+
+**Reconciliation (branch `platform-admin-ui`):**
+- **Merged `origin/main`** — only `cia-log.md` conflicted; resolved as main's version + the branch deltas (drained the 3 now-completed SP2 backlog rows `platform-admin-ui-sp2` / `platform-invite-super-admin` / `platform-audit-log-tenant-schema-pollution`, kept `api-client-vitest-infra`, re-added the 06-14 + 06-12 entries, and **restored the PRD-reconciliation `##` header** that had been dropped on `main`).
+- **Renumbered V68 → V71** (`51bcd6b` / `aeafb9f`) — the SP2 migration claimed V68 before NDPR took V69/V70; with no Flyway `out-of-order` config, V68-after-V70 would reject on an existing DB. Renamed the migration + its 3 IT references so the sequence is strictly in-order (V67→V69→V70→V71); **V68 is now a permanent gap**. Behaviour unchanged (independent of V69/V70).
+- **Fixed a latent test-isolation bug** (`93c0169`) the merge's new ordering exposed: NDPR `CompliancePurgeActivitiesIT.purgeTenantAt("test-tenant", …)` set `TenantContext` without clearing (prod clears via the Temporal `TenantAwareWorkerInterceptor`; the IT calls the activity directly), leaking the **hyphenated `test-tenant`** onto the pooled surefire thread. SP2's new `PlatformSuperAdminControllerIT` then resolved the leaked tenant in a startup DB query → `TenantSchemas.validate("test-tenant")` rejected the hyphen → context aborted → 10 cascading errors. Added `@AfterEach TenantContext.clear()` (mirrors `ChartOfAccountServiceIT` + the prod interceptor). The bug was on `main` since NDPR Slice B; only the SP2 ordering surfaced it.
+
+**Verification:** local targeted (renumbered V71 migration IT, full-boot SP2 IT, NDPR coexistence, the Compliance→Platform same-fork ordering repro) all green; **PR #6 CI all green** — full 440+ Backend Testcontainers suite, container image + Trivy (0 CRITICAL/HIGH), both Vercel deploys (incl. platform), helm lint, kind smoke. Merged via `dfcf3a0`.
+
+**What landed:** `cia-frontend/apps/platform` — a dark 5-module SPA (Dashboard, Tenants list + onboard wizard with one-time credential reveal, Tenant detail, Audit log, Super-admins invite/revoke) on the platform-realm Keycloak client, + the backend extensions (paginated `/tenants` + `/audit`, `/stats`, `/super-admins` API, V71 migration). The SP1 platform plane finally has its UI.
+
+**Known follow-ups / backlog change:** drained the 3 SP2 rows (above); `api-client-vitest-infra` (P3) retained. The Confluence PRD's Open Question #13 (SP2 scope) is now resolved-shipped — updating the PRD overview accordingly.
+
+---
+
 ## 2026-06-16 — NDPR DSAR Slice B (`feature/ndpr-retention-purge`): scheduled PII-retention purge workflow — COMPLETE
 
 **Goal (Slice B of the `ndpr-dsar-and-retention` P1, completing the backlog row `ndpr-retention-purge-sliceb`):** the destructive other half of the NDPR work — a **`CustomerPiiPurgeWorkflow`** that anonymizes a customer's master PII once it passes the tenant's configured retention window, while leaving the NAICOM/NIID-mandated policy/claim snapshots intact. Slice A (PR #8, merged) shipped the read/config half (DSAR export + the `data_retention_policy` table V69 + `DATA_PROTECTION` role); Slice B consumes that config. Design/plan: `docs/superpowers/specs/2026-06-15-ndpr-dsar-retention-design.md` §6–§8, `docs/superpowers/plans/2026-06-15-ndpr-dsar-slice-b.md`. Executed via `superpowers:subagent-driven-development` (fresh implementer per task → review → fold).
