@@ -143,7 +143,7 @@ A customer with a live policy is therefore **never** purged.
 
 For a **corporate** customer: `company_name`, `rc_number`, `cac_certificate_url`, `incorporation_date`, `industry` are **retained** (corporate identity, not personal data); its **directors are purged** (below).
 
-**Cascade:** `DELETE FROM customer_directors WHERE customer_id = ?` (directors are personal data of natural persons); for `customer_documents` and the customer's/directors' `id_document_url` + `cac_certificate_url`, resolve the storage paths then `DocumentStorageService.delete(...)` each blob, then delete the `customer_documents` rows.
+**Cascade:** `DELETE FROM customer_directors WHERE customer_id = ?` (directors are personal data of natural persons); for `customer_documents` and the customer's/directors' `id_document_url`, resolve the storage paths then `DocumentStorageService.delete(...)` each blob, then delete the `customer_documents` rows. **(`cac_certificate_url` is deliberately NOT deleted — per §2 a corporate's CAC certificate is a corporate regulatory filing, not personal data; the column is retained, so its blob is retained too. Deleting the blob while keeping the column would leave a dangling reference. The directors' personal `id_document_url` blobs ARE deleted.)**
 
 ### 6.5 Audit (without re-introducing PII)
 Each anonymized customer writes one audit row: `action=DELETE`, `reason="NDPR_RETENTION_PURGE"`, and a `new_value` JSON of **metadata only** — `{customerId, retentionDays, fieldsAnonymized:[...], directorsDeleted:N, blobsDeleted:M, purgedAt}`. It must **NOT** snapshot the erased PII values (`old_value` is null/omitted) — auditing the erased data would defeat the erasure. Audit writes use `REQUIRES_NEW` (a failed audit write never rolls back the purge).
