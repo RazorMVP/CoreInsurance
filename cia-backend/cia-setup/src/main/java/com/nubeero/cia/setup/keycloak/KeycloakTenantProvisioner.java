@@ -527,4 +527,99 @@ public class KeycloakTenantProvisioner {
         rep.setAttributes(attrs);
         return rep;
     }
+
+    // -------------------------------------------------------------------------
+    // Platform super-admin lifecycle (create / list / count / remove-role)
+    // -------------------------------------------------------------------------
+
+    /** Read shape for a platform super-admin (a user holding the SUPER_ADMIN realm role). */
+    public record SuperAdminView(String username, String email, boolean enabled) {}
+
+    /** Thrown by {@link #createSuperAdmin} when the username already exists in the realm. */
+    public static class SuperAdminExistsInRealm extends RuntimeException {
+        public SuperAdminExistsInRealm(String username) {
+            super("A user named '" + username + "' already exists in the platform realm.");
+        }
+    }
+
+    /**
+     * Creates a new super-admin in the platform realm: enabled user, temp password
+     * (forces UPDATE_PASSWORD on first login), assigned ONLY {@link PlatformRoles#ALL}.
+     * No accessGroupId attribute — the platform realm has no access groups.
+     *
+     * @throws SuperAdminExistsInRealm if a user with this username already exists
+     */
+    public void createSuperAdmin(Keycloak client, String realmName,
+                                 String username, String email, String tempPassword) {
+        var realm = client.realm(realmName);
+        if (!realm.users().search(username, true).isEmpty()) {
+            throw new SuperAdminExistsInRealm(username);
+        }
+        UserRepresentation rep = new UserRepresentation();
+        rep.setUsername(username);
+        rep.setEmail(email);
+        rep.setEnabled(true);
+        rep.setEmailVerified(false);
+        rep.setRequiredActions(List.of("UPDATE_PASSWORD"));
+
+        CredentialRepresentation cred = new CredentialRepresentation();
+        cred.setType(CredentialRepresentation.PASSWORD);
+        cred.setValue(tempPassword);
+        cred.setTemporary(true);
+        rep.setCredentials(List.of(cred));
+
+        String userId;
+        try (Response resp = realm.users().create(rep)) {
+            if (resp.getStatus() >= 300) {
+                throw new IllegalStateException(
+                        "Keycloak super-admin create returned HTTP " + resp.getStatus()
+                        + " for realm " + realmName);
+            }
+            String location = resp.getHeaderString("Location");
+            if (location == null) {
+                throw new IllegalStateException(
+                    "Keycloak created the super-admin user but returned no Location header for realm " + realmName);
+            }
+            userId = location.substring(location.lastIndexOf('/') + 1);
+        }
+        List<RoleRepresentation> roles = PlatformRoles.ALL.stream()
+                .map(r -> realm.roles().get(r).toRepresentation())
+                .toList();
+        realm.users().get(userId).roles().realmLevel().add(roles);
+        log.info("Platform realm '{}' — created super-admin '{}'", realmName, username);
+    }
+
+    /**
+     * Lists every user holding the SUPER_ADMIN realm role.
+     *
+     * <p>{@code getUserMembers()} returns Keycloak's default first page (~100). Super-admins are
+     * deliberately few, so this is sufficient; add a paginated variant only if that ever changes.
+     */
+    public List<SuperAdminView> listSuperAdmins(Keycloak client, String realmName) {
+        return client.realm(realmName).roles().get(PlatformRoles.SUPER_ADMIN).getUserMembers().stream()
+                .map(u -> new SuperAdminView(u.getUsername(), u.getEmail(),
+                        u.isEnabled() != null && u.isEnabled()))
+                .toList();
+    }
+
+    /** Number of users holding the SUPER_ADMIN realm role (backs the last-admin guard). */
+    public long superAdminCount(Keycloak client, String realmName) {
+        return client.realm(realmName).roles().get(PlatformRoles.SUPER_ADMIN).getUserMembers().size();
+    }
+
+    /**
+     * Removes the SUPER_ADMIN realm-role mapping from the named user (does NOT delete the
+     * account). Throws {@link NotFoundException} if the user doesn't exist.
+     */
+    public void removeSuperAdminRole(Keycloak client, String realmName, String username) {
+        var realm = client.realm(realmName);
+        var matches = realm.users().search(username, true);
+        if (matches.isEmpty()) {
+            throw new NotFoundException("No user '" + username + "' in realm " + realmName);
+        }
+        String userId = matches.get(0).getId();
+        RoleRepresentation superAdmin = realm.roles().get(PlatformRoles.SUPER_ADMIN).toRepresentation();
+        realm.users().get(userId).roles().realmLevel().remove(List.of(superAdmin));
+        log.info("Platform realm '{}' — removed SUPER_ADMIN from '{}'", realmName, username);
+    }
 }

@@ -212,4 +212,60 @@ class PlatformTenantServiceIT extends TenantProvisioningItSupport {
         var all = service.list();
         assertThat(all).extracting("schema").contains(SCHEMA);
     }
+
+    @Test
+    @DisplayName("detail — returns tenant summary + its recent audit rows")
+    void detail_returnsTenantAndRecentAudit() {
+        service.onboard(
+                new OnboardTenantRequest(SCHEMA, null, "Plat Corp", SUBDOMAIN, "admin", "a@plat.test"),
+                "superadmin", "platform", "10.0.0.1");
+        service.suspend(SCHEMA, "superadmin", "platform", "10.0.0.1");
+
+        var detail = service.detail(SCHEMA).orElseThrow();
+        assertThat(detail.tenant().schema()).isEqualTo(SCHEMA);
+        assertThat(detail.recentAudit()).extracting("action").contains("ONBOARD", "SUSPEND");
+
+        assertThat(service.detail("no_such_schema")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("list(page,size) + stats — paginates and reports total/active/suspended")
+    void pagedListAndStats() {
+        service.onboard(
+                new OnboardTenantRequest("tenant_acme", null, "Acme", "acme", "admin", "a@acme.test"),
+                "superadmin", "platform", "10.0.0.1");
+        service.onboard(
+                new OnboardTenantRequest("tenant_beta", null, "Beta", "beta", "admin", "a@beta.test"),
+                "superadmin", "platform", "10.0.0.1");
+        service.suspend("tenant_beta", "superadmin", "platform", "10.0.0.1");
+
+        var paged = service.list(0, 1);
+        assertThat(paged.items()).hasSize(1);
+        assertThat(paged.total()).isGreaterThanOrEqualTo(2);
+        assertThat(paged.page()).isZero();
+        assertThat(paged.size()).isEqualTo(1);
+
+        var stats = service.stats();
+        assertThat(stats.total()).isEqualTo(stats.active() + stats.suspended());
+        assertThat(stats.suspended()).isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("registry — paged findAll + counts reflect active/suspended split")
+    void registry_pagedAndCounts() {
+        registry.upsert("tenant_acme", "Acme", "acme");
+        registry.upsert("tenant_beta", "Beta", "beta");
+        registry.setActive("tenant_beta", false);
+
+        long total = registry.countAll();
+        long active = registry.countActive();
+        assertThat(total).isGreaterThanOrEqualTo(2);
+        assertThat(active).isLessThan(total); // beta is suspended
+
+        var firstPage = registry.findAll(0, 1);
+        assertThat(firstPage).hasSize(1);
+        var secondPage = registry.findAll(1, 1);
+        assertThat(secondPage).hasSize(1);
+        assertThat(firstPage.get(0).schema()).isNotEqualTo(secondPage.get(0).schema());
+    }
 }

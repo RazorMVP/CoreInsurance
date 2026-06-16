@@ -8,3 +8,4 @@ export * from './finance-closures';
 export * from './endorsement';
 export * from './reinsurance';
 export * from './audit';
+export * from './platform';

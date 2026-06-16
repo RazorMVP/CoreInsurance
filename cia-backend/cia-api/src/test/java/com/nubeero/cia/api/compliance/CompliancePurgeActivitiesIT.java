@@ -41,6 +41,16 @@ class CompliancePurgeActivitiesIT extends ComplianceItSupport {
     private static final Instant SUNDAY_0300 =
             ZonedDateTime.of(2026, 6, 14, 3, 0, 0, 0, ZoneOffset.UTC).toInstant();
 
+    @org.junit.jupiter.api.AfterEach
+    void clearLeakedTenantContext() {
+        // purgeTenantAt() sets TenantContext directly (in production the TenantAwareWorkerInterceptor
+        // clears it after each activity; called directly here there is no interceptor). Clear it so the
+        // hyphenated "test-tenant" id never leaks onto the pooled surefire thread — otherwise a later
+        // full-context IT's startup DB query resolves the leaked tenant through MultiTenantConnectionProvider
+        // and fails TenantSchemas.validate("test-tenant"), aborting that context (order-dependent flake).
+        com.nubeero.cia.common.tenant.TenantContext.clear();
+    }
+
     @Test
     void optInOff_noPurge() {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);

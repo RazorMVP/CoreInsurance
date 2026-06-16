@@ -55,6 +55,33 @@ public class TenantRegistry {
                 rs.getTimestamp("created_at").toInstant()));
     }
 
+    /** Page of tenants (active and inactive), ordered by creation time (schema name tiebreaker). */
+    public List<TenantSummary> findAll(int page, int size) {
+        int offset = Math.max(0, page) * size;
+        return jdbc.query(
+            "SELECT schema_name, name, subdomain, active, created_at FROM public.tenants"
+                + " ORDER BY created_at, schema_name LIMIT ? OFFSET ?",
+            (rs, i) -> new TenantSummary(
+                rs.getString("schema_name"),
+                rs.getString("name"),
+                rs.getString("subdomain"),
+                rs.getBoolean("active"),
+                rs.getTimestamp("created_at").toInstant()),
+            size, offset);
+    }
+
+    /** Total number of registered tenants. */
+    public long countAll() {
+        Long n = jdbc.queryForObject("SELECT COUNT(*) FROM public.tenants", Long.class);
+        return n == null ? 0L : n;
+    }
+
+    /** Number of active (non-suspended) tenants. */
+    public long countActive() {
+        Long n = jdbc.queryForObject("SELECT COUNT(*) FROM public.tenants WHERE active = TRUE", Long.class);
+        return n == null ? 0L : n;
+    }
+
     /** Look up a single tenant by schema name. Returns empty if not found. */
     public Optional<TenantSummary> find(String schema) {
         List<TenantSummary> rows = jdbc.query(

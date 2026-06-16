@@ -3,6 +3,9 @@ package com.nubeero.cia.api.platform;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nubeero.cia.api.platform.dto.OnboardTenantRequest;
 import com.nubeero.cia.api.platform.dto.OnboardTenantResponse;
+import com.nubeero.cia.api.platform.dto.PagedResult;
+import com.nubeero.cia.api.platform.dto.TenantDetailResponse;
+import com.nubeero.cia.api.platform.dto.TenantStats;
 import com.nubeero.cia.api.platform.dto.TenantSummary;
 import com.nubeero.cia.api.tenant.TenantBootstrapProperties.TenantSpec;
 import com.nubeero.cia.api.tenant.TenantProvisioningService;
@@ -10,8 +13,6 @@ import com.nubeero.cia.api.tenant.TenantRegistry;
 import com.nubeero.cia.auth.TenantActivationLookup;
 import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.common.tenant.TenantSchemas;
-import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -42,8 +43,6 @@ public class PlatformTenantService {
     private final TenantActivationLookup activationLookup;
     private final PlatformAuditService audit;
     private final ObjectMapper objectMapper; // Spring's configured bean — for safe detail JSON
-
-    private static final SecureRandom RNG = new SecureRandom();
 
     /**
      * Onboards a new tenant end-to-end: validates uniqueness, generates a temporary password,
@@ -85,7 +84,7 @@ public class PlatformTenantService {
         }
 
         // Generate server-side temp password — returned ONCE, never logged.
-        String tempPassword = generateTempPassword();
+        String tempPassword = PlatformPasswords.generateTempPassword();
 
         TenantSpec spec = new TenantSpec();
         spec.setSchema(req.schema());
@@ -118,6 +117,24 @@ public class PlatformTenantService {
     /** Returns a single tenant by schema name, or {@link Optional#empty()} if not found. */
     public Optional<TenantSummary> get(String schema) {
         return registry.find(schema);
+    }
+
+    /** Consolidated detail: registry summary + the 20 most-recent audit rows for the schema. */
+    public Optional<TenantDetailResponse> detail(String schema) {
+        return registry.find(schema)
+                .map(summary -> new TenantDetailResponse(summary, audit.recentForSchema(schema, 20)));
+    }
+
+    /** A page of tenants for the list view. */
+    public PagedResult<TenantSummary> list(int page, int size) {
+        return new PagedResult<>(registry.findAll(page, size), registry.countAll(), page, size);
+    }
+
+    /** Dashboard counters. */
+    public TenantStats stats() {
+        long total = registry.countAll();
+        long active = registry.countActive();
+        return new TenantStats(total, active, total - active);
     }
 
     /**
@@ -166,17 +183,5 @@ public class PlatformTenantService {
             log.warn("Failed to serialise audit detail; proceeding without detail", e);
             return null;
         }
-    }
-
-    /**
-     * Generates a cryptographically random temporary password that satisfies common
-     * password policies: ≥24 chars, upper, lower, digit, special.
-     * The prefix {@code "Aa1!"} ensures all four character classes are always present.
-     */
-    private static String generateTempPassword() {
-        byte[] b = new byte[18];
-        RNG.nextBytes(b);
-        // Prefix guarantees uppercase + lowercase + digit + special for strict policy checkers.
-        return "Aa1!" + Base64.getUrlEncoder().withoutPadding().encodeToString(b);
     }
 }
