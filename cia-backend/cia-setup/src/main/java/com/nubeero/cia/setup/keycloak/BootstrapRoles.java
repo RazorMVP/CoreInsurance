@@ -52,7 +52,7 @@ public final class BootstrapRoles {
     public static final List<String> PATTERN_B = List.of(
         "FINANCE_VIEW", "FINANCE_CREATE", "FINANCE_UPDATE", "FINANCE_APPROVE",
         "FINANCE_APPROVE_PPA", "FINANCE_REOPEN_PERIOD", "FINANCE_OVERRIDE_LOCK",
-        "PLATFORM_ADMIN"
+        "PLATFORM_ADMIN", "DATA_PROTECTION"
     );
 
     /** Every realm role the bootstrap admin must hold. */

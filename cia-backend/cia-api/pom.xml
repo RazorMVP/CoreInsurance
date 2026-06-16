@@ -92,6 +92,10 @@
       <groupId>com.nubeero.cia</groupId>
       <artifactId>cia-reports</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-compliance</artifactId>
+    </dependency>
 
     <!-- ── Spring Boot runtime ────────────────────────────────────── -->
     <dependency>
