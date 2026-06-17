@@ -70,6 +70,8 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 **Known follow-ups / backlog change:** **added** `cors-unconfigured` (P1, new go-live blocker); **re-rated** `temporal-eager-boot-dial` P2→P1 (Slice H2) and `file-upload-validation` P2→P1 (Slice H3, + the 1 MB-multipart latent-bug note). No code shipped — H1 starts on the user's approval.
 
+**Addendum (chore, `0509bdf`):** began tracking `cia-frontend/apps/platform/.gitignore` — it was created at the SP2 scaffold (`66e9068`) but never staged, so it sat untracked since 2026-06-12; a fresh clone therefore had no `.vercel` / `.env.local` ignore for the platform app (the Vercel link dir holds the project id). Added `.env.local` to mirror `apps/back-office/.gitignore`. Infra-only; no app-behaviour change.
+
 ---
 
 ## 2026-06-16 — SP2 platform-admin UI merged to `main` (`platform-admin-ui` → PR #6, reconciliation)
