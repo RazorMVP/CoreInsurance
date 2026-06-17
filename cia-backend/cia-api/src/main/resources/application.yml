@@ -75,6 +75,14 @@ management:
         enabled: true
 
 cia:
+  # CORS allow-list for the browser SPAs (back-office + platform console) calling
+  # the internal /api/** surface cross-origin. CSV-bindable. Partner /partner/** is
+  # M2M and intentionally not CORS-enabled. allowCredentials is on (Bearer auth), so
+  # origins must be enumerated here or matched by allowed-origin-patterns (no "*").
+  cors:
+    allowed-origins: ${CIA_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5175}
+    allowed-origin-patterns: ${CIA_CORS_ALLOWED_ORIGIN_PATTERNS:}
+
   temporal:
     host: ${TEMPORAL_HOST:localhost:7233}
     namespace: ${TEMPORAL_NAMESPACE:default}
