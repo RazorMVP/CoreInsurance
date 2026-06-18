@@ -93,6 +93,15 @@ class GlobalExceptionHandlerMvcTest {
                 .andExpect(jsonPath("$.errors[0].code").value("NOT_FOUND"));
     }
 
+    @Test
+    @DisplayName("MaxUploadSizeExceededException → 413 with ApiResponse.error(PAYLOAD_TOO_LARGE, ...)")
+    void maxUploadBranch() throws Exception {
+        mvc.perform(get("/test/throw-max-upload"))
+                .andExpect(status().isPayloadTooLarge())
+                .andExpect(jsonPath("$.data").doesNotExist())
+                .andExpect(jsonPath("$.errors[0].code").value("PAYLOAD_TOO_LARGE"));
+    }
+
     @RestController
     static class FakeController {
 
@@ -104,6 +113,11 @@ class GlobalExceptionHandlerMvcTest {
         @GetMapping("/test/throw-no-resource")
         void throwNoResource() throws NoResourceFoundException {
             throw new NoResourceFoundException(HttpMethod.GET, "intentional-missing.html");
+        }
+
+        @GetMapping("/test/throw-max-upload")
+        void throwMaxUpload() {
+            throw new org.springframework.web.multipart.MaxUploadSizeExceededException(15L * 1024 * 1024);
         }
     }
 
