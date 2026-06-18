@@ -28,6 +28,12 @@ public class ClaimDocumentService {
     private final ClaimDocumentRepository documentRepository;
     private final ClaimRepository         claimRepository;
     private final DocumentStorageService  storageService;
+    private final com.nubeero.cia.common.upload.FileUploadValidator fileUploadValidator;
+
+    /** Claim attachments — images or PDF, max 10 MB. */
+    private static final com.nubeero.cia.common.upload.FileUploadPolicy CLAIM_DOC_POLICY =
+            com.nubeero.cia.common.upload.FileUploadPolicy.imagesAndPdf(
+                    "claim document", com.nubeero.cia.common.upload.FileUploadPolicy.mb(10));
 
     public Page<ClaimDocument> findByClaimId(UUID claimId, Pageable pageable) {
         return documentRepository.findAllByClaim_IdAndDeletedAtIsNull(claimId, pageable);
@@ -110,9 +116,8 @@ public class ClaimDocumentService {
     @Transactional
     public ClaimDocument upload(UUID claimId, ClaimDocumentType documentType, MultipartFile file)
             throws IOException {
-        if (file == null || file.isEmpty()) {
-            throw new BusinessRuleException("EMPTY_FILE", "Uploaded file is empty");
-        }
+        // Validates empty + size + MIME allowlist + magic-byte signature (and runs the scan hook).
+        fileUploadValidator.validate(file, CLAIM_DOC_POLICY);
 
         Claim claim = claimRepository.findByIdAndDeletedAtIsNull(claimId)
                 .orElseThrow(() -> new ResourceNotFoundException("Claim", claimId));

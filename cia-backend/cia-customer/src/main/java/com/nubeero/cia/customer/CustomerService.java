@@ -39,6 +39,12 @@ public class CustomerService {
     private final DocumentStorageService documentStorageService;
     private final CustomerNumberFormatService customerNumberFormatService;
     private final RelationshipManagerRepository relationshipManagerRepository;
+    private final com.nubeero.cia.common.upload.FileUploadValidator fileUploadValidator;
+
+    /** KYC ID docs / CAC certificate / director IDs — images or PDF, max 5 MB. */
+    private static final com.nubeero.cia.common.upload.FileUploadPolicy KYC_POLICY =
+            com.nubeero.cia.common.upload.FileUploadPolicy.imagesAndPdf(
+                    "KYC document", com.nubeero.cia.common.upload.FileUploadPolicy.mb(5));
 
     // ─── Queries ────────────────────────────────────────────────────
 
@@ -545,6 +551,8 @@ public class CustomerService {
     /** Uploads a KYC document file to MinIO and returns the stored path. */
     private String uploadKycDocument(MultipartFile file, UUID customerId, String docKey) {
         if (file == null || file.isEmpty()) return null;
+        // All three customer upload endpoints funnel here, so validating once covers them all.
+        fileUploadValidator.validate(file, KYC_POLICY);
         String tenantId = TenantContext.getTenantId() != null ? TenantContext.getTenantId() : "public";
         String ext = getExtension(file.getOriginalFilename());
         String path = "customers/" + customerId + "/kyc/" + docKey + ext;

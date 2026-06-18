@@ -19,11 +19,18 @@ public class DocumentTemplateService {
 
     private final DocumentTemplateRepository repository;
     private final DocumentStorageService storageService;
+    private final com.nubeero.cia.common.upload.FileUploadValidator fileUploadValidator;
+
+    /** Rich-text/PDF templates — HTML or PDF, max 5 MB. */
+    private static final com.nubeero.cia.common.upload.FileUploadPolicy TEMPLATE_POLICY =
+            com.nubeero.cia.common.upload.FileUploadPolicy.htmlAndPdf(
+                    "document template", com.nubeero.cia.common.upload.FileUploadPolicy.mb(5));
 
     @Transactional
     public DocumentTemplate upload(DocumentTemplateType type, UUID productId,
                                     UUID classOfBusinessId, String description,
                                     MultipartFile file) throws IOException {
+        fileUploadValidator.validate(file, TEMPLATE_POLICY);
         // Deactivate any existing active templates for the same type+scope
         repository.findBestMatch(type, productId, classOfBusinessId).stream()
                 .filter(t -> productId == null ? t.getProductId() == null : productId.equals(t.getProductId()))

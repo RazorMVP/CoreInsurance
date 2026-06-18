@@ -89,6 +89,16 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("FORBIDDEN", "Access denied"));
     }
 
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUpload(
+            org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
+        log.warn("Upload exceeded servlet max size: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(ApiResponse.error("PAYLOAD_TOO_LARGE",
+                        "The uploaded file exceeds the maximum allowed size"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception ex) {
         log.error("Unexpected error", ex);
