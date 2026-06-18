@@ -4,6 +4,14 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
 
+  servlet:
+    multipart:
+      # Outer hard cap. The per-endpoint FileUploadValidator policy caps (KYC/template
+      # 5 MB, claims 10 MB) sit below this, so a policy violation surfaces as 422; this
+      # 413s only abusive uploads. Fixes the silent 1 MB default that 500'd 5 MB KYC docs.
+      max-file-size: 15MB
+      max-request-size: 75MB
+
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5434/cia}
     username: ${DB_USERNAME:cia}
