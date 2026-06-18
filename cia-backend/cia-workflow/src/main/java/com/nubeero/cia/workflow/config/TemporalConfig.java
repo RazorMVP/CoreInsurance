@@ -24,8 +24,17 @@ public class TemporalConfig {
     public WorkflowServiceStubs workflowServiceStubs(
             @Value("${cia.temporal.host:localhost:7233}") String host) {
         log.info("Connecting to Temporal at {}", host);
+        // setDisableHealthCheck(true): never dial Temporal at bean construction, so an unreachable
+        // Temporal can NEVER turn startup into a BeanCreationException crashloop. The connection is
+        // deferred to the first RPC; workers retry their pollers and the @PostConstruct cron
+        // scheduling + TemporalWorkerStarter.start() are already try-caught. This makes the
+        // boot-Temporal-degraded property an explicit, SDK-default-independent guarantee — locked in
+        // by TemporalConfigTest (unit) + TemporalUnreachableBootIT (full-context boot).
         return WorkflowServiceStubs.newInstance(
-                WorkflowServiceStubsOptions.newBuilder().setTarget(host).build());
+                WorkflowServiceStubsOptions.newBuilder()
+                        .setTarget(host)
+                        .setDisableHealthCheck(true)
+                        .build());
     }
 
     @Bean

@@ -72,4 +72,3 @@ jobs:
           kubectl describe pods -l app.kubernetes.io/instance=cia-api || true
           kubectl get events --sort-by=.lastTimestamp -A | tail -50 || true
           kubectl logs deploy/cia-api --tail=200 || true
-          kubectl logs deploy/cia-smoke-temporal --tail=100 || true
