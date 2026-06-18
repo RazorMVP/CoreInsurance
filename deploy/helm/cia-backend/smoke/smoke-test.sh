@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Full-dependency kind smoke for the cia-backend chart: builds the real image,
-# loads it into kind, stands up ephemeral Postgres + Temporal, installs the chart,
-# and asserts the cia-api pod reaches Ready + /actuator/health == 200.
+# loads it into kind, stands up ephemeral Postgres (Temporal intentionally absent —
+# the app boots Temporal-degraded by design, proven by TemporalUnreachableBootIT),
+# installs the chart, and asserts the cia-api pod reaches Ready + /actuator/health == 200.
 #
 # Assumes a kind cluster already exists and kubectl targets it (CI uses helm/kind-action;
 # locally: `kind create cluster --name cia-smoke`). Requires Docker, helm, kubectl.
@@ -19,11 +20,9 @@ docker build -t "$IMAGE" -f "$REPO_ROOT/cia-backend/Dockerfile" "$REPO_ROOT/cia-
 echo "==> Loading image into kind cluster $KIND_CLUSTER"
 kind load docker-image "$IMAGE" --name "$KIND_CLUSTER"
 
-echo "==> Applying Postgres + Temporal fixtures"
+echo "==> Applying Postgres fixture (Temporal intentionally absent — the app must boot Temporal-degraded)"
 kubectl apply -f "$FIXTURES/postgres.yaml"
 kubectl rollout status deploy/cia-smoke-postgres --timeout=120s
-kubectl apply -f "$FIXTURES/temporal.yaml"
-kubectl rollout status deploy/cia-smoke-temporal --timeout=240s
 
 echo "==> Creating cia-api secret (dev creds; CIA_DEPLOYMENT_ENVIRONMENT=local disarms the weak-default guard)"
 kubectl delete secret cia-backend-secrets --ignore-not-found
@@ -48,14 +47,14 @@ helm upgrade --install cia-api "$CHART" \
   --set hpa.enabled=false \
   --set replicaCount=1 \
   --set env.CIA_DEPLOYMENT_ENVIRONMENT=local \
-  --set env.TEMPORAL_HOST='cia-smoke-temporal:7233' \
+  --set env.TEMPORAL_HOST='temporal-not-deployed:7233' \
   --set env.KEYCLOAK_URL='http://unused.local' \
   --set env.STORAGE_TYPE=minio \
   --set env.STORAGE_ENDPOINT='http://unused.local:9000' \
   --set env.MANAGEMENT_HEALTH_REDIS_ENABLED=false \
   --set env.MANAGEMENT_HEALTH_MAIL_ENABLED=false
 
-echo "==> Waiting for cia-api rollout (proves the image boots against real Postgres + Temporal)"
+echo "==> Waiting for cia-api rollout (proves the image boots against real Postgres with Temporal absent — Temporal-degraded by design; see TemporalUnreachableBootIT)"
 kubectl rollout status deploy/cia-api --timeout=300s
 
 echo "==> Asserting /actuator/health == 200"
