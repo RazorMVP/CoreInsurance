@@ -15,6 +15,17 @@ description: Core Insurance Application — General Business (CIAGB) domain expe
 
 ---
 
+## Interaction Conventions
+
+How information is presented back to the user (not a code rule — a working-style rule the user set explicitly):
+
+1. **When a decision needs to be taken, present the options/next-steps as a numbered list** — one option per line, numbered `1.`, `2.`, `3.`. The user reads it far more easily and can reply with just a number. This is the default format for any "what should we do next / which option" moment.
+2. **Use a markdown table only when options need side-by-side comparison across multiple attributes** (e.g. effort vs. risk vs. impact). Otherwise prefer the numbered list — a table for a simple list is harder to scan.
+3. **Never use the `AskUserQuestion` modal for multi-option decisions** — the user wants the choices inline in the message (numbered list or comparison table), not in a popup.
+4. Keep each numbered option to a tight one-liner (a short lead phrase + the essential trade-off); put any longer rationale below the list, not inside the numbers.
+
+---
+
 ## Tech Stack (Locked)
 
 | Layer | Choice | Notes |
