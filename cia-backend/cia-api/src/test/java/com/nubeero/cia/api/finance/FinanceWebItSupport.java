@@ -56,7 +56,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * </ul>
  *
  * <h2>Database</h2>
- * A <em>singleton</em> Postgres 16 Testcontainers instance migrated to V59.
+ * A <em>singleton</em> Postgres 16 Testcontainers instance migrated to V74.
  * The container is started exactly once for the JVM (in a static initializer
  * block, no {@code @Container} / {@code @Testcontainers}) and is cleaned up by
  * the JVM-level shutdown hook Testcontainers installs via Ryuk.
@@ -133,7 +133,12 @@ public abstract class FinanceWebItSupport {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.target", () -> "66");
+        // Must track HEAD whenever a new migration adds a column that a JPA entity
+        // maps unconditionally — V74 adds policies.selected_clauses (and V73
+        // quotes.selected_clauses), which the Policy/Quote entities now always
+        // INSERT. A subclass that persists a Policy entity (e.g.
+        // PolicyRmCommissionDerivationIT) would otherwise hit "column does not exist".
+        registry.add("spring.flyway.target", () -> "74");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 }
