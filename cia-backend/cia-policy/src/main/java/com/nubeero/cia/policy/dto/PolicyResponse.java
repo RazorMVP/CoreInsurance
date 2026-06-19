@@ -98,6 +98,7 @@ public class PolicyResponse {
 
     private List<PolicyRiskResponse> risks;
     private List<PolicyCoinsuranceParticipantResponse> coinsuranceParticipants;
+    private List<com.nubeero.cia.common.clause.ClauseSnapshot> selectedClauses;
     private PolicySurveyResponse survey;
 
     private Instant createdAt;
