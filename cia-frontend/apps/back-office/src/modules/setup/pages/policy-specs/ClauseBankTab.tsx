@@ -1,81 +1,84 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-  Input,
+  EmptyState, Input,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Skeleton,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
-import type { ClauseRow, ClauseType, ClauseApplicability, ClauseSavePayload } from './clause-types';
-import { PRODUCTS, CLAUSE_TYPES } from './clause-types';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, type ClauseDto, type ProductDto } from '@cia/api-client';
+import type { ClauseRow, ClauseType, ClauseApplicability } from './clause-types';
+import { CLAUSE_TYPES } from './clause-types';
+import { useDeleteWithReason } from '@/lib/use-delete-with-reason';
 import ClauseSheet from './ClauseSheet';
-
-// ── Mock data ─────────────────────────────────────────────────────────────────
-const INITIAL_CLAUSES: ClauseRow[] = [
-  { id: 'c1', title: 'Third Party Liability',      text: 'Indemnity for third party bodily injury and property damage as per the Motor Vehicles (Third Party Insurance) Act.',         type: 'STANDARD',          applicability: 'MANDATORY', productIds: ['1','2'], productNames: ['Private Motor Comprehensive','Commercial Vehicle'] },
-  { id: 'c2', title: 'Own Damage',                 text: 'Covers accidental damage to the insured vehicle including fire, theft and malicious damage.',                                type: 'STANDARD',          applicability: 'MANDATORY', productIds: ['1'],     productNames: ['Private Motor Comprehensive'] },
-  { id: 'c3', title: 'Exclusion — Racing',         text: 'This policy does not cover loss or damage arising from or whilst the vehicle is used in racing, rallying or similar events.', type: 'EXCLUSION',         applicability: 'OPTIONAL',  productIds: ['1','2'], productNames: ['Private Motor Comprehensive','Commercial Vehicle'] },
-  { id: 'c4', title: 'Special Condition — Alarm System', text: 'It is a special condition of this policy that a NSIA-approved burglar alarm system is installed and in full operation throughout the period of insurance.', type: 'SPECIAL_CONDITION', applicability: 'OPTIONAL',  productIds: ['3'],     productNames: ['Fire & Burglary Standard'] },
-  { id: 'c5', title: 'Burglary & Housebreaking',   text: 'Indemnity against loss or damage resulting from burglary, housebreaking or theft involving forcible entry.',                  type: 'STANDARD',          applicability: 'MANDATORY', productIds: ['3'],     productNames: ['Fire & Burglary Standard'] },
-  { id: 'c6', title: 'Exclusion — Wear & Tear',    text: 'This policy excludes damage attributable to gradual deterioration, wear and tear or inherent vice.',                          type: 'EXCLUSION',         applicability: 'OPTIONAL',  productIds: ['1','2','3','4'], productNames: ['Private Motor Comprehensive','Commercial Vehicle','Fire & Burglary Standard','Marine Cargo Open Cover'] },
-  { id: 'c7', title: 'Marine — Institute Cargo',   text: 'Coverage in accordance with the Institute Cargo Clauses (A) for all risks of physical loss or damage.',                       type: 'STANDARD',          applicability: 'MANDATORY', productIds: ['4'],     productNames: ['Marine Cargo Open Cover'] },
-  { id: 'c8', title: 'Warranty — Security Survey', text: 'It is warranted that a security survey be completed and recommendations implemented within 30 days of policy inception.',     type: 'WARRANTY',          applicability: 'OPTIONAL',  productIds: ['3'],     productNames: ['Fire & Burglary Standard'] },
-];
 
 const TYPE_LABELS: Record<ClauseType, string> = {
   STANDARD: 'Standard', EXCLUSION: 'Exclusion', SPECIAL_CONDITION: 'Special Condition', WARRANTY: 'Warranty',
 };
 
-// ── Component ─────────────────────────────────────────────────────────────────
 export default function ClauseBankTab() {
-  const [clauses,       setClauses]       = useState<ClauseRow[]>(INITIAL_CLAUSES);
   const [sheetOpen,     setSheetOpen]     = useState(false);
-  const [editing,       setEditing]       = useState<ClauseRow | null>(null);
-  const [deleteId,      setDeleteId]      = useState<string | null>(null);
+  const [editing,       setEditing]       = useState<ClauseDto | null>(null);
   const [search,        setSearch]        = useState('');
   const [productFilter, setProductFilter] = useState('all');
   const [typeFilter,    setTypeFilter]    = useState('all');
 
-  // ── Filtering ──────────────────────────────────────────────────────────────
-  const filtered = useMemo(() => {
-    return clauses.filter(c => {
-      const matchSearch  = search === '' || c.title.toLowerCase().includes(search.toLowerCase()) || c.text.toLowerCase().includes(search.toLowerCase());
-      const matchProduct = productFilter === 'all' || c.productIds.includes(productFilter);
-      const matchType    = typeFilter === 'all'    || c.type === typeFilter;
-      return matchSearch && matchProduct && matchType;
-    });
-  }, [clauses, search, productFilter, typeFilter]);
+  const clausesQuery = useQuery<ClauseDto[]>({
+    queryKey: ['setup', 'clauses'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ClauseDto[] }>('/api/v1/setup/clauses');
+      return res.data.data;
+    },
+  });
+  const productsQuery = useQuery<ProductDto[]>({
+    queryKey: ['setup', 'products'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ProductDto[] }>('/api/v1/setup/products');
+      return res.data.data;
+    },
+  });
 
-  // ── Actions ────────────────────────────────────────────────────────────────
+  const products = useMemo(() => productsQuery.data ?? [], [productsQuery.data]);
+  const productNameById = useMemo(
+    () => new Map(products.map(p => [p.id, p.name])),
+    [products],
+  );
+
+  // ClauseDto[] → ClauseRow[] (derive productNames from the live products list).
+  const rows: ClauseRow[] = useMemo(
+    () => (clausesQuery.data ?? []).map(c => ({
+      id:            c.id,
+      title:         c.title,
+      text:          c.text,
+      type:          c.type,
+      applicability: c.applicability,
+      productIds:    c.productIds,
+      productNames:  c.productIds.map(id => productNameById.get(id)).filter((n): n is string => !!n),
+    })),
+    [clausesQuery.data, productNameById],
+  );
+
+  const { setTarget: setDeleteTarget, dialog: deleteDialog } = useDeleteWithReason<ClauseRow>({
+    endpoint: (id) => `/api/v1/setup/clauses/${id}`,
+    invalidateKey: ['setup', 'clauses'],
+    entityLabel: 'Clause',
+    entityName: (c) => c.title,
+  });
+
+  const filtered = useMemo(() => rows.filter(c => {
+    const matchSearch  = search === '' || c.title.toLowerCase().includes(search.toLowerCase()) || c.text.toLowerCase().includes(search.toLowerCase());
+    const matchProduct = productFilter === 'all' || c.productIds.includes(productFilter);
+    const matchType    = typeFilter === 'all'    || c.type === typeFilter;
+    return matchSearch && matchProduct && matchType;
+  }), [rows, search, productFilter, typeFilter]);
+
   function openCreate() { setEditing(null); setSheetOpen(true); }
-
   const openEdit = useCallback((c: ClauseRow) => {
-    setEditing(c);
+    setEditing((clausesQuery.data ?? []).find(d => d.id === c.id) ?? null);
     setSheetOpen(true);
-  }, []);
+  }, [clausesQuery.data]);
 
-  const openDuplicate = useCallback((c: ClauseRow) => {
-    setEditing({ ...c, id: '', title: `Copy of ${c.title}` });
-    setSheetOpen(true);
-  }, []);
-
-  function handleSave(values: ClauseSavePayload) {
-    const productNames = PRODUCTS.filter(p => values.productIds.includes(p.id)).map(p => p.name);
-    if (values.id) {
-      setClauses(prev => prev.map(c => c.id === values.id ? { ...values, id: values.id, productNames } : c));
-    } else {
-      setClauses(prev => [...prev, { ...values, id: crypto.randomUUID(), productNames }]);
-    }
-  }
-
-  function handleDelete() {
-    if (deleteId) {
-      setClauses(prev => prev.filter(c => c.id !== deleteId));
-      setDeleteId(null);
-    }
-  }
-
-  // ── Columns ────────────────────────────────────────────────────────────────
   const columns: ColumnDef<ClauseRow>[] = useMemo(() => [
     {
       accessorKey: 'title',
@@ -92,6 +95,7 @@ export default function ClauseBankTab() {
       header: 'Products',
       cell: ({ row }) => {
         const names: string[] = row.original.productNames;
+        if (names.length === 0) return <span className="text-xs text-muted-foreground">All products</span>;
         const shown = names.slice(0, 2);
         const extra = names.length - 2;
         return (
@@ -109,9 +113,7 @@ export default function ClauseBankTab() {
     {
       accessorKey: 'type',
       header: 'Type',
-      cell: ({ getValue }) => (
-        <span className="text-sm text-foreground">{TYPE_LABELS[getValue() as ClauseType]}</span>
-      ),
+      cell: ({ getValue }) => <span className="text-sm text-foreground">{TYPE_LABELS[getValue() as ClauseType]}</span>,
     },
     {
       accessorKey: 'applicability',
@@ -129,38 +131,27 @@ export default function ClauseBankTab() {
         <DataTableRowActions
           row={row}
           actions={[
-            { label: 'Edit',      onClick: (r) => openEdit(r.original) },
-            { label: 'Duplicate', onClick: (r) => openDuplicate(r.original) },
-            { label: 'Delete',    onClick: (r) => setDeleteId(r.original.id) },
+            { label: 'Edit',   onClick: (r) => openEdit(r.original) },
+            { label: 'Delete', onClick: (r) => setDeleteTarget(r.original), separator: true, className: 'text-destructive' },
           ]}
         />
       ),
     },
-  ], []);
+  ], [openEdit, setDeleteTarget]);
 
   return (
     <>
-      {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap mb-4">
-        <Input
-          placeholder="Search clauses…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="h-8 w-[200px] text-sm"
-        />
+        <Input placeholder="Search clauses…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-8 w-[200px] text-sm" />
         <Select value={productFilter} onValueChange={setProductFilter}>
-          <SelectTrigger className="h-8 w-[200px] text-sm">
-            <SelectValue placeholder="All Products" />
-          </SelectTrigger>
+          <SelectTrigger className="h-8 w-[200px] text-sm"><SelectValue placeholder="All Products" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Products</SelectItem>
-            {PRODUCTS.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+            {products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="h-8 w-[180px] text-sm">
-            <SelectValue placeholder="All Types" />
-          </SelectTrigger>
+          <SelectTrigger className="h-8 w-[180px] text-sm"><SelectValue placeholder="All Types" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
             {CLAUSE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
@@ -170,29 +161,22 @@ export default function ClauseBankTab() {
         <Button size="sm" onClick={openCreate}>+ Add Clause</Button>
       </div>
 
-      <DataTable columns={columns} data={filtered} />
+      {clausesQuery.isLoading ? (
+        <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : rows.length === 0 ? (
+        <EmptyState title="No clauses yet" description="The clause bank supplies the policy wording attached to quotes and policies. Add your first clause." />
+      ) : (
+        <DataTable columns={columns} data={filtered} />
+      )}
 
-      {/* ClauseSheet */}
       <ClauseSheet
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         clause={editing}
-        onSave={handleSave}
+        products={products}
+        onSuccess={() => setSheetOpen(false)}
       />
-
-      {/* Delete confirm dialog */}
-      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete clause?</DialogTitle>
-            <DialogDescription>This cannot be undone. The clause will be removed from the library.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {deleteDialog}
     </>
   );
 }

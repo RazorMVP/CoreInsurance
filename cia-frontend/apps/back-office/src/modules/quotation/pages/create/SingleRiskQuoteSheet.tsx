@@ -19,8 +19,8 @@ import {
   type BrokerDto,
   type CustomerDto,
   type ProductDto,
+  type ClauseDto,
 } from '@cia/api-client';
-import { INITIAL_CLAUSES } from '../clauses-shared';
 import { applyApiErrors } from '@/lib/form-errors';
 
 interface AdjustmentTypeDto { id: string; name: string; }
@@ -172,6 +172,15 @@ export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: 
     enabled: open,
   });
   const products = productsQuery.data ?? [];
+
+  const clausesQuery = useQuery<ClauseDto[]>({
+    queryKey: ['setup', 'clauses'],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: ClauseDto[] }>('/api/v1/setup/clauses');
+      return res.data.data;
+    },
+    enabled: open,
+  });
 
   const loadingTypesQuery = useQuery<AdjustmentTypeDto[]>({
     queryKey: ['setup', 'quote-loading-types'],
@@ -470,7 +479,7 @@ export default function SingleRiskQuoteSheet({ open, onOpenChange, onSuccess }: 
                 className="h-8 text-sm"
               />
               <div className="space-y-2 max-h-44 overflow-y-auto rounded-md border p-3">
-                {INITIAL_CLAUSES.filter(c =>
+                {(clausesQuery.data ?? []).filter(c =>
                   clauseSearch === '' ||
                   c.title.toLowerCase().includes(clauseSearch.toLowerCase()) ||
                   c.text.toLowerCase().includes(clauseSearch.toLowerCase())

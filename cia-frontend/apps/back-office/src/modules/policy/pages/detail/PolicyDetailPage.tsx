@@ -15,6 +15,7 @@ import AssignSurveyorDialog       from './AssignSurveyorDialog';
 import SubmitSurveyReportDialog   from './SubmitSurveyReportDialog';
 import CoinsuranceEditorDialog    from './CoinsuranceEditorDialog';
 import RisksEditorDialog          from './RisksEditorDialog';
+import ClausesEditorDialog        from './ClausesEditorDialog';
 import PostReceiptDialog          from './PostReceiptDialog';
 
 interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
@@ -32,7 +33,6 @@ type MockPolicy = PolicyDto & {
   riskDescription: string;
   paymentTerms: string;
   surveyRequired: boolean;
-  clauses: { id: string; title: string; text: string }[];
 };
 
 // Display labels for the V50 CommissionSourceType enum, mirroring CommissionSetupsSheet.
@@ -74,11 +74,6 @@ const mockPolicy: MockPolicy = {
   riskDescription: '2022 Toyota Camry 2.5L, Reg: LND-001-AA, Chassis: ABC123',
   paymentTerms: 'Immediate',
   surveyRequired: false,
-  clauses: [
-    { id: 'c1', title: 'Third Party Liability',   text: 'Indemnity for third party bodily injury and property damage as per the Motor Vehicles (Third Party Insurance) Act.' },
-    { id: 'c2', title: 'Own Damage',               text: 'Covers accidental damage to the insured vehicle including fire, theft and malicious damage.' },
-    { id: 'c3', title: 'Exclusion — Racing',       text: 'This policy does not cover loss or damage arising from or whilst the vehicle is used in racing, rallying or similar events.' },
-  ],
 };
 
 const statusVariant: Record<PolicyDto['status'], 'active' | 'pending' | 'draft' | 'cancelled' | 'rejected'> = {
@@ -194,6 +189,7 @@ export default function PolicyDetailPage() {
   const [submitReportOpen,    setSubmitReportOpen]    = useState(false);
   const [coinsuranceOpen,     setCoinsuranceOpen]     = useState(false);
   const [risksEditorOpen,     setRisksEditorOpen]     = useState(false);
+  const [clausesEditorOpen,   setClausesEditorOpen]   = useState(false);
 
   // Slice 96 / Backlog C1 — Finance tab queries.
   // Backend exposes ?entityId=<policyId> for both debit-notes (Session 96
@@ -440,19 +436,20 @@ export default function PolicyDetailPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Clause bank */}
-              <p className="text-sm font-semibold text-foreground">Clauses</p>
+              {/* Clause bank — rendered from the policy's frozen clause snapshot */}
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-foreground">Clauses</p>
+                <Button variant="outline" size="sm" onClick={() => setClausesEditorOpen(true)}>Edit Clauses</Button>
+              </div>
               <div className="space-y-3">
-                {p.clauses.map((clause) => (
+                {(p.selectedClauses ?? []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No clauses attached to this policy.</p>
+                ) : (p.selectedClauses ?? []).map((clause) => (
                   <div key={clause.id} className="rounded-lg border p-4 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-foreground">{clause.title}</p>
-                      <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground">Edit</Button>
-                    </div>
+                    <p className="text-sm font-semibold text-foreground">{clause.title}</p>
                     <p className="text-sm text-muted-foreground leading-relaxed">{clause.text}</p>
                   </div>
                 ))}
-                <Button variant="outline" size="sm">+ Add Clause</Button>
               </div>
               <Separator />
               <div className="flex items-center justify-between">
@@ -825,6 +822,15 @@ export default function PolicyDetailPage() {
         risks={p.risks}
         isMotor={p.classOfBusinessName.toLowerCase().includes('motor')}
         onSuccess={() => setRisksEditorOpen(false)}
+      />
+
+      <ClausesEditorDialog
+        open={clausesEditorOpen}
+        onOpenChange={setClausesEditorOpen}
+        policyId={p.id}
+        policyNumber={p.policyNumber ?? p.id}
+        clauses={p.selectedClauses ?? []}
+        onSuccess={() => setClausesEditorOpen(false)}
       />
 
       <PostReceiptDialog

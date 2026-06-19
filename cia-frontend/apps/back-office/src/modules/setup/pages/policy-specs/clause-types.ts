@@ -11,19 +11,9 @@ export interface ClauseRow {
   productNames:  string[];
 }
 
-export const PRODUCTS = [
-  { id: '1', name: 'Private Motor Comprehensive' },
-  { id: '2', name: 'Commercial Vehicle' },
-  { id: '3', name: 'Fire & Burglary Standard' },
-  { id: '4', name: 'Marine Cargo Open Cover' },
-];
-
 export const CLAUSE_TYPES = [
   { value: 'STANDARD' as const,          label: 'Standard' },
   { value: 'EXCLUSION' as const,         label: 'Exclusion' },
   { value: 'SPECIAL_CONDITION' as const, label: 'Special Condition' },
   { value: 'WARRANTY' as const,          label: 'Warranty' },
 ];
-
-/** Shape passed from ClauseSheet.onSave to ClauseBankTab.handleSave */
-export type ClauseSavePayload = Omit<ClauseRow, 'productNames' | 'id'> & { id?: string };
