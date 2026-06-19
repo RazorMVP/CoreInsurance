@@ -63,6 +63,7 @@ public class QuoteService {
     private final QuoteConfigService        quoteConfigService;
     private final QuoteDiscountTypeRepository discountTypeRepository;
     private final QuoteLoadingTypeRepository  loadingTypeRepository;
+    private final com.nubeero.cia.setup.policy.ClauseService clauseService;
 
     // ── Queries ───────────────────────────────────────────────────────────────
 
@@ -144,6 +145,7 @@ public class QuoteService {
                 .notes(request.getNotes())
                 .selectedClauseIds(request.getSelectedClauseIds() != null
                         ? request.getSelectedClauseIds() : new ArrayList<>())
+                .selectedClauses(clauseService.snapshot(request.getSelectedClauseIds()))
                 .inputterName(currentUserName())
                 .expiresAt(Instant.now().plus(config.getValidityDays(), ChronoUnit.DAYS))
                 .build();
@@ -195,6 +197,8 @@ public class QuoteService {
                 .notes(source.getNotes())
                 .selectedClauseIds(new ArrayList<>(source.getSelectedClauseIds() == null
                         ? List.of() : source.getSelectedClauseIds()))
+                .selectedClauses(new ArrayList<>(source.getSelectedClauses() == null
+                        ? List.of() : source.getSelectedClauses()))
                 .quoteLoadings(copyAdjustments(source.getQuoteLoadings()))
                 .quoteDiscounts(copyAdjustments(source.getQuoteDiscounts()))
                 .inputterName(currentUserName())
@@ -300,6 +304,7 @@ public class QuoteService {
         }
         if (request.getSelectedClauseIds() != null) {
             quote.setSelectedClauseIds(request.getSelectedClauseIds());
+            quote.setSelectedClauses(clauseService.snapshot(request.getSelectedClauseIds()));
         }
         if (request.getCoinsuranceParticipants() != null) {
             applyCoinsuranceParticipants(quote, request.getCoinsuranceParticipants());
@@ -691,6 +696,7 @@ public class QuoteService {
                 .quoteDiscounts(toAdjustmentResponses(q.getQuoteDiscounts(),
                         totalGross.add(sumAdjustments(q.getQuoteLoadings(), totalGross))))
                 .selectedClauseIds(q.getSelectedClauseIds())
+                .selectedClauses(q.getSelectedClauses())
                 .inputterName(q.getInputterName())
                 .approverName(q.getApproverName())
                 .notes(q.getNotes()).workflowId(q.getWorkflowId())

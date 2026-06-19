@@ -52,4 +52,7 @@ public class PolicyRequest {
 
     @Valid
     private List<PolicyCoinsuranceParticipantRequest> coinsuranceParticipants;
+
+    /** Clause master ids to attach (resolved + snapshotted server-side); optional/nullable. */
+    private List<String> selectedClauseIds;
 }

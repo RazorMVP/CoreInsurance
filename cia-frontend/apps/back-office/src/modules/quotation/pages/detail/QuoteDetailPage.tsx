@@ -15,7 +15,6 @@ import QuotePdfPreview, {
   type QuotePdfData, type AdjustmentLine, type RiskItemData,
   computeQuoteSummary,
 } from '../QuotePdfPreview';
-import { INITIAL_CLAUSES } from '../clauses-shared';
 import {
   MOCK_DISCOUNT_TYPES, MOCK_LOADING_TYPES, MOCK_QUOTE_CONFIG,
 } from '../../../setup/pages/policy-specs/quote-config-types';
@@ -227,6 +226,7 @@ export default function QuoteDetailPage() {
     quoteLoadings:     pdfQuoteLoadings,
     quoteDiscounts:    pdfQuoteDiscounts,
     selectedClauseIds: q.selectedClauseIds,
+    selectedClauses:   q.selectedClauses ?? [],
     inputterName:      q.inputterName ?? '',
     approverName:      q.approverName ?? '',
     validityDays:      MOCK_QUOTE_CONFIG.validityDays,
@@ -237,7 +237,7 @@ export default function QuoteDetailPage() {
   const itemResults = summary.items;
   const { totalQuoteLoading, totalQuoteDiscount, finalNet } = summary;
 
-  const selectedClauses = INITIAL_CLAUSES.filter(c => q.selectedClauseIds.includes(c.id));
+  const selectedClauses = q.selectedClauses ?? [];
 
   if (quoteQuery.isLoading && !quoteQuery.data) {
     return (

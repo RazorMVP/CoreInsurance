@@ -3,7 +3,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   Separator,
 } from '@cia/ui';
-import { INITIAL_CLAUSES } from './clauses-shared';
+import type { ClauseSnapshotDto } from '@cia/api-client';
 
 // ── Types for the PDF data model ──────────────────────────────────────────────
 export interface AdjustmentLine {
@@ -38,6 +38,7 @@ export interface QuotePdfData {
   quoteLoadings:     AdjustmentLine[];
   quoteDiscounts:    AdjustmentLine[];
   selectedClauseIds: string[];
+  selectedClauses?:  ClauseSnapshotDto[];
   inputterName:      string;
   approverName:      string;
   /** Days the quote remains valid from the issue date. */
@@ -121,7 +122,7 @@ function fmt(n: number) {
 // ── Print content component ───────────────────────────────────────────────────
 export function PrintContent({ data }: { data: QuotePdfData }) {
   const summary = computeQuoteSummary(data);
-  const selectedClauses = INITIAL_CLAUSES.filter(c => data.selectedClauseIds.includes(c.id));
+  const selectedClauses = data.selectedClauses ?? [];
 
   const cell = 'border border-gray-300 px-2 py-1 text-xs';
   const th   = `${cell} bg-gray-100 font-semibold text-left`;
@@ -369,7 +370,7 @@ export function PrintContent({ data }: { data: QuotePdfData }) {
 // ── Self-contained HTML generator for the print popup ────────────────────────
 function buildPrintHtml(data: QuotePdfData): string {
   const summary = computeQuoteSummary(data);
-  const selectedClauses = INITIAL_CLAUSES.filter(c => data.selectedClauseIds.includes(c.id));
+  const selectedClauses = data.selectedClauses ?? [];
 
   const m = (n: number) =>
     `&#8358;${n.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

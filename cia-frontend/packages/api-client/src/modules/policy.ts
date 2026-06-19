@@ -95,6 +95,15 @@ export const PolicySurveyDtoSchema = z.object({
 });
 export type PolicySurveyDto = z.infer<typeof PolicySurveyDtoSchema>;
 
+// Frozen clause snapshot on the policy (mirrors com.nubeero.cia.common.clause.ClauseSnapshot).
+export const ClauseSnapshotDtoSchema = z.object({
+  id:    z.string(),
+  title: z.string(),
+  text:  z.string(),
+  type:  z.string(),
+});
+export type ClauseSnapshotDto = z.infer<typeof ClauseSnapshotDtoSchema>;
+
 // ── Policy ────────────────────────────────────────────────────────────────
 
 export const PolicyDtoSchema = z.object({
@@ -178,6 +187,7 @@ export const PolicyDtoSchema = z.object({
 
   risks:                    z.array(PolicyRiskDtoSchema),
   coinsuranceParticipants:  z.array(PolicyCoinsuranceParticipantDtoSchema),
+  selectedClauses:          z.array(ClauseSnapshotDtoSchema).optional(),
   survey:                   PolicySurveyDtoSchema.nullable().optional(),
 
   createdAt:                z.string(),

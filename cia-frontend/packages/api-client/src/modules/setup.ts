@@ -268,6 +268,24 @@ export interface AgentDto {
   updatedAt?:     string | null;
 }
 
+// Policy clause bank (V72). Mirrors com.nubeero.cia.setup.policy.* enums.
+export type ClauseType          = 'STANDARD' | 'EXCLUSION' | 'SPECIAL_CONDITION' | 'WARRANTY';
+export type ClauseApplicability = 'MANDATORY' | 'OPTIONAL';
+
+// Mirrors com.nubeero.cia.setup.policy.dto.ClauseResponse (V72).
+export interface ClauseDto {
+  id:            string;
+  title:         string;
+  text:          string;
+  type:          ClauseType;
+  applicability: ClauseApplicability;
+  productIds:    string[];
+  createdAt:     string;
+  updatedAt?:    string | null;
+}
+
+// ClauseSnapshotDto (the frozen snapshot on quotes/policies) is defined canonically in ./policy.
+
 // Mirrors com.nubeero.cia.setup.finance.dto.BankResponse 1:1.
 // Audit timestamps added in Session 97 / Backlog A1.
 export interface BankDto {

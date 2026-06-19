@@ -83,6 +83,7 @@ class PolicyApprovedEventContractTest {
     @Mock private DocumentGenerationService documentGenerationService;
     @Mock private DocumentStorageService documentStorageService;
     @Mock private PolicySurveyService policySurveyService;
+    @Mock private com.nubeero.cia.setup.policy.ClauseService clauseService;
 
     private PolicyService service;
 
@@ -94,7 +95,7 @@ class PolicyApprovedEventContractTest {
                 relationshipManagerRepository,
                 insuranceCompanyRepository,
                 classOfBusinessRepository, auditService, workflowClient, eventPublisher,
-                documentGenerationService, documentStorageService, policySurveyService);
+                documentGenerationService, documentStorageService, policySurveyService, clauseService);
     }
 
     @Test

@@ -1,7 +1,9 @@
 package com.nubeero.cia.documents;
 
+import com.nubeero.cia.common.clause.ClauseSnapshot;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public record PolicyDocumentContext(
@@ -19,5 +21,6 @@ public record PolicyDocumentContext(
         String currencyCode,
         String approvedBy,
         LocalDate approvedDate,
-        String notes
+        String notes,
+        List<ClauseSnapshot> clauses
 ) {}

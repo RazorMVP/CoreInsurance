@@ -51,6 +51,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -77,6 +78,7 @@ public class PolicyService {
     private final DocumentGenerationService documentGenerationService;
     private final DocumentStorageService    documentStorageService;
     private final PolicySurveyService       policySurveyService;
+    private final com.nubeero.cia.setup.policy.ClauseService clauseService;
 
     // ─── Queries ──────────────────────────────────────────────────────────
 
@@ -193,6 +195,11 @@ public class PolicyService {
                                 .sharePercentage(p.getSharePercentage())
                                 .build()));
 
+        // Carry the quote's frozen clause snapshot verbatim — the policy document must match the
+        // issued quote (point-in-time), so we copy the snapshot rather than re-resolve.
+        policy.setSelectedClauses(new ArrayList<>(quote.getSelectedClauses() == null
+                ? List.of() : quote.getSelectedClauses()));
+
         Policy saved = repository.save(policy);
         quoteService.markConverted(quoteId);
         auditService.log("Policy", saved.getId().toString(), AuditAction.CREATE, null, saved);
@@ -268,6 +275,7 @@ public class PolicyService {
                 .policyEndDate(request.getPolicyEndDate())
                 .discount(discount)
                 .notes(request.getNotes())
+                .selectedClauses(clauseService.snapshot(request.getSelectedClauseIds()))
                 .build();
 
         applyRisks(policy, request.getRisks(), product);
@@ -405,7 +413,7 @@ public class PolicyService {
                 saved.getPolicyStartDate(), saved.getPolicyEndDate(),
                 saved.getTotalSumInsured(), saved.getNetPremium(), "NGN",
                 saved.getApprovedBy(), saved.getApprovedAt().atZone(java.time.ZoneOffset.UTC).toLocalDate(),
-                saved.getNotes()));
+                saved.getNotes(), saved.getSelectedClauses()));
         if (docPath != null) {
             saved.setPolicyDocumentPath(docPath);
             saved = repository.save(saved);
@@ -644,6 +652,17 @@ public class PolicyService {
         }
         applyCoinsuranceParticipants(policy, requests);
         validateCoinsuranceShares(policy);
+        auditService.log("Policy", id.toString(), AuditAction.UPDATE, null, policy);
+        return toResponse(policy);
+    }
+
+    /** Replace the policy's clause selection — re-resolves the ids against the clause master and
+     *  re-freezes the snapshot. DRAFT only (a clause change on an issued policy is an endorsement). */
+    @Transactional
+    public PolicyResponse updateClauses(UUID id, List<String> clauseIds) {
+        Policy policy = findOrThrow(id);
+        requireDraftStatus(policy, "update clauses");
+        policy.setSelectedClauses(clauseService.snapshot(clauseIds));
         auditService.log("Policy", id.toString(), AuditAction.UPDATE, null, policy);
         return toResponse(policy);
     }
@@ -1044,6 +1063,7 @@ public class PolicyService {
                 .documentAcknowledgedBy(p.getDocumentAcknowledgedBy())
                 .survey(policySurveyService.getOrNull(p.getId()))
                 .risks(risks).coinsuranceParticipants(participants)
+                .selectedClauses(p.getSelectedClauses())
                 .createdAt(p.getCreatedAt()).updatedAt(p.getUpdatedAt())
                 .build();
     }

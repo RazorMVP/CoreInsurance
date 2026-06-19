@@ -53,7 +53,8 @@ public class DocumentGenerationServiceImpl implements DocumentGenerationService 
                             entry("currencyCode",       ctx.currencyCode()),
                             entry("approvedBy",         ctx.approvedBy()),
                             entry("approvedDate",       fmt(ctx.approvedDate())),
-                            entry("notes",              ctx.notes() != null ? ctx.notes() : "")
+                            entry("notes",              ctx.notes() != null ? ctx.notes() : ""),
+                            entry("clauses",            renderClausesHtml(ctx.clauses()))
                     ));
             byte[] pdf = pdfConverter.convert(html);
             String path = "documents/policies/" + ctx.policyId() + "/policy-certificate.pdf";
@@ -63,6 +64,24 @@ public class DocumentGenerationServiceImpl implements DocumentGenerationService 
             log.error("Policy document generation failed for {}: {}", ctx.policyNumber(), ex.getMessage(), ex);
             return null;
         }
+    }
+
+    /** Builds the escaped HTML for the policy document's clause section ("" when none).
+     *  Injected into the template via the unescaped inline [(${clauses})]. */
+    private static String renderClausesHtml(java.util.List<com.nubeero.cia.common.clause.ClauseSnapshot> clauses) {
+        if (clauses == null || clauses.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder("<hr/><h2>Applicable Clauses</h2>");
+        int i = 1;
+        for (com.nubeero.cia.common.clause.ClauseSnapshot c : clauses) {
+            sb.append("<p><b>").append(i++).append(". ").append(esc(c.title())).append("</b></p>");
+            sb.append("<p>").append(esc(c.text())).append("</p>");
+        }
+        return sb.toString();
+    }
+
+    private static String esc(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     @Override

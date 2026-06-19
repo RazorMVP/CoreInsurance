@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import {
   Button,
@@ -12,28 +13,29 @@ import {
   Textarea,
   Input,
 } from '@cia/ui';
-import type { ClauseRow, ClauseSavePayload } from './clause-types';
-import { PRODUCTS, CLAUSE_TYPES } from './clause-types';
+import { apiClient, type ClauseDto, type ProductDto } from '@cia/api-client';
+import { CLAUSE_TYPES } from './clause-types';
+import { applyApiErrors } from '@/lib/form-errors';
 
-// ── Schema ───────────────────────────────────────────────────────────────────
 const clauseSchema = z.object({
   title:         z.string().min(2, 'Required'),
   text:          z.string().min(10, 'Required'),
   type:          z.enum(['STANDARD', 'EXCLUSION', 'SPECIAL_CONDITION', 'WARRANTY']),
   applicability: z.enum(['MANDATORY', 'OPTIONAL']),
-  productIds:    z.array(z.string()).min(1, 'Select at least one product'),
+  productIds:    z.array(z.string()),   // empty = applies to all products
 });
 type ClauseFormValues = z.infer<typeof clauseSchema>;
 
-// ── Props ────────────────────────────────────────────────────────────────────
 interface Props {
   open:         boolean;
   onOpenChange: (v: boolean) => void;
-  clause:       ClauseRow | null;
-  onSave:       (values: ClauseSavePayload) => void;
+  clause:       ClauseDto | null;
+  products:     ProductDto[];
+  onSuccess:    () => void;
 }
 
-export default function ClauseSheet({ open, onOpenChange, clause, onSave }: Props) {
+export default function ClauseSheet({ open, onOpenChange, clause, products, onSuccess }: Props) {
+  const queryClient = useQueryClient();
   const form = useForm<ClauseFormValues>({
     resolver:      zodResolver(clauseSchema),
     defaultValues: { title: '', text: '', type: 'STANDARD', applicability: 'OPTIONAL', productIds: [] },
@@ -47,10 +49,21 @@ export default function ClauseSheet({ open, onOpenChange, clause, onSave }: Prop
     );
   }, [clause, open, form]);
 
-  function onSubmit(values: ClauseFormValues) {
-    onSave({ title: values.title, text: values.text, type: values.type, applicability: values.applicability, productIds: values.productIds, id: clause?.id ?? undefined });
-    onOpenChange(false);
-  }
+  const save = useMutation({
+    mutationFn: async (values: ClauseFormValues) => {
+      if (clause) {
+        const res = await apiClient.put<{ data: ClauseDto }>(`/api/v1/setup/clauses/${clause.id}`, values);
+        return res.data.data;
+      }
+      const res = await apiClient.post<{ data: ClauseDto }>('/api/v1/setup/clauses', values);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['setup', 'clauses'] });
+      onSuccess();
+    },
+    onError: (e) => applyApiErrors(e, form, { defaultTitle: clause ? 'Could not update clause' : 'Could not add clause' }),
+  });
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -63,9 +76,8 @@ export default function ClauseSheet({ open, onOpenChange, clause, onSave }: Prop
         </SheetHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-6 space-y-5">
+          <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="mt-6 space-y-5">
 
-            {/* Title */}
             <FormField control={form.control} name="title" render={({ field }) => (
               <FormItem>
                 <FormLabel>Clause Title</FormLabel>
@@ -74,52 +86,36 @@ export default function ClauseSheet({ open, onOpenChange, clause, onSave }: Prop
               </FormItem>
             )} />
 
-            {/* Text */}
             <FormField control={form.control} name="text" render={({ field }) => (
               <FormItem>
                 <FormLabel>Clause Text</FormLabel>
                 <FormControl>
-                  <Textarea
-                    placeholder="Enter the full clause wording…"
-                    className="min-h-[100px] resize-y"
-                    {...field}
-                  />
+                  <Textarea placeholder="Enter the full clause wording…" className="min-h-[100px] resize-y" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )} />
 
-            {/* Type */}
             <FormField control={form.control} name="type" render={({ field }) => (
               <FormItem>
                 <FormLabel>Type</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                  </FormControl>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger></FormControl>
                   <SelectContent>
-                    {CLAUSE_TYPES.map(t => (
-                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                    ))}
+                    {CLAUSE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <FormMessage />
               </FormItem>
             )} />
 
-            {/* Applicability toggle */}
             <FormField control={form.control} name="applicability" render={({ field }) => (
               <FormItem>
                 <FormLabel>Applicability</FormLabel>
                 <div className="flex items-start gap-3 pt-1">
-                  <Switch
-                    checked={field.value === 'MANDATORY'}
-                    onCheckedChange={(checked) => field.onChange(checked ? 'MANDATORY' : 'OPTIONAL')}
-                  />
+                  <Switch checked={field.value === 'MANDATORY'} onCheckedChange={(checked) => field.onChange(checked ? 'MANDATORY' : 'OPTIONAL')} />
                   <div>
-                    <p className="text-sm font-medium leading-none">
-                      {field.value === 'MANDATORY' ? 'Mandatory' : 'Optional'}
-                    </p>
+                    <p className="text-sm font-medium leading-none">{field.value === 'MANDATORY' ? 'Mandatory' : 'Optional'}</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       {field.value === 'MANDATORY'
                         ? 'Auto-applied to all new policies for selected products'
@@ -131,60 +127,34 @@ export default function ClauseSheet({ open, onOpenChange, clause, onSave }: Prop
               </FormItem>
             )} />
 
-            {/* Products multi-select */}
             <FormField control={form.control} name="productIds" render={({ field: productsField }) => (
               <FormItem>
-                <FormLabel>Products</FormLabel>
-                {/* Selected chips */}
-                {(productsField.value as string[]).length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {PRODUCTS.filter(p => (productsField.value as string[]).includes(p.id)).map(p => (
-                      <span
-                        key={p.id}
-                        className="inline-flex items-center gap-1 rounded-md bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700"
-                      >
-                        {p.name}
-                        <button
-                          type="button"
-                          onClick={() => {
+                <FormLabel>Products <span className="text-xs font-normal text-muted-foreground">(none = applies to all)</span></FormLabel>
+                {products.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No products configured yet.</p>
+                ) : (
+                  <div className="rounded-md border divide-y max-h-[160px] overflow-y-auto">
+                    {products.map(p => (
+                      <label key={p.id} className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-secondary">
+                        <Checkbox
+                          checked={(productsField.value as string[]).includes(p.id)}
+                          onCheckedChange={() => {
                             const current = productsField.value as string[];
-                            productsField.onChange(current.filter(id => id !== p.id));
+                            productsField.onChange(current.includes(p.id) ? current.filter(id => id !== p.id) : [...current, p.id]);
                           }}
-                          className="hover:text-teal-900"
-                        >
-                          ✕
-                        </button>
-                      </span>
+                        />
+                        <span className="text-sm">{p.name}</span>
+                      </label>
                     ))}
                   </div>
                 )}
-                {/* Checkbox list */}
-                <div className="rounded-md border divide-y max-h-[160px] overflow-y-auto">
-                  {PRODUCTS.map(p => (
-                    <label
-                      key={p.id}
-                      className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-secondary"
-                    >
-                      <Checkbox
-                        checked={(productsField.value as string[]).includes(p.id)}
-                        onCheckedChange={() => {
-                          const current = productsField.value as string[];
-                          productsField.onChange(
-                            current.includes(p.id) ? current.filter(id => id !== p.id) : [...current, p.id],
-                          );
-                        }}
-                      />
-                      <span className="text-sm">{p.name}</span>
-                    </label>
-                  ))}
-                </div>
                 <FormMessage />
               </FormItem>
             )} />
 
             <SheetFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit">Save Clause</Button>
+              <Button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save Clause'}</Button>
             </SheetFooter>
           </form>
         </Form>

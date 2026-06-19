@@ -48,6 +48,7 @@ public class QuoteResponse {
     private List<AdjustmentEntryResponse> quoteLoadings;
     private List<AdjustmentEntryResponse> quoteDiscounts;
     private List<String> selectedClauseIds;
+    private List<com.nubeero.cia.common.clause.ClauseSnapshot> selectedClauses;
 
     private String inputterName;
     private String approverName;

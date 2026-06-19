@@ -1,10 +1,13 @@
 package com.nubeero.cia.policy;
 
+import com.nubeero.cia.common.clause.ClauseSnapshot;
 import com.nubeero.cia.common.entity.BaseEntity;
 import com.nubeero.cia.quotation.BusinessType;
 import com.nubeero.cia.setup.product.CommissionSourceType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -136,6 +139,12 @@ public class Policy extends BaseEntity {
 
     @Column(columnDefinition = "TEXT")
     private String notes;
+
+    /** Point-in-time snapshot of the policy's clauses, frozen at bind/create/edit (V74). */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "selected_clauses", columnDefinition = "jsonb")
+    @Builder.Default
+    private List<ClauseSnapshot> selectedClauses = new ArrayList<>();
 
     @Column(name = "workflow_id", length = 200)
     private String workflowId;

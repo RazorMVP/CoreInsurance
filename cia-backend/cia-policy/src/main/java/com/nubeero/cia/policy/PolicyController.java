@@ -349,6 +349,24 @@ public class PolicyController {
         return ApiResponse.success(service.updateCoinsurance(id, requests));
     }
 
+    @PutMapping("/{id}/clauses")
+    @PreAuthorize("hasRole('UNDERWRITING_UPDATE')")
+    @Operation(summary = "Replace the policy's clause selection",
+               description = "Re-resolves the selected clause ids against the clause master and re-freezes the snapshot onto the policy. Policy must be DRAFT.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Clauses updated",
+            content = @Content(schema = @Schema(implementation = PolicyResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks UNDERWRITING_UPDATE", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Policy not found", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Policy not in DRAFT state", content = @Content)
+    })
+    public ApiResponse<PolicyResponse> updateClauses(
+            @PathVariable UUID id,
+            @RequestBody java.util.List<String> selectedClauseIds) {
+        return ApiResponse.success(service.updateClauses(id, selectedClauseIds));
+    }
+
     // ─── Policy document delivery / acknowledgement / download ────────────
 
     @PostMapping("/{id}/document/send")
