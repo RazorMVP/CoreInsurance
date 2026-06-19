@@ -56,6 +56,25 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-06-19 — Clause Bank backend + quote/policy snapshot (#2, `hardening/clause-bank`) — COMPLETE
+
+**Goal (build-audit item #2 — "Clause Bank mock-only, leaks into the live quote/PDF flow"):** the Clause Bank had **no backend at all** — the Setup CRUD was pure `useState` (edits lost on refresh), quotes stored only clause **ids**, and the clause **text** existed solely in two frontend `INITIAL_CLAUSES` mock constants (which also evaded `check-api-wiring.sh` by naming). The official (backend) quote PDF printed a stub ("N clauses attached"); policies had no clause concept. Plan: `docs/superpowers/plans/2026-06-18-clause-bank-backend.md`. User-confirmed design: **snapshot on creation** (point-in-time, Decision 1=A) + **quote + policy in one slice** (Decision 2=B). Executed inline TDD.
+
+**Backend.**
+
+- **Clause master (cia-setup)** — `Clause` entity + `ClauseType`/`ClauseApplicability` + repo + `ClauseService` (CRUD + reasoned soft-delete + `snapshot(ids)` resolver) + `ClauseController` `/api/v1/setup/clauses` (SETUP_* roles, `?reason=`); mirrors the Agent template. **V72** `clauses` table + the 8-clause seed (was the frontend mock), deterministic UUIDs. `ClauseSnapshot` record in cia-common (frozen `{id,title,text,type}`).
+- **Quote (V73)** — `quotes.selected_clauses` JSONB; `QuoteService` snapshots at create/update/version; `QuoteResponse.selectedClauses`; **`QuotePdfService` renders the frozen text** (replaces the stub) + an `esc()` helper now escapes the adjacent free-text interpolations (customer/product/class/risk/type/signature) so e.g. "Smith & Sons" can't break the PDF.
+- **Policy (V74)** — `policies.selected_clauses` JSONB; `bindFromQuote` carries the quote's snapshot **verbatim** (point-in-time); direct `create` snapshots from `selectedClauseIds`; new **`PUT /api/v1/policies/{id}/clauses`** (UNDERWRITING_UPDATE, DRAFT-gated) re-snapshots; `PolicyResponse.selectedClauses`; the **policy document** (`policy-default.html` via `[(${clauses})]`) renders an escaped clause section.
+- **Tests:** `ClauseServiceSnapshotTest` (2, order + skip-unknown), `V72ClausesMigrationTest` (2, table+seed+CHECK), `QuoteSelectedClausesIT` + `PolicySelectedClausesIT` (5, JSONB round-trip + seed). `PolicyApprovedEventContractTest` constructor updated for the new dep.
+
+**Frontend (all mocks deleted).** api-client `ClauseDto` + canonical `ClauseSnapshotDto` (policy.ts) + `selectedClauses` on Quote/Policy DTOs (check-dto-drift green; `productNames` stays a frontend display-derivation). Setup Clause Bank tab + `ClauseSheet` → real `/api/v1/setup/clauses` + real products (`/api/v1/setup/products`) for the product association + reasoned delete (**deleted `INITIAL_CLAUSES` + `PRODUCTS` mocks**). Quote sheets fetch the live bank for selection; QuoteDetailPage + QuotePdfPreview render the quote's `selectedClauses` snapshot (**deleted `clauses-shared.ts`**). PolicyDetailPage renders the policy snapshot + new `ClausesEditorDialog` (PUT /clauses); removed the dead mock clauses + "+ Add Clause" stub. **`check-api-wiring` + `check-dto-drift` green; back-office `tsc` clean (exit 0).**
+
+**Design notes.** Snapshot stored as JSONB `List<ClauseSnapshot>` (not a child table) — matches the `selected_clause_ids` precedent; a frozen snapshot needs no OneToMany machinery. Direct-entry policy clauses are editor-managed via `ClausesEditorDialog` (DRAFT-gated, like risks/coinsurance), so the leak is fully closed without a create-form picker. The seed's deterministic UUIDs do **not** match legacy short ids (`'c1'`) on any pre-existing demo quote — acceptable pre-launch (new quotes carry real UUIDs).
+
+**Known follow-ups / backlog change:** the build-audit's "Clause Bank mock-only" item is **resolved** (no tracked backlog-table row existed — it was prose in the audit entry). The `check-api-wiring.sh` regex only matches `mockX`/`MOCK_X`; the clause mocks evaded it by naming, but they are now **deleted by construction**, so the evasion is closed — broadening the regex to all-caps data constants would false-positive on legit ones (`CLAUSE_TYPES`), so it was deliberately left unchanged. No new rows.
+
+---
+
 ## 2026-06-18 — Slice H3: server-side file-upload validation (`hardening/file-upload`) — COMPLETE
 
 **Goal (the last launch-blocker `file-upload-validation`, P1):** add server-side validation to all 5 multipart upload endpoints (KYC ID / CAC / director docs, claim docs, document templates), which previously passed the client-supplied `Content-Type` straight to storage with only an empty-check. Plan: `docs/superpowers/plans/2026-06-18-file-upload-validation.md` (11 tasks, inline TDD). User-confirmed design: **per-policy size cap → 422, servlet hard cap → 413** (point A); **validator re-opens the stream** for the magic-byte head read (point A) — both green end-to-end.
