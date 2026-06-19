@@ -11,7 +11,7 @@
 // Added supporting types: AdjustmentEntryDto (for per-risk + quote-level
 // loadings/discounts), QuoteCoinsuranceParticipantDto, AdjustmentFormat enum.
 
-import type { BusinessType } from './policy';
+import type { BusinessType, ClauseSnapshotDto } from './policy';
 
 export type QuoteStatus      = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'CONVERTED' | 'EXPIRED';
 export type AdjustmentFormat = 'PERCENT' | 'FLAT';
@@ -102,6 +102,7 @@ export interface QuoteDto {
   quoteLoadings:            AdjustmentEntryDto[];
   quoteDiscounts:           AdjustmentEntryDto[];
   selectedClauseIds:        string[];
+  selectedClauses?:         ClauseSnapshotDto[];
 
   inputterName?:            string | null;
   approverName?:            string | null;
