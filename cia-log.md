@@ -56,6 +56,18 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-06-20 — `/cia` skill Interaction Conventions + money-math Slice 2 kickoff
+
+**Interaction Conventions (PR #14, `chore/cia-skill-interaction-convention`, merge `4498504`) — MERGED.** Encoded a user working-style rule into `.claude/skills/cia/SKILL.md`: when a decision needs to be taken, present options as a **numbered list by default** (easiest to scan + reply to); reserve a markdown **comparison table** for genuine multi-axis trade-offs (cost/risk/impact); **never** use the `AskUserQuestion` modal for multi-option decisions. New "Interaction Conventions" section near the top of the skill. Reconciled the related working-style memory (`feedback-present-options-as-table` + MEMORY.md pointer) so it no longer contradicts the older "always a table" note — numbered list is now the default, table is the exception. Docs-only; CI green (full backend suite still runs because `ci.yml` isn't path-filtered — that's deliberate, the checks are branch-protection-required so path-filtering would make them "skipped" and block merge). Going forward, decision prompts in this project follow the numbered-list convention.
+
+**PR #13 wrap (Clause Bank).** The CI fix + merge are documented in the 2026-06-19 Clause Bank entry below (CI-fix subsection: `FinanceWebItSupport` flyway-target 66→74; merge `1e66c4f`).
+
+**Money-math Slice 2 (P1 `money-math-test-coverage`) — KICKOFF (no code yet).** Picked up from the backlog (user chose it as the next build item). Explored the three target areas to assess testability: **Quote** (`QuoteService.computeItemNet` LOADING_FIRST/DISCOUNT_FIRST + `sumAdjustments` PERCENT/FLAT + gross `SI×rate/100`) and **Policy** (`recalculateTotals` Σ + `discount.min(totalPremium)` cap + `netPremium`; `computeCommissionAmount` `net×rate/100` HALF_UP; per-risk `SI×rate`) are **pure `private` methods with no instance state** — ideal for direct unit tests. **Claims** "money defaults" are not pure arithmetic (DV amount defaults to `approvedAmount` inside status branches + `Instant.now()` + persistence) → wants a mocked-service test, not a math unit test. Stated slice goal: bring quote loading/discount-sequence math + policy direct-entry premium/commission + claims DV-default under direct test, nothing else. **Awaiting user decision** on approach (1 = visibility-relax `private`→pkg-private `static` + pure unit tests [recommended]; 2 = extract `QuotePremiumCalculator`/`PolicyPremiumCalculator`; 3 = Testcontainers ITs) and process (inline TDD vs plan-doc-first). Slice entry to follow when it lands.
+
+**Known follow-ups / backlog change:** no backlog rows added or removed today (the interaction-convention is a tooling/skill change, not a tracked code slice; money-math Slice 2 is the existing `money-math-test-coverage` P1 row, now in progress).
+
+---
+
 ## 2026-06-19 — Clause Bank backend + quote/policy snapshot (#2, `hardening/clause-bank`) — COMPLETE
 
 **Goal (build-audit item #2 — "Clause Bank mock-only, leaks into the live quote/PDF flow"):** the Clause Bank had **no backend at all** — the Setup CRUD was pure `useState` (edits lost on refresh), quotes stored only clause **ids**, and the clause **text** existed solely in two frontend `INITIAL_CLAUSES` mock constants (which also evaded `check-api-wiring.sh` by naming). The official (backend) quote PDF printed a stub ("N clauses attached"); policies had no clause concept. Plan: `docs/superpowers/plans/2026-06-18-clause-bank-backend.md`. User-confirmed design: **snapshot on creation** (point-in-time, Decision 1=A) + **quote + policy in one slice** (Decision 2=B). Executed inline TDD.
