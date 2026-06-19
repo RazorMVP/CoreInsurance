@@ -69,9 +69,9 @@ public class QuotePdfService {
 
         // Info table
         sb.append("<table><thead><tr><th>Field</th><th>Detail</th></tr></thead><tbody>");
-        sb.append("<tr><td>Prepared For</td><td>").append(q.getCustomerName()).append("</td></tr>");
-        sb.append("<tr><td>Product</td><td>").append(q.getProductName()).append("</td></tr>");
-        sb.append("<tr><td>Class of Business</td><td>").append(q.getClassOfBusinessName()).append("</td></tr>");
+        sb.append("<tr><td>Prepared For</td><td>").append(esc(q.getCustomerName())).append("</td></tr>");
+        sb.append("<tr><td>Product</td><td>").append(esc(q.getProductName())).append("</td></tr>");
+        sb.append("<tr><td>Class of Business</td><td>").append(esc(q.getClassOfBusinessName())).append("</td></tr>");
         sb.append("<tr><td>Business Type</td><td>").append(q.getBusinessType().name().replace('_', ' ')).append("</td></tr>");
         sb.append("<tr><td>Policy Period</td><td>").append(fmt(q.getPolicyStartDate()))
           .append(" to ").append(fmt(q.getPolicyEndDate())).append("</td></tr>");
@@ -84,9 +84,9 @@ public class QuotePdfService {
         int itemNo = 1;
         for (QuoteRisk r : q.getRisks()) {
             if (r.getDeletedAt() != null) continue;
-            sb.append("<p><strong>Item ").append(itemNo++).append(" - ").append(r.getDescription()).append("</strong></p>");
+            sb.append("<p><strong>Item ").append(itemNo++).append(" - ").append(esc(r.getDescription())).append("</strong></p>");
             sb.append("<table><tr><th>Description</th><th>Sum Insured</th><th>Rate (%)</th><th>Gross Premium</th></tr>");
-            sb.append("<tr><td>").append(r.getDescription()).append("</td>")
+            sb.append("<tr><td>").append(esc(r.getDescription())).append("</td>")
               .append("<td>").append(money(r.getSumInsured())).append("</td>")
               .append("<td>").append(r.getRate()).append("%</td>")
               .append("<td>").append(money(r.getGrossPremium())).append("</td></tr></table>");
@@ -104,14 +104,14 @@ public class QuotePdfService {
             sb.append("<tr><td>Sum of Item Net Premiums</td><td>").append(money(totalItemNet)).append("</td></tr>");
             for (AdjustmentEntry l : q.getQuoteLoadings()) {
                 BigDecimal amt = computeAmount(l, totalGross);
-                sb.append("<tr><td>+ Loading: ").append(l.getTypeName())
+                sb.append("<tr><td>+ Loading: ").append(esc(l.getTypeName()))
                   .append(" (").append(formatAdjFmt(l)).append(")</td>")
                   .append("<td>").append(money(amt)).append("</td></tr>");
             }
             for (AdjustmentEntry d : q.getQuoteDiscounts()) {
                 BigDecimal base = totalGross.add(quoteLoading);
                 BigDecimal amt  = computeAmount(d, base);
-                sb.append("<tr><td>- Discount: ").append(d.getTypeName())
+                sb.append("<tr><td>- Discount: ").append(esc(d.getTypeName()))
                   .append(" (").append(formatAdjFmt(d)).append(")</td>")
                   .append("<td>").append(money(amt)).append("</td></tr>");
             }
@@ -123,11 +123,15 @@ public class QuotePdfService {
         sb.append("<p><strong>FINAL NET PREMIUM: ").append(money(finalNet)).append("</strong></p>");
         sb.append("<hr/>");
 
-        // Clauses
-        if (!q.getSelectedClauseIds().isEmpty()) {
+        // Clauses — rendered from the frozen snapshot (V73), not a stub.
+        if (!q.getSelectedClauses().isEmpty()) {
             sb.append("<h2>Applicable Clauses</h2>");
-            sb.append("<p>").append(q.getSelectedClauseIds().size())
-              .append(" clause(s) attached. See full policy document for clause text.</p>");
+            int clauseNo = 1;
+            for (com.nubeero.cia.common.clause.ClauseSnapshot c : q.getSelectedClauses()) {
+                sb.append("<p><strong>").append(clauseNo++).append(". ")
+                  .append(esc(c.title())).append("</strong></p>");
+                sb.append("<p>").append(esc(c.text())).append("</p>");
+            }
         }
 
         // General Subjectivity
@@ -143,8 +147,8 @@ public class QuotePdfService {
 
         // Signatures
         sb.append("<table><tr><th>Prepared by (Underwriter)</th><th>Approved by</th></tr>");
-        sb.append("<tr><td>").append(nvl(q.getInputterName(), "-")).append("</td>")
-          .append("<td>").append(nvl(q.getApproverName(), "-")).append("</td></tr></table>");
+        sb.append("<tr><td>").append(esc(nvl(q.getInputterName(), "-"))).append("</td>")
+          .append("<td>").append(esc(nvl(q.getApproverName(), "-"))).append("</td></tr></table>");
 
         sb.append("<p>NubSure by Nubeero Technologies. Computer generated quotation.</p>");
         sb.append("</body></html>");
@@ -153,6 +157,14 @@ public class QuotePdfService {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    /** Escapes HTML metacharacters in interpolated free text (customer/clause/etc.) before it
+     *  reaches the PDF HTML — a name like "Smith &amp; Sons" or admin-authored clause text must not
+     *  break the markup the PDFBox renderer parses. */
+    private static String esc(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
     private void appendAdjTable(StringBuilder sb, String title,
                                  List<AdjustmentEntry> entries, BigDecimal base) {
         if (entries == null || entries.isEmpty()) return;
@@ -160,7 +172,7 @@ public class QuotePdfService {
           .append("<tr><th>Type</th><th>Format</th><th>Amount</th></tr>");
         for (AdjustmentEntry e : entries) {
             BigDecimal amt = computeAmount(e, base);
-            sb.append("<tr><td>").append(e.getTypeName()).append("</td>")
+            sb.append("<tr><td>").append(esc(e.getTypeName())).append("</td>")
               .append("<td>").append(formatAdjFmt(e)).append("</td>")
               .append("<td>").append(money(amt)).append("</td></tr>");
         }

@@ -115,6 +115,12 @@ public class Quote extends BaseEntity {
     @Builder.Default
     private List<String> selectedClauseIds = new ArrayList<>();
 
+    /** Point-in-time snapshot of the selected clauses' text, frozen at create from the clause master (V73). */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "selected_clauses", columnDefinition = "jsonb")
+    @Builder.Default
+    private List<com.nubeero.cia.common.clause.ClauseSnapshot> selectedClauses = new ArrayList<>();
+
     @Column(name = "inputter_name", length = 200)
     private String inputterName;
 
