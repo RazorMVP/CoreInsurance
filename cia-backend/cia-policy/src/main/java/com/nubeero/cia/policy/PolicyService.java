@@ -844,7 +844,9 @@ public class PolicyService {
         });
     }
 
-    private void recalculateTotals(Policy policy, BigDecimal discount) {
+    // Package-private static for direct unit testing (money-math-test-coverage
+    // Slice 2). Stateless — mutates only the passed policy from its own risks.
+    static void recalculateTotals(Policy policy, BigDecimal discount) {
         BigDecimal totalSumInsured = policy.getRisks().stream()
                 .map(PolicyRisk::getSumInsured)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -968,7 +970,9 @@ public class PolicyService {
      * <p>Formula: {@code netPremium × commissionRate / 100}, rounded to 2dp
      * HALF_UP — matches the standard money rounding used across the GL.
      */
-    private BigDecimal computeCommissionAmount(Policy policy) {
+    // Package-private static for direct unit testing (money-math-test-coverage
+    // Slice 2). Stateless — pure function of the policy's net premium + rate.
+    static BigDecimal computeCommissionAmount(Policy policy) {
         if (policy.getCommissionRate() == null) return null;
         if (policy.getNetPremium() == null) return null;
         return policy.getNetPremium()

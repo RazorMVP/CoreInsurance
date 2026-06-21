@@ -428,7 +428,9 @@ public class QuoteService {
      * If LOADING_FIRST: Loaded = Gross + Σloadings; Net = Loaded - Σdiscounts
      * If DISCOUNT_FIRST: Discounted = Gross - Σdiscounts; Net = Discounted + Σloadings
      */
-    private BigDecimal computeItemNet(BigDecimal gross,
+    // Package-private static for direct unit testing (money-math-test-coverage
+    // Slice 2). Stateless — depends only on its arguments.
+    static BigDecimal computeItemNet(BigDecimal gross,
                                       List<AdjustmentEntry> loadings,
                                       List<AdjustmentEntry> discounts,
                                       CalcSequence sequence) {
@@ -447,7 +449,7 @@ public class QuoteService {
         }
     }
 
-    private BigDecimal sumAdjustments(List<AdjustmentEntry> entries, BigDecimal base) {
+    static BigDecimal sumAdjustments(List<AdjustmentEntry> entries, BigDecimal base) {
         if (entries == null || entries.isEmpty()) return BigDecimal.ZERO;
         return entries.stream()
                 .map(e -> {
