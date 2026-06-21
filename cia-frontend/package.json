@@ -8,6 +8,7 @@
     "dev:partner": "turbo dev --filter=@cia/partner",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
+    "test": "turbo test",
     "clean": "turbo clean && rm -rf node_modules"
   },
   "devDependencies": {
