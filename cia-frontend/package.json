@@ -9,9 +9,13 @@
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
+    "e2e:build": "VITE_API_BASE_URL=${E2E_API_BASE_URL:-http://localhost:8090} VITE_KEYCLOAK_URL= VITE_DEMO_MODE=true pnpm --filter @cia/back-office exec vite build",
+    "e2e": "pnpm e2e:build && playwright test",
     "clean": "turbo clean && rm -rf node_modules"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^20",
     "turbo": "^2.3.3",
     "typescript": "^5.6.3"
   },
