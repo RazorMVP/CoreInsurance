@@ -126,6 +126,11 @@ cia:
       token-url: ${PARTNER_TOKEN_URL:http://localhost:8280/realms/cia/protocol/openid-connect/token}
     webhook:
       signing-secret: ${WEBHOOK_SIGNING_SECRET:dev-secret-replace-in-prod}
+    rate-limit:
+      enabled: ${PARTNER_API_RATE_LIMIT_ENABLED:true}
+      # Fallback requests/minute when a client_id has no resolvable PartnerApp
+      # (the real per-partner budget is PartnerApp.rateLimitRpm).
+      default-rpm: ${PARTNER_API_RATE_LIMIT_DEFAULT_RPM:60}
 
   deployment:
     # Deployment-environment marker that gates ProductionSafetyValidator.
@@ -214,19 +219,13 @@ springdoc:
     path: /partner/docs
   default-produces-media-type: application/json
 
+# Partner API rate limiting is handled by PartnerRateLimitFilter (per-client,
+# keyed by client_id, sized to PartnerApp.rateLimitRpm) — see RateLimitConfig.
+# The old declarative bucket4j starter filter used a single shared bucket for
+# ALL partners (no cache-key), so one partner could exhaust everyone's budget;
+# it is disabled here.
 bucket4j:
-  enabled: true
-  cache-to-use: redis-jedis
-  filters:
-    - cache-name: rate-limit-partner
-      url: /partner/v1/.*
-      filter-method: SERVLET
-      rate-limits:
-        - bandwidths:
-            - capacity: 1000
-              time: 1
-              unit: minutes
-              refill-speed: interval
+  enabled: false
 
 logging:
   level:
