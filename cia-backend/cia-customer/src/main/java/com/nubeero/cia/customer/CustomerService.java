@@ -535,7 +535,8 @@ public class CustomerService {
     }
 
     /** Validates that DL/Passport expiry date is present and not in the past. */
-    private void validateExpiryDate(IdType idType, LocalDate expiryDate, String label) {
+    // Package-private static for direct unit testing (zero-test-modules). Pure.
+    static void validateExpiryDate(IdType idType, LocalDate expiryDate, String label) {
         if (idType == IdType.DRIVERS_LICENSE || idType == IdType.PASSPORT) {
             if (expiryDate == null) {
                 throw new BusinessRuleException("MISSING_EXPIRY_DATE",
@@ -564,7 +565,8 @@ public class CustomerService {
         }
     }
 
-    private String getExtension(String filename) {
+    // Package-private static for direct unit testing (zero-test-modules). Pure.
+    static String getExtension(String filename) {
         if (filename == null || !filename.contains(".")) return "";
         return filename.substring(filename.lastIndexOf('.'));
     }
@@ -590,7 +592,9 @@ public class CustomerService {
         });
     }
 
-    private void applyKycResult(Customer customer, KycResult result) {
+    // Package-private static for direct unit testing (zero-test-modules). Pure
+    // mapping of a KYC outcome onto the customer's status fields.
+    static void applyKycResult(Customer customer, KycResult result) {
         if (result.isVerified()) {
             customer.setKycStatus(KycStatus.PASSED);
             customer.setKycVerifiedAt(Instant.now());
