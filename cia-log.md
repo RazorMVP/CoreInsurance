@@ -56,6 +56,14 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-06-23 — Merged E2E harness to main + opened `db-backup-dr` slice — IN PROGRESS
+
+**PR #21 merged.** `test/e2e-playwright-golden-paths` (full-stack Playwright harness + per-module golden paths + `E2eMockAuthFilter` + `.github/workflows/e2e.yml`) went green on every check — Backend Testcontainers, **Full-stack E2E 8/8 in CI**, Trivy, helm, kind-smoke, both Vercel deploys — and was **merged to `main`** (merge commit `cf5b086`, branch deleted). Detail in the 2026-06-22 entry below; backlog already reconciled there (`e2e-playwright-golden-paths` → `e2e-deep-user-flows` P3, row 31). No new backlog change from the merge itself.
+
+**`db-backup-dr` (P2) slice opened — scoping presented, awaiting sequencing decision.** Audited the infra on main: `MultiTenantConnectionProvider` (cia-common) holds a **single** `DataSource`, sets `search_path TO "<tenant>", public` per borrow; `cia-reports` issues `EntityManager.createNativeQuery()` through the **same Hibernate session**, so a connection-provider-level read-replica route *would* catch those native reads **iff** report read-paths are `@Transactional(readOnly=true)`. `application-prod.yml` documents the single shared pool; no replica datasource, no DR runbook (`docs-site/docs/operations/` has none), no backup CronJob in `deploy/helm/cia-backend/`. Concluded the item is **two separable deliverables** (one-goal-per-slice): **(A)** backup/restore/PITR + DR runbook (docs + an optional helm logical-backup `CronJob`; managed-Postgres PITR is primary) — ops/infra, no app-core risk; **(B)** read-replica routing for cia-reports (conditional replica `DataSource` + `AbstractRoutingDataSource` keyed off `readOnly` tx + `@Transactional(readOnly=true)` on report reads + `DB_REPLICA_URL` in helm + a decisive two-Testcontainers IT) — additive (no replica configured ⇒ byte-identical to today), but touches the tenant-isolation core so isolated in its own PR. Presented a numbered sequencing choice (A→B separate PRs / one combined PR / B→A). **No code written yet** — pending the user's pick. Backlog unchanged this turn (row 37 `db-backup-dr` stays until the slice lands).
+
+---
+
 ## 2026-06-22 — Full-stack E2E harness + per-module golden paths (`test/e2e-playwright-golden-paths`) — COMPLETE
 
 **Goal (P2 `e2e-playwright-golden-paths`):** the repo had **zero E2E** (no Playwright anywhere). User chose (after a scope discussion) **option 2 — full-stack E2E, a path per module** (real backend, not route-mocked).
