@@ -32,3 +32,20 @@ ingress:
   tlsSecretName: cia-backend-tls
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
+
+# Optional logical-backup CronJob (SECONDARY to managed-Postgres PITR — the DR
+# primary). Placeholders below; swap for real values at go-live. See
+# docs-site/docs/operations/disaster-recovery.md.
+backup:
+  enabled: true
+  image: "REPLACE_ME/pg-dump-s3:16"   # image with pg_dump 16 + aws-cli; pin by digest
+  schedule: "0 1 * * *"
+  db:
+    host: "postgres.internal"
+    port: 5432
+    name: cia
+  s3:
+    bucket: "cia-db-backups"
+    prefix: db-backups
+    region: us-east-1
+    endpoint: ""

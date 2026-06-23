@@ -40,6 +40,7 @@ const sidebars: SidebarsConfig = {
       type: "category",
       label: "Operations",
       items: [
+        "operations/disaster-recovery",
         "operations/period-end-closures-backfill",
       ],
     },
