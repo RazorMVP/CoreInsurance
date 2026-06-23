@@ -1,5 +1,6 @@
 package com.nubeero.cia.reports.service;
 
+import com.nubeero.cia.common.datasource.ReplicaRoutingContext;
 import com.nubeero.cia.reports.controller.dto.ReportResultDto;
 import com.nubeero.cia.reports.controller.dto.ReportRunRequest;
 import com.nubeero.cia.reports.domain.ReportDefinition;
@@ -32,18 +33,23 @@ public class ReportRunnerService {
 
     @Transactional(readOnly = true)
     public ReportResultDto run(ReportRunRequest request) {
-        ReportDefinition definition = definitionService.get(request.getReportId());
-        List<Map<String, Object>> rows = queryBuilder.execute(definition, request.getFilters());
+        // Route this report-heavy analytical query to the read replica when one
+        // is configured (no-op otherwise). Set before the first DB access so the
+        // whole transaction's held connection lands on the replica.
+        return ReplicaRoutingContext.onReplica(() -> {
+            ReportDefinition definition = definitionService.get(request.getReportId());
+            List<Map<String, Object>> rows = queryBuilder.execute(definition, request.getFilters());
 
-        List<ReportField> columns = definition.getConfig().getFields() != null
-                ? definition.getConfig().getFields()
-                : List.of();
+            List<ReportField> columns = definition.getConfig().getFields() != null
+                    ? definition.getConfig().getFields()
+                    : List.of();
 
-        return ReportResultDto.builder()
-                .columns(columns)
-                .rows(rows)
-                .totalRows(rows.size())
-                .build();
+            return ReportResultDto.builder()
+                    .columns(columns)
+                    .rows(rows)
+                    .totalRows(rows.size())
+                    .build();
+        });
     }
 
     /**
@@ -58,34 +64,38 @@ public class ReportRunnerService {
 
     @Transactional(readOnly = true)
     public CsvExport runCsv(ReportRunRequest request) {
-        ReportDefinition definition = definitionService.get(request.getReportId());
-        // Fetch one extra row so we can detect when the dataset exceeded the cap.
-        List<Map<String, Object>> rows = queryBuilder.execute(
-                definition, request.getFilters(), ReportQueryBuilder.EXPORT_MAX_ROWS + 1);
-        boolean truncated = rows.size() > ReportQueryBuilder.EXPORT_MAX_ROWS;
-        if (truncated) {
-            rows = rows.subList(0, ReportQueryBuilder.EXPORT_MAX_ROWS);
-        }
-        List<ReportField> columns = definition.getConfig().getFields() != null
-                ? definition.getConfig().getFields()
-                : List.of();
-        return new CsvExport(csvRenderer.render(columns, rows), truncated, rows.size());
+        return ReplicaRoutingContext.onReplica(() -> {
+            ReportDefinition definition = definitionService.get(request.getReportId());
+            // Fetch one extra row so we can detect when the dataset exceeded the cap.
+            List<Map<String, Object>> rows = queryBuilder.execute(
+                    definition, request.getFilters(), ReportQueryBuilder.EXPORT_MAX_ROWS + 1);
+            boolean truncated = rows.size() > ReportQueryBuilder.EXPORT_MAX_ROWS;
+            if (truncated) {
+                rows = rows.subList(0, ReportQueryBuilder.EXPORT_MAX_ROWS);
+            }
+            List<ReportField> columns = definition.getConfig().getFields() != null
+                    ? definition.getConfig().getFields()
+                    : List.of();
+            return new CsvExport(csvRenderer.render(columns, rows), truncated, rows.size());
+        });
     }
 
     @Transactional(readOnly = true)
     public PdfExport runPdf(ReportRunRequest request) {
-        ReportDefinition definition = definitionService.get(request.getReportId());
-        List<Map<String, Object>> rows = queryBuilder.execute(
-                definition, request.getFilters(), ReportQueryBuilder.EXPORT_MAX_ROWS + 1);
-        boolean truncated = rows.size() > ReportQueryBuilder.EXPORT_MAX_ROWS;
-        if (truncated) {
-            rows = rows.subList(0, ReportQueryBuilder.EXPORT_MAX_ROWS);
-        }
-        List<ReportField> columns = definition.getConfig().getFields() != null
-                ? definition.getConfig().getFields()
-                : List.of();
-        byte[] bytes = pdfRenderer.render(definition, columns, rows, request.getFilters());
-        return new PdfExport(bytes, truncated, rows.size());
+        return ReplicaRoutingContext.onReplica(() -> {
+            ReportDefinition definition = definitionService.get(request.getReportId());
+            List<Map<String, Object>> rows = queryBuilder.execute(
+                    definition, request.getFilters(), ReportQueryBuilder.EXPORT_MAX_ROWS + 1);
+            boolean truncated = rows.size() > ReportQueryBuilder.EXPORT_MAX_ROWS;
+            if (truncated) {
+                rows = rows.subList(0, ReportQueryBuilder.EXPORT_MAX_ROWS);
+            }
+            List<ReportField> columns = definition.getConfig().getFields() != null
+                    ? definition.getConfig().getFields()
+                    : List.of();
+            byte[] bytes = pdfRenderer.render(definition, columns, rows, request.getFilters());
+            return new PdfExport(bytes, truncated, rows.size());
+        });
     }
 
     // ── Pin management ─────────────────────────────────────────────────

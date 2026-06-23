@@ -237,4 +237,4 @@ target and record the result + timings (feeds the RTO/RPO table in §2).
 | Logical secondary backup (CronJob) | `deploy/helm/cia-backend` (`backup.*`) | Opt-in; §3.2 |
 | Encryption-key custody | Secret manager | §3.3 — separate from DB backups |
 | Restore procedures + drill | This runbook | §4–§7 |
-| Read-scaling for reports (replica) | (follow-up — read-replica routing) | Tracked separately; not a DR mechanism |
+| Read-scaling for reports (replica) | App: `CIA_DATASOURCE_REPLICA_URL` + `ReplicaRoutingDataSource` (only `cia-reports` runs route there) | Read offload only — **not** a DR mechanism (a replica is not a backup; it replicates corruption and drops too) |

@@ -33,6 +33,15 @@ env:
   STORAGE_BUCKET: cia-documents
   PARTNER_API_RATE_LIMIT_STORE: in-memory
   JAVA_OPTS: "-XX:MaxRAMPercentage=70"
+  # Optional read replica for the report-heavy cia-reports analytical queries
+  # (see docs-site/docs/operations/disaster-recovery.md + CLAUDE.md §7). UNSET =
+  # single pool, the default. To enable, uncomment + set the replica JDBC URL;
+  # only cia-reports report runs route there, everything else stays on primary.
+  # Credentials default to the primary's (DB_USERNAME/DB_PASSWORD) unless you
+  # also add CIA_DATASOURCE_REPLICA_USERNAME/_PASSWORD to the Secret.
+  # NOTE: omit the key entirely to disable — do NOT set it blank (a blank value
+  # still activates routing and the replica pool would fail to connect).
+  # CIA_DATASOURCE_REPLICA_URL: "jdbc:postgresql://<replica-host>:5432/cia"
 
 resources:
   requests:
