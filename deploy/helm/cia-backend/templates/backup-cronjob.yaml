@@ -1,0 +1,114 @@
+{{- if .Values.backup.enabled }}
+# OPTIONAL logical-backup CronJob — SECONDARY to managed-Postgres PITR.
+# This is the portable, app-version-aware logical snapshot (provider-independent,
+# the escape hatch from managed-backup corruption / provider lock-in). Managed
+# Postgres PITR remains the DR PRIMARY. See:
+#   docs-site/docs/operations/disaster-recovery.md
+# Disabled by default; enabled in values-prod.example.yaml so CI kubeconform
+# validates this template. Retention is an object-storage LIFECYCLE policy on the
+# target bucket/prefix — NOT enforced here.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "cia-backend.fullname" . }}-db-backup
+  labels:
+    {{- include "cia-backend.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db-backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  # Never let a slow dump overlap the next scheduled one.
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: {{ .Values.backup.historyLimit.success }}
+  failedJobsHistoryLimit: {{ .Values.backup.historyLimit.failed }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.backup.backoffLimit }}
+      activeDeadlineSeconds: {{ .Values.backup.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "cia-backend.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: db-backup
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "cia-backend.serviceAccountName" . }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: db-backup
+              # MUST bundle pg_dump (matching the server major version) AND the
+              # object-storage client your uploadCommand uses. Stock postgres:16
+              # has pg_dump but NO s3 client — supply a combined image.
+              image: {{ required "backup.image is required when backup.enabled=true (an image with pg_dump + an object-storage client)" .Values.backup.image | quote }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  ts="$(date -u +%Y%m%dT%H%M%SZ)"
+                  dump="/tmp/cia-${ts}.sql.gz"
+                  echo "[backup] pg_dump start ${ts} (host=${PGHOST} db=${PGDATABASE})"
+                  # --no-owner/--no-privileges keep the dump restorable into a
+                  # differently-owned staging instance during a drill.
+                  pg_dump --format=plain --no-owner --no-privileges --schema='*' | gzip > "${dump}"
+                  echo "[backup] dumped $(du -h "${dump}" | cut -f1), uploading"
+                  endpoint_arg=""
+                  [ -n "${S3_ENDPOINT:-}" ] && endpoint_arg="--endpoint-url ${S3_ENDPOINT}"
+                  {{ .Values.backup.uploadCommand }}
+                  echo "[backup] uploaded to s3://${S3_BUCKET}/${S3_PREFIX}/cia-${ts}.sql.gz — done"
+              env:
+                # libpq connection — NOT the JDBC DB_URL (which pg_dump can't parse).
+                - name: PGHOST
+                  value: {{ required "backup.db.host is required when backup.enabled=true" .Values.backup.db.host | quote }}
+                - name: PGPORT
+                  value: {{ .Values.backup.db.port | quote }}
+                - name: PGDATABASE
+                  value: {{ .Values.backup.db.name | quote }}
+                # Creds reuse the app Secret — least-privilege: only these 4 keys.
+                - name: PGUSER
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.existingSecret }}
+                      key: DB_USERNAME
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.existingSecret }}
+                      key: DB_PASSWORD
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.existingSecret }}
+                      key: STORAGE_ACCESS_KEY
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.existingSecret }}
+                      key: STORAGE_SECRET_KEY
+                - name: AWS_DEFAULT_REGION
+                  value: {{ .Values.backup.s3.region | quote }}
+                - name: S3_BUCKET
+                  value: {{ required "backup.s3.bucket is required when backup.enabled=true" .Values.backup.s3.bucket | quote }}
+                - name: S3_PREFIX
+                  value: {{ .Values.backup.s3.prefix | quote }}
+                - name: S3_ENDPOINT
+                  value: {{ .Values.backup.s3.endpoint | quote }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            # readOnlyRootFilesystem=true ⇒ the gzip dump must land on a writable
+            # emptyDir. Size it for the largest expected compressed dump.
+            - name: tmp
+              emptyDir:
+                sizeLimit: {{ .Values.backup.tmpSizeLimit | quote }}
+{{- end }}
