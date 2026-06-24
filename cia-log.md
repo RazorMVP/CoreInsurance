@@ -48,11 +48,31 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 | R7-twilio-prod | P3 | Twilio SMS prod-impl on top of the R7 SPI | R7 brainstorm (Session 133): same as `R7-termii-prod` but for non-Nigerian tenants. `TwilioSmsService` against the Twilio Programmable SMS API; `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_FROM_NUMBER` envs. Lower priority than Termii because the platform is Nigeria-first; ship only when the first non-NG tenant onboards. |
 | reports-frontend-datasource-union-sync | P3 | Frontend `DataSource` union lags the backend enum | The frontend string-union `DataSource` in `cia-frontend/apps/back-office/src/modules/reports/types/report.types.ts` is two values behind the backend `cia-reports` enum: missing `RM_COMMISSION` (V64) and `UNDERWRITING_PERFORMANCE` (V66). Harmless today — the ReportViewer never reads `dataSource`, no zod parse validates report responses (TS unions aren't runtime-enforced), and the custom-report-builder picker is driven by a separate `DATA_SOURCE_OPTIONS` list (these two aggregate sources are deliberately excluded from the builder). The gap was set by the V64 RM_COMMISSION slice and not worsened by V66. Becomes real only if someone adds a runtime zod parse of report responses or another exhaustive `Record<DataSource,...>` consumed for SYSTEM reports. Fix: add both values to the union (keep them out of `DATA_SOURCE_OPTIONS`). Trivial; do when next touching reports FE types. |
 | bindFromQuote-rm-derivation-it | P3 | `bindFromQuote` RM-derivation IT now unblocked | Was blocked by `quote-risk-gross-premium-drift` (a seeded APPROVED quote drove a `QuoteRisk` fetch that failed on the missing `gross_premium` column). That drift is fixed by V65 (Session 136), so the quote-conversion RM-derivation case in `PolicyRmCommissionDerivationIT` can now be added. Low priority: the four `create()` direct-entry cases already cover the broker→agent→RM→none fallback, and both entry points share `resolveCommissionSnapshot`, so the logic is covered; this is purely a second-entry-point coverage nicety. |
-| backoffice-client-reconcile-direct-grants | P2 | `ensureBackOfficeClient` reconcile path doesn't re-assert `directAccessGrantsEnabled=false` | Surfaced in SP1 Task 1 code review (the platform-client equivalent was fixed in-slice). `KeycloakTenantProvisioner.ensureBackOfficeClient`'s create path sets `directAccessGrantsEnabled=false` (auth-code+PKCE only), but the reconcile branch only re-asserts publicClient/standardFlow/redirectUris/webOrigins/PKCE — NOT direct-access-grants. If an operator manually re-enables the ROPC (password) grant in the Keycloak console, the drift is never corrected on the next provisioning sweep, letting stolen back-office user creds skip the PKCE flow. Same one-line fix as the platform client: add a `directAccessGrantsEnabled` reconcile check + an IT assertion. P2 (auth-client drift, low likelihood — requires console tampering — but real). |
 | platform-hard-delete-tenant | P3 | No hard tenant delete — suspend only | SP1 deliberately ships suspend/activate (flip `public.tenants.active`) but no destructive delete: tenant data is regulated (NDPR + NAICOM retention), so purging a tenant schema + Keycloak realm + registry row needs an NDPR/retention-aware workflow (export/retain per policy, then drop), not a DELETE endpoint. Build a guarded `platform`-scoped retention/purge Temporal workflow when a real decommissioning requirement exists; until then suspend is the correct terminal state. |
 | api-client-vitest-infra | P3 | `@cia/api-client` has no vitest infra — its first co-located test runs only via an app's vitest | Surfaced in SP2 Task 13. `packages/api-client/src/modules/platform.test.ts` is the first-ever test in the package; it has no `vitest` devDep, no `vitest.config.ts`, no `test` script. So the test runs only via a consuming app's vitest binary (`vitest run src/modules/platform.test.ts --root packages/api-client`), and a manual `tsc --noEmit` over the package reports `Cannot find module 'vitest'` on the test file. **Zero CI impact** — CI typechecks only `@cia/back-office` + `@cia/partner` (not api-client), the barrel re-exports only `platform.ts` (not the test), and `check-dto-drift` (the real api-client CI gate) passes. Fix: add `vitest` devDep + a minimal `vitest.config.ts` + a `test` script to `@cia/api-client`. Natural to bundle with `frontend-tests-in-ci` (P2). |
 
 **Discoveries policy.** Every slice ends by either (a) decrementing rows from this table, (b) adding rows with a P-rating, or (c) leaving it unchanged. The "Known follow-ups" section of the session entry must explicitly point to the row(s) added or removed.
+
+---
+
+## 2026-06-24 — Back-office client reconcile re-disables directAccessGrants (`fix/backoffice-client-reconcile-direct-grants`) — COMPLETE
+
+**Goal (P2 `backoffice-client-reconcile-direct-grants`).** `KeycloakTenantProvisioner.ensureBackOfficeClient`'s create path sets `directAccessGrantsEnabled=false` (auth-code + PKCE only), but its **reconcile** branch only re-asserted public/standard-flow/redirects/web-origins/PKCE — **not** direct-access-grants. So if an operator re-enabled the ROPC (password) grant in the Keycloak console, the next provisioning sweep never corrected it, leaving a window where stolen back-office user creds could skip the PKCE flow. The platform-client equivalent (`ensurePlatformClient`) already had the guard (fixed in-slice during SP1); this closes the back-office gap.
+
+**Change.** One reconcile check added to `ensureBackOfficeClient`, mirroring `ensurePlatformClient` exactly (same position, right after the standard-flow check):
+
+```java
+if (Boolean.TRUE.equals(existing.isDirectAccessGrantsEnabled())) {
+    existing.setDirectAccessGrantsEnabled(false);
+    changed = true;
+}
+```
+
+**Test.** New IT `KeycloakTenantProvisionerIT.reconcilesBackOfficeClientDirectAccessGrantsDrift` (against a real Keycloak Testcontainer): provision → flip `directAccessGrantsEnabled=true` via the admin client (simulating console tampering) → assert the drift took → re-provision → assert it's reconciled back to `false`. **6/6** in the IT (was 5), BUILD SUCCESS.
+
+**Docs.** CLAUDE.md §8 S139 reconcile note updated to list direct-access-grants in the create-then-reconcile drift set.
+
+**Known follow-ups / backlog change:** **removed** row `backoffice-client-reconcile-direct-grants` (P2) — landed. No rows added.
 
 ---
 
@@ -64,7 +84,7 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 **Change.** One BOM-property override in `cia-backend/pom.xml`: `<jackson-bom.version>2.21.4</jackson-bom.version>` — same mechanism as the S144 `tomcat`/`netty`/`postgresql` overrides (a real spring-boot-dependencies BOM property name, so a `<properties>` value bumps the whole jackson family). Verified: `mvn dependency:tree -Dincludes=...jackson-databind` resolves **2.21.4** (was 2.21.2), BUILD SUCCESS. CLAUDE.md §Testing-Requirements S144 CVE-pins note updated (jackson added; stale netty `.134`→`.135` mention corrected in passing).
 
-**Known follow-ups / backlog change:** none — discovered + fixed in this slice, no lingering row. (Sequencing: this merges first to green `main`'s image gate; PR #24 then rebases onto the fixed `main` so its own Trivy gate clears.)
+**Known follow-ups / backlog change:** none — discovered + fixed in this slice, no lingering row. (Sequencing: this merged first to green `main`'s image gate; PR #24 then rebases onto the fixed `main` so its own Trivy gate clears.)
 
 ---
 
