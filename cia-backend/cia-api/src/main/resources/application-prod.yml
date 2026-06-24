@@ -25,6 +25,18 @@ spring:
       # (catches a missing try-with-resources before it starves the pool).
       leak-detection-threshold: ${DB_POOL_LEAK_DETECTION_MS:60000}
       # base application.yml's connection-init-sql (pgcrypto pii-key) is inherited.
+  # Graceful shutdown drain window: how long the context waits for in-flight work
+  # (HTTP requests + the embedded Temporal worker) to finish on SIGTERM. Kept
+  # below the Helm Deployment's terminationGracePeriodSeconds (90s) so the JVM
+  # drains cleanly before k8s sends SIGKILL (k8s-termination-grace).
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+# Graceful shutdown — on SIGTERM stop accepting new requests and let in-flight
+# ones complete (vs the default IMMEDIATE, which drops them). Paired with the
+# Helm preStop drain so the Service endpoint deregisters first.
+server:
+  shutdown: graceful
 
 logging:
   level:

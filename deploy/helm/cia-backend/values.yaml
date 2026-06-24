@@ -84,6 +84,28 @@ pdb:
   enabled: true
   minAvailable: 2
 
+# Graceful pod termination (k8s-termination-grace). On SIGTERM: the native
+# preStop sleep lets the Service endpoint deregister (no new requests arrive),
+# then the JVM drains in-flight HTTP + Temporal work (server.shutdown=graceful
+# in application-prod.yml), all inside terminationGracePeriodSeconds before SIGKILL.
+# Budget: terminationGracePeriodSeconds >= preStopDrainSeconds + Spring drain (30s).
+terminationGracePeriodSeconds: 90
+preStopDrainSeconds: 5            # native lifecycle.preStop.sleep (k8s >= 1.29)
+
+# Spread replicas so the HPA (3->10) can't pile every pod onto one node/zone —
+# the PDB protects voluntary disruption only, not a node/AZ failure
+# (k8s-topology-spread). labelSelector is auto-injected from the chart's pod
+# labels. Default ScheduleAnyway (best-effort) so an imbalanced cluster never
+# leaves pods unschedulable; set whenUnsatisfiable=DoNotSchedule per-domain for
+# hard spread once the real cluster topology is known.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+
 # OPTIONAL logical-backup CronJob — SECONDARY to managed-Postgres PITR (the DR
 # PRIMARY). Disabled by default; see docs-site/docs/operations/disaster-recovery.md.
 # When enabled, backup.image / backup.db.host / backup.s3.bucket are REQUIRED
