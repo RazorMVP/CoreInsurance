@@ -56,6 +56,18 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-06-24 — jackson-databind 2.21.2 → 2.21.4 (CVE-2026-54512/54513) (`fix/jackson-databind-cve-2026-54512`) — COMPLETE
+
+**Goal.** Clear two newly-disclosed (2026-06) HIGH CVEs in `com.fasterxml.jackson.core:jackson-databind` 2.21.2 — the version the Spring Boot 3.5.14 BOM pins: **CVE-2026-54512** (PolymorphicTypeValidator bypass) + **CVE-2026-54513** (array subtype allowlist bypass). Both fixed in **2.21.4** (same patch line, drop-in).
+
+**How it surfaced.** The `backend-image.yml` Trivy gate failed on PR #24 (`backoffice-client-reconcile-direct-grants`) at the "Report high and critical CVEs" step — NOT from that PR's code (it adds zero deps): Trivy's CVE DB updated overnight and now flags the BOM-pinned jackson, so the gate fails on **every** build today including `main`'s. Per slice discipline this is a side-discovery, split out of #24 into its own one-goal slice (off `main`) rather than absorbed.
+
+**Change.** One BOM-property override in `cia-backend/pom.xml`: `<jackson-bom.version>2.21.4</jackson-bom.version>` — same mechanism as the S144 `tomcat`/`netty`/`postgresql` overrides (a real spring-boot-dependencies BOM property name, so a `<properties>` value bumps the whole jackson family). Verified: `mvn dependency:tree -Dincludes=...jackson-databind` resolves **2.21.4** (was 2.21.2), BUILD SUCCESS. CLAUDE.md §Testing-Requirements S144 CVE-pins note updated (jackson added; stale netty `.134`→`.135` mention corrected in passing).
+
+**Known follow-ups / backlog change:** none — discovered + fixed in this slice, no lingering row. (Sequencing: this merges first to green `main`'s image gate; PR #24 then rebases onto the fixed `main` so its own Trivy gate clears.)
+
+---
+
 ## 2026-06-23 — `db-backup-dr` Deliverable B: read-replica routing for cia-reports (`feat/db-read-replica`) — COMPLETE (B of 2 → item closed)
 
 **Goal (Deliverable B, the app-code half of `db-backup-dr`).** Route the report-heavy `cia-reports` analytical queries to a read replica when one is configured, **additively** (no replica ⇒ byte-identical to today).
