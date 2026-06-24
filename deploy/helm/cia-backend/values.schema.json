@@ -1,0 +1,164 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "cia-backend chart values",
+  "description": "Validated by Helm on lint/template/install. additionalProperties:false on the structured objects catches typos (e.g. hpa.minRepicas) at render time instead of silently rendering a default. env + passthrough k8s structures (podSecurityContext, hpa.behavior) stay open.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "nameOverride": { "type": "string" },
+    "fullnameOverride": { "type": "string" },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string" },
+        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
+      }
+    },
+    "replicaCount": { "type": "integer", "minimum": 1 },
+    "existingSecret": { "type": "string", "minLength": 1 },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "create": { "type": "boolean" },
+        "name": { "type": "string" },
+        "annotations": { "type": "object" }
+      }
+    },
+    "env": {
+      "type": "object",
+      "description": "Free-form non-secret env -> ConfigMap. Intentionally open (operators add arbitrary keys).",
+      "additionalProperties": { "type": ["string", "integer", "boolean"] }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests": { "$ref": "#/definitions/resourceQuantities" },
+        "limits": { "$ref": "#/definitions/resourceQuantities" }
+      }
+    },
+    "podSecurityContext": {
+      "type": "object",
+      "description": "Passthrough pod securityContext — open so operators can add fields (supplementalGroups, etc.)."
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["port"],
+      "properties": {
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "className": { "type": "string" },
+        "host": { "type": "string" },
+        "tlsSecretName": { "type": "string" },
+        "annotations": { "type": "object" }
+      }
+    },
+    "hpa": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "minReplicas": { "type": "integer", "minimum": 1 },
+        "maxReplicas": { "type": "integer", "minimum": 1 },
+        "targetCPUUtilizationPercentage": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "behavior": {
+          "type": "object",
+          "description": "Passthrough HPA spec.behavior — open (rendered verbatim via toYaml)."
+        }
+      }
+    },
+    "pdb": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "minAvailable": { "type": ["integer", "string"] }
+      }
+    },
+    "terminationGracePeriodSeconds": { "type": "integer", "minimum": 0 },
+    "preStopDrainSeconds": { "type": "integer", "minimum": 0 },
+    "topologySpreadConstraints": {
+      "type": "array",
+      "description": "labelSelector is auto-injected by the template, so it is NOT specified here. The template honors only maxSkew/topologyKey/whenUnsatisfiable.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["maxSkew", "topologyKey", "whenUnsatisfiable"],
+        "properties": {
+          "maxSkew": { "type": "integer", "minimum": 1 },
+          "topologyKey": { "type": "string", "minLength": 1 },
+          "whenUnsatisfiable": { "type": "string", "enum": ["DoNotSchedule", "ScheduleAnyway"] }
+        }
+      }
+    },
+    "backup": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "type": "string" },
+        "schedule": { "type": "string", "minLength": 1 },
+        "db": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "host": { "type": "string" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "name": { "type": "string", "minLength": 1 }
+          }
+        },
+        "s3": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "bucket": { "type": "string" },
+            "prefix": { "type": "string" },
+            "region": { "type": "string" },
+            "endpoint": { "type": "string" }
+          }
+        },
+        "uploadCommand": { "type": "string", "minLength": 1 },
+        "backoffLimit": { "type": "integer", "minimum": 0 },
+        "activeDeadlineSeconds": { "type": "integer", "minimum": 1 },
+        "tmpSizeLimit": { "type": "string" },
+        "historyLimit": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "success": { "type": "integer", "minimum": 0 },
+            "failed": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "resources": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "requests": { "$ref": "#/definitions/resourceQuantities" },
+            "limits": { "$ref": "#/definitions/resourceQuantities" }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "resourceQuantities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cpu": { "type": ["string", "number"] },
+        "memory": { "type": ["string", "number"] }
+      }
+    }
+  }
+}

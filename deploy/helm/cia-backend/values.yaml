@@ -79,6 +79,23 @@ hpa:
   minReplicas: 3
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
+  # Stabilization windows tame autoscaler thrash. The JVM's 30-90s cold start
+  # means a transient CPU spike should NOT immediately add pods, and a brief dip
+  # should NOT immediately remove them (default scaleDown stabilization is 300s,
+  # scaleUp is 0s). Rendered verbatim under spec.behavior — fully overridable.
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100          # at most double the replicas...
+          periodSeconds: 60    # ...per minute
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50           # at most halve the replicas...
+          periodSeconds: 60    # ...per minute
 
 pdb:
   enabled: true
