@@ -164,6 +164,13 @@ public class KeycloakTenantProvisioner {
 
         if (!Boolean.TRUE.equals(existing.isPublicClient())) { existing.setPublicClient(true); changed = true; }
         if (!Boolean.TRUE.equals(existing.isStandardFlowEnabled())) { existing.setStandardFlowEnabled(true); changed = true; }
+        // Re-assert no ROPC (password) grant: if an operator re-enabled it in the
+        // console, drift it back to PKCE-only — otherwise stolen back-office creds
+        // could skip the auth-code+PKCE flow. Mirrors ensurePlatformClient.
+        if (Boolean.TRUE.equals(existing.isDirectAccessGrantsEnabled())) {
+            existing.setDirectAccessGrantsEnabled(false);
+            changed = true;
+        }
         if (!desired.getRedirectUris().equals(existing.getRedirectUris())) {
             existing.setRedirectUris(desired.getRedirectUris()); changed = true;
         }

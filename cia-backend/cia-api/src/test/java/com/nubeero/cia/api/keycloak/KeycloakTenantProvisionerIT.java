@@ -189,4 +189,27 @@ class KeycloakTenantProvisionerIT extends KeycloakItSupport {
                 .stream().filter(m -> "tenant_id".equals(m.getName())).toList();
         assertThat(tenantIdMappers).hasSize(1);
     }
+
+    @Test
+    @DisplayName("provisionTenantRealm — reconcile re-disables directAccessGrants if re-enabled in the console")
+    void reconcilesBackOfficeClientDirectAccessGrantsDrift() {
+        KeycloakTenantProvisioner p = newProvisioner();
+        p.provisionTenantRealm(testRealmName);
+
+        // Simulate an operator re-enabling the ROPC (password) grant in the console.
+        ClientRepresentation drifted =
+                ADMIN.realm(testRealmName).clients().findByClientId("cia-back-office").get(0);
+        drifted.setDirectAccessGrantsEnabled(true);
+        ADMIN.realm(testRealmName).clients().get(drifted.getId()).update(drifted);
+        assertThat(ADMIN.realm(testRealmName).clients().findByClientId("cia-back-office")
+                .get(0).isDirectAccessGrantsEnabled())
+                .as("drift applied").isTrue();
+
+        // The next provisioning sweep must reconcile the password grant back off.
+        p.provisionTenantRealm(testRealmName);
+
+        assertThat(ADMIN.realm(testRealmName).clients().findByClientId("cia-back-office")
+                .get(0).isDirectAccessGrantsEnabled())
+                .as("reconciled back to PKCE-only").isFalse();
+    }
 }
