@@ -77,7 +77,13 @@
          carries the fix. -->
     <bouncy-castle.version>1.84</bouncy-castle.version>
     <mapstruct.version>1.5.5.Final</mapstruct.version>
-    <springdoc.version>2.5.0</springdoc.version>
+    <!-- 2.5.0 -> 2.8.17: springdoc 2.5.0 targets Spring 6.1 and calls the
+         ControllerAdviceBean(Object) ctor that Spring 6.2 (Boot 3.5.14) removed,
+         so live /partner/v3/api-docs/** + the /partner/docs Swagger UI 500 at
+         runtime (NoSuchMethodError) — latent since the S144 Boot 3.3.5->3.5.14
+         bump because the committed OpenAPI/Postman snapshots are static. The
+         2.8.x line is built against Spring 6.2; .17 is the latest patch. -->
+    <springdoc.version>2.8.17</springdoc.version>
     <pdfbox.version>3.0.2</pdfbox.version>
     <minio.version>8.6.0</minio.version>
     <!-- OkHttp is no longer managed by the Spring Boot BOM as of 3.5 (Boot
@@ -253,13 +259,19 @@
       </dependency>
       <!-- swagger-annotations standalone — used by business modules that
            annotate internal controllers with @Operation / @ApiResponses /
-           @Tag but do not need the Swagger UI. Version matches what
-           springdoc-openapi-starter-webmvc-ui transitively brings to keep
-           the cia-api assembly consistent. -->
+           @Tag but do not need the Swagger UI. Version MUST match what
+           springdoc-openapi-starter-webmvc-ui transitively brings (it ships
+           swagger-*-jakarta 2.2.47, which provides the same
+           io.swagger.v3.oas.annotations.media.Schema class): springdoc 2.8.17's
+           GenericResponseService calls Schema.$dynamicRef(), absent before
+           2.2.30 — so a stale 2.2.22 here shadows the method and 500s every
+           /partner/v3/api-docs/** request. 2.2.22 -> 2.2.47 with the springdoc
+           2.5.0 -> 2.8.17 bump. (Dedup to swagger-annotations-jakarta is a
+           follow-up: swagger-annotations-jakarta-migration.) -->
       <dependency>
         <groupId>io.swagger.core.v3</groupId>
         <artifactId>swagger-annotations</artifactId>
-        <version>2.2.22</version>
+        <version>2.2.47</version>
       </dependency>
 
       <!-- ── PDF generation ────────────────────────────────────────── -->
