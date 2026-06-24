@@ -51,6 +51,14 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-06-24 — CLAUDE.md §10 sync: chart resilience + backup/DR (`docs/claude-md-chart-resilience`) — COMPLETE
+
+**Goal (session-completion gate).** The per-PR doc updates this session covered the app-architecture changes (read-replica §7, back-office reconcile §8, jackson S144), but the §10 **Helm chart** paragraph predated #22/#26/#27, so it omitted the new chart surface. Brought §10 current: `topologySpreadConstraints`, the three-part graceful termination (preStop → `server.shutdown=graceful` → `terminationGracePeriodSeconds`), HPA `behavior` windows, `values.schema.json`, and the opt-in backup `CronJob` + DR-runbook pointer — each tagged with its backlog row id. Docs-only; no code. **SKILL.md** unchanged (no module/feature/entity/convention change this session); **no partner-api** endpoints added (no `@Operation`/Postman work).
+
+**Known follow-ups / backlog change:** none.
+
+---
+
 ## 2026-06-24 — Helm chart hardening: HPA behavior windows + values.schema.json (`feat/helm-hpa-behavior-values-schema`) — COMPLETE
 
 **Goal (P3 `hpa-scaling-behavior` + `chart-values-schema`, combined — both finish the Slice B chart-review hardening).**
