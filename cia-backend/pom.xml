@@ -62,6 +62,13 @@
     <tomcat.version>10.1.55</tomcat.version>
     <netty.version>4.1.135.Final</netty.version>
     <postgresql.version>42.7.11</postgresql.version>
+    <!-- jackson-bom is a Boot BOM property too: the 3.5.14 BOM pins jackson
+         2.21.2, which two 2026-06 HIGH CVEs flag — CVE-2026-54512
+         (PolymorphicTypeValidator bypass) + CVE-2026-54513 (array subtype
+         allowlist bypass). 2.21.4 is the same-line patch carrying both fixes
+         (drop-in, no API change). Override here, same mechanism as tomcat/
+         netty/postgresql above. -->
+    <jackson-bom.version>2.21.4</jackson-bom.version>
     <!-- bcprov-jdk18on is NOT a Boot BOM property; minio 8.6.0 pins it
          transitively at 1.81 (CVE-2026-5598 HIGH — non-constant-time comparison
          private-key leak). A <properties> value alone is a no-op here; it must be
