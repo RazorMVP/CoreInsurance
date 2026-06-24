@@ -23,6 +23,18 @@ spec:
       labels:
         {{- include "cia-backend.selectorLabels" . | nindent 8 }}
     spec:
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- range . }}
+        - maxSkew: {{ .maxSkew }}
+          topologyKey: {{ .topologyKey }}
+          whenUnsatisfiable: {{ .whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              {{- include "cia-backend.selectorLabels" $ | nindent 14 }}
+        {{- end }}
+      {{- end }}
       serviceAccountName: {{ include "cia-backend.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
@@ -59,6 +71,15 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.preStopDrainSeconds }}
+          # Delay SIGTERM reaching the JVM so the Service endpoint deregisters
+          # first (no new requests mid-shutdown). Native sleep handler — needs no
+          # shell, so it works under readOnlyRootFilesystem + drop-ALL-caps.
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: {{ .Values.preStopDrainSeconds }}
+          {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
