@@ -60,6 +60,19 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6380}
 
+  # Pin @Cacheable to the intended in-memory ConcurrentMapCacheManager. Redis is
+  # on the classpath (partner rate-limiting, Keycloak sessions), which would
+  # otherwise make Spring Boot auto-select RedisCacheManager + the default JDK
+  # serializer — and the cached entities (PostingRule, ChartOfAccount) are NOT
+  # Serializable, so every cache write (e.g. PostingRuleService.findByEventType
+  # on the policy/claim/endorsement-approval GL-posting path) would throw a
+  # SerializationException → 500. These caches are seeded, read-only reference
+  # data, so a per-replica in-memory cache is correct (no cross-replica staleness;
+  # nothing edits them at runtime). The 274-IT suite never caught this because
+  # @SpringBootTest has no Redis, so caching already fell back to `simple`.
+  cache:
+    type: simple
+
 server:
   port: ${SERVER_PORT:8090}
   servlet:
