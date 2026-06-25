@@ -1,6 +1,9 @@
 package com.nubeero.cia.common.audit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.hibernate6.Hibernate6Module;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -13,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -22,6 +26,29 @@ public class AuditService {
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
+
+    /**
+     * Dedicated mapper for the audit JSONB columns. Copied from the shared/primary
+     * {@link ObjectMapper} (so it inherits its config) and given {@link Hibernate6Module},
+     * which serializes an uninitialized Hibernate lazy proxy as {@code null} instead of
+     * throwing. Without it, auditing an entity with a {@code @ManyToOne/@OneToOne(LAZY)}
+     * association (e.g. {@code PolicyNumberFormat.product}) failed serialization, the old
+     * fallback wrote a non-JSON {@code toString()} into the JSONB column, and the resulting
+     * "invalid input syntax for type json" aborted the transaction → 500. Registered here
+     * only, so API-response serialization (the primary mapper) is unaffected.
+     */
+    ObjectMapper auditMapper;   // package-private: asserted by AuditServiceTest
+
+    @PostConstruct
+    void configureAuditMapper() {
+        // objectMapper is always injected in production; a couple of IT stubs
+        // construct AuditService with a null mapper and override log() to no-op,
+        // so guard the null rather than NPE at bean init.
+        ObjectMapper base = (objectMapper != null) ? objectMapper.copy() : new ObjectMapper();
+        this.auditMapper = base
+                .registerModule(new Hibernate6Module())
+                .disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+    }
 
     // @Transactional(REQUIRES_NEW) on every public entry point. Three reasons:
     //   1) Production semantics — audit logs survive business-transaction
@@ -117,10 +144,28 @@ public class AuditService {
     private String toJson(Object value) {
         if (value == null) return null;
         try {
-            return objectMapper.writeValueAsString(value);
+            return auditMapper.writeValueAsString(value);
         } catch (Exception e) {
-            log.warn("Could not serialise audit value to JSON: {}", e.getMessage());
-            return value.toString();
+            log.warn("Could not serialise audit value to JSON ({}): {}",
+                    value.getClass().getName(), e.getMessage());
+            return fallbackJson(value, e);
+        }
+    }
+
+    /**
+     * Last-resort serialisation that ALWAYS returns valid JSON. A serialisation
+     * failure must never write a malformed value into the {@code jsonb} audit
+     * columns — that errors on INSERT and aborts the (audit) transaction (the
+     * old code returned a non-JSON {@code toString()}). Captures the type + cause
+     * for the auditor instead.
+     */
+    private String fallbackJson(Object value, Exception cause) {
+        try {
+            return auditMapper.writeValueAsString(Map.of(
+                    "_unserialized", value.getClass().getName(),
+                    "_error", String.valueOf(cause.getMessage())));
+        } catch (Exception ignored) {
+            return "{\"_unserialized\":\"unknown\"}";
         }
     }
 }
