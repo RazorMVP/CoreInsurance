@@ -32,6 +32,16 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
     </dependency>
+    <!-- AuditService serializes audited entities to the audit_log JSONB columns;
+         those entities carry @ManyToOne/@OneToOne(LAZY) associations whose
+         uninitialized Hibernate proxies the plain ObjectMapper cannot serialize.
+         This module renders an uninitialized proxy as null. Version tracks the
+         pinned jackson line (jackson-bom does not manage this datatype module). -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-hibernate6</artifactId>
+      <version>${jackson-bom.version}</version>
+    </dependency>
   </dependencies>
 
 </project>
