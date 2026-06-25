@@ -52,6 +52,17 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-06-25 — Swagger/Postman currency audit — CONCLUSION (capstone)
+
+**Capstone for the audit** the user requested ("confirm all swagger + postman docs are updated with all changes so far"). The two slices that did the work landed 2026-06-24 (`fix/springdoc-spring62-compat` #29, `docs/internal-api-snapshot-regen-guard` #30 — detailed entries below); this records the bottom-line answer at session close. **The honest answer was not a blanket "yes"** — verifying surfaced two latent problems, now both fixed + guarded:
+
+1. **Runtime OpenAPI/Swagger generation was broken** since the S144 Boot 3.5 bump (springdoc 2.5.0 vs Spring 6.2, then its swagger-annotations dep vs springdoc 2.8.17 — a two-link `NoSuchMethodError` chain). Fixed: springdoc → 2.8.17, swagger-annotations → 2.2.47. Guarded by `OpenApiDocsSmokeIT` (both groups must render 200).
+2. **Internal snapshot `internal-api.json` had drifted** by 13 endpoints (8 platform + 2 NDPR compliance + 3 clause-bank), with no validator. Fixed: regenerated (286 paths, OpenAPI 3.1.0). Guarded by `InternalApiSnapshotIT` (live `(METHOD,path)` set must equal the committed file).
+
+**Final state:** all three doc surfaces reconciled — partner OpenAPI + Postman were already current; internal snapshot now current; live Swagger renders again — and **both ITs run in the existing Testcontainers CI job**, so a future undocumented endpoint or a Swagger-breaking dependency bump fails CI instead of drifting silently. **Backlog:** no change at this capstone (`internal-api-snapshot-drift` already removed by #30; `swagger-annotations-jakarta-migration` P3 remains).
+
+---
+
 ## 2026-06-24 — Regenerate internal-api.json (+13 drifted endpoints) + path-set drift guard (`docs/internal-api-snapshot-regen-guard`) — COMPLETE
 
 **Goal (P2 `internal-api-snapshot-drift`).** Refresh the static internal OpenAPI snapshot `docs-site/static/internal-api.json` (the staff/system API reference served by the docs site) — stale since 2026-05-29 — and add a CI guard so it can't silently drift again. Unblocked by the springdoc 2.8.17 fix above (the live generator works again).
