@@ -211,6 +211,7 @@ export const PolicySummaryDtoSchema = z.object({
   businessType:        BusinessTypeSchema,
   policyStartDate:     z.string(),
   policyEndDate:       z.string(),
+  totalSumInsured:     z.number(),
   netPremium:          z.number(),
   naicomUid:           z.string().nullable().optional(),
   createdAt:           z.string(),
