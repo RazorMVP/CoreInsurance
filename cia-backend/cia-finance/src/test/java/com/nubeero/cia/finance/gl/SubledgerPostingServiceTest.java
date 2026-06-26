@@ -102,7 +102,8 @@ class SubledgerPostingServiceTest {
             "Motor Comprehensive", new BigDecimal("500000.00"), "NGN",
             LocalDate.of(2027, 5, 9), UUID.randomUUID(), UUID.randomUUID(),
             new BigDecimal("10000000.00"), policyStart,
-            null, null, null, null));
+            null, null, null, null,
+            policyStart)); // approvalDate = start (test keeps business_date unchanged)
 
         JournalEntry saved = captureSavedJe();
         assertThat(saved.getBusinessDate()).isEqualTo(policyStart);
@@ -126,7 +127,8 @@ class SubledgerPostingServiceTest {
             "x", BigDecimal.ZERO, "NGN",
             LocalDate.of(2027, 1, 1), UUID.randomUUID(), UUID.randomUUID(),
             BigDecimal.ZERO, LocalDate.of(2026, 1, 1),
-            null, null, null, null));
+            null, null, null, null,
+            LocalDate.of(2026, 1, 1))); // approvalDate = start (test keeps business_date unchanged)
 
         verify(journalEntryRepository, never()).save(any(JournalEntry.class));
     }
@@ -142,7 +144,8 @@ class SubledgerPostingServiceTest {
             "x", new BigDecimal("100.00"), "NGN",
             LocalDate.of(2027, 1, 1), UUID.randomUUID(), UUID.randomUUID(),
             BigDecimal.ZERO, LocalDate.of(2026, 5, 10),
-            null, null, null, null)))
+            null, null, null, null,
+            LocalDate.of(2026, 5, 10)))) // approvalDate = start (test keeps business_date unchanged)
             .isInstanceOf(PostingRuleNotFoundException.class)
             .hasMessageContaining(SubledgerPostingService.EVENT_POLICY_APPROVED);
 

@@ -117,7 +117,8 @@ class SubledgerPostingRmCommissionIT {
             "Motor", new BigDecimal("500000.00"), "NGN",
             LocalDate.of(2027, 5, 14), UUID.randomUUID(), UUID.randomUUID(),
             new BigDecimal("10000000.00"), businessDate,
-            "RELATIONSHIP_MANAGER", new BigDecimal("12500.00"), null, null);
+            "RELATIONSHIP_MANAGER", new BigDecimal("12500.00"), null, null,
+            businessDate); // approvalDate = start (test keeps business_date unchanged)
     }
 
     @Test

@@ -91,6 +91,7 @@ class SubledgerPostingServiceIT {
     @Autowired private SubledgerPostingService service;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private EntityManager entityManager;
+    @Autowired private org.springframework.cache.CacheManager cacheManager;
 
     private LocalDate businessDate;
 
@@ -104,6 +105,12 @@ class SubledgerPostingServiceIT {
         // FiscalPeriodNotFoundException once the wall clock leaves May 2026.
         ensureMonthPeriod(businessDate);
         ensureMonthPeriod(LocalDate.now());
+        // PostingRuleService.findByEventType is @Cacheable; clear it per test so a
+        // rule cached by an earlier POLICY_APPROVED test can't mask the deactivation
+        // in missingRuleFailsLoud (order-independent — the COA caches are untouched).
+        var ruleCache = cacheManager.getCache(
+                com.nubeero.cia.finance.gl.PostingRuleService.CACHE_BY_EVENT_TYPE);
+        if (ruleCache != null) ruleCache.clear();
     }
 
     /**
@@ -150,7 +157,8 @@ class SubledgerPostingServiceIT {
             "Motor", new BigDecimal("500000.00"), "NGN",
             LocalDate.of(2027, 5, 14), UUID.randomUUID(), UUID.randomUUID(),
             new BigDecimal("10000000.00"), businessDate,
-            null, null, null, null));
+            null, null, null, null,
+            businessDate)); // approvalDate = start (test keeps business_date unchanged)
         entityManager.flush();
 
         Map<String, Object> je = loadJe("policy", "POLICY_APPROVED", policyId.toString());
@@ -159,6 +167,30 @@ class SubledgerPostingServiceIT {
 
         assertLine((UUID) je.get("id"), "1310", "500000.00", "0.00");
         assertLine((UUID) je.get("id"), "2110", "0.00", "500000.00");
+    }
+
+    @Test
+    @DisplayName("PolicyApproved (future-effective) → JE business_date = approvalDate, not the future policyStartDate")
+    void policyApprovedFutureEffectiveAnchorsToApprovalDate() {
+        UUID policyId = UUID.randomUUID();
+        // Coverage starts in the future; the policy is booked (approved) today.
+        // business_date must be the booking date (approvalDate), else
+        // business_date (future) > posting_date (now) violates ck_journal_entry_dates.
+        LocalDate futureStart = businessDate.plusMonths(2);
+        service.onPolicyApproved(new PolicyApprovedEvent(
+            policyId, "POL-IT-FUT", UUID.randomUUID(), "Acme", null, null,
+            "Motor", new BigDecimal("500000.00"), "NGN",
+            futureStart.plusYears(1), UUID.randomUUID(), UUID.randomUUID(),
+            new BigDecimal("10000000.00"), futureStart,   // policyStartDate = future
+            null, null, null, null,
+            businessDate));                               // approvalDate = booking date
+        entityManager.flush();
+
+        Map<String, Object> je = loadJe("policy", "POLICY_APPROVED", policyId.toString());
+        assertThat(je).as("future-effective policy still posts a premium JE").isNotEmpty();
+        assertThat(je.get("business_date"))
+                .as("business_date anchors to the booking/approval date, not the future coverage start")
+                .isEqualTo(java.sql.Date.valueOf(businessDate));
     }
 
     // ── ClaimApproved ────────────────────────────────────────────────────────
@@ -308,7 +340,8 @@ class SubledgerPostingServiceIT {
             "x", new BigDecimal("100.00"), "NGN",
             LocalDate.of(2027, 5, 14), UUID.randomUUID(), UUID.randomUUID(),
             BigDecimal.ZERO, businessDate,
-            null, null, null, null)))
+            null, null, null, null,
+            businessDate))) // approvalDate = start (test keeps business_date unchanged)
             .isInstanceOf(PostingRuleNotFoundException.class)
             .hasMessageContaining("POLICY_APPROVED");
 
@@ -329,7 +362,8 @@ class SubledgerPostingServiceIT {
             "x", new BigDecimal("100.00"), "NGN",
             LocalDate.of(2027, 5, 14), UUID.randomUUID(), UUID.randomUUID(),
             BigDecimal.ZERO, businessDate,
-            null, null, null, null);
+            null, null, null, null,
+            businessDate); // approvalDate = start (test keeps business_date unchanged)
         service.onPolicyApproved(event);
         entityManager.flush();
 

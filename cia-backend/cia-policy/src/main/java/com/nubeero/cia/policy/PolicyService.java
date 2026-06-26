@@ -441,7 +441,9 @@ public class PolicyService {
                 saved.getProductId(), saved.getClassOfBusinessId(),
                 saved.getTotalSumInsured(), saved.getPolicyStartDate(),
                 commissionSourceTypeStr, commissionAmount,
-                saved.getAgentId(), saved.getAgentName()));
+                saved.getAgentId(), saved.getAgentName(),
+                // Booking date for the GL posting — approved_at, not the coverage start.
+                saved.getApprovedAt().atZone(java.time.ZoneOffset.UTC).toLocalDate()));
 
         auditService.log("Policy", id.toString(), AuditAction.UPDATE, null, saved);
         return toResponse(saved);

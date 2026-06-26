@@ -48,5 +48,12 @@ public record PolicyApprovedEvent(
         // Agent attribution (Slice 84d / V53). Mutually exclusive with brokerId.
         // Both fields null on broker-attributed or non-attributed policies.
         UUID agentId,
-        String agentName
+        String agentName,
+        // Booking date (policy.approved_at::date) — the date the GL posting
+        // anchors to (business_date). Distinct from policyStartDate, which is the
+        // coverage-effective date used for the RI treaty year + IFRS-17 cohort.
+        // GL business_date must be the booking date so a forward-dated policy
+        // doesn't violate ck_journal_entry_dates (business_date <= posting_date)
+        // and a backdated one doesn't post into a closed period.
+        LocalDate approvalDate
 ) {}

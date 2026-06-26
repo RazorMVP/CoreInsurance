@@ -92,7 +92,8 @@ class PolicyCommissionCreditNoteListenerIT extends FinanceItSupport {
             "Motor", new BigDecimal("500000.00"), "NGN",
             LocalDate.of(2027, 5, 14), UUID.randomUUID(), UUID.randomUUID(),
             new BigDecimal("10000000.00"), LocalDate.of(2026, 5, 15),
-            "RELATIONSHIP_MANAGER", new BigDecimal("12500.00"), null, null));
+            "RELATIONSHIP_MANAGER", new BigDecimal("12500.00"), null, null,
+            LocalDate.of(2026, 5, 15))); // approvalDate = start (test keeps business_date unchanged)
         entityManager.flush();
 
         assertThat(countCreditNotesForEntity(policyId)).isZero();
@@ -108,7 +109,8 @@ class PolicyCommissionCreditNoteListenerIT extends FinanceItSupport {
             "Motor", new BigDecimal("500000.00"), "NGN",
             LocalDate.of(2027, 5, 14), UUID.randomUUID(), UUID.randomUUID(),
             new BigDecimal("10000000.00"), LocalDate.of(2026, 5, 15),
-            "BROKER", new BigDecimal("12500.00"), null, null));
+            "BROKER", new BigDecimal("12500.00"), null, null,
+            LocalDate.of(2026, 5, 15))); // approvalDate = start (test keeps business_date unchanged)
         entityManager.flush();
 
         assertThat(countCreditNotesForEntity(policyId)).isEqualTo(1L);

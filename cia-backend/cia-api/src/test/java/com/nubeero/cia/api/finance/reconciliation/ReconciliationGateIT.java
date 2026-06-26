@@ -280,7 +280,7 @@ class ReconciliationGateIT {
             BackfillEventType type = BackfillEventType.valueOf(envelope.get("type").asText());
             JsonNode payload = envelope.get("payload");
             Object event = switch (type) {
-                case POLICY_APPROVED        -> mapper.treeToValue(payload, PolicyApprovedEvent.class);
+                case POLICY_APPROVED        -> withApprovalDate(mapper.treeToValue(payload, PolicyApprovedEvent.class));
                 case CLAIM_APPROVED         -> mapper.treeToValue(payload, ClaimApprovedEvent.class);
                 case CLAIM_SETTLED          -> mapper.treeToValue(payload, ClaimSettledEvent.class);
                 case CLAIM_EXPENSE_APPROVED -> mapper.treeToValue(payload, ClaimExpenseApprovedEvent.class);
@@ -289,6 +289,23 @@ class ReconciliationGateIT {
             };
             publisher.publishEvent(event);
         }
+    }
+
+    /**
+     * The Slice 1.9b fixture predates the {@code approvalDate} field (added for the
+     * je-business-date fix), so deserialised events have a null approvalDate. Default
+     * it to the policy start date so the reconciliation snapshot's business_date is
+     * unchanged — exactly the value the GL posting used before the field existed.
+     */
+    private static PolicyApprovedEvent withApprovalDate(PolicyApprovedEvent e) {
+        if (e.approvalDate() != null) return e;
+        return new PolicyApprovedEvent(
+            e.policyId(), e.policyNumber(), e.customerId(), e.customerName(),
+            e.brokerId(), e.brokerName(), e.productName(), e.netPremium(),
+            e.currencyCode(), e.policyEndDate(), e.productId(), e.classOfBusinessId(),
+            e.totalSumInsured(), e.policyStartDate(), e.commissionSourceType(),
+            e.commissionAmount(), e.agentId(), e.agentName(),
+            e.policyStartDate());
     }
 
     private static ObjectMapper newMapper() {

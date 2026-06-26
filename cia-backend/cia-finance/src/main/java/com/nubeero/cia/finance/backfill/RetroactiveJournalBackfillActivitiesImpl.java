@@ -164,12 +164,13 @@ public class RetroactiveJournalBackfillActivitiesImpl implements RetroactiveJour
                        policy_start_date, policy_end_date,
                        total_sum_insured, class_of_business_id,
                        commission_source_type, commission_rate,
-                       agent_id, agent_name
+                       agent_id, agent_name, approved_at
                   FROM policies
                  WHERE status = 'APPROVED'
                    AND deleted_at IS NULL
-                   AND policy_start_date BETWEEN :from AND :to
-                 ORDER BY policy_start_date, id
+                   AND approved_at IS NOT NULL
+                   AND (approved_at AT TIME ZONE 'UTC')::date BETWEEN :from AND :to
+                 ORDER BY approved_at, id
                  LIMIT :limit OFFSET :offset
                 """)
                 .setParameter("from", req.fromDate())
@@ -209,7 +210,8 @@ public class RetroactiveJournalBackfillActivitiesImpl implements RetroactiveJour
                         commissionSource,
                         commissionAmount,
                         uuid(row[16]),
-                        str(row[17]));
+                        str(row[17]),
+                        instantToDate(row[18]));   // approved_at -> GL business_date
                 if (req.dryRun()) {
                     posted++;
                 } else {
