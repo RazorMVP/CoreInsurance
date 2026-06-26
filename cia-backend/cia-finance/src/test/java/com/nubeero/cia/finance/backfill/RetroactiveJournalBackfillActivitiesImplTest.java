@@ -130,6 +130,9 @@ class RetroactiveJournalBackfillActivitiesImplTest {
         assertThat(ev.policyNumber()).isEqualTo("POL-2026-0001");
         assertThat(ev.netPremium()).isEqualByComparingTo(new BigDecimal("125000.00"));
         assertThat(ev.policyStartDate()).isEqualTo(LocalDate.of(2026, 4, 12));
+        // approvalDate is the booking date the GL business_date anchors to —
+        // independent of (and here, earlier than) the coverage start date.
+        assertThat(ev.approvalDate()).isEqualTo(LocalDate.of(2026, 4, 5));
         assertThat(ev.currencyCode()).isEqualTo("NGN");
     }
 
@@ -232,14 +235,21 @@ class RetroactiveJournalBackfillActivitiesImplTest {
                 new BigDecimal("5000000.00"),                               // 12 total_sum_insured
                 UUID.randomUUID(),                                          // 13 class_of_business_id
                 // 14-17 added by slices 84c/84d (commission source + agent
-                // attribution). The impl SELECTs 18 columns and reads
-                // row[14..17]; this double had lagged at 14 elements, causing
+                // attribution). The impl SELECTs 19 columns and reads
+                // row[14..18]; this double had lagged at 14 elements, causing
                 // Index-14-out-of-bounds. Null = a pre-attribution policy that
                 // skips the commission/agent chain (matches the impl comment).
                 null,                                                       // 14 commission_source_type
                 null,                                                       // 15 commission_rate
                 null,                                                       // 16 agent_id
-                null                                                        // 17 agent_name
+                null,                                                       // 17 agent_name
+                // 18 approved_at — the booking date the GL business_date now
+                // anchors to (je-business-date fix). Deliberately distinct from
+                // policy_start_date (row[10] = 2026-04-12) to prove the two are
+                // wired independently: this policy was booked 2026-04-05 for
+                // coverage starting a week later (the future-effective shape).
+                java.time.LocalDate.of(2026, 4, 5)
+                        .atStartOfDay(java.time.ZoneOffset.UTC).toInstant()  // 18 approved_at
         };
     }
 
