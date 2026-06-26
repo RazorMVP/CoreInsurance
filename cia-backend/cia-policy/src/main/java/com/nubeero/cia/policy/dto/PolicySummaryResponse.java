@@ -26,6 +26,7 @@ public class PolicySummaryResponse {
     private BusinessType businessType;
     private LocalDate policyStartDate;
     private LocalDate policyEndDate;
+    private BigDecimal totalSumInsured;
     private BigDecimal netPremium;
     private String naicomUid;
     private Instant createdAt;

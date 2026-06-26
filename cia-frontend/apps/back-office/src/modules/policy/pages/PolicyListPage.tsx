@@ -7,10 +7,10 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type PolicyDto } from '@cia/api-client';
+import { apiClient, type PolicySummaryDto } from '@cia/api-client';
 import CreatePolicySheet from './create/CreatePolicySheet';
 
-const statusVariant: Record<PolicyDto['status'], 'active' | 'pending' | 'draft' | 'cancelled' | 'rejected'> = {
+const statusVariant: Record<PolicySummaryDto['status'], 'active' | 'pending' | 'draft' | 'cancelled' | 'rejected'> = {
   ACTIVE:           'active',
   REINSTATED:       'active',
   PENDING_APPROVAL: 'pending',
@@ -30,16 +30,16 @@ export default function PolicyListPage() {
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
 
-  const policiesQuery = useQuery<PolicyDto[]>({
+  const policiesQuery = useQuery<PolicySummaryDto[]>({
     queryKey: ['policies'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: PolicyDto[] }>('/api/v1/policies');
+      const res = await apiClient.get<{ data: PolicySummaryDto[] }>('/api/v1/policies');
       return res.data.data;
     },
   });
   const policies = policiesQuery.data ?? [];
 
-  const columns: ColumnDef<PolicyDto>[] = [
+  const columns: ColumnDef<PolicySummaryDto>[] = [
     {
       accessorKey: 'policyNumber',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Policy No." />,
@@ -70,16 +70,18 @@ export default function PolicyListPage() {
     {
       accessorKey: 'totalSumInsured',
       header: 'Sum Insured',
-      cell: ({ getValue }) => (
-        <span className="text-sm tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
-      ),
+      cell: ({ getValue }) => {
+        const v = getValue() as number | null | undefined;
+        return <span className="text-sm tabular-nums">{v == null ? '—' : `₦${v.toLocaleString()}`}</span>;
+      },
     },
     {
       accessorKey: 'netPremium',
       header: 'Net Premium',
-      cell: ({ getValue }) => (
-        <span className="text-sm font-medium tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
-      ),
+      cell: ({ getValue }) => {
+        const v = getValue() as number | null | undefined;
+        return <span className="text-sm font-medium tabular-nums">{v == null ? '—' : `₦${v.toLocaleString()}`}</span>;
+      },
     },
     {
       // Computed column — DB enforces broker XOR agent (ck_policies_broker_xor_agent).
@@ -112,7 +114,7 @@ export default function PolicyListPage() {
       accessorKey: 'status',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
       cell: ({ getValue }) => {
-        const s = getValue() as PolicyDto['status'];
+        const s = getValue() as PolicySummaryDto['status'];
         return <Badge variant={statusVariant[s]}>{s.toLowerCase().replace('_', ' ')}</Badge>;
       },
     },

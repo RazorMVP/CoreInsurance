@@ -1006,6 +1006,7 @@ public class PolicyService {
                 .brokerName(p.getBrokerName()).agentName(p.getAgentName())
                 .businessType(p.getBusinessType())
                 .policyStartDate(p.getPolicyStartDate()).policyEndDate(p.getPolicyEndDate())
+                .totalSumInsured(p.getTotalSumInsured())
                 .netPremium(p.getNetPremium()).naicomUid(p.getNaicomUid()).createdAt(p.getCreatedAt())
                 .build();
     }
