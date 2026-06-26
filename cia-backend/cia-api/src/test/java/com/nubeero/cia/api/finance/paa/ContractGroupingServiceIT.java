@@ -197,7 +197,8 @@ class ContractGroupingServiceIT {
             null, // class_of_business_id intentionally null
             new BigDecimal("10000000.00"),
             LocalDate.of(2026, 5, 1),
-            null, null, null, null));
+            null, null, null, null,
+            LocalDate.of(2026, 5, 1))); // approvalDate = start (test keeps business_date unchanged)
         entityManager.flush();
 
         var portfolio = portfolioRepository.findByCodeAndDeletedAtIsNull("UNCLASSIFIED");
@@ -283,7 +284,8 @@ class ContractGroupingServiceIT {
             cobId,
             new BigDecimal("10000000.00"),
             startDate,
-            null, null, null, null);
+            null, null, null, null,
+            startDate); // approvalDate = start (test keeps business_date unchanged)
     }
 
 }

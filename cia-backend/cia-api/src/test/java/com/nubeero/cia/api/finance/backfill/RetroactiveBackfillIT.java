@@ -385,7 +385,11 @@ class RetroactiveBackfillIT {
                     new BigDecimal("5000000.00"),
                     new BigDecimal("100000.00"),
                     new BigDecimal("100000.00"),
-                    "admin", java.sql.Timestamp.from(Instant.now()), "test"
+                    // approved_at = the policy's start at UTC midnight: the backfill
+                    // now windows + anchors business_date on (approved_at AT TIME ZONE
+                    // 'UTC')::date, and start is the distributed date, so behaviour is
+                    // unchanged. UTC (not local) so the ::date doesn't shift a day.
+                    "admin", java.sql.Timestamp.from(start.atStartOfDay(java.time.ZoneOffset.UTC).toInstant()), "test"
             });
         }
         jdbcTemplate.batchUpdate(
@@ -422,7 +426,7 @@ class RetroactiveBackfillIT {
             UUID.randomUUID(), "Motor", "MOT",
             policyStart, policyStart.plusYears(1),
             new BigDecimal("5000000.00"), netPremium, netPremium,
-            "admin", java.sql.Timestamp.from(Instant.now()), "test");
+            "admin", java.sql.Timestamp.from(policyStart.atStartOfDay(java.time.ZoneOffset.UTC).toInstant()), "test");
     }
 
     @TestConfiguration
