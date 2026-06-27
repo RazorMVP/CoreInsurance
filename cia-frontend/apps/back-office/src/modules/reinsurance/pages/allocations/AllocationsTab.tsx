@@ -12,6 +12,7 @@ import {
   type ApiError, type ApiResponse,
   type AllocationDto, type AllocationStatus, type ClassOfBusinessDto, type TreatyDto, type TreatyType,
 } from '@cia/api-client';
+import { formatNaira } from '@/lib/format';
 import PolicyAllocationSheet  from './PolicyAllocationSheet';
 import BatchReallocationSheet from './BatchReallocationSheet';
 import CreateFACOfferSheet    from '../fac/CreateFACOfferSheet';
@@ -146,17 +147,17 @@ export default function AllocationsTab() {
     {
       accessorKey: 'ourShareSumInsured',
       header:      'Sum Insured',
-      cell: ({ getValue }) => <span className="text-sm tabular-nums">₦{(getValue() as number).toLocaleString()}</span>,
+      cell: ({ getValue }) => <span className="text-sm tabular-nums">{formatNaira(getValue() as number | null | undefined)}</span>,
     },
     {
       accessorKey: 'retainedAmount',
       header:      'Retention',
-      cell: ({ getValue }) => <span className="text-sm tabular-nums">₦{(getValue() as number).toLocaleString()}</span>,
+      cell: ({ getValue }) => <span className="text-sm tabular-nums">{formatNaira(getValue() as number | null | undefined)}</span>,
     },
     {
       accessorKey: 'cededAmount',
       header:      'Ceding',
-      cell: ({ getValue }) => <span className="text-sm font-medium tabular-nums text-primary">₦{(getValue() as number).toLocaleString()}</span>,
+      cell: ({ getValue }) => <span className="text-sm font-medium tabular-nums text-primary">{formatNaira(getValue() as number | null | undefined)}</span>,
     },
     {
       id:     'treaty',

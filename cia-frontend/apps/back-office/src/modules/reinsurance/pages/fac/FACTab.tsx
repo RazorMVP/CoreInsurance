@@ -14,6 +14,7 @@ import {
   type ApiError, type ApiResponse,
   type FacCoverDto, type FacCoverStatus,
 } from '@cia/api-client';
+import { formatNaira } from '@/lib/format';
 import CreateFACOfferSheet  from './CreateFACOfferSheet';
 import AddInwardFACSheet    from './AddInwardFACSheet';
 import FACCreditNoteDialog  from './FACCreditNoteDialog';
@@ -156,7 +157,7 @@ export default function FACTab() {
     {
       accessorKey: 'sumInsuredCeded',
       header: 'Sum Insured (Ceded)',
-      cell: ({ getValue }) => <span className="text-sm tabular-nums">₦{(getValue() as number).toLocaleString()}</span>,
+      cell: ({ getValue }) => <span className="text-sm tabular-nums">{formatNaira(getValue() as number | null | undefined)}</span>,
     },
     {
       accessorKey: 'premiumRate',
@@ -166,7 +167,7 @@ export default function FACTab() {
     {
       accessorKey: 'netPremium',
       header: 'Net Premium',
-      cell: ({ getValue }) => <span className="text-sm tabular-nums text-primary">₦{(getValue() as number).toLocaleString()}</span>,
+      cell: ({ getValue }) => <span className="text-sm tabular-nums text-primary">{formatNaira(getValue() as number | null | undefined)}</span>,
     },
     {
       accessorKey: 'status',
@@ -231,7 +232,7 @@ export default function FACTab() {
     {
       accessorKey: 'sumInsured',
       header: 'Sum Insured',
-      cell: ({ getValue }) => <span className="text-sm tabular-nums">₦{(getValue() as number).toLocaleString()}</span>,
+      cell: ({ getValue }) => <span className="text-sm tabular-nums">{formatNaira(getValue() as number | null | undefined)}</span>,
     },
     {
       accessorKey: 'ourShare',
@@ -241,7 +242,7 @@ export default function FACTab() {
     {
       accessorKey: 'ourPremium',
       header: 'Our Premium',
-      cell: ({ getValue }) => <span className="text-sm tabular-nums text-primary">₦{(getValue() as number).toLocaleString()}</span>,
+      cell: ({ getValue }) => <span className="text-sm tabular-nums text-primary">{formatNaira(getValue() as number | null | undefined)}</span>,
     },
     {
       accessorKey: 'status',

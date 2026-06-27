@@ -11,6 +11,7 @@ import {
   validatedGet, DebitNoteDtoSchema,
   type DebitNoteDto,
 } from '@cia/api-client';
+import { formatNaira } from '@/lib/format';
 import PostReceiptSheet         from './PostReceiptSheet';
 import DebitNoteDetailDialog    from './DebitNoteDetailDialog';
 import ReceiptsListSection      from './ReceiptsListSection';
@@ -77,14 +78,14 @@ export default function ReceivablesTab() {
       accessorKey: 'totalAmount',
       header: 'Amount',
       cell: ({ getValue }) => (
-        <span className="text-sm font-medium tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
+        <span className="text-sm font-medium tabular-nums">{formatNaira(getValue() as number | null | undefined)}</span>
       ),
     },
     {
       accessorKey: 'outstandingAmount',
       header: 'Outstanding',
       cell: ({ getValue }) => (
-        <span className="text-sm font-medium tabular-nums text-amber-700">₦{(getValue() as number).toLocaleString()}</span>
+        <span className="text-sm font-medium tabular-nums text-amber-700">{formatNaira(getValue() as number | null | undefined)}</span>
       ),
     },
     {

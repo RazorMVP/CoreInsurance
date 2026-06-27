@@ -641,6 +641,7 @@ public class QuoteService {
                 .agentName(q.getAgentName())
                 .businessType(q.getBusinessType())
                 .policyStartDate(q.getPolicyStartDate()).policyEndDate(q.getPolicyEndDate())
+                .totalSumInsured(q.getTotalSumInsured())
                 .netPremium(q.getNetPremium()).expiresAt(q.getExpiresAt())
                 .createdAt(q.getCreatedAt())
                 .build();

@@ -8,6 +8,7 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import { validatedGet, ClaimDtoSchema, type ClaimDto } from '@cia/api-client';
+import { formatNaira } from '@/lib/format';
 import RegisterClaimSheet from './register/RegisterClaimSheet';
 import SubmitClaimDialog  from './detail/SubmitClaimDialog';
 import CancelClaimDialog  from './detail/CancelClaimDialog';
@@ -77,7 +78,7 @@ export default function ClaimsListPage() {
       accessorKey: 'reserveAmount',
       header: 'Reserve',
       cell: ({ getValue }) => (
-        <span className="text-sm tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
+        <span className="text-sm tabular-nums">{formatNaira(getValue() as number | null | undefined)}</span>
       ),
     },
     {
