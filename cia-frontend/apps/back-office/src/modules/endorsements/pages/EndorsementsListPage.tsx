@@ -7,6 +7,7 @@ import {
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, ENDORSEMENT_TYPE_LABELS, type EndorsementDto } from '@cia/api-client';
+import { formatNaira } from '@/lib/format';
 import CreateEndorsementSheet from './create/CreateEndorsementSheet';
 
 const statusVariant: Record<EndorsementDto['status'], 'active' | 'pending' | 'draft' | 'rejected'> = {
@@ -60,14 +61,15 @@ export default function EndorsementsListPage() {
       accessorKey: 'newSumInsured',
       header: 'New Sum Insured',
       cell: ({ getValue }) => (
-        <span className="text-sm tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
+        <span className="text-sm tabular-nums">{formatNaira(getValue() as number | null | undefined)}</span>
       ),
     },
     {
       accessorKey: 'premiumAdjustment',
       header: 'Pro-rata Premium',
       cell: ({ getValue }) => {
-        const v = getValue() as number;
+        const v = getValue() as number | null | undefined;
+        if (v == null) return <span className="text-sm tabular-nums">—</span>;
         return (
           <span className={`text-sm font-medium tabular-nums ${v < 0 ? 'text-destructive' : ''}`}>
             {v < 0 ? '−' : ''}₦{Math.abs(v).toLocaleString()}

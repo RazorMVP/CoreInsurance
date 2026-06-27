@@ -123,3 +123,29 @@ export interface QuoteDto {
   createdAt:                string;
   updatedAt:                string;
 }
+
+/**
+ * The lean list/search projection returned by `GET /api/v1/quotes` (and
+ * `/search`) — mirrors backend `QuoteSummaryResponse`, NOT the full `QuoteDto`.
+ * Notably the summary exposes `netPremium` (not the full DTO's `totalNetPremium`)
+ * and omits risks/clauses/adjustments. List pages MUST bind to this type — using
+ * `QuoteDto` lets TS believe fields exist that the summary payload never sends.
+ */
+export interface QuoteSummaryDto {
+  id:                  string;
+  quoteNumber:         string;
+  status:              QuoteStatus;
+  customerId:          string;
+  customerName:        string;
+  productName:         string;
+  classOfBusinessName: string;
+  brokerName?:         string | null;
+  agentName?:          string | null;
+  businessType:        BusinessType;
+  policyStartDate:     string;
+  policyEndDate:       string;
+  totalSumInsured:     number;
+  netPremium:          number;
+  expiresAt?:          string | null;
+  createdAt:           string;
+}

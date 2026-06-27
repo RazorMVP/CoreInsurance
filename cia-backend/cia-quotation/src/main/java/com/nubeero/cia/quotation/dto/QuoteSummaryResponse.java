@@ -26,6 +26,7 @@ public class QuoteSummaryResponse {
     private BusinessType businessType;
     private LocalDate policyStartDate;
     private LocalDate policyEndDate;
+    private BigDecimal totalSumInsured;
     private BigDecimal netPremium;
     private Instant expiresAt;
     private Instant createdAt;

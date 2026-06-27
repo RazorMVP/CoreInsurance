@@ -15,6 +15,7 @@ import SmsConfirmDialog from '../SmsConfirmDialog';
 import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransactionDialog';
 import { formatPhone } from '../../lib/formatPhone';
 import type { BulkDownloadItem, FinanceEntityType, PaymentListItemResponse } from '@cia/api-client';
+import { formatNaira } from '@/lib/format';
 
 interface EmailTarget {
   cnId:           string;
@@ -142,7 +143,7 @@ export default function PaymentsListSection() {
       accessorKey: 'amount',
       header: 'Amount',
       cell: ({ getValue }) => (
-        <span className="text-sm font-medium tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
+        <span className="text-sm font-medium tabular-nums">{formatNaira(getValue() as number | null | undefined)}</span>
       ),
     },
     {

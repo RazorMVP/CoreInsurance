@@ -7,7 +7,8 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type QuoteDto } from '@cia/api-client';
+import { apiClient, type QuoteSummaryDto } from '@cia/api-client';
+import { formatNaira } from '@/lib/format';
 import SingleRiskQuoteSheet from './create/SingleRiskQuoteSheet';
 import MultiRiskQuoteSheet  from './create/MultiRiskQuoteSheet';
 import QuotePdfPreview, { type QuotePdfData } from './QuotePdfPreview';
@@ -43,7 +44,7 @@ const mockQuotePdfData: Record<string, QuotePdfData> = {
   },
 };
 
-const statusVariant: Record<QuoteDto['status'], 'active' | 'pending' | 'rejected' | 'draft' | 'cancelled'> = {
+const statusVariant: Record<QuoteSummaryDto['status'], 'active' | 'pending' | 'rejected' | 'draft' | 'cancelled'> = {
   APPROVED:  'active',
   SUBMITTED: 'pending',
   DRAFT:     'draft',
@@ -59,10 +60,10 @@ export default function QuotationListPage() {
   const [multiOpen,  setMultiOpen]  = useState(false);
   const [pdfData,    setPdfData]    = useState<QuotePdfData | null>(null);
 
-  const quotesQuery = useQuery<QuoteDto[]>({
+  const quotesQuery = useQuery<QuoteSummaryDto[]>({
     queryKey: ['quotes'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: QuoteDto[] }>('/api/v1/quotes');
+      const res = await apiClient.get<{ data: QuoteSummaryDto[] }>('/api/v1/quotes');
       return res.data.data;
     },
   });
@@ -87,7 +88,7 @@ export default function QuotationListPage() {
     },
   });
 
-  const columns: ColumnDef<QuoteDto>[] = [
+  const columns: ColumnDef<QuoteSummaryDto>[] = [
     {
       accessorKey: 'quoteNumber',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Quote No." />,
@@ -119,14 +120,14 @@ export default function QuotationListPage() {
       accessorKey: 'totalSumInsured',
       header: 'Sum Insured',
       cell: ({ getValue }) => (
-        <span className="text-sm tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
+        <span className="text-sm tabular-nums">{formatNaira(getValue() as number | null | undefined)}</span>
       ),
     },
     {
-      accessorKey: 'totalNetPremium',
+      accessorKey: 'netPremium',
       header: 'Net Premium',
       cell: ({ getValue }) => (
-        <span className="text-sm font-medium tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
+        <span className="text-sm font-medium tabular-nums">{formatNaira(getValue() as number | null | undefined)}</span>
       ),
     },
     {
@@ -161,7 +162,7 @@ export default function QuotationListPage() {
       accessorKey: 'status',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
       cell: ({ getValue }) => {
-        const s = getValue() as QuoteDto['status'];
+        const s = getValue() as QuoteSummaryDto['status'];
         return <Badge variant={statusVariant[s]}>{s.toLowerCase()}</Badge>;
       },
     },
@@ -183,13 +184,13 @@ export default function QuotationListPage() {
               { label: 'View details', onClick: (r) => navigate(`/quotation/${r.original.id}`) },
               // Submit / Convert / Edit all live on the detail page — route there
               // rather than duplicating the workflow logic on the list row.
-              ...(status === 'DRAFT'     ? [{ label: 'Submit for approval', onClick: (r: { original: QuoteDto }) => navigate(`/quotation/${r.original.id}`) }] : []),
-              ...(status === 'APPROVED'  ? [{ label: 'Convert to policy',   onClick: (r: { original: QuoteDto }) => navigate(`/quotation/${r.original.id}`) }] : []),
-              ...(status !== 'CONVERTED' ? [{ label: 'Edit quote',          onClick: (r: { original: QuoteDto }) => navigate(`/quotation/${r.original.id}`) }] : []),
+              ...(status === 'DRAFT'     ? [{ label: 'Submit for approval', onClick: (r: { original: QuoteSummaryDto }) => navigate(`/quotation/${r.original.id}`) }] : []),
+              ...(status === 'APPROVED'  ? [{ label: 'Convert to policy',   onClick: (r: { original: QuoteSummaryDto }) => navigate(`/quotation/${r.original.id}`) }] : []),
+              ...(status !== 'CONVERTED' ? [{ label: 'Edit quote',          onClick: (r: { original: QuoteSummaryDto }) => navigate(`/quotation/${r.original.id}`) }] : []),
               ...((status === 'APPROVED' || status === 'CONVERTED') && mockQuotePdfData[row.original.id]
                 ? [{ label: 'Download PDF', onClick: (r: any) => setPdfData(mockQuotePdfData[r.original.id] ?? null) }]
                 : []),
-              { label: 'Duplicate', onClick: (r: { original: QuoteDto }) => duplicate.mutate(r.original.id) },
+              { label: 'Duplicate', onClick: (r: { original: QuoteSummaryDto }) => duplicate.mutate(r.original.id) },
             ]}
           />
         );

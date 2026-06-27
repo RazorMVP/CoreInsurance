@@ -11,6 +11,7 @@ import {
   validatedGet, CreditNoteDtoSchema,
   type CreditNoteDto, type FinanceEntityType,
 } from '@cia/api-client';
+import { formatNaira } from '@/lib/format';
 import CreditNoteDetailDialog   from './CreditNoteDetailDialog';
 import ProcessPaymentSheet      from './ProcessPaymentSheet';
 import PaymentsListSection      from './PaymentsListSection';
@@ -79,14 +80,14 @@ export default function PayablesTab() {
       accessorKey: 'totalAmount',
       header: 'Amount',
       cell: ({ getValue }) => (
-        <span className="text-sm font-medium tabular-nums">₦{(getValue() as number).toLocaleString()}</span>
+        <span className="text-sm font-medium tabular-nums">{formatNaira(getValue() as number | null | undefined)}</span>
       ),
     },
     {
       accessorKey: 'outstandingAmount',
       header: 'Outstanding',
       cell: ({ getValue }) => (
-        <span className="text-sm font-medium tabular-nums text-amber-700">₦{(getValue() as number).toLocaleString()}</span>
+        <span className="text-sm font-medium tabular-nums text-amber-700">{formatNaira(getValue() as number | null | undefined)}</span>
       ),
     },
     {
