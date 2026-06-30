@@ -1,6 +1,5 @@
 package com.nubeero.cia.finance.pdf;
 
-import com.nubeero.cia.claims.Claim;
 import com.nubeero.cia.claims.ClaimRepository;
 import com.nubeero.cia.customer.Customer;
 import com.nubeero.cia.customer.CustomerRepository;
@@ -40,9 +39,14 @@ public class ClaimBeneficiaryProfileResolver implements BeneficiaryProfileResolv
 
     @Override
     public BeneficiaryProfile resolve(CreditNote creditNote) {
-        Optional<Claim> claimOpt = claimRepository.findById(creditNote.getEntityId());
+        // Scalar projection ONLY — never load the full Claim entity here. Doing
+        // so inside the payment write-tx pulls Claim's @OneToMany(cascade=ALL,
+        // orphanRemoval=true) collections into the session, and the voucher-PDF
+        // template query's autoflush then throws "Found shared references to a
+        // collection: Claim.documents", rolling back the payment. cia-log 2026-06-28.
+        var claimOpt = claimRepository.findBeneficiaryView(creditNote.getEntityId());
         if (claimOpt.isEmpty()) return null;
-        Claim claim = claimOpt.get();
+        var claim = claimOpt.get();
 
         Optional<Customer> customerOpt = customerRepository.findById(claim.getCustomerId());
         if (customerOpt.isEmpty()) {
