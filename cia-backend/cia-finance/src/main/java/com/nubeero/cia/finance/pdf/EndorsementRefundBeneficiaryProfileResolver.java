@@ -3,7 +3,6 @@ package com.nubeero.cia.finance.pdf;
 import com.nubeero.cia.customer.Customer;
 import com.nubeero.cia.customer.CustomerRepository;
 import com.nubeero.cia.customer.CustomerType;
-import com.nubeero.cia.endorsement.Endorsement;
 import com.nubeero.cia.endorsement.EndorsementRepository;
 import com.nubeero.cia.finance.CreditNote;
 import org.springframework.stereotype.Component;
@@ -40,9 +39,14 @@ public class EndorsementRefundBeneficiaryProfileResolver implements BeneficiaryP
 
     @Override
     public BeneficiaryProfile resolve(CreditNote creditNote) {
-        Optional<Endorsement> endOpt = endorsementRepository.findById(creditNote.getEntityId());
+        // Scalar projection ONLY — never load the full Endorsement entity here.
+        // Doing so inside the payment write-tx pulls its @OneToMany(cascade=ALL,
+        // orphanRemoval=true) `risks` collection into the session and the
+        // voucher-PDF template query's autoflush then throws "Found shared
+        // references to a collection: Endorsement.risks". cia-log 2026-06-28.
+        var endOpt = endorsementRepository.findBeneficiaryView(creditNote.getEntityId());
         if (endOpt.isEmpty()) return null;
-        Endorsement end = endOpt.get();
+        var end = endOpt.get();
 
         Optional<Customer> custOpt = customerRepository.findById(end.getCustomerId());
         if (custOpt.isEmpty()) {

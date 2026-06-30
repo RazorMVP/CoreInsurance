@@ -1,6 +1,8 @@
 package com.nubeero.cia.finance.gl;
 
+import jakarta.persistence.QueryHint;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.QueryHints;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -27,7 +29,16 @@ public interface FiscalPeriodRepository extends JpaRepository<FiscalPeriod, UUID
      * starting on the same date inside one fiscal year — and the
      * generation flow (Slice 1.6) lays out non-overlapping months — so at
      * most one row can match a given (type, date) tuple.
+     *
+     * <p><b>flushMode=COMMIT (required):</b> {@code PeriodLockInterceptor} runs
+     * this lookup from <em>inside</em> a Hibernate flush. Under the default AUTO
+     * mode the pre-read auto-flush re-enters the in-flight {@code LockableByPeriod}
+     * entity and spuriously throws "Found shared references to a collection" for
+     * any such entity owning an uninitialised orphan-removal {@code @OneToMany}
+     * (e.g. Endorsement.risks). Fiscal periods are reference data the in-flight
+     * write never modifies, so skipping the pre-read flush is safe. cia-log 2026-06-30.
      */
+    @QueryHints(@QueryHint(name = "org.hibernate.flushMode", value = "COMMIT"))
     Optional<FiscalPeriod> findFirstByPeriodTypeAndStartDateLessThanEqualAndEndDateGreaterThanEqualAndDeletedAtIsNull(
         FiscalPeriodType periodType, LocalDate startBound, LocalDate endBound);
 

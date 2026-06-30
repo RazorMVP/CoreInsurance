@@ -1,6 +1,8 @@
 package com.nubeero.cia.finance.gl;
 
+import jakarta.persistence.QueryHint;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.QueryHints;
 
 import java.util.List;
 import java.util.Optional;
@@ -25,7 +27,19 @@ public interface PeriodLockRepository extends JpaRepository<PeriodLock, UUID> {
      * any. Returns at most one row — a period has exactly zero or one active
      * lock at a time; multiple lock rows accumulate only across the lock
      * lifecycle (soft → release → hard, etc.).
+     *
+     * <p><b>flushMode=COMMIT (required):</b> this query is run by
+     * {@code PeriodLockInterceptor} from <em>inside</em> a Hibernate flush
+     * (onSave/onFlushDirty). Under the default AUTO flush mode it would
+     * auto-flush the in-flight {@code LockableByPeriod} entity before reading,
+     * and that re-entrant flush spuriously trips "Found shared references to a
+     * collection" on any such entity that owns an uninitialised
+     * {@code @OneToMany(orphanRemoval=true)} collection (e.g. Endorsement.risks),
+     * rolling back the whole write. The lock/period rows are reference data the
+     * in-flight write never touches, so skipping the pre-read flush is safe.
+     * See cia-log 2026-06-30.
      */
+    @QueryHints(@QueryHint(name = "org.hibernate.flushMode", value = "COMMIT"))
     Optional<PeriodLock> findFirstByFiscalPeriodIdAndReleasedAtIsNullAndDeletedAtIsNull(UUID fiscalPeriodId);
 
     /**

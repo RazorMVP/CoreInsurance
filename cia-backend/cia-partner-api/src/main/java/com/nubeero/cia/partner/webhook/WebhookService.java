@@ -78,7 +78,7 @@ public class WebhookService {
         String eventName = event.eventName();
         String payloadJson;
         try {
-            payloadJson = objectMapper.writeValueAsString(Map.of(
+            payloadJson = objectMapper.writeValueAsString(WebhookPayloads.of(
                     "id", "evt_" + UUID.randomUUID().toString().replace("-", ""),
                     "event", eventName,
                     "timestamp", Instant.now().toString(),

@@ -6,8 +6,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
-
 /**
  * Bridges Spring ApplicationEvents to webhook fanout.
  * Listeners run synchronously on the request thread so TenantContext is still set.
@@ -21,7 +19,7 @@ public class WebhookEventListener {
 
     @EventListener
     public void onPolicyApproved(PolicyApprovedEvent event) {
-        webhookService.publish(TenantContext.getTenantId(), WebhookEvent.POLICY_BOUND, Map.of(
+        webhookService.publish(TenantContext.getTenantId(), WebhookEvent.POLICY_BOUND, WebhookPayloads.of(
                 "policyId", event.policyId(),
                 "policyNumber", event.policyNumber(),
                 "customerId", event.customerId(),
@@ -34,7 +32,7 @@ public class WebhookEventListener {
 
     @EventListener
     public void onEndorsementApproved(EndorsementApprovedEvent event) {
-        webhookService.publish(TenantContext.getTenantId(), WebhookEvent.POLICY_ENDORSED, Map.of(
+        webhookService.publish(TenantContext.getTenantId(), WebhookEvent.POLICY_ENDORSED, WebhookPayloads.of(
                 "endorsementId", event.endorsementId(),
                 "endorsementNumber", event.endorsementNumber(),
                 "policyId", event.policyId(),
@@ -47,7 +45,7 @@ public class WebhookEventListener {
 
     @EventListener
     public void onClaimApproved(ClaimApprovedEvent event) {
-        webhookService.publish(TenantContext.getTenantId(), WebhookEvent.CLAIM_APPROVED, Map.of(
+        webhookService.publish(TenantContext.getTenantId(), WebhookEvent.CLAIM_APPROVED, WebhookPayloads.of(
                 "claimId", event.claimId(),
                 "claimNumber", event.claimNumber(),
                 "policyId", event.policyId(),
@@ -60,7 +58,7 @@ public class WebhookEventListener {
 
     @EventListener
     public void onClaimSettled(ClaimSettledEvent event) {
-        webhookService.publish(TenantContext.getTenantId(), WebhookEvent.CLAIM_SETTLED, Map.of(
+        webhookService.publish(TenantContext.getTenantId(), WebhookEvent.CLAIM_SETTLED, WebhookPayloads.of(
                 "claimId", event.claimId(),
                 "claimNumber", event.claimNumber(),
                 "policyId", event.policyId(),

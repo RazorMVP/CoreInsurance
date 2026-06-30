@@ -29,4 +29,24 @@ public interface ClaimRepository extends JpaRepository<Claim, UUID> {
             )
             """)
     Page<Claim> search(@Param("q") String query, Pageable pageable);
+
+    /**
+     * Scalar projection of the two fields a beneficiary resolver needs
+     * (customer id + denormalised name). Loading the full {@link Claim} entity
+     * inside a write transaction (e.g. payment posting → voucher-PDF gen) pulls
+     * its {@code @OneToMany(cascade=ALL, orphanRemoval=true)} collections
+     * (notably {@code documents}) into the session; the next autoflush then
+     * throws "Found shared references to a collection: Claim.documents" and
+     * rolls back the payment. This projection never materialises the entity or
+     * its collections. See cia-log 2026-06-28.
+     */
+    @Query("SELECT c.customerId AS customerId, c.customerName AS customerName "
+            + "FROM Claim c WHERE c.id = :id AND c.deletedAt IS NULL")
+    Optional<ClaimBeneficiaryView> findBeneficiaryView(@Param("id") UUID id);
+
+    /** Projection for {@link #findBeneficiaryView(UUID)}. */
+    interface ClaimBeneficiaryView {
+        UUID getCustomerId();
+        String getCustomerName();
+    }
 }
