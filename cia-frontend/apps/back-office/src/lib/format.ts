@@ -14,3 +14,35 @@
 export function formatNaira(value: number | null | undefined): string {
   return value == null ? '—' : `₦${value.toLocaleString()}`;
 }
+
+/** The em-dash rendered for any absent/null value. */
+const EMPTY = '—';
+
+/**
+ * Date-only formatter for list/detail cells — `30 Jun 2026` (en-GB
+ * `dd Mon yyyy`). `null`/`undefined` renders `—`. Consolidates the identical
+ * per-page `formatDate` helpers and makes them null-tolerant so a cell
+ * repointed to a nullable date can't white-screen on `new Date(undefined)`.
+ */
+export function formatDate(iso: string | null | undefined): string {
+  return iso == null
+    ? EMPTY
+    : new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+/**
+ * Compact ISO-timestamp formatter used by the audit tables — strips the `T`
+ * and trailing `Z` (`2026-06-30T19:04:28Z` → `2026-06-30 19:04:28`).
+ * `null`/`undefined` renders `—`.
+ */
+export function formatTimestamp(iso: string | null | undefined): string {
+  return iso == null ? EMPTY : iso.replace('T', ' ').replace('Z', '');
+}
+
+/**
+ * Renders a SCREAMING_SNAKE enum/status value as a human label
+ * (`BANK_TRANSFER` → `bank transfer`). `null`/`undefined` renders `—`.
+ */
+export function formatEnumLabel(value: string | null | undefined): string {
+  return value == null ? EMPTY : value.replace(/_/g, ' ').toLowerCase();
+}
