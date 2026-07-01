@@ -6,9 +6,10 @@ import {
 } from '@cia/ui';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
 import {
-  apiClient,
-  AuditAlertDtoSchema, pageSchema,
+  apiClient, validatedGet,
+  AuditAlertDtoSchema,
   type ApiError, type ApiResponse,
   type AlertType, type AuditAlertDto,
 } from '@cia/api-client';
@@ -16,42 +17,6 @@ import AlertConfigDialog from './AlertConfigDialog';
 import { formatTimestamp } from '@/lib/format';
 
 interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
-
-// allow-mock: fallback while /audit/alerts is in flight
-const mockAlerts: AuditAlertDto[] = [
-  {
-    id: 'alt1', alertType: 'FAILED_LOGIN', severity: 'HIGH',
-    description: '3 consecutive failed login attempts from IP 154.113.22.9 for user emeka.eze@nubeero.com.',
-    triggeredAt: '2026-04-24T08:23:09Z', acknowledged: false,
-    userName: 'Emeka Eze',
-  },
-  {
-    id: 'alt2', alertType: 'LARGE_FINANCIAL_APPROVAL', severity: 'HIGH',
-    description: 'Claim DV PAY-2026-00002 approved for ₦225,000,000 — exceeds the ₦50M threshold.',
-    triggeredAt: '2026-03-18T16:50:00Z', acknowledged: false,
-    userName: 'PAY-2026-00002',
-  },
-  {
-    id: 'alt3', alertType: 'OFF_HOURS_ACTIVITY', severity: 'MEDIUM',
-    description: 'User chukwudi.obi@nubeero.com logged in at 21:44 (outside business hours 09:00–17:00).',
-    triggeredAt: '2026-04-22T21:44:10Z', acknowledged: false,
-    userName: 'Chukwudi Obi',
-  },
-  {
-    id: 'alt4', alertType: 'FAILED_LOGIN', severity: 'MEDIUM',
-    description: '2 failed login attempts from a new IP (105.112.88.1) for user ngozi.adeyemi@nubeero.com.',
-    triggeredAt: '2026-04-21T14:11:00Z', acknowledged: true,
-    acknowledgedAt: '2026-04-21T14:30:00Z', acknowledgedBy: 'Akinwale Nubeero',
-    userName: 'Ngozi Adeyemi',
-  },
-  {
-    id: 'alt5', alertType: 'BULK_DELETE', severity: 'CRITICAL',
-    description: '7 customer records deleted within 5 minutes by user adaeze@nubeero.com.',
-    triggeredAt: '2026-04-20T11:05:00Z', acknowledged: true,
-    acknowledgedAt: '2026-04-20T11:15:00Z', acknowledgedBy: 'Akinwale Nubeero',
-    userName: 'Adaeze Nwosu',
-  },
-];
 
 const ALERT_TYPE_LABEL: Record<AlertType, string> = {
   FAILED_LOGIN:             'Failed Logins',
@@ -73,14 +38,12 @@ export default function AlertsTab() {
   const queryClient = useQueryClient();
   const alertsQuery = useQuery<AuditAlertDto[]>({
     queryKey: ['audit', 'alerts'],
-    queryFn: async () => {
-      // Backend serves Page<AuditAlertResponse>; unwrap content[].
-      const res = await apiClient.get('/api/v1/audit/alerts');
-      const page = pageSchema(AuditAlertDtoSchema).parse(res.data.data);
-      return page.content;
-    },
+    // List endpoint returns the array directly in `data` with pagination in
+    // `meta` (Session-77 convention). validatedGet unwraps + validates it.
+    queryFn: () => validatedGet('/api/v1/audit/alerts', z.array(AuditAlertDtoSchema)),
   });
-  const alerts = alertsQuery.data ?? mockAlerts;
+  // No fabricated fallback: a failed load reads as empty-with-error, never fake alerts.
+  const alerts = alertsQuery.data ?? [];
   const [configOpen,         setConfigOpen]         = useState(false);
   const [acknowledgeTarget,  setAcknowledgeTarget]  = useState<AuditAlertDto | null>(null);
   // "View details" — read-only inspection of the alert. Backend stores
@@ -203,6 +166,10 @@ export default function AlertsTab() {
         >
           {alertsQuery.isLoading ? (
             <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+          ) : alertsQuery.isError ? (
+            <div className="rounded-md border border-destructive/50 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+              Failed to load alerts. This view shows no records rather than sample data — retry, or check the API connection.
+            </div>
           ) : (
             <DataTable
               columns={columns}
