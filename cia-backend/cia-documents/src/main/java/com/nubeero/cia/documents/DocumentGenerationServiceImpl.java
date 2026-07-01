@@ -2,7 +2,6 @@ package com.nubeero.cia.documents;
 
 import com.nubeero.cia.storage.DocumentStorageService;
 import com.nubeero.cia.common.tenant.TenantContext;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.ClassPathResource;
@@ -23,14 +22,33 @@ import static java.util.Map.entry;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class DocumentGenerationServiceImpl implements DocumentGenerationService {
 
     private final DocumentTemplateRepository templateRepository;
     private final DocumentStorageService storageService;
     private final HtmlToPdfConverter pdfConverter;
-    @Qualifier("documentTemplateEngine")
     private final TemplateEngine templateEngine;
+
+    // Manual constructor (not Lombok @RequiredArgsConstructor) so the
+    // @Qualifier actually reaches the injection point. Lombok does NOT copy
+    // @Qualifier from a field onto the generated constructor parameter (no
+    // lombok.config copyableAnnotations here), so with it on the field Spring
+    // ignored it and injected the Boot-autoconfigured web `templateEngine`
+    // (a classpath SpringResourceTemplateResolver) instead of our
+    // `documentTemplateEngine` (a StringTemplateResolver). The web engine then
+    // treats the loaded HTML *content* as a template *name* and fails with
+    // "Error resolving template [<!DOCTYPE html>…]" — so every PDF (policy,
+    // endorsement, claim DV) silently failed to render. Same Lombok limitation
+    // PeriodLockInterceptor works around. See cia-log 2026-06-30.
+    public DocumentGenerationServiceImpl(DocumentTemplateRepository templateRepository,
+                                         DocumentStorageService storageService,
+                                         HtmlToPdfConverter pdfConverter,
+                                         @Qualifier("documentTemplateEngine") TemplateEngine templateEngine) {
+        this.templateRepository = templateRepository;
+        this.storageService = storageService;
+        this.pdfConverter = pdfConverter;
+        this.templateEngine = templateEngine;
+    }
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd MMM yyyy");
 
