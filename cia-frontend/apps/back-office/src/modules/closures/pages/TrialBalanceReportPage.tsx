@@ -34,7 +34,8 @@ function formatBalance(amount: number) {
   return `₦${amount.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function formatInstant(iso: string) {
+function formatInstant(iso: string | null | undefined) {
+  if (iso == null) return '—';
   return new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
 }
 

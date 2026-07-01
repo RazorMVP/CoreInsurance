@@ -18,6 +18,7 @@ import {
   type Onerousness,
   type GroupStatus,
 } from '@cia/api-client';
+import { formatDate } from '@/lib/format';
 
 const ONEROUSNESS_LABEL: Record<Onerousness, string> = {
   NOT_ONEROUS:                'Not onerous',
@@ -39,9 +40,6 @@ const STATUS_VARIANT: Record<GroupStatus, 'active' | 'rejected'> = {
 type OnerousnessFilter = Onerousness | 'ALL';
 type StatusFilter     = GroupStatus | 'ALL';
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-}
 
 export default function ContractGroupsPage() {
   const [portfolioId, setPortfolioId] = useState<string | 'ALL'>('ALL');

@@ -26,6 +26,7 @@ import ClosePeriodDialog from './ClosePeriodDialog';
 import ReopenPeriodDialog from './ReopenPeriodDialog';
 import LockHistorySheet from './LockHistorySheet';
 import CreateFiscalYearSheet from './CreateFiscalYearSheet';
+import { formatDate } from '@/lib/format';
 
 const STATUS_VARIANT: Record<FiscalPeriodStatus, 'active' | 'pending' | 'rejected' | 'draft'> = {
   OPEN:        'active',
@@ -36,9 +37,6 @@ const STATUS_VARIANT: Record<FiscalPeriodStatus, 'active' | 'pending' | 'rejecte
 
 const PERIOD_TYPES: FiscalPeriodType[] = ['MONTH', 'QUARTER', 'HALF_YEAR', 'YEAR'];
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-}
 
 function formatPeriodLabel(p: FiscalPeriodDto) {
   if (p.periodType === 'MONTH')     return new Date(p.startDate).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });

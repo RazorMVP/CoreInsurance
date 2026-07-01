@@ -11,6 +11,7 @@ import {
   type AuditAction, type AuditLogDto,
 } from '@cia/api-client';
 import AuditEventDetailSheet from './AuditEventDetailSheet';
+import { formatTimestamp } from '@/lib/format';
 
 // allow-mock: fallback while /audit/logs is in flight
 const mockAuditLog: AuditLogDto[] = [
@@ -101,7 +102,7 @@ export default function AuditLogTab() {
     {
       accessorKey: 'timestamp',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Timestamp" />,
-      cell: ({ getValue }) => <span className="font-mono text-xs text-muted-foreground whitespace-nowrap">{(getValue() as string).replace('T', ' ').replace('Z', '')}</span>,
+      cell: ({ getValue }) => <span className="font-mono text-xs text-muted-foreground whitespace-nowrap">{formatTimestamp(getValue() as string | null | undefined)}</span>,
     },
     {
       accessorKey: 'entityType',

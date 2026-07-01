@@ -12,6 +12,7 @@ import {
   type InvestmentClassificationHistoryDto,
   type InvestmentClassification,
 } from '@cia/api-client';
+import { formatDate } from '@/lib/format';
 
 interface ClassificationHistorySheetProps {
   holding: InvestmentHoldingDto | null;
@@ -26,9 +27,6 @@ const CLASSIFICATION_VARIANT: Record<InvestmentClassification, 'active' | 'pendi
   FVPL:           'rejected',
 };
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-}
 
 export default function HoldingClassificationHistorySheet({ holding, open, onOpenChange }: ClassificationHistorySheetProps) {
   const historyQuery = useQuery<InvestmentClassificationHistoryDto[]>({

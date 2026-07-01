@@ -22,6 +22,7 @@ import {
   type NaicomSubmissionType,
 } from '@cia/api-client';
 import NaicomSubmissionDetailSheet from './NaicomSubmissionDetailSheet';
+import { formatDate } from '@/lib/format';
 
 const STATE_VARIANT: Record<NaicomSubmissionState, 'active' | 'pending' | 'draft' | 'rejected'> = {
   DRAFT:        'draft',
@@ -50,9 +51,6 @@ const SUBMISSION_TYPE_LABEL: Record<NaicomSubmissionType, string> = Object.fromE
   SUBMISSION_TYPES.map((t) => [t.value, t.label]),
 ) as Record<NaicomSubmissionType, string>;
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-}
 
 function formatPeriodLabel(p: FiscalPeriodDto) {
   return new Date(p.startDate).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });

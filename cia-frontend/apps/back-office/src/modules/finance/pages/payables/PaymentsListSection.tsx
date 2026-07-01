@@ -16,6 +16,7 @@ import ReverseTransactionDialog, { type ReverseTarget } from '../ReverseTransact
 import { formatPhone } from '../../lib/formatPhone';
 import type { BulkDownloadItem, FinanceEntityType, PaymentListItemResponse } from '@cia/api-client';
 import { formatNaira } from '@/lib/format';
+import { formatEnumLabel } from '@/lib/format';
 
 interface EmailTarget {
   cnId:           string;
@@ -149,7 +150,7 @@ export default function PaymentsListSection() {
     {
       accessorKey: 'paymentMethod',
       header: 'Method',
-      cell: ({ getValue }) => <span className="text-sm">{(getValue() as string).replace('_', ' ').toLowerCase()}</span>,
+      cell: ({ getValue }) => <span className="text-sm">{formatEnumLabel(getValue() as string | null | undefined)}</span>,
     },
     {
       accessorKey: 'paymentDate',

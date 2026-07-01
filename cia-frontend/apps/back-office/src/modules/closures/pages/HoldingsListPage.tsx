@@ -17,6 +17,7 @@ import {
   type HoldingStatus,
 } from '@cia/api-client';
 import HoldingClassificationHistorySheet from './HoldingClassificationHistorySheet';
+import { formatDate } from '@/lib/format';
 
 type AssetTypeFilter      = AssetType | 'ALL';
 type ClassificationFilter = InvestmentClassification | 'ALL';
@@ -40,9 +41,6 @@ function formatMoney(amount: number, currency: string) {
   return `${currency} ${amount.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-}
 
 export default function HoldingsListPage() {
   const [assetTypeFilter,      setAssetTypeFilter]      = useState<AssetTypeFilter>('ALL');
