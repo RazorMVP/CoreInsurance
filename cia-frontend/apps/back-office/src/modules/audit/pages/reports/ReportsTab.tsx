@@ -7,8 +7,8 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import {
-  apiClient,
-  AuditLogDtoSchema, LoginAuditLogDtoSchema, UserActivitySummaryDtoSchema, pageSchema,
+  validatedGet,
+  AuditLogDtoSchema, LoginAuditLogDtoSchema, UserActivitySummaryDtoSchema,
   type AuditLogDto, type LoginAuditLogDto, type UserActivitySummaryDto,
 } from '@cia/api-client';
 
@@ -111,78 +111,52 @@ export default function ReportsTab() {
     return { from: isoStart(new Date(range.from)), to: isoEnd(new Date(range.to)) };
   }
 
-  // Approvals report — Page<AuditLogResponse>
+  // All report endpoints return the array directly in `data` with pagination
+  // in `meta` (Session-77 convention); validatedGet unwraps + validates each.
+
+  // Approvals report
   const approvalsQuery = useQuery<AuditLogDto[]>({
     queryKey: ['audit', 'reports', 'approvals', range],
-    queryFn: async () => {
-      const res = await apiClient.get('/api/v1/audit/reports/approvals', {
-        params: { ...rangeQueryParams(), size: 100 },
-      });
-      const page = pageSchema(AuditLogDtoSchema).parse(res.data.data);
-      return page.content;
-    },
+    queryFn: () => validatedGet('/api/v1/audit/reports/approvals', z.array(AuditLogDtoSchema),
+      { params: { ...rangeQueryParams(), size: 100 } }),
   });
 
-  // Login security report — Page<LoginAuditLogResponse>
+  // Login security report
   const loginQuery = useQuery<LoginAuditLogDto[]>({
     queryKey: ['audit', 'reports', 'login-security', range],
-    queryFn: async () => {
-      const res = await apiClient.get('/api/v1/audit/reports/login-security', {
-        params: { ...rangeQueryParams(), size: 100 },
-      });
-      const page = pageSchema(LoginAuditLogDtoSchema).parse(res.data.data);
-      return page.content;
-    },
+    queryFn: () => validatedGet('/api/v1/audit/reports/login-security', z.array(LoginAuditLogDtoSchema),
+      { params: { ...rangeQueryParams(), size: 100 } }),
   });
 
-  // User activity report — flat List<UserActivitySummary>
+  // User activity report — ranked summary list
   const userActivityQuery = useQuery<UserActivitySummaryDto[]>({
     queryKey: ['audit', 'reports', 'user-activity', range],
-    queryFn: async () => {
-      const res = await apiClient.get('/api/v1/audit/reports/user-activity', {
-        params: rangeQueryParams(),
-      });
-      return z.array(UserActivitySummaryDtoSchema).parse(res.data.data);
-    },
+    queryFn: () => validatedGet('/api/v1/audit/reports/user-activity', z.array(UserActivitySummaryDtoSchema),
+      { params: rangeQueryParams() }),
   });
 
-  // Actions by user — Page<AuditLogResponse>; gated on userIdFilter
+  // Actions by user — gated on userIdFilter
   const actionsByUserQuery = useQuery<AuditLogDto[]>({
     queryKey: ['audit', 'reports', 'actions-by-user', userIdFilter, range],
     enabled: !!userIdFilter.trim(),
-    queryFn: async () => {
-      const res = await apiClient.get('/api/v1/audit/reports/actions-by-user', {
-        params: { userId: userIdFilter.trim(), ...rangeQueryParams(), size: 100 },
-      });
-      const page = pageSchema(AuditLogDtoSchema).parse(res.data.data);
-      return page.content;
-    },
+    queryFn: () => validatedGet('/api/v1/audit/reports/actions-by-user', z.array(AuditLogDtoSchema),
+      { params: { userId: userIdFilter.trim(), ...rangeQueryParams(), size: 100 } }),
   });
 
-  // Actions by module — Page<AuditLogResponse>; gated on moduleFilter
+  // Actions by module — gated on moduleFilter
   const actionsByModuleQuery = useQuery<AuditLogDto[]>({
     queryKey: ['audit', 'reports', 'actions-by-module', moduleFilter, range],
     enabled: !!moduleFilter,
-    queryFn: async () => {
-      const res = await apiClient.get('/api/v1/audit/reports/actions-by-module', {
-        params: { entityType: moduleFilter, ...rangeQueryParams(), size: 100 },
-      });
-      const page = pageSchema(AuditLogDtoSchema).parse(res.data.data);
-      return page.content;
-    },
+    queryFn: () => validatedGet('/api/v1/audit/reports/actions-by-module', z.array(AuditLogDtoSchema),
+      { params: { entityType: moduleFilter, ...rangeQueryParams(), size: 100 } }),
   });
 
-  // Data changes — Page<AuditLogResponse>; gated on both entityType + entityId
+  // Data changes — gated on both entityType + entityId
   const dataChangesQuery = useQuery<AuditLogDto[]>({
     queryKey: ['audit', 'reports', 'data-changes', dcEntityType, dcEntityId],
     enabled: !!dcEntityType && !!dcEntityId.trim(),
-    queryFn: async () => {
-      const res = await apiClient.get('/api/v1/audit/reports/data-changes', {
-        params: { entityType: dcEntityType, entityId: dcEntityId.trim(), size: 100 },
-      });
-      const page = pageSchema(AuditLogDtoSchema).parse(res.data.data);
-      return page.content;
-    },
+    queryFn: () => validatedGet('/api/v1/audit/reports/data-changes', z.array(AuditLogDtoSchema),
+      { params: { entityType: dcEntityType, entityId: dcEntityId.trim(), size: 100 } }),
   });
 
   // Backend → table-row projections

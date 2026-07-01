@@ -6,31 +6,13 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
+import { z } from 'zod';
 import {
-  apiClient, AuditLogDtoSchema, pageSchema,
+  validatedGet, AuditLogDtoSchema,
   type AuditAction, type AuditLogDto,
 } from '@cia/api-client';
 import AuditEventDetailSheet from './AuditEventDetailSheet';
 import { formatTimestamp } from '@/lib/format';
-
-// allow-mock: fallback while /audit/logs is in flight
-const mockAuditLog: AuditLogDto[] = [
-  { id: 'al01', entityType: 'POLICY',      entityId: 'pol1', action: 'CREATE',  userId: 'u1', userName: 'Akinwale Nubeero', timestamp: '2026-02-01T09:12:44Z', ipAddress: '197.210.64.12', sessionId: 'sess-aaa1', oldValue: null, newValue: '{"status":"DRAFT","policyNumber":"POL-2026-00001","customerId":"c1","sumInsured":3500000}' },
-  { id: 'al02', entityType: 'POLICY',      entityId: 'pol1', action: 'APPROVE', userId: 'u1', userName: 'Akinwale Nubeero', timestamp: '2026-02-01T10:05:18Z', ipAddress: '197.210.64.12', sessionId: 'sess-aaa1', oldValue: '{"status":"PENDING_APPROVAL"}', newValue: '{"status":"ACTIVE"}' },
-  { id: 'al03', entityType: 'CUSTOMER',    entityId: 'c1',   action: 'CREATE',  userId: 'u1', userName: 'Akinwale Nubeero', timestamp: '2026-01-28T14:33:02Z', ipAddress: '197.210.64.12', sessionId: 'sess-aaa0', oldValue: null, newValue: '{"firstName":"Chioma","lastName":"Okafor","kycStatus":"PENDING"}' },
-  { id: 'al04', entityType: 'CLAIM',       entityId: 'cl1',  action: 'CREATE',  userId: 'u2', userName: 'Adaeze Nwosu',    timestamp: '2026-03-12T11:22:07Z', ipAddress: '41.206.32.8',   sessionId: 'sess-bbb1', oldValue: null, newValue: '{"status":"REGISTERED","estimatedLoss":850000}' },
-  { id: 'al05', entityType: 'CLAIM',       entityId: 'cl1',  action: 'UPDATE',  userId: 'u2', userName: 'Adaeze Nwosu',    timestamp: '2026-03-14T15:44:51Z', ipAddress: '41.206.32.8',   sessionId: 'sess-bbb2', oldValue: '{"status":"REGISTERED","reserveAmount":0}', newValue: '{"status":"UNDER_INVESTIGATION","reserveAmount":650000}' },
-  { id: 'al06', entityType: 'CLAIM',       entityId: 'cl1',  action: 'APPROVE', userId: 'u1', userName: 'Akinwale Nubeero', timestamp: '2026-03-22T09:07:29Z', ipAddress: '197.210.64.12', sessionId: 'sess-aaa3', oldValue: '{"status":"PENDING_APPROVAL"}', newValue: '{"status":"APPROVED"}' },
-  { id: 'al07', entityType: 'QUOTE',       entityId: 'q1',   action: 'CREATE',  userId: 'u2', userName: 'Adaeze Nwosu',    timestamp: '2026-01-25T10:11:43Z', ipAddress: '41.206.32.8',   sessionId: 'sess-bbb0', oldValue: null, newValue: '{"status":"DRAFT","sumInsured":3500000,"premium":78750}' },
-  { id: 'al08', entityType: 'ENDORSEMENT', entityId: 'end1', action: 'CREATE',  userId: 'u2', userName: 'Adaeze Nwosu',    timestamp: '2026-02-15T14:02:11Z', ipAddress: '41.206.32.8',   sessionId: 'sess-bbb3', oldValue: null, newValue: '{"type":"INCREASE_SI","newSumInsured":4000000}' },
-  { id: 'al09', entityType: 'ENDORSEMENT', entityId: 'end1', action: 'APPROVE', userId: 'u1', userName: 'Akinwale Nubeero', timestamp: '2026-02-16T09:55:00Z', ipAddress: '197.210.64.12', sessionId: 'sess-aaa4', oldValue: '{"status":"PENDING_APPROVAL"}', newValue: '{"status":"APPROVED"}' },
-  { id: 'al10', entityType: 'RECEIPT',     entityId: 'r1',   action: 'CREATE',  userId: 'u3', userName: 'Emeka Eze',       timestamp: '2026-03-01T11:30:00Z', ipAddress: '105.112.14.8',  sessionId: 'sess-ccc1', oldValue: null, newValue: '{"amount":40000,"paymentMethod":"Bank Transfer"}' },
-  { id: 'al11', entityType: 'RECEIPT',     entityId: 'r1',   action: 'APPROVE', userId: 'u1', userName: 'Akinwale Nubeero', timestamp: '2026-03-01T14:10:00Z', ipAddress: '197.210.64.12', sessionId: 'sess-aaa5', oldValue: '{"status":"PENDING_APPROVAL"}', newValue: '{"status":"APPROVED"}' },
-  { id: 'al12', entityType: 'USER',        entityId: 'u3',   action: 'UPDATE',  userId: 'u1', userName: 'Akinwale Nubeero', timestamp: '2026-02-10T08:47:22Z', ipAddress: '197.210.64.12', sessionId: 'sess-aaa2', oldValue: '{"accessGroupId":"ag2"}', newValue: '{"accessGroupId":"ag3"}' },
-  { id: 'al13', entityType: 'PAYMENT',     entityId: 'pay1', action: 'APPROVE', userId: 'u1', userName: 'Akinwale Nubeero', timestamp: '2026-02-25T16:22:00Z', ipAddress: '197.210.64.12', sessionId: 'sess-aaa6', oldValue: '{"status":"PENDING"}', newValue: '{"status":"APPROVED"}' },
-  { id: 'al14', entityType: 'REINSURANCE', entityId: 'ri1',  action: 'CREATE',  userId: 'u1', userName: 'Akinwale Nubeero', timestamp: '2026-02-15T12:00:00Z', ipAddress: '197.210.64.12', sessionId: 'sess-aaa4', oldValue: null, newValue: '{"status":"OFFER_SENT","reinsurer":"Munich Re","sumInsured":26000000}' },
-  { id: 'al15', entityType: 'PARTNER_APP', entityId: 'pa1',  action: 'CREATE',  userId: 'u1', userName: 'Akinwale Nubeero', timestamp: '2026-03-10T10:00:00Z', ipAddress: '197.210.64.12', sessionId: 'sess-aaa7', oldValue: null, newValue: '{"name":"CoverQuick API","scopes":["policies:read","quotes:create"]}' },
-];
 
 const ACTION_VARIANT: Record<AuditAction, 'active' | 'pending' | 'rejected' | 'draft' | 'cancelled'> = {
   CREATE:  'active',
@@ -72,14 +54,13 @@ function exportCSV(data: AuditLogDto[]) {
 export default function AuditLogTab() {
   const auditQuery = useQuery<AuditLogDto[]>({
     queryKey: ['audit', 'logs'],
-    queryFn: async () => {
-      // Backend returns Page<AuditLogResponse>; unwrap content[].
-      const res = await apiClient.get('/api/v1/audit/logs');
-      const page = pageSchema(AuditLogDtoSchema).parse(res.data.data);
-      return page.content;
-    },
+    // List endpoint returns the array directly in `data` with pagination in
+    // `meta` (Session-77 convention). validatedGet unwraps + validates it.
+    queryFn: () => validatedGet('/api/v1/audit/logs', z.array(AuditLogDtoSchema)),
   });
-  const auditLog = auditQuery.data ?? mockAuditLog;
+  // No fabricated fallback: this is a compliance surface, so a failed load must
+  // read as empty-with-error, never as plausible-but-fake audit rows.
+  const auditLog = auditQuery.data ?? [];
   const [detail,     setDetail]     = useState<AuditLogDto | null>(null);
   const [entityType, setEntityType] = useState('ALL');
   const [action,     setAction]     = useState('ALL');
@@ -183,6 +164,10 @@ export default function AuditLogTab() {
 
         {auditQuery.isLoading ? (
           <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+        ) : auditQuery.isError ? (
+          <div className="rounded-md border border-destructive/50 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+            Failed to load the audit log. This view shows no records rather than sample data — retry, or check the API connection.
+          </div>
         ) : (
           <DataTable
             columns={columns}

@@ -6,27 +6,12 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
+import { z } from 'zod';
 import {
-  apiClient, LoginAuditLogDtoSchema, pageSchema,
+  validatedGet, LoginAuditLogDtoSchema,
   type LoginAuditLogDto, type LoginEventType,
 } from '@cia/api-client';
 import { formatTimestamp } from '@/lib/format';
-
-// allow-mock: fallback while /audit/login-logs is in flight
-const mockLoginLog: LoginAuditLogDto[] = [
-  { id: 'll01', userId: 'u1', userName: 'Akinwale Nubeero', eventType: 'LOGIN',          ipAddress: '197.210.64.12', userAgent: 'Chrome/124 (Windows)',    timestamp: '2026-04-24T08:01:12Z', success: true },
-  { id: 'll02', userId: 'u2', userName: 'Adaeze Nwosu',    eventType: 'LOGIN',          ipAddress: '41.206.32.8',   userAgent: 'Chrome/124 (macOS)',      timestamp: '2026-04-24T08:15:44Z', success: true },
-  { id: 'll03', userId: 'u3', userName: 'Emeka Eze',       eventType: 'LOGIN_FAILED',   ipAddress: '154.113.22.9',  userAgent: 'Firefox/125 (Ubuntu)',    timestamp: '2026-04-24T08:22:07Z', success: false, failureReason: 'Invalid password' },
-  { id: 'll04', userId: 'u3', userName: 'Emeka Eze',       eventType: 'LOGIN_FAILED',   ipAddress: '154.113.22.9',  userAgent: 'Firefox/125 (Ubuntu)',    timestamp: '2026-04-24T08:22:41Z', success: false, failureReason: 'Invalid password' },
-  { id: 'll05', userId: 'u3', userName: 'Emeka Eze',       eventType: 'LOGIN_FAILED',   ipAddress: '154.113.22.9',  userAgent: 'Firefox/125 (Ubuntu)',    timestamp: '2026-04-24T08:23:08Z', success: false, failureReason: 'Invalid password' },
-  { id: 'll06', userId: 'u3', userName: 'Emeka Eze',       eventType: 'ACCOUNT_LOCKED', ipAddress: '154.113.22.9',  userAgent: 'Firefox/125 (Ubuntu)',    timestamp: '2026-04-24T08:23:09Z', success: false, failureReason: 'Too many failed attempts (3/3)' },
-  { id: 'll07', userId: 'u1', userName: 'Akinwale Nubeero', eventType: 'LOGOUT',         ipAddress: '197.210.64.12', userAgent: 'Chrome/124 (Windows)',    timestamp: '2026-04-24T12:05:00Z', success: true },
-  { id: 'll08', userId: 'u2', userName: 'Adaeze Nwosu',    eventType: 'LOGOUT',         ipAddress: '41.206.32.8',   userAgent: 'Chrome/124 (macOS)',      timestamp: '2026-04-24T13:30:00Z', success: true },
-  { id: 'll09', userId: 'u4', userName: 'Ngozi Adeyemi',   eventType: 'PASSWORD_RESET', ipAddress: '41.206.52.1',   userAgent: 'Safari/17 (iPhone)',     timestamp: '2026-04-23T16:42:55Z', success: true },
-  { id: 'll10', userId: 'u1', userName: 'Akinwale Nubeero', eventType: 'LOGIN',          ipAddress: '197.210.64.12', userAgent: 'Chrome/124 (Windows)',    timestamp: '2026-04-23T08:10:00Z', success: true },
-  { id: 'll11', userId: 'u5', userName: 'Chukwudi Obi',    eventType: 'LOGIN',          ipAddress: '102.89.3.44',   userAgent: 'Chrome/124 (Android)',    timestamp: '2026-04-22T21:44:10Z', success: true },
-  { id: 'll12', userId: 'u5', userName: 'Chukwudi Obi',    eventType: 'LOGOUT',         ipAddress: '102.89.3.44',   userAgent: 'Chrome/124 (Android)',    timestamp: '2026-04-22T23:01:00Z', success: true },
-];
 
 const EVENT_VARIANT: Record<LoginEventType, 'active'|'pending'|'rejected'|'draft'|'cancelled'> = {
   LOGIN:          'active',
@@ -69,14 +54,12 @@ function exportCSV(data: LoginAuditLogDto[]) {
 export default function LoginLogTab() {
   const loginQuery = useQuery<LoginAuditLogDto[]>({
     queryKey: ['audit', 'login-logs'],
-    queryFn: async () => {
-      // Backend returns Page<LoginAuditLogResponse>; unwrap content[].
-      const res = await apiClient.get('/api/v1/audit/login-logs');
-      const page = pageSchema(LoginAuditLogDtoSchema).parse(res.data.data);
-      return page.content;
-    },
+    // List endpoint returns the array directly in `data` with pagination in
+    // `meta` (Session-77 convention). validatedGet unwraps + validates it.
+    queryFn: () => validatedGet('/api/v1/audit/login-logs', z.array(LoginAuditLogDtoSchema)),
   });
-  const loginLog = loginQuery.data ?? mockLoginLog;
+  // No fabricated fallback: a failed load reads as empty-with-error, never fake events.
+  const loginLog = loginQuery.data ?? [];
   const [eventType, setEventType] = useState('ALL');
   const [user,      setUser]      = useState('');
   const [dateFrom,  setDateFrom]  = useState('');
@@ -173,6 +156,10 @@ export default function LoginLogTab() {
 
       {loginQuery.isLoading ? (
         <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+      ) : loginQuery.isError ? (
+        <div className="rounded-md border border-destructive/50 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+          Failed to load login &amp; session events. This view shows no records rather than sample data — retry, or check the API connection.
+        </div>
       ) : (
         <DataTable
           columns={columns}

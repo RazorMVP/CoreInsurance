@@ -97,22 +97,3 @@ export const AuditAlertDtoSchema = z.object({
   acknowledgedAt:   z.string().nullable().optional(),
 });
 export type AuditAlertDto = z.infer<typeof AuditAlertDtoSchema>;
-
-// ── Spring Page envelope helper ──────────────────────────────────────────
-//
-// Some audit endpoints return `Page<T>`; others return a flat list.
-// Use this when the backend returns Page:
-//
-//   const res = await apiClient.get(url, { params });
-//   const page = pageSchema(AuditLogDtoSchema).parse(res.data.data);
-//   return page.content;
-
-export function pageSchema<T extends z.ZodTypeAny>(itemSchema: T) {
-  return z.object({
-    content:       z.array(itemSchema),
-    totalElements: z.number().optional(),
-    totalPages:    z.number().optional(),
-    number:        z.number().optional(),
-    size:          z.number().optional(),
-  });
-}
