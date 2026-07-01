@@ -10,6 +10,7 @@ import {
   apiClient, LoginAuditLogDtoSchema, pageSchema,
   type LoginAuditLogDto, type LoginEventType,
 } from '@cia/api-client';
+import { formatTimestamp } from '@/lib/format';
 
 // allow-mock: fallback while /audit/login-logs is in flight
 const mockLoginLog: LoginAuditLogDto[] = [
@@ -94,7 +95,7 @@ export default function LoginLogTab() {
     {
       accessorKey: 'timestamp',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Timestamp" />,
-      cell: ({ getValue }) => <span className="font-mono text-xs text-muted-foreground whitespace-nowrap">{(getValue() as string).replace('T', ' ').replace('Z', '')}</span>,
+      cell: ({ getValue }) => <span className="font-mono text-xs text-muted-foreground whitespace-nowrap">{formatTimestamp(getValue() as string | null | undefined)}</span>,
     },
     {
       accessorKey: 'userName',

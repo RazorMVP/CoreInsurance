@@ -43,7 +43,8 @@ function findOverride(
   return overrides.find((o) => o.templateType === templateType && o.channel === channel) ?? null;
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string | null | undefined): string {
+  if (iso == null) return '—';
   return new Date(iso).toLocaleString('en-GB', {
     day: '2-digit', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit',

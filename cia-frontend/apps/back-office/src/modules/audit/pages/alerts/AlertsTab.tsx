@@ -13,6 +13,7 @@ import {
   type AlertType, type AuditAlertDto,
 } from '@cia/api-client';
 import AlertConfigDialog from './AlertConfigDialog';
+import { formatTimestamp } from '@/lib/format';
 
 interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
 
@@ -117,7 +118,7 @@ export default function AlertsTab() {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Detected" />,
       cell: ({ getValue }) => (
         <span className="font-mono text-xs text-muted-foreground whitespace-nowrap">
-          {(getValue() as string).replace('T', ' ').replace('Z', '')}
+          {formatTimestamp(getValue() as string | null | undefined)}
         </span>
       ),
     },
