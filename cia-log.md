@@ -52,6 +52,18 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-07-01 — Session completion gate — doc-sync (`docs/session-gate-doc-sync`) — COMPLETE
+
+Ran the CIA Session Completion Gate to close out the live-stack-review session (9 runtime bugs + 1 latent-hardening pass, PRs #32–#39). Automated hook (`check-session-gate.sh`) green: clean tree, cia-log current + in each commit. Checklist: **cia-log** ✓ (per-PR entries); **SKILL.md** — no change (no new module/feature/entity/count this session — all bug fixes); **partner `/partner/v1` annotations + Postman** — N/A (no new partner endpoints).
+
+**CLAUDE.md — promoted 2 durable invariants** surfaced this session from cia-log into the doc where future work will see them (the two backend fixes' own invariants are already in code javadoc + cia-log, so not duplicated):
+- **DTO-drift guard blind spot + cell-formatter convention** (→ DTO-drift-guard section): the guard compares field *sets* but can't see a component binding the *wrong* DTO — list pages MUST bind the summary DTO their endpoint returns (the `/policies`+`/quotation` white-screen class); money/date/status cells MUST use the shared null-tolerant `format*` helpers, never inline `(getValue() as …).method()`.
+- **Period-lock interceptor lookups MUST run `flushMode=COMMIT`** (→ Period-Lock Design section): the `checkWrite` lookups run inside a Hibernate flush; AUTO mode's pre-read autoflush re-enters the in-flight `LockableByPeriod` entity and spuriously trips "Found shared references to a collection" — the root cause of the endorsement-approval + claim-payment 500s (#37). Do not remove the hint.
+
+**Known follow-ups / backlog change:** none — no rows added or removed (all five live-hunt rows were drained across #35–#39). Backlog now down to the older P2/P3s (`naicom-niid-live-integration`, `kyc-live-provider`, `coverage-gates-backend-jacoco`, `setup-dead-shells`, `inward-fac-backend-or-hide`, etc.).
+
+---
+
 ## 2026-07-01 — Harden back-office date/status string cells (`fix/list-date-string-cells-null-tolerance`) — COMPLETE
 
 Lands P3 `list-date-string-cells-null-tolerance` — the defensive parallel to the money-cell `formatNaira` hardening (Session 2026-06-27). List/detail cells that called `(getValue() as string).replace/…` or a non-null-tolerant `formatDate(iso: string)` on a value are safe today (the fields are required), but repointing any to a nullable accessor would reintroduce the `undefined.<method>()` white-screen class. Now they degrade to `'—'`.
