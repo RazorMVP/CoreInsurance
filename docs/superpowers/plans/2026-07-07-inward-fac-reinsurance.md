@@ -21,6 +21,8 @@
 - **GL postings** go through `JournalEntryService.post(...)` (the gateway); it re-checks `Σdebit == Σcredit` and enforces period-lock.
 - **Frontend:** no mocks; use `validatedGet`/`validatedPost` (zod). `check-api-wiring.sh` + `check-dto-drift.mjs` + `pnpm --filter @cia/back-office build` must pass.
 - **Build to run backend locally:** `cd cia-backend && mvn install -DskipTests -pl cia-api -am`, then run ITs with `mvn -pl <module> -am verify` (Testcontainers needs Docker).
+- **IT harness for entity↔migration drift (IMPORTANT):** any IT whose job is to catch drift between a JPA entity and the V75 schema (persist/read a `RiFacInward`, or a service/controller flow that does) MUST validate against the **real V75 Flyway schema** — use the cia-api pattern (`@DataJpaTest` bootstrapped off `CiaApplication`'s config + `spring.flyway.target` pinned to the migration; see `cia-api/src/test/.../quotation/QuoteRiskGrossPremiumColumnIT.java`). Do **NOT** use `spring.jpa.hibernate.ddl-auto=create-drop` in a business module: Hibernate generates the schema *from* the entity, so the check is tautological and can never detect a `@Column` mismatch. A `cia-reinsurance`-local `ddl-auto=create-drop` IT is acceptable only for schema-independent logic (e.g. the counter-sequence test), never for entity-column validation. The runtime convention is `ddl-auto: none` (Flyway is the DDL source of truth).
+- **Period-lock anchor:** `LockableByPeriod.getLockDate()` returns the **booking date** (for inward FAC, `createdAt`), never the business-effective `cover_from`/`cover_to` — anchoring on effective dates silently breaks lock semantics (CLAUDE.md Period-Lock Design).
 - **Commit message trailer:** end every commit with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 
 ---
@@ -274,15 +276,24 @@ public class RiFacInward extends BaseEntity implements LockableByPeriod {
     @Column(name = "cancellation_reason", columnDefinition = "TEXT")
     private String cancellationReason;
 
-    /** Period-lock anchor = booking date = cover_from (parity with outward's booked-date anchor). */
+    /**
+     * Period-lock anchor = **booking date**, NOT the business-effective cover
+     * dates. CLAUDE.md Period-Lock Design: getLockDate() must return the
+     * booking date; anchoring on cover_from (effective) silently breaks lock
+     * semantics. Outward RiFacCover uses approvedAt (booking). Inward FAC is
+     * created live with no approval timestamp, so the booking date IS the
+     * creation timestamp (createdAt, inherited from BaseEntity).
+     */
     @Override
     public LocalDate getLockDate() {
-        return coverFrom;
+        return getCreatedAt() != null
+                ? getCreatedAt().atZone(java.time.ZoneOffset.UTC).toLocalDate()
+                : java.time.LocalDate.now(java.time.ZoneOffset.UTC);
     }
 }
 ```
 
-> Verify `LockableByPeriod`'s method name by reading `cia-common/.../entity/LockableByPeriod.java` (it may be `getLockDate()` returning `LocalDate`; the `isReversal()` default is `false` and inward FAC is not a reversal, so don't override it).
+> Verify `LockableByPeriod`'s method name/return type by reading `cia-common/.../entity/LockableByPeriod.java`, and confirm `BaseEntity.getCreatedAt()`'s type (`Instant` vs `LocalDateTime`) — adjust the `.atZone(...)`/`.toLocalDate()` conversion to match. **Do NOT anchor on `cover_from`/`cover_to`** (those are business-effective dates — the documented anti-pattern). The `getCreatedAt() != null` guard covers the interceptor firing before auditing has populated `createdAt`; confirm the timing against how another created-fresh `LockableByPeriod` entity (e.g. `Receipt`/`Payment`/`DebitNote`) anchors its `getLockDate()` and mirror the safe idiom. `isReversal()` defaults to `false` and inward FAC is not a reversal — don't override it.
 
 - [ ] **Step 3: Counter + repository** (mirror `RiFacCounter` / `RiFacCounterRepository`)
 
