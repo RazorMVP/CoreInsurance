@@ -46,6 +46,44 @@
       <artifactId>postgresql</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Real PostgreSQL JDBC driver — needed by RiFacInwardReferenceIT to connect to the
+         Testcontainers instance. Version managed by the spring-boot-starter-parent BOM
+         (postgresql.version property, root pom). Only cia-api carries this at runtime scope
+         for production; this module needs it at test scope for its own @DataJpaTest IT. -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
+
+  <build>
+    <plugins>
+      <!--
+        Activate failsafe to run *IT.java tests during the integration-test
+        phase. Spring Boot's parent has failsafe in pluginManagement only, so
+        without this explicit activation `mvn verify` silently skips every IT
+        in this module (mirrors the identical binding + rationale comment in
+        cia-api/pom.xml, needed here for RiFacInwardReferenceIT).
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 
 </project>
