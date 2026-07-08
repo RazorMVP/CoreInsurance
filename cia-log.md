@@ -59,6 +59,12 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-07-08 — Inward Facultative Reinsurance (v1) — implementation IN PROGRESS (`feat/inward-fac-reinsurance`)
+
+Executing the approved plan (`docs/superpowers/plans/2026-07-07-inward-fac-reinsurance.md`) via subagent-driven development (fresh implementer per task + spec/quality review between each). **Landed so far:** Task 1 — V75 migration (`ri_fac_inwards` + `ri_fac_inward_counters` + COA `4330`/`5240`; commits up to `809ca09`, migration IT green, review clean). Task 2 — `RiFacInward` entity/counter/repository + `RiNumberService.nextInwardFacReference()` (`b33cc6a`); review caught **two Important issues now being fixed**: (1) `getLockDate()` must anchor on the booking date (`createdAt`), not the effective `cover_from` — a plan-level error against CLAUDE.md's Period-Lock Design invariant; (2) the module IT used `ddl-auto=create-drop` (tautological — can't catch entity↔V75 drift), so a cia-api Flyway-backed persistence IT (mirroring `QuoteRiskGrossPremiumColumnIT`) is being added. **Plan corrected** (`191b2ff`) with both fixes + a new Global Constraint so Tasks 5/7 don't inherit the tautological harness. **Remaining:** Tasks 3–12 (event/DTOs, guaranty doc, service, finance DebitNote+GL, controller, FE rebuild, docs) + final whole-branch review, then PR. Not yet merged. Full session entry + backlog reconciliation (drain `inward-fac-backend-build` P1) lands with Task 12.
+
+---
+
 ## 2026-07-07 — Inward Facultative Reinsurance (v1) — design + spec (`feat/inward-fac-reinsurance`) — DESIGN COMPLETE, implementation pending
 
 **Goal (one slice):** Brainstorm → spec the inward-FAC backend build the user flagged as the important next feature after the `allow-mock` sweep (backlog `inward-fac-backend-build`, P1). No implementation this slice — design only, per the brainstorming discipline (design + user approval before code).
