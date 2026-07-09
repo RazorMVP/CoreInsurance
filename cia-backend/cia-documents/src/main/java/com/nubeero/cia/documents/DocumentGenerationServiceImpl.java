@@ -158,6 +158,36 @@ public class DocumentGenerationServiceImpl implements DocumentGenerationService 
         }
     }
 
+    @Override
+    public String generateInwardFacGuaranty(InwardFacGuarantyContext ctx) {
+        try {
+            String html = resolveAndRender(
+                    DocumentTemplateType.INWARD_FAC_GUARANTY, null, ctx.classOfBusinessId(),
+                    Map.ofEntries(
+                            entry("facInwardReference",  ctx.facInwardReference()),
+                            entry("cedingCompanyName",   ctx.cedingCompanyName()),
+                            entry("classOfBusinessName", ctx.classOfBusinessName()),
+                            entry("riskDescription",     ctx.riskDescription() != null ? ctx.riskDescription() : ""),
+                            entry("sumInsured",          ctx.sumInsured().toPlainString()),
+                            entry("ourSharePct",         ctx.ourSharePct().toPlainString()),
+                            entry("acceptedSumInsured",  ctx.acceptedSumInsured().toPlainString()),
+                            entry("grossPremium",        ctx.grossPremium().toPlainString()),
+                            entry("commissionAmount",    ctx.commissionAmount().toPlainString()),
+                            entry("netPremium",          ctx.netPremium().toPlainString()),
+                            entry("currencyCode",        ctx.currencyCode()),
+                            entry("coverFrom",           fmt(ctx.coverFrom())),
+                            entry("coverTo",             fmt(ctx.coverTo()))
+                    ));
+            byte[] pdf = pdfConverter.convert(html);
+            String path = "documents/ri-fac-inwards/" + ctx.facInwardId() + "/guaranty.pdf";
+            store(path, pdf);
+            return path;
+        } catch (Exception ex) {
+            log.error("Inward FAC guaranty generation failed for {}: {}", ctx.facInwardReference(), ex.getMessage(), ex);
+            return null;
+        }
+    }
+
     // ─── Template resolution ──────────────────────────────────────────────
 
     private String resolveAndRender(DocumentTemplateType type, UUID productId,
@@ -191,6 +221,7 @@ public class DocumentGenerationServiceImpl implements DocumentGenerationService 
             case ENDORSEMENT        -> "endorsement-default.html";
             case CLAIM_DV           -> "claim-dv-default.html";
             case NAICOM_CERTIFICATE -> "policy-default.html"; // reuse policy template as fallback
+            case INWARD_FAC_GUARANTY -> "inward-fac-guaranty-default.html";
         };
         try {
             ClassPathResource resource = new ClassPathResource("document-templates/" + filename);

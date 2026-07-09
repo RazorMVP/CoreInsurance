@@ -4,5 +4,6 @@ public enum DocumentTemplateType {
     POLICY,
     ENDORSEMENT,
     CLAIM_DV,
-    NAICOM_CERTIFICATE
+    NAICOM_CERTIFICATE,
+    INWARD_FAC_GUARANTY
 }

@@ -14,4 +14,6 @@ public interface DocumentGenerationService {
     String generateEndorsementDocument(EndorsementDocumentContext ctx);
 
     String generateClaimDv(ClaimDvContext ctx);
+
+    String generateInwardFacGuaranty(InwardFacGuarantyContext ctx);
 }

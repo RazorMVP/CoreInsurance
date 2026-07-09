@@ -57,4 +57,31 @@
     </dependency>
   </dependencies>
 
+  <build>
+    <plugins>
+      <!--
+        Activate failsafe to run *IT.java tests during the integration-test
+        phase. Spring Boot's parent has failsafe in pluginManagement only, so
+        without this explicit activation `mvn verify` silently skips every IT
+        in this module (mirrors the identical binding + rationale comment in
+        cia-api/pom.xml and cia-reinsurance/pom.xml) — needed here for
+        InwardFacGuarantyRenderIT (Task 4) and retroactively picks up the
+        pre-existing HtmlToPdfConverterFontIT, which was never actually
+        executed by `mvn verify` before this binding existed.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
 </project>
