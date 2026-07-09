@@ -16,18 +16,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Reference-sequence IT for {@link RiNumberService#nextInwardFacReference()} against a real
- * PostgreSQL container (Docker via Testcontainers).
+ * PostgreSQL container (Docker via Testcontainers). Scope: <strong>only</strong> the counter /
+ * reference-minting round-trip (year row is created, sequence increments, format is
+ * {@code FAC-IN-YYYY-NNNNNN}).
  *
- * <p>{@code cia-reinsurance} has no {@code @SpringBootApplication} or Flyway migrations of its
- * own (both live in {@code cia-api}, which this module cannot depend on — the reactor
- * dependency runs the other way). {@link ReinsuranceTestApplication}, a minimal
- * {@code @SpringBootConfiguration} fixture colocated in this package, gives
- * {@code @DataJpaTest} something to bootstrap from; {@code spring.jpa.hibernate.ddl-auto} is
- * pinned to {@code create-drop} for this isolated test context only (no Flyway substrate
- * exists at this module's scope to migrate against) so Hibernate creates the schema for every
- * entity in this package — all self-contained, no relationships crossing into other modules'
- * entities. This does not relax the project's {@code ddl-auto: none} runtime convention, which
- * governs {@code cia-api}'s Flyway-owned schema only.
+ * <p><strong>This is NOT a schema-drift guard.</strong> The schema here is built by Hibernate
+ * {@code ddl-auto=create-drop} <em>from the entities themselves</em>, so it is tautological —
+ * it cannot catch a {@code @Column} name/type mismatch against the real V75 {@code ri_fac_inwards}
+ * migration, and this test never persists a {@link RiFacInward} row (only the counter). Entity ↔
+ * V75 column validation lives in {@code cia-api}'s {@code RiFacInwardSchemaIT}, which runs the
+ * <em>real</em> Flyway V1..V75 migrations ({@code ddl-auto=none}) and round-trips a fully
+ * populated {@code RiFacInward}. Do not treat this module's {@code create-drop} harness as
+ * "schema-verified" precedent.
+ *
+ * <p>Why {@code create-drop} here: {@code cia-reinsurance} has no {@code @SpringBootApplication}
+ * or Flyway migrations of its own (both live in {@code cia-api}, which this module cannot depend
+ * on — the reactor dependency runs the other way). {@link ReinsuranceTestApplication}, a minimal
+ * {@code @SpringBootConfiguration} fixture colocated in this package, gives {@code @DataJpaTest}
+ * something to bootstrap from; {@code create-drop} is pinned for this isolated test context only
+ * (no Flyway substrate exists at this module's scope to migrate against). This does not relax the
+ * project's {@code ddl-auto: none} runtime convention, which governs {@code cia-api}'s
+ * Flyway-owned schema only.
  */
 @Testcontainers
 @DataJpaTest

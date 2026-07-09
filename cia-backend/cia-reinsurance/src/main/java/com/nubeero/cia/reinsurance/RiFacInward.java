@@ -8,6 +8,7 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Entity
@@ -93,9 +94,23 @@ public class RiFacInward extends BaseEntity implements LockableByPeriod {
     @Column(name = "cancellation_reason", columnDefinition = "TEXT")
     private String cancellationReason;
 
-    /** Period-lock anchor = booking date = cover_from (parity with outward's booked-date anchor). */
+    /**
+     * Period-lock anchor = <strong>booking date</strong> = {@code createdAt}, the
+     * timestamp the inward FAC hits the books. It must <strong>not</strong> be
+     * {@code coverFrom}/{@code coverTo} — those are the business-<em>effective</em>
+     * cover period, and anchoring the lock on them would let a backdated cover
+     * period be wrongly evaluated against a closed fiscal period (breaking lock
+     * semantics — see CLAUDE.md §Period-Lock Design "getLockDate returns the
+     * booking date, not the business-effective date").
+     *
+     * <p>Inward FAC is created live with no approval step, so its booking date is
+     * the creation timestamp. Mirrors the created-fresh sibling idiom in
+     * {@code DebitNote}/{@code CreditNote}: return {@code null} until auditing has
+     * populated {@code createdAt} (the interceptor treats a null lock date as
+     * "allow" — the pre-persist window is never in a closed period).
+     */
     @Override
     public LocalDate getLockDate() {
-        return coverFrom;
+        return getCreatedAt() == null ? null : getCreatedAt().atOffset(ZoneOffset.UTC).toLocalDate();
     }
 }
