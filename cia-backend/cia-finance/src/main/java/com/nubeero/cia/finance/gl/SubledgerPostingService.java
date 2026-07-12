@@ -6,6 +6,7 @@ import com.nubeero.cia.common.event.ClaimSettledEvent;
 import com.nubeero.cia.common.event.EndorsementApprovedEvent;
 import com.nubeero.cia.common.event.FacPremiumCededEvent;
 import com.nubeero.cia.common.event.PolicyApprovedEvent;
+import com.nubeero.cia.common.event.RiFacInwardAcceptedEvent;
 import com.nubeero.cia.finance.dto.JournalEntryLineRequest;
 import com.nubeero.cia.finance.dto.PostJournalEntryRequest;
 import lombok.RequiredArgsConstructor;
@@ -72,6 +73,9 @@ public class SubledgerPostingService {
     static final String EVENT_ENDORSEMENT_PREMIUM_ADDITIONAL = "ENDORSEMENT_PREMIUM_ADDITIONAL";
     static final String EVENT_ENDORSEMENT_PREMIUM_REFUND = "ENDORSEMENT_PREMIUM_REFUND";
     static final String EVENT_FAC_PREMIUM_CEDED = "FAC_PREMIUM_CEDED";
+    // Inward FAC (v1) Task 6 — mirrors EVENT_FAC_PREMIUM_CEDED for the inward
+    // (accepted-from-ceding-company) direction.
+    static final String EVENT_FAC_PREMIUM_ACCEPTED = "FAC_PREMIUM_ACCEPTED";
     // Slice 84c — Broker commission JE chained from POLICY_APPROVED. Agent /
     // RM equivalents will be added when Open Q#11 unblocks per-policy
     // attribution for those sources.
@@ -92,6 +96,12 @@ public class SubledgerPostingService {
     private static final String COA_RI_PREMIUM_EXPENSE = "5210";   // Outward reinsurance premium
     private static final String COA_RI_COMMISSION_INCOME = "4300"; // Reinsurance income (ceded)
     private static final String COA_RI_PREMIUM_PAYABLE = "2310";   // RI premium payable (outward)
+
+    // ── Hardcoded COA codes for the compound inward FAC 3-line posting ───────
+    // (V75 — 4330/5240 net new; 1330 pre-existed from V32 R1=A scope decision.)
+    private static final String COA_INWARD_PREMIUM_RECEIVABLE = "1330"; // Premium receivable - Coinsurer (inward)
+    private static final String COA_INWARD_COMMISSION_EXPENSE  = "5240"; // Inward reinsurance commission expense
+    private static final String COA_INWARD_PREMIUM_INCOME      = "4330"; // Inward reinsurance premium income
 
     private final JournalEntryService journalEntryService;
     private final PostingRuleService postingRuleService;
@@ -350,6 +360,62 @@ public class SubledgerPostingService {
                 line(COA_RI_PREMIUM_EXPENSE,    event.premiumCeded(),    BigDecimal.ZERO,         event.currencyCode(), classOfBusinessId),
                 line(COA_RI_COMMISSION_INCOME,  BigDecimal.ZERO,         event.commissionAmount(), event.currencyCode(), classOfBusinessId),
                 line(COA_RI_PREMIUM_PAYABLE,    BigDecimal.ZERO,         event.netPremiumCeded(),  event.currencyCode(), classOfBusinessId)));
+        journalEntryService.post(request);
+    }
+
+    /**
+     * 7. Inward FAC accepted → compound 3-line posting (hardcoded, mirrors
+     * {@link #replayFacPremiumCeded}).
+     *
+     * <pre>
+     *   Dr 1330 Premium receivable - Coinsurer (inward) = netPremium
+     *   Dr 5240 Inward reinsurance commission expense    = commissionAmount
+     *   Cr 4330 Inward reinsurance premium income        = grossPremium
+     * </pre>
+     *
+     * <p>Invariant: {@code grossPremium == commissionAmount + netPremium}.
+     * {@link JournalEntryService#post} re-checks this at the GL boundary.
+     * Simple income posting (not IFRS-17 PAA — backlog
+     * fac-ifrs17-paa-workstream).
+     *
+     * <p><strong>Idempotency reference:</strong> {@code create}, {@code
+     * renew}, and {@code extend} on {@code RiFacInwardService} all publish
+     * {@link RiFacInwardAcceptedEvent} for the SAME {@code facInwardId}. The
+     * JE gateway's {@code UNIQUE(source_module, source_event_type,
+     * source_reference)} constraint would reject a second posting keyed only
+     * on {@code facInwardId.toString()}, so the reference here is {@code
+     * facInwardId:businessDate} instead. This keeps create + a later extend
+     * (different day) from colliding, but two extends fired on the SAME
+     * calendar day still collide — accepted for v1; a fuller fix threads a
+     * per-transaction sequence into the reference.
+     */
+    public void replayFacPremiumAccepted(RiFacInwardAcceptedEvent event) {
+        replayFacPremiumAccepted(event, today());
+    }
+
+    /**
+     * 7b. Backfill/explicit-date overload — see {@link
+     * #replayFacPremiumAccepted(RiFacInwardAcceptedEvent)} for the posting
+     * contract and the idempotency-reference caveat.
+     */
+    public void replayFacPremiumAccepted(RiFacInwardAcceptedEvent event, LocalDate businessDate) {
+        if (zeroOrNull(event.grossPremium())) {
+            log.debug("Skipping JE for RiFacInwardAccepted {} — gross premium is zero", event.facInwardReference());
+            return;
+        }
+        String narrative = String.format("Inward FAC %s accepted from %s",
+                event.facInwardReference(), event.cedingCompanyName());
+
+        PostJournalEntryRequest request = new PostJournalEntryRequest(
+            businessDate,
+            MODULE_REINSURANCE,
+            EVENT_FAC_PREMIUM_ACCEPTED,
+            event.facInwardId().toString() + ":" + businessDate,
+            narrative,
+            List.of(
+                line(COA_INWARD_PREMIUM_RECEIVABLE, event.netPremium(),       BigDecimal.ZERO,       event.currencyCode(), event.classOfBusinessId()),
+                line(COA_INWARD_COMMISSION_EXPENSE,  event.commissionAmount(), BigDecimal.ZERO,       event.currencyCode(), event.classOfBusinessId()),
+                line(COA_INWARD_PREMIUM_INCOME,      BigDecimal.ZERO,         event.grossPremium(),  event.currencyCode(), event.classOfBusinessId())));
         journalEntryService.post(request);
     }
 

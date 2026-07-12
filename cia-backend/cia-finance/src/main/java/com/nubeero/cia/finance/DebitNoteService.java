@@ -2,6 +2,7 @@ package com.nubeero.cia.finance;
 
 import com.nubeero.cia.common.event.EndorsementApprovedEvent;
 import com.nubeero.cia.common.event.PolicyApprovedEvent;
+import com.nubeero.cia.common.event.RiFacInwardAcceptedEvent;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -88,6 +89,33 @@ public class DebitNoteService {
         dn.setTotalAmount(event.premiumAdjustment());
         dn.setCurrencyCode(event.currencyCode());
         dn.setStatus(DebitNoteStatus.OUTSTANDING);
+        return debitNoteRepository.save(dn);
+    }
+
+    /**
+     * Inward FAC accepted → receivable {@link DebitNote} against the ceding
+     * company. entityType {@code REINSURANCE}; debtor fields (customerId /
+     * customerName) hold the ceding company, not an actual {@code Customer}
+     * row — mirrors {@link #createForEndorsement} (no due date; inward FAC
+     * has none).
+     */
+    @Transactional
+    public DebitNote createForInwardFac(RiFacInwardAcceptedEvent event) {
+        DebitNote dn = new DebitNote();
+        dn.setDebitNoteNumber(numberService.nextDebitNoteNumber());
+        dn.setEntityType(FinanceEntityType.REINSURANCE);
+        dn.setEntityId(event.facInwardId());
+        dn.setEntityReference(event.facInwardReference());
+        dn.setCustomerId(event.cedingCompanyId());
+        dn.setCustomerName(event.cedingCompanyName());
+        dn.setDescription("Inward FAC premium — " + event.facInwardReference()
+                + " (" + event.cedingCompanyName() + ")");
+        dn.setAmount(event.netPremium());
+        dn.setTaxAmount(BigDecimal.ZERO);
+        dn.setTotalAmount(event.netPremium());
+        dn.setCurrencyCode(event.currencyCode());
+        dn.setStatus(DebitNoteStatus.OUTSTANDING);
+        dn.setCreatedBy(currentUser());
         return debitNoteRepository.save(dn);
     }
 
