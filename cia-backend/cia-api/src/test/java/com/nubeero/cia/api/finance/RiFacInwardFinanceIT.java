@@ -10,6 +10,7 @@ import com.nubeero.cia.finance.FinanceNumberService;
 import com.nubeero.cia.finance.RiFacInwardAcceptedEventListener;
 import com.nubeero.cia.finance.gl.ChartOfAccountService;
 import com.nubeero.cia.finance.gl.FiscalPeriodResolver;
+import com.nubeero.cia.finance.gl.JournalEntryDuplicateException;
 import com.nubeero.cia.finance.gl.JournalEntryService;
 import com.nubeero.cia.finance.gl.PolicyClassResolver;
 import com.nubeero.cia.finance.gl.PostingRuleService;
@@ -33,6 +34,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.transaction.TestTransaction;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -116,12 +118,12 @@ class RiFacInwardFinanceIT {
     @Autowired private EntityManager entityManager;
     @Autowired private CacheManager cacheManager;
 
-    private LocalDate businessDate;
-
     @BeforeEach
     void setUp() {
-        businessDate = LocalDate.of(2026, 5, 15);
-        ensureMonthPeriod(businessDate);
+        // Both tests post via RiFacInwardAcceptedEventListener ->
+        // SubledgerPostingService.replayFacPremiumAccepted(event), which uses
+        // the 1-arg overload (today()) — so the only fiscal period any test
+        // ever posts against is LocalDate.now()'s month.
         ensureMonthPeriod(LocalDate.now());
 
         // DebitNoteService.currentUser() reads SecurityContextHolder.
@@ -227,46 +229,71 @@ class RiFacInwardFinanceIT {
 
     @Test
     @DisplayName("Two accepts for the SAME facInwardId on the SAME business day: "
-        + "GL leg throws JournalEntryDuplicateException (documented v1 same-day-collision "
-        + "caveat) — exactly 1 journal_entry survives, no partial/duplicate JE lines")
-    void repeatedAcceptOnSameFacInwardSameDay_glLegCollidesButNeverDoublePosts() {
+        + "the second accept's whole transaction rolls back atomically (JE gateway's "
+        + "JournalEntryDuplicateException poisons the listener's @Transactional boundary) "
+        + "— exactly 1 DebitNote + 1 journal_entry survive, NO orphan receivable")
+    void repeatedAcceptOnSameFacInwardSameDay_secondAcceptRollsBackAtomically() {
         UUID facInwardId = UUID.randomUUID();
         RiFacInwardAcceptedEvent event = new RiFacInwardAcceptedEvent(
             facInwardId, "FAC-IN-2026-000099", UUID.randomUUID(), "Continental Re",
             UUID.randomUUID(), new BigDecimal("500000.00"), new BigDecimal("50000.00"),
             new BigDecimal("450000.00"), "NGN");
 
+        // ── First accept: commit it as its OWN top-level transaction — this
+        //    is what RiFacInwardService.create()'s @Transactional boundary
+        //    does in production (the listener joins via REQUIRED propagation
+        //    and the accept lands durably when that transaction commits). ───
         listener.onInwardFacAccepted(event);
         entityManager.flush();
-        assertThat(countDebitNotesForEntity(facInwardId)).isEqualTo(1L);
-        assertThat(countJesForReference("reinsurance", "FAC_PREMIUM_ACCEPTED",
-                facInwardId + ":" + LocalDate.now())).isEqualTo(1L);
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
 
-        // A second accept (e.g. an extend fired the same calendar day) — the
-        // DebitNote leg has no dedupe guard (a fresh receivable is created,
-        // same behaviour as createForEndorsement firing once per event), but
-        // the GL leg's idempotency reference (facInwardId:businessDate) is
-        // now taken, so replayFacPremiumAccepted throws.
-        assertThatThrownBy(() -> listener.onInwardFacAccepted(event))
-            .hasMessageContaining("FAC_PREMIUM_ACCEPTED");
-
-        // The exception is thrown by JournalEntryService's application-level
-        // duplicate check (a SELECT, not a DB constraint violation), so the
-        // Hibernate session/transaction is never poisoned — an explicit flush
-        // here pushes the second (still-pending, auto-flush skipped it since
-        // it doesn't touch journal_entry's query space) DebitNote insert
-        // through, proving the DebitNote leg has no dedupe guard (mirrors
-        // SubledgerPostingServiceIT.idempotencyOnReplay's read-after-throw
-        // pattern — the outer transaction is merely marked rollback-only,
-        // not physically rolled back, until the test itself tears down).
-        entityManager.flush();
+        TestTransaction.start();
         assertThat(countDebitNotesForEntity(facInwardId))
-            .as("no dedupe on the DebitNote leg — documented, not a defect for v1")
-            .isEqualTo(2L);
+            .as("first accept's DebitNote committed")
+            .isEqualTo(1L);
         assertThat(countJesForReference("reinsurance", "FAC_PREMIUM_ACCEPTED",
                 facInwardId + ":" + LocalDate.now()))
-            .as("GL leg must never double-post — exactly 1 journal_entry survives")
+            .as("first accept's JournalEntry committed")
             .isEqualTo(1L);
+        TestTransaction.end();
+
+        // ── Second accept (e.g. a same-day extend() on the same facInward) —
+        //    a FRESH top-level transaction, mirroring the REQUIRED-propagation
+        //    boundary RiFacInwardService.extend()'s own @Transactional opens
+        //    in production. Inside it: the DebitNote leg inserts a second
+        //    (pending, uncommitted) receivable, then the GL leg's idempotency
+        //    reference (facInwardId:businessDate) is already taken, so
+        //    replayFacPremiumAccepted throws JournalEntryDuplicateException —
+        //    an unchecked CiaException. Spring's default rollback-on-unchecked
+        //    rule marks THIS transaction rollback-only; because the listener
+        //    itself is @Transactional(REQUIRED) and joined (rather than
+        //    started) this transaction, only an explicit rollback of the
+        //    outer TestTransaction physically undoes the pending DebitNote
+        //    insert — proving the real production outcome: clean atomic
+        //    failure, no orphan receivable. ───────────────────────────────
+        TestTransaction.start();
+        assertThatThrownBy(() -> listener.onInwardFacAccepted(event))
+            .isInstanceOf(JournalEntryDuplicateException.class)
+            .hasMessageContaining("FAC_PREMIUM_ACCEPTED");
+        TestTransaction.flagForRollback();
+        TestTransaction.end();
+
+        // ── Verify in a fresh transaction, reading only what was physically
+        //    committed: the second accept's DebitNote never survived — the
+        //    same atomic rollback that undid the second JE attempt undid the
+        //    second DebitNote insert too, because both live in the SAME
+        //    listener transaction. ─────────────────────────────────────────
+        TestTransaction.start();
+        assertThat(countDebitNotesForEntity(facInwardId))
+            .as("second accept's DebitNote insert rolled back with the rest of its "
+                + "transaction — no orphan receivable ever committed")
+            .isEqualTo(1L);
+        assertThat(countJesForReference("reinsurance", "FAC_PREMIUM_ACCEPTED",
+                facInwardId + ":" + LocalDate.now()))
+            .as("GL leg never double-posts — exactly 1 journal_entry survives")
+            .isEqualTo(1L);
+        TestTransaction.end();
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

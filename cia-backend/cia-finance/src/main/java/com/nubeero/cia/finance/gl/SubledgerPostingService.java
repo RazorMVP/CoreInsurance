@@ -378,15 +378,21 @@ public class SubledgerPostingService {
      * Simple income posting (not IFRS-17 PAA — backlog
      * fac-ifrs17-paa-workstream).
      *
-     * <p><strong>Idempotency reference:</strong> {@code create}, {@code
-     * renew}, and {@code extend} on {@code RiFacInwardService} all publish
-     * {@link RiFacInwardAcceptedEvent} for the SAME {@code facInwardId}. The
-     * JE gateway's {@code UNIQUE(source_module, source_event_type,
-     * source_reference)} constraint would reject a second posting keyed only
-     * on {@code facInwardId.toString()}, so the reference here is {@code
+     * <p><strong>Idempotency reference:</strong> only {@code create} followed
+     * by a same-day {@code extend}, or two same-day {@code extend}s, publish
+     * {@link RiFacInwardAcceptedEvent} for the SAME {@code facInwardId} —
+     * {@code extend} mutates and re-publishes against the existing row's id,
+     * while {@code renew} on {@code RiFacInwardService} always persists a
+     * brand-new {@code RiFacInward} (a fresh id) and publishes with THAT new
+     * id, so a renewal can never collide with its source. The JE gateway's
+     * {@code UNIQUE(source_module, source_event_type, source_reference)}
+     * constraint would reject a second posting keyed only on {@code
+     * facInwardId.toString()}, so the reference here is {@code
      * facInwardId:businessDate} instead. This keeps create + a later extend
-     * (different day) from colliding, but two extends fired on the SAME
-     * calendar day still collide — accepted for v1; a fuller fix threads a
+     * (different day) from colliding, but two same-facInwardId accepts fired
+     * on the SAME calendar day still collide — accepted for v1 (the whole
+     * publisher transaction rolls back atomically on the second accept, so
+     * no orphan receivable can result); a fuller fix threads a
      * per-transaction sequence into the reference.
      */
     public void replayFacPremiumAccepted(RiFacInwardAcceptedEvent event) {
