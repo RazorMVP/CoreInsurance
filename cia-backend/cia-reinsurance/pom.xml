@@ -37,6 +37,10 @@
       <artifactId>cia-documents</artifactId>
     </dependency>
     <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-storage</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.mapstruct</groupId>
       <artifactId>mapstruct</artifactId>
     </dependency>
@@ -53,6 +57,14 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- spring-security-test: provides @WithMockUser for RiFacInwardControllerIT's
+         @WebMvcTest slice, which enables @EnableMethodSecurity locally to exercise
+         real @PreAuthorize RBAC checks on RiFacInwardController. -->
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-test</artifactId>
       <scope>test</scope>
     </dependency>
     <!-- Real PostgreSQL JDBC driver — needed by RiFacInwardReferenceIT to connect to the
