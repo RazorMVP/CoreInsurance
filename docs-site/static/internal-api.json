@@ -137,6 +137,10 @@
       "description": "Slice 3.2 \u2014 register investment holdings under \u00a74.1 classification (SPPI test + business model \u2192 FVPL / FVOCI_DEBT / FVOCI_EQUITY / AMORTISED_COST). Reclassification follows \u00a7B4.1.26 (rare, audited via Type-2 SCD investment_classification_history)."
     },
     {
+      "name": "Inward Facultative Reinsurance",
+      "description": "Inward FAC \u2014 accept a share of another insurer's risk. Lifecycle: ACTIVE \u2192 RENEWED/EXPIRED/CANCELLED. Creation fires RiFacInwardAcceptedEvent \u2192 cia-finance cascades a DebitNote receivable + JE (Dr 1330 / Dr 5240 / Cr 4330)."
+    },
+    {
       "name": "GL Backfill (Admin)",
       "description": "Retroactive journal-entry backfill (Slice 1.8). One-time mechanism for moving from \"no GL history\" to \"all GL history reconstructed\" \u2014 walks every relevant sub-ledger source table and posts the JEs SubledgerPostingService would have written. Idempotent via the JE-gateway triple. See operations/period-end-closures-backfill.md runbook."
     },
@@ -9270,6 +9274,316 @@
         ]
       }
     },
+    "/api/v1/ri/fac-inwards": {
+      "get": {
+        "tags": [
+          "Inward Facultative Reinsurance"
+        ],
+        "summary": "List inward FAC covers (paginated, filterable)",
+        "description": "Filter by cedingCompanyId, classOfBusinessId, and/or status.",
+        "operationId": "list_28",
+        "parameters": [
+          {
+            "name": "cedingCompanyId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "classOfBusinessId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ACTIVE",
+                "RENEWED",
+                "EXPIRED",
+                "CANCELLED"
+              ]
+            }
+          },
+          {
+            "name": "pageable",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Pageable"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Inward FAC cover page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacInwardResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 caller lacks REINSURANCE_VIEW"
+          }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Inward Facultative Reinsurance"
+        ],
+        "summary": "Create (accept) an inward FAC cover \u2014 status ACTIVE",
+        "description": "Generates a fac-inward reference and an ACTIVE cover, and immediately generates the guaranty document. Fires RiFacInwardAcceptedEvent \u2192 cia-finance cascades a DebitNote receivable + JE.",
+        "operationId": "create_28",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFacInwardRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Inward FAC cover created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacInwardResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (negative amounts, dates inverted, share % out of range)"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 caller lacks REINSURANCE_CREATE"
+          },
+          "404": {
+            "description": "Ceding company or class of business not found"
+          }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ri/fac-inwards/{id}/renew": {
+      "post": {
+        "tags": [
+          "Inward Facultative Reinsurance"
+        ],
+        "summary": "Renew an ACTIVE inward FAC cover for a new term",
+        "description": "Creates a new cover row linked via renewedFromId, carrying over premium terms from the source and marking the source RENEWED.",
+        "operationId": "renew",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenewFacInwardRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Inward FAC cover renewed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacInwardResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (dates inverted)"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 caller lacks REINSURANCE_CREATE"
+          },
+          "404": {
+            "description": "Inward FAC cover not found"
+          },
+          "409": {
+            "description": "Source cover not in ACTIVE state"
+          }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ri/fac-inwards/{id}/extend": {
+      "post": {
+        "tags": [
+          "Inward Facultative Reinsurance"
+        ],
+        "summary": "Extend an ACTIVE inward FAC cover's period (incremental pro-rata premium)",
+        "description": "Moves coverTo forward and publishes a second RiFacInwardAcceptedEvent for the incremental pro-rata premium delta only.",
+        "operationId": "extend",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtendFacInwardRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Inward FAC cover extended",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacInwardResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (newCoverTo not after current coverTo)"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 caller lacks REINSURANCE_UPDATE"
+          },
+          "404": {
+            "description": "Inward FAC cover not found"
+          },
+          "409": {
+            "description": "Inward FAC cover not in ACTIVE state"
+          }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ri/fac-inwards/{id}/cancel": {
+      "post": {
+        "tags": [
+          "Inward Facultative Reinsurance"
+        ],
+        "summary": "Cancel an inward FAC cover (reason required)",
+        "operationId": "cancel_1",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelFacInwardRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Inward FAC cover cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacInwardResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Reason missing"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 caller lacks REINSURANCE_UPDATE"
+          },
+          "404": {
+            "description": "Inward FAC cover not found"
+          },
+          "409": {
+            "description": "Inward FAC cover already cancelled"
+          }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
+      }
+    },
     "/api/v1/ri/fac-covers": {
       "get": {
         "tags": [
@@ -9277,7 +9591,7 @@
         ],
         "summary": "List FAC covers (paginated, filterable)",
         "description": "Filter by policyId, status, and/or reinsuranceCompanyId. Used by the FAC dashboard to show outstanding offer slips per reinsurer.",
-        "operationId": "list_28",
+        "operationId": "list_29",
         "parameters": [
           {
             "name": "policyId",
@@ -9349,7 +9663,7 @@
         ],
         "summary": "Create a FAC cover (DRAFT)",
         "description": "Generates an offer slip reference (facReference) and DRAFT-state cover. The offer slip PDF is generated by cia-documents and sent to the reinsurer. Confirmation comes later via /confirm.",
-        "operationId": "create_28",
+        "operationId": "create_29",
         "requestBody": {
           "content": {
             "application/json": {
@@ -9451,7 +9765,7 @@
         ],
         "summary": "Cancel a FAC cover",
         "description": "Cancels with a mandatory reason. For CONFIRMED covers, reverses the cascaded credit note + JE (reversal carve-out applies \u2014 can cross a closed period).",
-        "operationId": "cancel_1",
+        "operationId": "cancel_2",
         "parameters": [
           {
             "name": "id",
@@ -9514,7 +9828,7 @@
         ],
         "summary": "List allocations (paginated, filterable)",
         "description": "Filter by policyId and/or status. Each allocation row embeds the per-participant lines.",
-        "operationId": "list_29",
+        "operationId": "list_30",
         "parameters": [
           {
             "name": "policyId",
@@ -9676,7 +9990,7 @@
         ],
         "summary": "Cancel an allocation",
         "description": "Used when the underlying policy is cancelled or the allocation needs to be re-run (e.g. batch reallocation under a new treaty). Reverses any cascaded credit notes from this allocation.",
-        "operationId": "cancel_2",
+        "operationId": "cancel_3",
         "parameters": [
           {
             "name": "id",
@@ -10063,7 +10377,7 @@
           "Quotes (Module 2)"
         ],
         "summary": "List quotes (paginated, filterable)",
-        "operationId": "list_30",
+        "operationId": "list_31",
         "parameters": [
           {
             "name": "status",
@@ -10129,7 +10443,7 @@
         ],
         "summary": "Create a quote",
         "description": "Creates a DRAFT quote. Single-risk: one risk item. Multi-risk: multiple risk items with per-item loadings/discounts. Premium is computed live by the service per the tenant's quote_config (LOADING_FIRST | DISCOUNT_FIRST sequence).",
-        "operationId": "create_29",
+        "operationId": "create_30",
         "requestBody": {
           "content": {
             "application/json": {
@@ -10390,7 +10704,7 @@
         ],
         "summary": "List policies (paginated, filterable)",
         "description": "Filter by status and/or customerId; both omitted returns all. Returns lightweight summary projection (no risks or coinsurance participants).",
-        "operationId": "list_31",
+        "operationId": "list_32",
         "parameters": [
           {
             "name": "status",
@@ -10458,7 +10772,7 @@
         ],
         "summary": "Create a policy directly (without a quote)",
         "description": "Used for renewals, broker-relationship-only business, or any path where a formal quote was never issued. Policy starts in DRAFT; submission + approval are separate steps.",
-        "operationId": "create_30",
+        "operationId": "create_31",
         "requestBody": {
           "content": {
             "application/json": {
@@ -11174,7 +11488,7 @@
         ],
         "summary": "Cancel an active policy",
         "description": "Transitions ACTIVE \u2192 CANCELLED with mandatory reason. Issues a credit-note endorsement for the unearned premium pro-rata. If the policy has claims, those remain on the original cover period.",
-        "operationId": "cancel_3",
+        "operationId": "cancel_4",
         "parameters": [
           {
             "name": "id",
@@ -11353,7 +11667,7 @@
         "tags": [
           "platform-tenant-controller"
         ],
-        "operationId": "list_32",
+        "operationId": "list_33",
         "parameters": [
           {
             "name": "page",
@@ -11483,7 +11797,7 @@
         "tags": [
           "platform-super-admin-controller"
         ],
-        "operationId": "list_33",
+        "operationId": "list_34",
         "responses": {
           "200": {
             "description": "OK",
@@ -11532,7 +11846,7 @@
           "Partner App Management"
         ],
         "summary": "List all partner app registrations",
-        "operationId": "list_34",
+        "operationId": "list_35",
         "parameters": [
           {
             "name": "page",
@@ -11588,7 +11902,7 @@
         ],
         "summary": "Register a new partner app",
         "description": "Creates the partner record. Keycloak client creation is handled separately.",
-        "operationId": "create_31",
+        "operationId": "create_32",
         "requestBody": {
           "content": {
             "application/json": {
@@ -12457,7 +12771,7 @@
         ],
         "summary": "Search / list journal entries (paginated)",
         "description": "All filters optional. Filtering by accountCode or classOfBusinessId joins to journal_entry_line \u2014 a JE with N matching lines still appears once in the result (DISTINCT). Lines are NOT included in the summary; drill into GET /{id} for the line array. The Slice 1.10 classOfBusinessId substrate is filterable here.",
-        "operationId": "list_35",
+        "operationId": "list_36",
         "parameters": [
           {
             "name": "businessFrom",
@@ -12779,7 +13093,7 @@
         ],
         "summary": "List active investment holdings",
         "description": "Returns every non-soft-deleted holding, ordered by security name.",
-        "operationId": "list_36",
+        "operationId": "list_37",
         "responses": {
           "200": {
             "description": "Holdings list",
@@ -13080,7 +13394,7 @@
           "Fiscal Years"
         ],
         "summary": "List all fiscal years (no period embedding)",
-        "operationId": "list_37",
+        "operationId": "list_38",
         "responses": {
           "200": {
             "description": "Fiscal years (ordered by start date)",
@@ -13111,7 +13425,7 @@
         ],
         "summary": "Create a fiscal year + auto-generate periods",
         "description": "Creates the fiscal year in DRAFT state and synchronously generates all 19 MONTH / QUARTER / HALF_YEAR / YEAR periods. Activation is a separate step.",
-        "operationId": "create_32",
+        "operationId": "create_33",
         "requestBody": {
           "content": {
             "application/json": {
@@ -13260,7 +13574,7 @@
         ],
         "summary": "List endorsements (paginated, filterable)",
         "description": "Filter by policyId, status, and/or customerId. Each endorsement embeds its risk schedule. Used by the Debit Note Analysis Report (Module 4 feature).",
-        "operationId": "list_38",
+        "operationId": "list_39",
         "parameters": [
           {
             "name": "policyId",
@@ -13334,7 +13648,7 @@
         ],
         "summary": "Create an endorsement (DRAFT)",
         "description": "Creates the endorsement in DRAFT. Type-specific validation: period changes require new dates, SI changes require newSumInsured, add/delete items require itemDescription. Pro-rata premium adjustment is computed by service.",
-        "operationId": "create_33",
+        "operationId": "create_34",
         "requestBody": {
           "content": {
             "application/json": {
@@ -13499,7 +13813,7 @@
         ],
         "summary": "Cancel an endorsement",
         "description": "For DRAFT endorsements: hard-cancel (no GL impact). For APPROVED endorsements: reverses the cascaded debit/credit note + JE (reversal carve-out applies \u2014 can cross closed periods).",
-        "operationId": "cancel_4",
+        "operationId": "cancel_5",
         "parameters": [
           {
             "name": "id",
@@ -13623,7 +13937,7 @@
           "Document Templates"
         ],
         "summary": "List document templates (paginated)",
-        "operationId": "list_39",
+        "operationId": "list_40",
         "parameters": [
           {
             "name": "pageable",
@@ -13676,7 +13990,8 @@
                 "POLICY",
                 "ENDORSEMENT",
                 "CLAIM_DV",
-                "NAICOM_CERTIFICATE"
+                "NAICOM_CERTIFICATE",
+                "INWARD_FAC_GUARANTY"
               ]
             }
           },
@@ -13810,7 +14125,7 @@
         ],
         "summary": "Cancel a debit note",
         "description": "Transitions the DN to CANCELLED. Allowed only when no receipts have been posted (paidAmount = 0). Rejected with 409 otherwise; reverse the receipts first.",
-        "operationId": "cancel_5",
+        "operationId": "cancel_6",
         "parameters": [
           {
             "name": "id",
@@ -13859,7 +14174,7 @@
           "Receipts (Module 8)"
         ],
         "summary": "List receipts for a debit note (paginated)",
-        "operationId": "list_40",
+        "operationId": "list_41",
         "parameters": [
           {
             "name": "debitNoteId",
@@ -14428,7 +14743,7 @@
           "Customer Documents"
         ],
         "summary": "List documents attached to a customer",
-        "operationId": "list_41",
+        "operationId": "list_42",
         "parameters": [
           {
             "name": "customerId",
@@ -14623,7 +14938,7 @@
         ],
         "summary": "Cancel a credit note",
         "description": "Transitions the CN to CANCELLED. Allowed only when no payments have been posted (paidAmount = 0). Reverse the payments first if cancellation is needed after payment.",
-        "operationId": "cancel_6",
+        "operationId": "cancel_7",
         "parameters": [
           {
             "name": "id",
@@ -14672,7 +14987,7 @@
           "Payments (Module 8)"
         ],
         "summary": "List payments for a credit note (paginated)",
-        "operationId": "list_42",
+        "operationId": "list_43",
         "parameters": [
           {
             "name": "creditNoteId",
@@ -15087,7 +15402,7 @@
         ],
         "summary": "List claims (paginated, filterable)",
         "description": "Filter by any combination of policyId, status, customerId. Returns claim summaries (no nested reserves/expenses/documents).",
-        "operationId": "list_43",
+        "operationId": "list_44",
         "parameters": [
           {
             "name": "policyId",
@@ -16047,7 +16362,7 @@
           "Claim Expenses"
         ],
         "summary": "List expenses on a claim (paginated)",
-        "operationId": "list_44",
+        "operationId": "list_45",
         "parameters": [
           {
             "name": "claimId",
@@ -16160,7 +16475,7 @@
         ],
         "summary": "Cancel an expense",
         "description": "Allowed only on PENDING expenses (no GL impact yet). For approved expenses that need to be undone, reverse the cascaded payment first.",
-        "operationId": "cancel_7",
+        "operationId": "cancel_8",
         "parameters": [
           {
             "name": "claimId",
@@ -16294,7 +16609,7 @@
         ],
         "summary": "List documents attached to a claim",
         "description": "Optionally filter by documentType. Returns metadata only \u2014 use /{id}/content to stream bytes.",
-        "operationId": "list_45",
+        "operationId": "list_46",
         "parameters": [
           {
             "name": "claimId",
@@ -16450,7 +16765,7 @@
           "Claim Comments"
         ],
         "summary": "List comments on a claim (paginated, chronological)",
-        "operationId": "list_46",
+        "operationId": "list_47",
         "parameters": [
           {
             "name": "claimId",
@@ -17120,13 +17435,102 @@
         ]
       }
     },
+    "/api/v1/ri/fac-inwards/{id}": {
+      "get": {
+        "tags": [
+          "Inward Facultative Reinsurance"
+        ],
+        "summary": "Get inward FAC cover detail",
+        "operationId": "get_39",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Inward FAC cover found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacInwardResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 caller lacks REINSURANCE_VIEW"
+          },
+          "404": {
+            "description": "Inward FAC cover not found"
+          }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ri/fac-inwards/{id}/document": {
+      "get": {
+        "tags": [
+          "Inward Facultative Reinsurance"
+        ],
+        "summary": "Download the guaranty document (PDF)",
+        "description": "Streams the guaranty PDF generated at create/renew time. 404 if the cover has no guaranty document path yet (generation failure \u2014 creation still succeeds so a document render failure never blocks accepting a risk).",
+        "operationId": "document",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Guaranty PDF stream",
+            "content": {
+              "application/pdf": {}
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 caller lacks REINSURANCE_VIEW"
+          },
+          "404": {
+            "description": "Inward FAC cover not found, or no guaranty document available"
+          }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
+      }
+    },
     "/api/v1/ri/fac-covers/{id}": {
       "get": {
         "tags": [
           "Facultative Reinsurance Covers"
         ],
         "summary": "Get FAC cover detail",
-        "operationId": "get_39",
+        "operationId": "get_40",
         "parameters": [
           {
             "name": "id",
@@ -17172,7 +17576,7 @@
           "Reinsurance Allocations"
         ],
         "summary": "Get allocation detail (with participant lines)",
-        "operationId": "get_40",
+        "operationId": "get_41",
         "parameters": [
           {
             "name": "id",
@@ -17248,7 +17652,7 @@
         "tags": [
           "receipt-list-controller"
         ],
-        "operationId": "list_47",
+        "operationId": "list_48",
         "parameters": [
           {
             "name": "status",
@@ -17693,7 +18097,7 @@
         "tags": [
           "payment-list-controller"
         ],
-        "operationId": "list_48",
+        "operationId": "list_49",
         "parameters": [
           {
             "name": "status",
@@ -17791,7 +18195,7 @@
           "Partner App Management"
         ],
         "summary": "Get partner app details",
-        "operationId": "get_41",
+        "operationId": "get_42",
         "parameters": [
           {
             "name": "id",
@@ -17847,7 +18251,7 @@
         ],
         "summary": "Get the trial balance as of a business date",
         "description": "Returns a flat per-account list with a footer summary. The asOf parameter is interpreted as a business date (economic date) per the Slice 1.4 D4 decision. Includes Income + Expense accounts (not just balance-sheet accounts) so cumulative P&L can be computed.",
-        "operationId": "get_42",
+        "operationId": "get_43",
         "parameters": [
           {
             "name": "asOf",
@@ -17895,7 +18299,7 @@
         ],
         "summary": "List all posting rules",
         "description": "Returns every non-soft-deleted rule, sorted ascending by source_event_type. Each row carries the Dr/Cr account codes plus their human-readable names resolved through the Chart of Accounts.",
-        "operationId": "list_49",
+        "operationId": "list_50",
         "responses": {
           "200": {
             "description": "Posting rules",
@@ -18028,7 +18432,7 @@
         ],
         "summary": "List recent PDF downloads for the calling user",
         "description": "Returns the calling user's PDF download events from the last `days` days, newest first. Default 1 day (today); max 30 days.",
-        "operationId": "list_50",
+        "operationId": "list_51",
         "parameters": [
           {
             "name": "days",
@@ -18106,7 +18510,7 @@
         ],
         "summary": "Get \u00a7103 movement analysis for a period",
         "description": "Returns the \u00a7103-shaped roll-forward: opening balances + period movements (premiums earned, claims incurred, finance income/expense, OCI elements) + closing balances. Computed from the V38 paa_movement_analysis view.",
-        "operationId": "get_43",
+        "operationId": "get_44",
         "parameters": [
           {
             "name": "periodId",
@@ -18278,7 +18682,7 @@
         ],
         "summary": "List submissions filtered by period and/or state",
         "description": "At least one of (periodId, state) must be supplied \u2014 both omitted is rejected to avoid a full-table scan. When both are supplied, results are the intersection. Returns summary projections (payload omitted).",
-        "operationId": "list_51",
+        "operationId": "list_52",
         "parameters": [
           {
             "name": "periodId",
@@ -18342,7 +18746,7 @@
         ],
         "summary": "Get a submission with its payload",
         "description": "Returns the full submission including the rendered payload (engine output).",
-        "operationId": "get_44",
+        "operationId": "get_45",
         "parameters": [
           {
             "name": "id",
@@ -18546,7 +18950,7 @@
         ],
         "summary": "Get a journal entry by id",
         "description": "Returns the JE header plus its lines. JE narratives sometimes embed disclosure substrate (e.g. premium-receivable ECL provision matrix for \u00a7B5.5.36 evidence) \u2014 see /finance/ifrs9/premium-receivable-ecl docs.",
-        "operationId": "get_45",
+        "operationId": "get_46",
         "parameters": [
           {
             "name": "id",
@@ -18593,7 +18997,7 @@
         ],
         "summary": "Get \u00a7B5.5.39 movement analysis for a period",
         "description": "Returns two sections: investments (from V40 view, aggregated by holding + classification totals) and premium-receivable ECL (derived from JE aggregate on account 1340 by business_date \u2014 opening = sum prior periods, closing = sum through period-end, movement = closing \u2212 opening).",
-        "operationId": "get_46",
+        "operationId": "get_47",
         "parameters": [
           {
             "name": "periodId",
@@ -18639,7 +19043,7 @@
           "IFRS 9 \u2014 Investment Holdings"
         ],
         "summary": "Get holding detail",
-        "operationId": "get_47",
+        "operationId": "get_48",
         "parameters": [
           {
             "name": "holdingId",
@@ -18730,7 +19134,7 @@
         ],
         "summary": "Get a fiscal year by id",
         "description": "Set includePeriods=true to embed the period tree (MONTH \u2192 QUARTER \u2192 HALF_YEAR \u2192 YEAR) inline.",
-        "operationId": "get_48",
+        "operationId": "get_49",
         "parameters": [
           {
             "name": "id",
@@ -18942,7 +19346,7 @@
           "Endorsements (Module 4)"
         ],
         "summary": "Get endorsement detail",
-        "operationId": "get_49",
+        "operationId": "get_50",
         "parameters": [
           {
             "name": "id",
@@ -19054,7 +19458,7 @@
           "Document Templates"
         ],
         "summary": "Get template metadata by id",
-        "operationId": "get_50",
+        "operationId": "get_51",
         "parameters": [
           {
             "name": "id",
@@ -19139,7 +19543,7 @@
         ],
         "summary": "List debit notes (paginated, filterable)",
         "description": "Filter by status, customerId, or entityId (the underlying policy / endorsement). All omitted returns all. Outstanding amount is computed inline (totalAmount \u2212 paidAmount).",
-        "operationId": "list_52",
+        "operationId": "list_53",
         "parameters": [
           {
             "name": "status",
@@ -19214,7 +19618,7 @@
           "Debit Notes (Module 8)"
         ],
         "summary": "Get debit note detail",
-        "operationId": "get_51",
+        "operationId": "get_52",
         "parameters": [
           {
             "name": "id",
@@ -19260,7 +19664,7 @@
           "Receipts (Module 8)"
         ],
         "summary": "Get receipt detail",
-        "operationId": "get_52",
+        "operationId": "get_53",
         "parameters": [
           {
             "name": "debitNoteId",
@@ -19509,7 +19913,7 @@
         ],
         "summary": "List customers (paginated, filterable)",
         "description": "Filter by customer type (INDIVIDUAL / CORPORATE) and/or KYC status (PENDING / VERIFIED / FAILED). Returns lightweight summary projection.",
-        "operationId": "list_53",
+        "operationId": "list_54",
         "parameters": [
           {
             "name": "type",
@@ -19670,7 +20074,7 @@
         ],
         "summary": "List credit notes (paginated, filterable)",
         "description": "Filter by status or entityId (the underlying claim / FAC / commission record). Outstanding amount is computed inline (totalAmount \u2212 paidAmount).",
-        "operationId": "list_54",
+        "operationId": "list_55",
         "parameters": [
           {
             "name": "status",
@@ -19735,7 +20139,7 @@
           "Credit Notes (Module 8)"
         ],
         "summary": "Get credit note detail",
-        "operationId": "get_53",
+        "operationId": "get_54",
         "parameters": [
           {
             "name": "id",
@@ -19781,7 +20185,7 @@
           "Payments (Module 8)"
         ],
         "summary": "Get payment detail",
-        "operationId": "get_54",
+        "operationId": "get_55",
         "parameters": [
           {
             "name": "creditNoteId",
@@ -20090,7 +20494,7 @@
           "Claim Expenses"
         ],
         "summary": "Get expense detail",
-        "operationId": "get_55",
+        "operationId": "get_56",
         "parameters": [
           {
             "name": "claimId",
@@ -20145,7 +20549,7 @@
           "Claim Documents"
         ],
         "summary": "Get document metadata",
-        "operationId": "get_56",
+        "operationId": "get_57",
         "parameters": [
           {
             "name": "claimId",
@@ -20782,7 +21186,7 @@
         ],
         "summary": "List login & session logs",
         "description": "Filterable by userId or date range. Requires AUDIT_VIEW or SETUP_UPDATE role.",
-        "operationId": "list_55",
+        "operationId": "list_56",
         "parameters": [
           {
             "name": "userId",
@@ -25387,6 +25791,193 @@
           "sharePercentage"
         ]
       },
+      "CreateFacInwardRequest": {
+        "type": "object",
+        "properties": {
+          "cedingCompanyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "classOfBusinessId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "riskDescription": {
+            "type": "string"
+          },
+          "sumInsured": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "ourSharePct": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0001
+          },
+          "premiumRate": {
+            "type": "number",
+            "minimum": 1e-06
+          },
+          "commissionRate": {
+            "type": "number"
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "coverFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "coverTo": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": [
+          "cedingCompanyId",
+          "classOfBusinessId",
+          "coverFrom",
+          "coverTo",
+          "ourSharePct",
+          "premiumRate",
+          "sumInsured"
+        ]
+      },
+      "FacInwardResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facInwardReference": {
+            "type": "string"
+          },
+          "cedingCompanyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cedingCompanyName": {
+            "type": "string"
+          },
+          "classOfBusinessId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "classOfBusinessName": {
+            "type": "string"
+          },
+          "riskDescription": {
+            "type": "string"
+          },
+          "sumInsured": {
+            "type": "number"
+          },
+          "ourSharePct": {
+            "type": "number"
+          },
+          "acceptedSumInsured": {
+            "type": "number"
+          },
+          "premiumRate": {
+            "type": "number"
+          },
+          "grossPremium": {
+            "type": "number"
+          },
+          "commissionRate": {
+            "type": "number"
+          },
+          "commissionAmount": {
+            "type": "number"
+          },
+          "netPremium": {
+            "type": "number"
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "coverFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "coverTo": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "RENEWED",
+              "EXPIRED",
+              "CANCELLED"
+            ]
+          },
+          "renewedFromId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "guarantyDocumentPath": {
+            "type": "string"
+          },
+          "cancelledBy": {
+            "type": "string"
+          },
+          "cancelledAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cancellationReason": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RenewFacInwardRequest": {
+        "type": "object",
+        "properties": {
+          "coverFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "coverTo": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": [
+          "coverFrom",
+          "coverTo"
+        ]
+      },
+      "ExtendFacInwardRequest": {
+        "type": "object",
+        "properties": {
+          "newCoverTo": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": [
+          "newCoverTo"
+        ]
+      },
+      "CancelFacInwardRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
       "CreateFacCoverRequest": {
         "type": "object",
         "properties": {
@@ -28063,7 +28654,8 @@
               "POLICY",
               "ENDORSEMENT",
               "CLAIM_DV",
-              "NAICOM_CERTIFICATE"
+              "NAICOM_CERTIFICATE",
+              "INWARD_FAC_GUARANTY"
             ]
           },
           "productId": {
@@ -29662,6 +30254,9 @@
             "type": "string",
             "format": "date"
           },
+          "totalSumInsured": {
+            "type": "number"
+          },
           "netPremium": {
             "type": "number"
           },
@@ -29733,6 +30328,9 @@
           "policyEndDate": {
             "type": "string",
             "format": "date"
+          },
+          "totalSumInsured": {
+            "type": "number"
           },
           "netPremium": {
             "type": "number"
