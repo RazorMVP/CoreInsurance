@@ -12,8 +12,6 @@
 //   const treaties = await validatedGet('/api/v1/ri/treaties', z.array(TreatyDtoSchema));
 //
 // Backend gaps NOT modelled here (require future backend work):
-//   - Inward FAC entirely (list, create, renew, extend) — backend has
-//     a single RiFacCover entity with no direction field
 //   - Treaty PUT (edit) — backend has create + activate/expire/cancel
 //     transitions only
 //   - Batch reallocation — backend has single /confirm only
@@ -111,9 +109,9 @@ export type AllocationDto     = z.infer<typeof AllocationDtoSchema>;
 
 // ── FAC Cover ─────────────────────────────────────────────────────────────
 //
-// Backend has a single RiFacCover entity (no direction field). The frontend
-// "Outward" tab maps directly. The frontend "Inward" tab has no backend
-// equivalent yet — see the deferred-gaps comment at the top of this file.
+// Backend has a single RiFacCover entity (no direction field) — the
+// frontend "Outward" tab maps directly to it. Inward FAC is a separate
+// backend entity (RiFacInward, see the "FAC Inward" section below).
 
 export const FacCoverDtoSchema = z.object({
   id:                       z.string(),
@@ -143,3 +141,58 @@ export const FacCoverDtoSchema = z.object({
 });
 
 export type FacCoverDto = z.infer<typeof FacCoverDtoSchema>;
+
+// ── FAC Inward ────────────────────────────────────────────────────────────
+//
+// Mirrors the backend RiFacInward entity / FacInwardResponse record
+// (cia-reinsurance/dto/FacInwardResponse.java) — a distinct entity from
+// outward RiFacCover above; we accept a share from another ceding company
+// rather than ceding our own risk. Served at /api/v1/ri/fac-inwards.
+
+export const RiFacInwardStatusSchema = z.enum(['ACTIVE', 'RENEWED', 'EXPIRED', 'CANCELLED']);
+export type RiFacInwardStatus = z.infer<typeof RiFacInwardStatusSchema>;
+
+export const FacInwardDtoSchema = z.object({
+  id:                    z.string(),
+  facInwardReference:    z.string(),
+  cedingCompanyId:       z.string(),
+  cedingCompanyName:     z.string(),
+  classOfBusinessId:     z.string(),
+  classOfBusinessName:   z.string(),
+  riskDescription:       z.string().nullable().optional(),
+  sumInsured:            z.number(),
+  ourSharePct:           z.number(),
+  acceptedSumInsured:    z.number(),
+  premiumRate:           z.number(),
+  grossPremium:          z.number(),
+  commissionRate:        z.number(),
+  commissionAmount:      z.number(),
+  netPremium:            z.number(),
+  currencyCode:          z.string(),
+  coverFrom:             z.string(),
+  coverTo:               z.string(),
+  status:                RiFacInwardStatusSchema,
+  renewedFromId:         z.string().nullable().optional(),
+  guarantyDocumentPath:  z.string().nullable().optional(),
+  cancelledBy:           z.string().nullable().optional(),
+  cancelledAt:           z.string().nullable().optional(),
+  cancellationReason:    z.string().nullable().optional(),
+  createdAt:             z.string(),
+});
+export type FacInwardDto = z.infer<typeof FacInwardDtoSchema>;
+
+export interface CreateFacInwardRequest {
+  cedingCompanyId: string;
+  classOfBusinessId: string;
+  riskDescription?: string;
+  sumInsured: number;
+  ourSharePct: number;
+  premiumRate: number;
+  commissionRate?: number;
+  currencyCode?: string;
+  coverFrom: string;
+  coverTo: string;
+}
+export interface RenewFacInwardRequest { coverFrom: string; coverTo: string; }
+export interface ExtendFacInwardRequest { newCoverTo: string; }
+export interface CancelFacInwardRequest { reason: string; }
