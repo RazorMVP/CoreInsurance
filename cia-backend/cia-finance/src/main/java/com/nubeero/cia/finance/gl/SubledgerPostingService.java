@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -412,16 +413,31 @@ public class SubledgerPostingService {
         String narrative = String.format("Inward FAC %s accepted from %s",
                 event.facInwardReference(), event.cedingCompanyName());
 
+        // The Dr 5240 commission line is emitted ONLY when commissionAmount > 0.
+        // JournalEntryService rejects any line whose debit and credit are both
+        // zero (each line must have exactly one side > 0), so a zero-commission
+        // accept — commissionRate is optional and defaults to 0, a normal
+        // facultative case and the default FE form state — would otherwise post
+        // a Dr 5240 = 0.00 line, be rejected (422), and roll back the whole
+        // accept. With zero commission net == gross, so the 2-line
+        // Dr 1330 (net) / Cr 4330 (gross) balances on its own. Same guard covers
+        // an extend whose pro-rata delta commission rounds to 0.00 while delta
+        // gross > 0. (The outward replayFacPremiumCeded shares this latent shape
+        // — backlog fac-zero-commission-je-line.)
+        List<JournalEntryLineRequest> lines = new ArrayList<>();
+        lines.add(line(COA_INWARD_PREMIUM_RECEIVABLE, event.netPremium(), BigDecimal.ZERO, event.currencyCode(), event.classOfBusinessId()));
+        if (event.commissionAmount() != null && event.commissionAmount().signum() > 0) {
+            lines.add(line(COA_INWARD_COMMISSION_EXPENSE, event.commissionAmount(), BigDecimal.ZERO, event.currencyCode(), event.classOfBusinessId()));
+        }
+        lines.add(line(COA_INWARD_PREMIUM_INCOME, BigDecimal.ZERO, event.grossPremium(), event.currencyCode(), event.classOfBusinessId()));
+
         PostJournalEntryRequest request = new PostJournalEntryRequest(
             businessDate,
             MODULE_REINSURANCE,
             EVENT_FAC_PREMIUM_ACCEPTED,
             event.facInwardId().toString() + ":" + businessDate,
             narrative,
-            List.of(
-                line(COA_INWARD_PREMIUM_RECEIVABLE, event.netPremium(),       BigDecimal.ZERO,       event.currencyCode(), event.classOfBusinessId()),
-                line(COA_INWARD_COMMISSION_EXPENSE,  event.commissionAmount(), BigDecimal.ZERO,       event.currencyCode(), event.classOfBusinessId()),
-                line(COA_INWARD_PREMIUM_INCOME,      BigDecimal.ZERO,         event.grossPremium(),  event.currencyCode(), event.classOfBusinessId())));
+            lines);
         journalEntryService.post(request);
     }
 

@@ -228,6 +228,63 @@ class RiFacInwardFinanceIT {
     }
 
     @Test
+    @DisplayName("Zero-commission inward FAC accept (commissionRate omitted/0 — the OPTIONAL field's "
+        + "default and the default FE form state) → balanced 2-line JE (Dr 1330 net / Cr 4330 gross, "
+        + "NO zero-amount Dr 5240 line) + DebitNote. Regression guard: the zero-amount line was "
+        + "rejected by JournalEntryService's per-line XOR rule, rolling back the whole accept.")
+    void zeroCommissionAccept_createsBalancedTwoLineJe() {
+        UUID facInwardId = UUID.randomUUID();
+        UUID cedingCompanyId = UUID.randomUUID();
+        UUID classOfBusinessId = UUID.randomUUID();
+        // No ceding commission → net == gross (commissionRate is optional on
+        // CreateFacInwardRequest; the FE defaults it to 0). This is the exact
+        // input the final whole-branch review found rolled the accept back.
+        BigDecimal grossPremium = new BigDecimal("250000.00");
+        BigDecimal commissionAmount = BigDecimal.ZERO.setScale(2);
+        BigDecimal netPremium = new BigDecimal("250000.00");
+        assertThat(netPremium.add(commissionAmount)).isEqualByComparingTo(grossPremium);
+
+        RiFacInwardAcceptedEvent event = new RiFacInwardAcceptedEvent(
+            facInwardId, "FAC-IN-2026-000123", cedingCompanyId, "AIICO Insurance",
+            classOfBusinessId, grossPremium, commissionAmount, netPremium, "NGN");
+
+        // Must NOT throw — the pre-fix code posted a Dr 5240 = 0.00 line that
+        // JournalEntryService rejects (each line needs exactly one side > 0),
+        // which rolled back the entire accept.
+        listener.onInwardFacAccepted(event);
+        entityManager.flush();
+
+        // DebitNote still created, for the full net (== gross) premium.
+        DebitNote dn = debitNoteRepository
+            .findByEntityIdAndEntityTypeAndDeletedAtIsNull(facInwardId, FinanceEntityType.REINSURANCE)
+            .orElseThrow(() -> new AssertionError("Expected a DebitNote for entityId=" + facInwardId));
+        assertThat(dn.getAmount()).isEqualByComparingTo(netPremium);
+        assertThat(dn.getStatus()).isEqualTo(DebitNoteStatus.OUTSTANDING);
+
+        Map<String, Object> je = loadJe("reinsurance", "FAC_PREMIUM_ACCEPTED",
+            facInwardId.toString() + ":" + LocalDate.now());
+        assertThat(je).as("expected a journal_entry even with zero commission").isNotEmpty();
+        UUID jeId = (UUID) je.get("id");
+
+        Long lineCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM journal_entry_line WHERE journal_entry_id = ?", Long.class, jeId);
+        assertThat(lineCount).as("zero-commission entry omits the Dr 5240 line — 2 lines only").isEqualTo(2L);
+
+        Long line5240 = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM journal_entry_line l JOIN chart_of_account a ON a.id = l.account_id " +
+            "WHERE l.journal_entry_id = ? AND a.code = '5240'", Long.class, jeId);
+        assertThat(line5240).as("commission-expense line absent when commission is zero").isEqualTo(0L);
+
+        assertLine(jeId, "1330", netPremium, BigDecimal.ZERO);
+        assertLine(jeId, "4330", BigDecimal.ZERO, grossPremium);
+
+        BigDecimal net = jdbcTemplate.queryForObject(
+            "SELECT COALESCE(SUM(debit_amount), 0) - COALESCE(SUM(credit_amount), 0) " +
+            "FROM journal_entry_line WHERE journal_entry_id = ?", BigDecimal.class, jeId);
+        assertThat(net).as("Σdebit == Σcredit").isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
     @DisplayName("Two accepts for the SAME facInwardId on the SAME business day: "
         + "the second accept's whole transaction rolls back atomically (JE gateway's "
         + "JournalEntryDuplicateException poisons the listener's @Transactional boundary) "
