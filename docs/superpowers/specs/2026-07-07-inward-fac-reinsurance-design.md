@@ -1,7 +1,7 @@
 # Inward Facultative Reinsurance (v1) — Design
 
 **Module:** 6 — Reinsurance (`cia-reinsurance`) + `cia-finance` + `cia-documents` + `cia-frontend`
-**Status:** Approved design (brainstorm 2026-07-07). Next step: implementation plan.
+**Status:** ✅ IMPLEMENTED (shipped 2026-07-15 on `feat/inward-fac-reinsurance`, 12-task SDD build — see `cia-log.md` 2026-07-15 entry). Plan: `docs/superpowers/plans/2026-07-07-inward-fac-reinsurance.md`. Design approved via brainstorm 2026-07-07.
 **Context:** The FAC → Inward tab was removed from a fabricated mock + 404-ing forms and replaced with a "coming soon" placeholder (PR #42, commit `48b85f3`). This spec builds the real backend + rebuilds the frontend against it. Backlog row `inward-fac-backend-build` (P1) tracks it.
 
 ---
