@@ -10,28 +10,19 @@ import { type ColumnDef, type Row } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import {
-  apiClient, validatedGet, FacCoverDtoSchema,
+  apiClient, validatedGet, FacCoverDtoSchema, FacInwardDtoSchema,
   type ApiError, type ApiResponse,
   type FacCoverDto, type FacCoverStatus,
+  type FacInwardDto, type RiFacInwardStatus,
 } from '@cia/api-client';
 import { formatNaira } from '@/lib/format';
-import CreateFACOfferSheet  from './CreateFACOfferSheet';
-import FACCreditNoteDialog  from './FACCreditNoteDialog';
-import FACOfferSlipDialog   from './FACOfferSlipDialog';
+import CreateFACOfferSheet   from './CreateFACOfferSheet';
+import FACCreditNoteDialog   from './FACCreditNoteDialog';
+import FACOfferSlipDialog    from './FACOfferSlipDialog';
+import AddInwardFACSheet     from './AddInwardFACSheet';
+import InwardFACActionSheet, { type InwardFACMode } from './InwardFACActionSheet';
 
 interface ApiHttpError { response?: { data?: ApiResponse<unknown> }; message?: string }
-
-// ── Inward FAC — not yet available ─────────────────────────────────────────
-//
-// The backend has a single RiFacCover entity that models OUTWARD facultative
-// only (risks we cede to reinsurers). There is no inward-FAC concept in the
-// data model, service, or API yet — so the Inward tab is an honest "coming
-// soon" placeholder rather than a table over fabricated rows. It previously
-// rendered a static mock plus Add / Renew / Extend / Cancel actions that
-// POSTed to `/api/v1/reinsurance/fac/inward*` (all 404) — removed here so no
-// one can act on data that does not exist. Building the inward-FAC backend
-// (entity + migration + service + controller + DTOs) is the tracked follow-up;
-// this view is where that feature will surface once it lands.
 
 // ── Badge maps ────────────────────────────────────────────────────────────────
 
@@ -44,6 +35,20 @@ const OUT_STATUS_VARIANT: Record<FacCoverStatus, 'active' | 'pending' | 'rejecte
 const OUT_STATUS_LABEL: Record<FacCoverStatus, string> = {
   PENDING:   'Pending',
   CONFIRMED: 'Confirmed',
+  CANCELLED: 'Cancelled',
+};
+
+const IN_STATUS_VARIANT: Record<RiFacInwardStatus, 'active' | 'pending' | 'rejected' | 'cancelled'> = {
+  ACTIVE:    'active',
+  RENEWED:   'pending',
+  EXPIRED:   'cancelled',
+  CANCELLED: 'rejected',
+};
+
+const IN_STATUS_LABEL: Record<RiFacInwardStatus, string> = {
+  ACTIVE:    'Active',
+  RENEWED:   'Renewed',
+  EXPIRED:   'Expired',
   CANCELLED: 'Cancelled',
 };
 
@@ -177,12 +182,145 @@ export default function FACTab() {
     },
   ];
 
+  // ── Inward FAC ────────────────────────────────────────────────────────────
+
+  const [addInwardOpen, setAddInwardOpen] = useState(false);
+
+  const inwardQuery = useQuery<FacInwardDto[]>({
+    queryKey: ['ri', 'fac-inwards'],
+    queryFn: () => validatedGet('/api/v1/ri/fac-inwards', z.array(FacInwardDtoSchema)),
+  });
+  const inward = inwardQuery.data ?? [];
+
+  // Inward action targets
+  const [inwardActionTarget, setInwardActionTarget] = useState<FacInwardDto | null>(null);
+  const [inwardActionMode,   setInwardActionMode]   = useState<InwardFACMode>('RENEW');
+  const [inwardCancelTarget, setInwardCancelTarget] = useState<FacInwardDto | null>(null);
+  const [inwardCancelReason, setInwardCancelReason] = useState('');
+  const [inwardCancelReasonErr, setInwardCancelReasonErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (inwardCancelTarget === null) { setInwardCancelReason(''); setInwardCancelReasonErr(null); }
+  }, [inwardCancelTarget]);
+
+  const cancelFacInward = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      await apiClient.post(`/api/v1/ri/fac-inwards/${id}/cancel`, { reason });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ri', 'fac-inwards'] });
+      toast({ title: 'Inward FAC cover cancelled' });
+      setInwardCancelTarget(null);
+    },
+    onError: (err) => showServerError(err, 'Could not cancel inward FAC cover'),
+  });
+
+  function handleInwardCancelConfirm() {
+    if (!inwardCancelTarget) return;
+    if (!inwardCancelReason.trim()) {
+      setInwardCancelReasonErr('Reason is required.');
+      return;
+    }
+    cancelFacInward.mutate({ id: inwardCancelTarget.id, reason: inwardCancelReason });
+  }
+
+  function downloadGuaranty(fac: FacInwardDto) {
+    apiClient.get(`/api/v1/ri/fac-inwards/${fac.id}/document`, { responseType: 'blob' })
+      .then(res => {
+        const blob = new Blob([res.data as Blob], { type: 'application/pdf' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = `${fac.facInwardReference}-guaranty.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      })
+      .catch(e => showServerError(e, 'Could not download guaranty document'));
+  }
+
+  // ── Inward columns ───────────────────────────────────────────────────────
+  const inColumns: ColumnDef<FacInwardDto>[] = [
+    {
+      accessorKey: 'facInwardReference',
+      header: 'Reference',
+      cell: ({ getValue }) => <span className="font-mono text-xs text-primary">{getValue() as string}</span>,
+    },
+    {
+      accessorKey: 'cedingCompanyName',
+      header: 'Ceding Company',
+      cell: ({ getValue }) => <span className="text-sm">{getValue() as string}</span>,
+    },
+    {
+      accessorKey: 'classOfBusinessName',
+      header: 'Class',
+      cell: ({ getValue }) => <span className="text-sm text-muted-foreground">{getValue() as string}</span>,
+    },
+    {
+      accessorKey: 'sumInsured',
+      header: 'Sum Insured',
+      cell: ({ getValue }) => <span className="text-sm tabular-nums">{formatNaira(getValue() as number | null | undefined)}</span>,
+    },
+    {
+      accessorKey: 'ourSharePct',
+      header: 'Our Share',
+      cell: ({ getValue }) => <span className="text-sm">{getValue() as number}%</span>,
+    },
+    {
+      accessorKey: 'netPremium',
+      header: 'Net Premium',
+      cell: ({ getValue }) => <span className="text-sm tabular-nums text-primary">{formatNaira(getValue() as number | null | undefined)}</span>,
+    },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      cell: ({ getValue }) => {
+        const s = getValue() as RiFacInwardStatus;
+        return <Badge variant={IN_STATUS_VARIANT[s]} className="text-[10px]">{IN_STATUS_LABEL[s]}</Badge>;
+      },
+    },
+    {
+      id: 'period',
+      header: 'Period',
+      cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {row.original.coverFrom} → {row.original.coverTo}
+        </span>
+      ),
+    },
+    {
+      id: 'actions',
+      cell: ({ row }) => (
+        <DataTableRowActions
+          row={row as Row<FacInwardDto>}
+          actions={[
+            ...(row.original.status === 'ACTIVE' ? [{
+              label:   'Renew',
+              onClick: (r: Row<FacInwardDto>) => { setInwardActionTarget(r.original); setInwardActionMode('RENEW'); },
+            }, {
+              label:   'Extend period',
+              onClick: (r: Row<FacInwardDto>) => { setInwardActionTarget(r.original); setInwardActionMode('EXTEND'); },
+            }] : []),
+            ...(row.original.guarantyDocumentPath != null ? [{
+              label:   'Download guaranty',
+              onClick: (r: Row<FacInwardDto>) => downloadGuaranty(r.original),
+            }] : []),
+            ...(row.original.status !== 'CANCELLED' && row.original.status !== 'EXPIRED' ? [{
+              label:     'Cancel',
+              onClick:   (r: Row<FacInwardDto>) => setInwardCancelTarget(r.original),
+              separator: true,
+              className: 'text-destructive',
+            }] : []),
+          ]}
+        />
+      ),
+    },
+  ];
+
   return (
     <>
       <Tabs defaultValue="outward">
         <TabsList>
           <TabsTrigger value="outward">Outward FAC ({outward.length})</TabsTrigger>
-          <TabsTrigger value="inward">Inward FAC</TabsTrigger>
+          <TabsTrigger value="inward">Inward FAC ({inward.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="outward" className="mt-4">
@@ -204,11 +342,14 @@ export default function FACTab() {
           <PageSection
             title="Inward Facultative"
             description="Facultative risks accepted from other ceding companies."
+            actions={<Button size="sm" onClick={() => setAddInwardOpen(true)}>Add Inward FAC</Button>}
           >
-            <EmptyState
-              title="Inward FAC — coming soon"
-              description="Inward facultative acceptances (accept a share of another insurer's risk, then renew, extend, or cancel the cover) will be managed here once backend support ships. This view is intentionally empty until then — no illustrative data is shown."
-            />
+            {inwardQuery.isLoading
+              ? <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+              : inward.length === 0
+              ? <EmptyState title="No inward FAC covers" description="Accept a facultative share of another ceding company's risk to see it here." />
+              : <DataTable columns={inColumns} data={inward} toolbar={{ searchColumn: 'facInwardReference', searchPlaceholder: 'Search…' }} />
+            }
           </PageSection>
         </TabsContent>
       </Tabs>
@@ -263,6 +404,58 @@ export default function FACTab() {
             </Button>
             <Button variant="destructive" disabled={cancelFac.isPending} onClick={handleCancelConfirm}>
               {cancelFac.isPending ? 'Cancelling…' : 'Cancel FAC'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Add inward FAC sheet ────────────────────────────────────────────── */}
+      <AddInwardFACSheet
+        open={addInwardOpen}
+        onOpenChange={setAddInwardOpen}
+        onSuccess={() => setAddInwardOpen(false)}
+      />
+
+      {/* ── Renew / Extend inward FAC sheet ─────────────────────────────────── */}
+      <InwardFACActionSheet
+        open={inwardActionTarget !== null}
+        onOpenChange={(v) => { if (!v) setInwardActionTarget(null); }}
+        fac={inwardActionTarget}
+        mode={inwardActionMode}
+        onSuccess={() => setInwardActionTarget(null)}
+      />
+
+      {/* Cancel inward FAC confirmation — wires backend cancel with reason */}
+      <Dialog open={inwardCancelTarget !== null} onOpenChange={(v) => { if (!v) setInwardCancelTarget(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Cancel Inward FAC Cover</DialogTitle>
+            <DialogDescription>
+              {inwardCancelTarget && (
+                <>Cancel <span className="font-medium text-foreground">{inwardCancelTarget.facInwardReference}</span> accepted from <span className="font-medium text-foreground">{inwardCancelTarget.cedingCompanyName}</span>? This cannot be undone.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="fac-inward-cancel-reason">Reason for cancellation</Label>
+            <Textarea
+              id="fac-inward-cancel-reason"
+              placeholder="e.g. risk lapsed / ceding company withdrew / replaced by treaty allocation"
+              rows={3}
+              value={inwardCancelReason}
+              onChange={e => { setInwardCancelReason(e.target.value); if (inwardCancelReasonErr) setInwardCancelReasonErr(null); }}
+              disabled={cancelFacInward.isPending}
+            />
+            {inwardCancelReasonErr && <p className="text-xs text-destructive">{inwardCancelReasonErr}</p>}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInwardCancelTarget(null)} disabled={cancelFacInward.isPending}>
+              Keep Cover
+            </Button>
+            <Button variant="destructive" disabled={cancelFacInward.isPending} onClick={handleInwardCancelConfirm}>
+              {cancelFacInward.isPending ? 'Cancelling…' : 'Cancel Cover'}
             </Button>
           </DialogFooter>
         </DialogContent>

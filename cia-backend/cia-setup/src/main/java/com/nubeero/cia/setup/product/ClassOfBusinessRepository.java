@@ -10,6 +10,7 @@ import java.util.UUID;
 
 public interface ClassOfBusinessRepository extends JpaRepository<ClassOfBusiness, UUID> {
     Optional<ClassOfBusiness> findByCodeAndDeletedAtIsNull(String code);
+    Optional<ClassOfBusiness> findByIdAndDeletedAtIsNull(UUID id);
     Page<ClassOfBusiness> findAllByDeletedAtIsNull(Pageable pageable);
     List<ClassOfBusiness> findAllByDeletedAtIsNull();
     boolean existsByCodeAndDeletedAtIsNull(String code);

@@ -13,6 +13,7 @@ public class RiNumberService {
 
     private final RiCounterRepository riCounterRepository;
     private final RiFacCounterRepository riFacCounterRepository;
+    private final RiFacInwardCounterRepository riFacInwardCounterRepository;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public String nextAllocationNumber() {
@@ -42,5 +43,20 @@ public class RiNumberService {
         counter.setLastSequence(counter.getLastSequence() + 1);
         riFacCounterRepository.save(counter);
         return String.format("FAC-%d-%06d", year, counter.getLastSequence());
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public String nextInwardFacReference() {
+        int year = Year.now().getValue();
+        RiFacInwardCounter counter = riFacInwardCounterRepository.findByYearForUpdate(year)
+                .orElseGet(() -> {
+                    RiFacInwardCounter c = new RiFacInwardCounter();
+                    c.setYear(year);
+                    c.setLastSequence(0L);
+                    return c;
+                });
+        counter.setLastSequence(counter.getLastSequence() + 1);
+        riFacInwardCounterRepository.save(counter);
+        return String.format("FAC-IN-%d-%06d", year, counter.getLastSequence());
     }
 }
