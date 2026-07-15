@@ -74,6 +74,8 @@ Claim notification, claim registration, bulk claim registration (individual and 
 ### Module 6 — Reinsurance (17 features)
 Peril group setup, treaty setup (Surplus/Quota Share/XOL), automatic RI allocation, RI confirmation for policies exceeding gross capacity, RI confirmation approval, treaty allocation approval (individual and batch), outward facultative offer slip generation, outward facultative credit note generation, inward facultative policy generation, batch treaty reallocation, renewal/extension endorsements for FAC inward, renewal notice for FAC inward, monthly/quarterly reinsurance returns, claims and premium bordereaux, reinsurance recoveries, debit note analysis for FAC inward.
 
+**Inward Facultative (v1) — BUILT (V75, 2026-07-15, PR #44).** New `RiFacInward` aggregate (`ri_fac_inwards` table, no local `policy_id` — external risk; ceding company = Insurers master data): create/renew/extend/cancel lifecycle + server-side guaranty document (`cia-documents`). Accepted premium lands as a **receivable** — `RiFacInwardAcceptedEvent` → `cia-finance` `DebitNote` + a hardcoded `FAC_PREMIUM_ACCEPTED` GL posting `Dr 1330 / Dr 5240 / Cr 4330` (simple income posting, mirroring outward FAC — NOT IFRS-17 PAA; that's the deferred `fac-ifrs17-paa-workstream`). REST at `/api/v1/ri/fac-inwards`; live `FACTab` Inward tab. Still deferred (backlog): `inward-fac-renewal-notices` (Temporal), `inward-fac-debit-note-analysis` (report).
+
 ### Module 7 — Customer Onboarding (10 features)
 Individual customer onboarding (with KYC), corporate customer onboarding (with KYC), broker-enabled corporate, broker-enabled individual, KYC update, customer summary page, policy history, claim history, loss ratio report, active customers report.
 
