@@ -62,6 +62,14 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-07-16 — Backlog review + prioritisation (no code)
+
+No code changes — reviewed the full tracked-follow-up table at the top of this file (43 rows after the inward-FAC reconciliation: **0 P1, 4 P2, 39 P3**) and grouped it into five themes to make the long-tail legible: (A) live integrations & optional features gated on external creds/decisions — 7; (B) reinsurance/FAC — 9; (C) frontend wiring / UX gaps — 7; (D) testing / coverage / CI hygiene — 12; (E) security / hardening / ops — 8.
+
+**Pull-forward shortlist (the genuinely user-visible or security-relevant ones, for next slice-selection):** `treaty-batch-realloc-empty-drilldown`, `setup-dead-shells`, `quote-detail-uses-live-config`, `audit-list-page-size-cap` (live FE/UX gaps a real user hits), `login-failed-endpoint-abuse` (unauthenticated audit/alert-flood surface), and the two launch-gating P2 integration pairs (`naicom-niid-live-integration`, `kyc-live-provider`) when credentials arrive. The remaining ~36 are safe long-tail (optional/feature-flagged, latent-not-live, or test/CI nice-to-haves). No backlog rows added or removed.
+
+---
+
 ## 2026-07-15 — Inward Facultative Reinsurance (v1) — SHIPPED (`feat/inward-fac-reinsurance`)
 
 **Goal (one slice, the important post-`allow-mock`-sweep feature):** build inward FAC end-to-end — accept a share of another insurer's risk, generate a guaranty document, land the premium as a real receivable in Finance, and restore the live FE tab that the `allow-mock` sweep had replaced with a "coming soon" placeholder. Delivered against the approved spec (`docs/superpowers/specs/2026-07-07-inward-fac-reinsurance-design.md`) + plan (`docs/superpowers/plans/2026-07-07-inward-fac-reinsurance.md`) via **subagent-driven development** — fresh implementer per task + a two-stage spec/quality review between each (12 review passes, every task landed review-clean, 3 needed one fix round).
