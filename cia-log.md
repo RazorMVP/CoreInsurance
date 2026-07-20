@@ -62,6 +62,21 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-07-20 — "Frontend wiring / UX gaps" (category C) — scoping (no code, brainstorm in progress)
+
+Scoping a plan to close the 7 category-C backlog items (`setup-dead-shells`, `quote-detail-uses-live-config`, `quote-list-pdf-mock-gated`, `raw-apiclient-list-validatedget-sweep`, `audit-list-page-size-cap`, `list-endpoints-true-pagination`, `reports-frontend-datasource-union-sync`). **Key sizing finding — 5 of the 7 need NO backend build** (endpoints already exist):
+- `audit-list-page-size-cap` — **trivial** (BE): 4 audit controllers, ~9× `@PageableDefault(size=20)` → `2000`.
+- `reports-frontend-datasource-union-sync` — **trivial** (FE): add `RM_COMMISSION` + `UNDERWRITING_PERFORMANCE` to the FE `DataSource` union (both confirmed absent).
+- `quote-detail-uses-live-config` — **small** (FE): live `/api/v1/setup/quote-{config,discount-types,loading-types}` exist; replace 3 `MOCK_*` imports with `useQuery`.
+- `quote-list-pdf-mock-gated` — **small** (FE): detail page already has a working client-side PDF; reuse it + drop the `mockQuotePdfData[id]` gate (`QuotationListPage:190`).
+- `setup-dead-shells` — **medium** (FE): pages are pure `PlaceholderTab` shells but the backend CRUD exists for all 6 tabs (`/api/v1/setup/claim-reserve-categories`, `.../products/{id}/claim-notification-timeline`, loss-types; `/api/v1/setup/vehicle-{makes,makes/{id}/models,types}`) → build 6 CRUD tabs.
+- `raw-apiclient-list-validatedget-sweep` — **large** (FE): ~50 files use raw `apiClient.get` (realistically ~15-20 true list pages + ~30 dropdown fetches).
+- `list-endpoints-true-pagination` — **very large (~2 wk)**, FE+BE: Option C.
+
+**Proposed sequencing (one goal per slice, cheapest/highest-value first):** S1 quick wins (audit-size-cap + datasource-union) · S2 quotation FE wiring (quote-detail + quote-list-pdf) · S3 setup dead shells (6 CRUD tabs, splittable) · S4 validatedGet sweep (true list pages first) · S5 true pagination. **Open scope decision (awaiting user):** include `list-endpoints-true-pagination` (~2 wk, dominates the batch) or defer it (recommended — the size-cap stopgap covers the acute symptom; close items 1-6 as S1-S4). No backlog rows changed; spec + plan to follow once scope is confirmed.
+
+---
+
 ## 2026-07-16 — Backlog review + prioritisation (no code)
 
 No code changes — reviewed the full tracked-follow-up table at the top of this file (43 rows after the inward-FAC reconciliation: **0 P1, 4 P2, 39 P3**) and grouped it into five themes to make the long-tail legible: (A) live integrations & optional features gated on external creds/decisions — 7; (B) reinsurance/FAC — 9; (C) frontend wiring / UX gaps — 7; (D) testing / coverage / CI hygiene — 12; (E) security / hardening / ops — 8.
