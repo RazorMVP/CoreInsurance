@@ -15,9 +15,10 @@ import QuotePdfPreview, {
   type QuotePdfData, type AdjustmentLine, type RiskItemData,
   computeQuoteSummary,
 } from '../QuotePdfPreview';
-import {
-  MOCK_DISCOUNT_TYPES, MOCK_LOADING_TYPES, MOCK_QUOTE_CONFIG,
-} from '../../../setup/pages/policy-specs/quote-config-types';
+
+/** Minimal shape of the live setup adjustment-type + quote-config responses. */
+interface AdjustmentType { id: string; name: string }
+type ResolveTypeName = (typeId: string, category: 'loading' | 'discount') => string;
 
 // allow-mock: fallback while useQuery is in flight or for unknown ids
 const MOCK_QUOTES: QuoteDto[] = [
@@ -152,34 +153,30 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function resolveTypeName(typeId: string, category: 'loading' | 'discount') {
-  const list = category === 'loading' ? MOCK_LOADING_TYPES : MOCK_DISCOUNT_TYPES;
-  return list.find(t => t.id === typeId)?.name ?? typeId;
-}
-
 /**
  * Convert a backend AdjustmentEntryDto to the PDF preview's AdjustmentLine.
  * The PDF preview computes amounts itself from (format, value) + the gross
- * base, so we drop `computedAmount` here. typeName is enriched from the
- * mock types list if the backend left it blank.
+ * base, so we drop `computedAmount` here. typeName is enriched from the live
+ * setup adjustment-type list (via {@code resolveName}) if the backend left it
+ * blank.
  */
-function toAdjustmentLine(a: AdjustmentEntryDto, category: 'loading' | 'discount'): AdjustmentLine {
+function toAdjustmentLine(a: AdjustmentEntryDto, category: 'loading' | 'discount', resolveName: ResolveTypeName): AdjustmentLine {
   return {
     typeId:   a.typeId,
-    typeName: a.typeName || resolveTypeName(a.typeId, category),
+    typeName: a.typeName || resolveName(a.typeId, category),
     format:   a.format,
     value:    a.value,
   };
 }
 
 /** Convert a QuoteRiskDto to the PDF preview's RiskItemData. */
-function toRiskItemData(r: QuoteRiskDto): RiskItemData {
+function toRiskItemData(r: QuoteRiskDto, resolveName: ResolveTypeName): RiskItemData {
   return {
     description: r.description,
     sumInsured:  r.sumInsured,
     rate:        r.rate,
-    loadings:    r.loadings.map(l => toAdjustmentLine(l, 'loading')),
-    discounts:   r.discounts.map(d => toAdjustmentLine(d, 'discount')),
+    loadings:    r.loadings.map(l => toAdjustmentLine(l, 'loading', resolveName)),
+    discounts:   r.discounts.map(d => toAdjustmentLine(d, 'discount', resolveName)),
   };
 }
 
@@ -201,15 +198,37 @@ export default function QuoteDetailPage() {
   // allow-mock: fallback while useQuery is in flight or for unknown ids
   const q = quoteQuery.data ?? MOCK_QUOTES.find(x => x.id === id) ?? MOCK_QUOTES[0];
 
+  // ── Live tenant quote config (quote-detail-uses-live-config) ──────────────
+  // Discount/loading type names + the validity period come from the tenant's
+  // live Setup → Quotes config, not hardcoded mocks. Each falls back gracefully
+  // while in flight (raw typeId for names, 30-day default for validity).
+  const discountTypesQuery = useQuery<AdjustmentType[]>({
+    queryKey: ['setup', 'quote-discount-types'],
+    queryFn: async () => (await apiClient.get<{ data: AdjustmentType[] }>('/api/v1/setup/quote-discount-types')).data.data,
+  });
+  const loadingTypesQuery = useQuery<AdjustmentType[]>({
+    queryKey: ['setup', 'quote-loading-types'],
+    queryFn: async () => (await apiClient.get<{ data: AdjustmentType[] }>('/api/v1/setup/quote-loading-types')).data.data,
+  });
+  const quoteConfigQuery = useQuery<{ validityDays: number }>({
+    queryKey: ['setup', 'quote-config'],
+    queryFn: async () => (await apiClient.get<{ data: { validityDays: number } }>('/api/v1/setup/quote-config')).data.data,
+  });
+
+  const resolveTypeName: ResolveTypeName = (typeId, category) => {
+    const list = category === 'loading' ? (loadingTypesQuery.data ?? []) : (discountTypesQuery.data ?? []);
+    return list.find(t => t.id === typeId)?.name ?? typeId;
+  };
+
   const canSubmit  = q.status === 'DRAFT';
   const canConvert = q.status === 'APPROVED';
   const canEdit    = q.status !== 'CONVERTED' && q.status !== 'APPROVED';
   const canDownloadPdf = q.status === 'APPROVED' || q.status === 'CONVERTED';
 
   // Project the API-shape quote into the PDF preview's stable internal shape.
-  const pdfRisks: RiskItemData[] = q.risks.map(toRiskItemData);
-  const pdfQuoteLoadings: AdjustmentLine[]  = q.quoteLoadings.map(l => toAdjustmentLine(l, 'loading'));
-  const pdfQuoteDiscounts: AdjustmentLine[] = q.quoteDiscounts.map(d => toAdjustmentLine(d, 'discount'));
+  const pdfRisks: RiskItemData[] = q.risks.map(r => toRiskItemData(r, resolveTypeName));
+  const pdfQuoteLoadings: AdjustmentLine[]  = q.quoteLoadings.map(l => toAdjustmentLine(l, 'loading', resolveTypeName));
+  const pdfQuoteDiscounts: AdjustmentLine[] = q.quoteDiscounts.map(d => toAdjustmentLine(d, 'discount', resolveTypeName));
 
   const pdfData: QuotePdfData = {
     quoteNumber:       q.quoteNumber,
@@ -229,7 +248,7 @@ export default function QuoteDetailPage() {
     selectedClauses:   q.selectedClauses ?? [],
     inputterName:      q.inputterName ?? '',
     approverName:      q.approverName ?? '',
-    validityDays:      MOCK_QUOTE_CONFIG.validityDays,
+    validityDays:      quoteConfigQuery.data?.validityDays ?? 30,
   };
 
   // Single source of truth for display totals
