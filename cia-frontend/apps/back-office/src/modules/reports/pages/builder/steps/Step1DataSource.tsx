@@ -25,6 +25,10 @@ const DESCRIPTIONS: Record<DataSource, string> = {
   IFRS9_HOLDINGS:  'Financial assets by classification — AC, FVOCI debt/equity, FVPL.',
   IFRS9_CARRYING:  'Per-holding period roll-forward — interest, fair-value change, ECL.',
   IFRS9_MOVEMENT:  '§B5.5.39 combined investment movement disclosure (V40 view).',
+  // Fixed-shape aggregate substrates — excluded from DATA_SOURCE_OPTIONS, so
+  // these descriptions never render; present only to keep the Record exhaustive.
+  RM_COMMISSION:            'RM commission accrual per relationship manager (aggregate substrate).',
+  UNDERWRITING_PERFORMANCE: 'Loss/combined-ratio cross-entity underwriting performance (aggregate substrate).',
 };
 
 export default function Step1DataSource({ value, onChange }: Props) {

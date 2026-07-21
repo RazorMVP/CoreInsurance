@@ -97,7 +97,7 @@ public class LoginAuditController {
             @RequestParam(required = false) String userId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @PageableDefault(size = 2000) Pageable pageable) {
 
         Page<LoginAuditLogResponse> page;
         if (userId != null) {

@@ -40,7 +40,7 @@ public class AuditReportController {
             @RequestParam String userId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @PageableDefault(size = 2000) Pageable pageable) {
         Page<AuditLogResponse> page = reportService.actionsByUser(userId, from, to, pageable);
         return ResponseEntity.ok(ApiResponse.success(page.getContent(), buildMeta(page)));
     }
@@ -56,7 +56,7 @@ public class AuditReportController {
             @RequestParam String entityType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @PageableDefault(size = 2000) Pageable pageable) {
         Page<AuditLogResponse> page = reportService.actionsByModule(entityType, from, to, pageable);
         return ResponseEntity.ok(ApiResponse.success(page.getContent(), buildMeta(page)));
     }
@@ -71,7 +71,7 @@ public class AuditReportController {
     public ResponseEntity<ApiResponse<List<AuditLogResponse>>> approvalAuditTrail(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @PageableDefault(size = 2000) Pageable pageable) {
         Page<AuditLogResponse> page = reportService.approvalAuditTrail(from, to, pageable);
         return ResponseEntity.ok(ApiResponse.success(page.getContent(), buildMeta(page)));
     }
@@ -86,7 +86,7 @@ public class AuditReportController {
     public ResponseEntity<ApiResponse<List<AuditLogResponse>>> dataChanges(
             @RequestParam String entityType,
             @RequestParam String entityId,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @PageableDefault(size = 2000) Pageable pageable) {
         Page<AuditLogResponse> page = reportService.dataChanges(entityType, entityId, pageable);
         return ResponseEntity.ok(ApiResponse.success(page.getContent(), buildMeta(page)));
     }
@@ -101,7 +101,7 @@ public class AuditReportController {
     public ResponseEntity<ApiResponse<List<LoginAuditLogResponse>>> loginSecurityReport(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @PageableDefault(size = 2000) Pageable pageable) {
         Page<LoginAuditLogResponse> page = reportService.loginSecurityReport(from, to, pageable);
         return ResponseEntity.ok(ApiResponse.success(page.getContent(), buildMeta(page)));
     }
