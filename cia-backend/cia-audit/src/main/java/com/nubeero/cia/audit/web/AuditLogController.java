@@ -41,7 +41,7 @@ public class AuditLogController {
     })
     public ResponseEntity<ApiResponse<List<AuditLogResponse>>> search(
             AuditLogFilter filter,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @PageableDefault(size = 2000) Pageable pageable) {
         Page<AuditLogResponse> page = queryService.search(filter, pageable);
         ApiMeta meta = ApiMeta.builder()
                 .total(page.getTotalElements())

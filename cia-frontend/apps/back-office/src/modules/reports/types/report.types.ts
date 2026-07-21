@@ -25,7 +25,11 @@ export type DataSource =
   | 'IFRS17_MOVEMENT'
   | 'IFRS9_HOLDINGS'
   | 'IFRS9_CARRYING'
-  | 'IFRS9_MOVEMENT';
+  | 'IFRS9_MOVEMENT'
+  // Fixed-shape aggregate substrates (backend enum only) — deliberately NOT in
+  // DATA_SOURCE_OPTIONS (excluded from the custom-report-builder picker).
+  | 'RM_COMMISSION'
+  | 'UNDERWRITING_PERFORMANCE';
 
 export type FieldType = 'STRING' | 'MONEY' | 'PERCENT' | 'DATE' | 'NUMBER' | 'INTEGER';
 export type FilterType = 'DATE' | 'DATE_RANGE' | 'SELECT' | 'MULTI_SELECT' | 'TEXT' | 'NUMBER';

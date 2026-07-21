@@ -39,7 +39,7 @@ public class AuditAlertController {
     })
     public ResponseEntity<ApiResponse<List<AuditAlertResponse>>> listAll(
             @RequestParam(defaultValue = "false") boolean unacknowledgedOnly,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @PageableDefault(size = 2000) Pageable pageable) {
         Page<AuditAlertResponse> page = unacknowledgedOnly
                 ? alertService.listUnacknowledged(pageable)
                 : alertService.listAll(pageable);
