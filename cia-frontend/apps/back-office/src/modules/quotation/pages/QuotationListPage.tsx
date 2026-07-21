@@ -11,38 +11,6 @@ import { apiClient, type QuoteSummaryDto } from '@cia/api-client';
 import { formatNaira } from '@/lib/format';
 import SingleRiskQuoteSheet from './create/SingleRiskQuoteSheet';
 import MultiRiskQuoteSheet  from './create/MultiRiskQuoteSheet';
-import QuotePdfPreview, { type QuotePdfData } from './QuotePdfPreview';
-
-// Extended mock — carries PDF data for approved quotes
-// allow-mock: PDF preview shape — list endpoint doesn't include risk/clause detail
-const mockQuotePdfData: Record<string, QuotePdfData> = {
-  q1: {
-    quoteNumber: 'QUO-2026-00001', issueDate: '2026-01-28',
-    customerName: 'Chioma Okafor', productName: 'Private Motor Comprehensive', classOfBusiness: 'Motor (Private)',
-    startDate: '2026-02-01', endDate: '2027-02-01',
-    risks: [{
-      description: '2022 Toyota Camry, Reg: LND-001-AA',
-      sumInsured: 3_500_000, rate: 2.25,
-      loadings:  [{ typeId: 'l1', typeName: 'High Risk Area',     format: 'PERCENT', value: 5 }],
-      discounts: [{ typeId: 'd1', typeName: 'No Claims Discount', format: 'PERCENT', value: 2.5 }],
-    }],
-    quoteLoadings: [], quoteDiscounts: [], selectedClauseIds: ['c1', 'c2'],
-    inputterName: 'Chidi Okafor', approverName: 'Adeola Bello',
-    validityDays: 30,
-  },
-  q4: {
-    quoteNumber: 'QUO-2026-00004', issueDate: '2026-01-10',
-    customerName: 'Chioma Okafor', productName: 'Marine Cargo Open Cover', classOfBusiness: 'Marine Cargo',
-    startDate: '2026-01-15', endDate: '2027-01-15',
-    risks: [{
-      description: 'General cargo — Lagos to Kano',
-      sumInsured: 8_000_000, rate: 0.75, loadings: [], discounts: [],
-    }],
-    quoteLoadings: [], quoteDiscounts: [], selectedClauseIds: ['c7'],
-    inputterName: 'Chidi Okafor', approverName: 'Adeola Bello',
-    validityDays: 30,
-  },
-};
 
 const statusVariant: Record<QuoteSummaryDto['status'], 'active' | 'pending' | 'rejected' | 'draft' | 'cancelled'> = {
   APPROVED:  'active',
@@ -58,7 +26,6 @@ export default function QuotationListPage() {
   const queryClient = useQueryClient();
   const [singleOpen, setSingleOpen] = useState(false);
   const [multiOpen,  setMultiOpen]  = useState(false);
-  const [pdfData,    setPdfData]    = useState<QuotePdfData | null>(null);
 
   const quotesQuery = useQuery<QuoteSummaryDto[]>({
     queryKey: ['quotes'],
@@ -187,8 +154,10 @@ export default function QuotationListPage() {
               ...(status === 'DRAFT'     ? [{ label: 'Submit for approval', onClick: (r: { original: QuoteSummaryDto }) => navigate(`/quotation/${r.original.id}`) }] : []),
               ...(status === 'APPROVED'  ? [{ label: 'Convert to policy',   onClick: (r: { original: QuoteSummaryDto }) => navigate(`/quotation/${r.original.id}`) }] : []),
               ...(status !== 'CONVERTED' ? [{ label: 'Edit quote',          onClick: (r: { original: QuoteSummaryDto }) => navigate(`/quotation/${r.original.id}`) }] : []),
-              ...((status === 'APPROVED' || status === 'CONVERTED') && mockQuotePdfData[row.original.id]
-                ? [{ label: 'Download PDF', onClick: (r: any) => setPdfData(mockQuotePdfData[r.original.id] ?? null) }]
+              // The real per-quote PDF lives on the detail page (built from the
+              // full quote); route there rather than mock-gating on seed ids.
+              ...((status === 'APPROVED' || status === 'CONVERTED')
+                ? [{ label: 'Download PDF', onClick: (r: { original: QuoteSummaryDto }) => navigate(`/quotation/${r.original.id}`) }]
                 : []),
               { label: 'Duplicate', onClick: (r: { original: QuoteSummaryDto }) => duplicate.mutate(r.original.id) },
             ]}
@@ -247,7 +216,6 @@ export default function QuotationListPage() {
 
       <SingleRiskQuoteSheet open={singleOpen} onOpenChange={setSingleOpen} onSuccess={() => setSingleOpen(false)} />
       <MultiRiskQuoteSheet  open={multiOpen}  onOpenChange={setMultiOpen}  onSuccess={() => setMultiOpen(false)}  />
-      <QuotePdfPreview open={!!pdfData} onOpenChange={(v) => { if (!v) setPdfData(null); }} data={pdfData} />
     </div>
   );
 }
