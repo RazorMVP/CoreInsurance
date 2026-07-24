@@ -1207,7 +1207,7 @@ node cia-frontend/scripts/check-dto-drift.mjs
 | `[x]` | Policy Specifications | Clause bank DataTable (search, product/type filter, mandatory/optional, CRUD); template manager (per-product, type-coloured badges, upload/replace/archive/delete); **Quotes tab** — Discount Types CRUD, Loading Types CRUD, Quote Validity Period, Premium Calculation Sequence (LOADING_FIRST/DISCOUNT_FIRST) |
 | `[x]` | Claims Setup | Tabbed: Reserve Categories, Notification Timelines, Documents, Loss Types (skeleton tabs ready) |
 | `[x]` | Organisations | 7 working tabs (Session 78): Brokers, Reinsurers, Insurers, Branches, SBUs, Surveyors, **Adjusters** (new). Each tab has list + add/edit sheet wired to its `/api/v1/setup/*` endpoint. BrokerDto realigned to the backend shape (dropped legacy `status` + `contactPerson`, added `rcNumber` + `address`); the previous frontend↔backend drift was silent because Jackson dropped unknown fields. New `cia-setup/.../org/Adjuster*` module + V45 migration (`adjusters` table, INTERNAL/EXTERNAL type). |
-| `[x]` | Vehicle Registry | Tabbed: Makes, Models, Types (skeleton tabs ready) |
+| `[x]` | Vehicle Registry | Tabbed: Makes, Types (`{name}` list-CRUD), Models (nested under a selected make) — full CRUD wired to `/api/v1/setup/vehicle-{makes,types}` + nested `/vehicle-makes/{makeId}/models`, mirroring the Organisations tab pattern (S3a, 2026-07-23) |
 | `[x]` | Partner App Management | EmptyState with Register App action (skeleton) |
 | `[x]` | Customer Number Format | CustomerNumberFormatPage — prefix, includeYear, includeType (IND/CORP segments with separate sequences), sequenceLength (default 8 → 99M/type/year); live format preview via useMemo; amber warning when unconfigured |
 
