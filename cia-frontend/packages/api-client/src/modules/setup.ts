@@ -205,6 +205,33 @@ export interface SbuDto {
   updatedAt?: string | null;
 }
 
+// Mirrors com.nubeero.cia.setup.vehicle.dto.VehicleMakeResponse.
+export interface VehicleMakeDto {
+  id:         string;
+  name:       string;
+  createdAt:  string;
+  updatedAt?: string | null;
+}
+
+// Mirrors com.nubeero.cia.setup.vehicle.dto.VehicleTypeResponse.
+export interface VehicleTypeDto {
+  id:         string;
+  name:       string;
+  createdAt:  string;
+  updatedAt?: string | null;
+}
+
+// Mirrors com.nubeero.cia.setup.vehicle.dto.VehicleModelResponse.
+// Nested under a make: makeId + denormalised makeName.
+export interface VehicleModelDto {
+  id:         string;
+  name:       string;
+  makeId:     string;
+  makeName:   string;
+  createdAt:  string;
+  updatedAt?: string | null;
+}
+
 // Mirrors com.nubeero.cia.setup.org.dto.ReinsuranceCompanyResponse.
 export interface ReinsuranceCompanyDto {
   id:         string;
