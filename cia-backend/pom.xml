@@ -57,11 +57,13 @@
          whose fixes post-date the BOM pins (Tomcat 10.1.54->.55 CVE-2026-41293
          CRITICAL; netty 4.1.132->.135 — .134 cleared CVE-2026-42583/42579/42584,
          .135 clears the 2026-06 HIGHs CVE-2026-44249/45416 (netty-handler) +
-         CVE-2026-45674/47691 (netty-resolver-dns); pgjdbc
-         42.7.10->.11 CVE-2026-42198). -->
+         CVE-2026-45674/47691 (netty-resolver-dns); .136 clears the 2026-07
+         HIGHs CVE-2026-59901 (netty-codec Bzip2Decoder infinite loop) +
+         CVE-2026-55831/55833/56745 (netty-codec-http); pgjdbc
+         42.7.10->.11 CVE-2026-42198, .12 CVE-2026-54291). -->
     <tomcat.version>10.1.55</tomcat.version>
-    <netty.version>4.1.135.Final</netty.version>
-    <postgresql.version>42.7.11</postgresql.version>
+    <netty.version>4.1.136.Final</netty.version>
+    <postgresql.version>42.7.12</postgresql.version>
     <!-- jackson-bom is a Boot BOM property too: the 3.5.14 BOM pins jackson
          2.21.2, which two 2026-06 HIGH CVEs flag — CVE-2026-54512
          (PolymorphicTypeValidator bypass) + CVE-2026-54513 (array subtype
