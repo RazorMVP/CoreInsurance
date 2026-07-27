@@ -232,6 +232,55 @@ export interface VehicleModelDto {
   updatedAt?: string | null;
 }
 
+// Mirrors com.nubeero.cia.setup.loss.dto.ClaimReserveCategoryResponse.
+export interface ClaimReserveCategoryDto {
+  id:         string;
+  name:       string;
+  code:       string;
+  createdAt:  string;
+  updatedAt?: string | null;
+}
+
+// Mirrors com.nubeero.cia.setup.loss.dto.NatureOfLossResponse.
+export interface NatureOfLossDto {
+  id:         string;
+  name:       string;
+  code:       string;
+  createdAt:  string;
+  updatedAt?: string | null;
+}
+
+// Mirrors com.nubeero.cia.setup.loss.dto.CauseOfLossResponse. FK-linked to a nature.
+export interface CauseOfLossDto {
+  id:               string;
+  name:             string;
+  code:             string;
+  natureOfLossId:   string;
+  natureOfLossName: string;
+  createdAt:        string;
+  updatedAt?:       string | null;
+}
+
+// Mirrors com.nubeero.cia.setup.product.dto.ClaimNotificationTimelineResponse (per-product singleton).
+export interface ClaimNotificationTimelineDto {
+  id:               string;
+  productId:        string;
+  notificationDays: number;
+  createdAt:        string;
+  updatedAt?:       string | null;
+}
+
+// Mirrors com.nubeero.cia.setup.product.dto.ClaimDocumentRequirementResponse (per-product list row).
+export interface ClaimDocumentRequirementDto {
+  id:           string;
+  productId:    string;
+  documentName: string;
+  mandatory:    boolean;
+  documentType: string;
+  createdAt:    string;
+  updatedAt?:   string | null;
+}
+
 // Mirrors com.nubeero.cia.setup.org.dto.ReinsuranceCompanyResponse.
 export interface ReinsuranceCompanyDto {
   id:         string;
