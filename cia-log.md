@@ -58,6 +58,16 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-07-27 — S3b Claims Config CRUD: plan written, awaiting review (checkpoint)
+
+Not a code change — a planning checkpoint. Wrote and committed the S3b implementation plan (`docs/superpowers/plans/2026-07-24-s3b-claims-config-crud.md`), the second/final half of `setup-dead-shells` (S3a did the Vehicle Registry half). A subagent extracted the exact backend contract for the 5 claims-config controllers (10 DTOs) so the plan is fully no-placeholder; every `@cia/ui` import (`PageSection`/`Switch`/`FormDescription`/`Label`/`toast`) verified against the shipped exports.
+
+Scope: 6 FE-only tasks across the 4 `ClaimsConfigPage` tabs / 4 UI shapes — **(A)** flat `{name,code}` list-CRUD (Reserve Categories, Nature of Loss); **(A′)** flat + parent-FK Select (Cause of Loss → `natureOfLossId`); **(B)** per-product **singleton** upsert (Notification Timelines — GET+PUT, one `notificationDays` scalar; not a table, matching the endpoint); **(C)** per-product list with per-row CRUD (Required Documents — `mandatory` Switch + `documentType` Select over the 8 `ClaimDocumentType` enum values). Reuses the merged S3a Vehicle Registry pattern.
+
+**Status:** paused at the writing-plans → build gate per the user's auto-pilot cadence (S3/S4 plans are shown for review before building). Awaiting go-ahead. On approval: execute inline task-by-task, PR, merge on green — **which closes `setup-dead-shells`**. No backlog rows changed by this checkpoint.
+
+---
+
 ## 2026-07-24 — CVE bump: netty 4.1.136.Final + pgjdbc 42.7.12 (`chore/cve-netty-postgres-bump`, PR #51)
 
 Backend dependency-security fix, surfaced by (but unrelated to) the S3a PR CI. The enforcing **backend-image Trivy gate** (`backend-image.yml`) began failing 2026-07-24 with **5 HIGH CVEs (0 CRITICAL)** disclosed against the parent-pom's pinned transitives since the last pins (2026-07-21) — a time-based vuln-DB drift that fails every branch identically (`main` included if re-run). Two same-line patch bumps via the existing `<properties>` BOM-override mechanism (same as the S144 tomcat/netty/pgjdbc/jackson pins):
