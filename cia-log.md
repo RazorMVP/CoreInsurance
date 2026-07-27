@@ -58,6 +58,19 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-07-24 — CVE bump: netty 4.1.136.Final + pgjdbc 42.7.12 (`chore/cve-netty-postgres-bump`, PR #51)
+
+Backend dependency-security fix, surfaced by (but unrelated to) the S3a PR CI. The enforcing **backend-image Trivy gate** (`backend-image.yml`) began failing 2026-07-24 with **5 HIGH CVEs (0 CRITICAL)** disclosed against the parent-pom's pinned transitives since the last pins (2026-07-21) — a time-based vuln-DB drift that fails every branch identically (`main` included if re-run). Two same-line patch bumps via the existing `<properties>` BOM-override mechanism (same as the S144 tomcat/netty/pgjdbc/jackson pins):
+
+- `netty.version` 4.1.135.Final → **4.1.136.Final** — clears CVE-2026-59901 (netty-codec Bzip2Decoder infinite loop) + CVE-2026-55831 / 55833 / 56745 (netty-codec-http).
+- `postgresql.version` 42.7.11 → **42.7.12** — clears CVE-2026-54291.
+
+The CVE-override comment block in `cia-backend/pom.xml` was extended to document both. Full reactor compiles clean; PR #51 CI green across the board — **Build backend container image** Trivy re-scan **0 CRITICAL/HIGH**, Backend Testcontainers pass (15m41s, confirming the bumps break no tests), + Frontend / E2E / kind-smoke / helm-lint. Merged to main (`e3dec0a`); image gate green again.
+
+**Slice discipline note:** discovered mid-S3a but **not absorbed** into that FE-only slice — the user chose (option 1) to merge S3a first, then land this as its own backend slice with a full-reactor + Trivy re-verify. No backlog rows added/removed (a dependency-hygiene fix, not a tracked feature gap).
+
+---
+
 ## 2026-07-23 — Category-C FE gaps: Slice 3a — Vehicle Registry CRUD (`feat/fe-gaps-s3a-vehicle-registry`)
 
 First half of S3 (`setup-dead-shells`), split into **S3a Vehicle Registry** (this slice) + **S3b Claims Config**. FE-only — the backend `VehicleMake/Type/Model` controllers already exist (`/api/v1/setup/vehicle-makes`, `/vehicle-types`, nested `/vehicle-makes/{makeId}/models`). Plan: `docs/superpowers/plans/2026-07-21-s3a-vehicle-registry-crud.md`.
