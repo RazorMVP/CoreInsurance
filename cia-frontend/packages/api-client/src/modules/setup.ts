@@ -170,40 +170,43 @@ export interface CommissionSetupDto {
 // Previously carried `status` + `contactPerson` which the backend never accepted
 // (Jackson silently dropped them on the way in). Now matches the entity 1:1.
 // V49 added the optional `licenseNumber` field — NAICOM broker licence.
-export interface BrokerDto {
-  id:             string;
-  name:           string;
-  code:           string;
-  rcNumber?:      string | null;
-  /** NAICOM broker licence number (V49). */
-  licenseNumber?: string | null;
-  address?:       string | null;
-  email?:         string | null;
-  phone?:         string | null;
-  createdAt:      string;
-  updatedAt?:     string | null;
-}
+export const BrokerDtoSchema = z.object({
+  id:            z.string(),
+  name:          z.string(),
+  code:          z.string(),
+  rcNumber:      z.string().nullable().optional(),
+  // NAICOM broker licence number (V49).
+  licenseNumber: z.string().nullable().optional(),
+  address:       z.string().nullable().optional(),
+  email:         z.string().nullable().optional(),
+  phone:         z.string().nullable().optional(),
+  createdAt:     z.string(),
+  updatedAt:     z.string().nullable().optional(),
+});
+export type BrokerDto = z.infer<typeof BrokerDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.org.dto.BranchResponse.
-export interface BranchDto {
-  id:         string;
-  name:       string;
-  code:       string;
-  sbuId?:     string | null;
-  sbuName?:   string | null;
-  address?:   string | null;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const BranchDtoSchema = z.object({
+  id:        z.string(),
+  name:      z.string(),
+  code:      z.string(),
+  sbuId:     z.string().nullable().optional(),
+  sbuName:   z.string().nullable().optional(),
+  address:   z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type BranchDto = z.infer<typeof BranchDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.org.dto.SbuResponse.
-export interface SbuDto {
-  id:         string;
-  name:       string;
-  code:       string;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const SbuDtoSchema = z.object({
+  id:        z.string(),
+  name:      z.string(),
+  code:      z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type SbuDto = z.infer<typeof SbuDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.vehicle.dto.VehicleMakeResponse.
 export interface VehicleMakeDto {
@@ -282,48 +285,51 @@ export interface ClaimDocumentRequirementDto {
 }
 
 // Mirrors com.nubeero.cia.setup.org.dto.ReinsuranceCompanyResponse.
-export interface ReinsuranceCompanyDto {
-  id:         string;
-  name:       string;
-  rcNumber?:  string | null;
-  address?:   string | null;
-  email?:     string | null;
-  phone?:     string | null;
-  country:    string;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const ReinsuranceCompanyDtoSchema = z.object({
+  id:        z.string(),
+  name:      z.string(),
+  rcNumber:  z.string().nullable().optional(),
+  address:   z.string().nullable().optional(),
+  email:     z.string().nullable().optional(),
+  phone:     z.string().nullable().optional(),
+  country:   z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type ReinsuranceCompanyDto = z.infer<typeof ReinsuranceCompanyDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.org.dto.RelationshipManagerResponse.
 // V46 added the FK on customers.relationship_manager_id; CustomerService
 // denormalises `relationshipManagerName` into customer responses.
-export interface RelationshipManagerDto {
-  id:         string;
-  name:       string;
-  email?:     string | null;
-  phone?:     string | null;
-  branchId?:  string | null;
-  branchName?: string | null;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const RelationshipManagerDtoSchema = z.object({
+  id:         z.string(),
+  name:       z.string(),
+  email:      z.string().nullable().optional(),
+  phone:      z.string().nullable().optional(),
+  branchId:   z.string().nullable().optional(),
+  branchName: z.string().nullable().optional(),
+  createdAt:  z.string(),
+  updatedAt:  z.string().nullable().optional(),
+});
+export type RelationshipManagerDto = z.infer<typeof RelationshipManagerDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.org.AdjusterType (V45).
 export type AdjusterType = 'INTERNAL' | 'EXTERNAL';
 
 // Mirrors com.nubeero.cia.setup.org.dto.AdjusterResponse (V45).
-export interface AdjusterDto {
-  id:             string;
-  name:           string;
-  code:           string;
-  type:           AdjusterType;
-  licenseNumber?: string | null;
-  email?:         string | null;
-  phone?:         string | null;
-  address?:       string | null;
-  createdAt:      string;
-  updatedAt?:     string | null;
-}
+export const AdjusterDtoSchema = z.object({
+  id:            z.string(),
+  name:          z.string(),
+  code:          z.string(),
+  type:          z.enum(['INTERNAL', 'EXTERNAL']),
+  licenseNumber: z.string().nullable().optional(),
+  email:         z.string().nullable().optional(),
+  phone:         z.string().nullable().optional(),
+  address:       z.string().nullable().optional(),
+  createdAt:     z.string(),
+  updatedAt:     z.string().nullable().optional(),
+});
+export type AdjusterDto = z.infer<typeof AdjusterDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.org.AgentType (V48). Agents represent the
 // INSURER and earn commission on policies sold, distinct from Brokers
@@ -331,18 +337,19 @@ export interface AdjusterDto {
 export type AgentType = 'INDIVIDUAL' | 'CORPORATE';
 
 // Mirrors com.nubeero.cia.setup.org.dto.AgentResponse (V48).
-export interface AgentDto {
-  id:             string;
-  name:           string;
-  code:           string;
-  type:           AgentType;
-  licenseNumber?: string | null;
-  email?:         string | null;
-  phone?:         string | null;
-  address?:       string | null;
-  createdAt:      string;
-  updatedAt?:     string | null;
-}
+export const AgentDtoSchema = z.object({
+  id:            z.string(),
+  name:          z.string(),
+  code:          z.string(),
+  type:          z.enum(['INDIVIDUAL', 'CORPORATE']),
+  licenseNumber: z.string().nullable().optional(),
+  email:         z.string().nullable().optional(),
+  phone:         z.string().nullable().optional(),
+  address:       z.string().nullable().optional(),
+  createdAt:     z.string(),
+  updatedAt:     z.string().nullable().optional(),
+});
+export type AgentDto = z.infer<typeof AgentDtoSchema>;
 
 // Policy clause bank (V72). Mirrors com.nubeero.cia.setup.policy.* enums.
 export type ClauseType          = 'STANDARD' | 'EXCLUSION' | 'SPECIAL_CONDITION' | 'WARRANTY';
@@ -388,30 +395,32 @@ export interface CurrencyDto {
 // Mirrors com.nubeero.cia.setup.org.dto.SurveyorResponse.
 export type SurveyorType = 'INTERNAL' | 'EXTERNAL';
 
-export interface SurveyorDto {
-  id:             string;
-  name:           string;
-  type:           SurveyorType;
-  licenseNumber?: string | null;
-  email?:         string | null;
-  phone?:         string | null;
-  createdAt:      string;
-  updatedAt?:     string | null;
-}
+export const SurveyorDtoSchema = z.object({
+  id:            z.string(),
+  name:          z.string(),
+  type:          z.enum(['INTERNAL', 'EXTERNAL']),
+  licenseNumber: z.string().nullable().optional(),
+  email:         z.string().nullable().optional(),
+  phone:         z.string().nullable().optional(),
+  createdAt:     z.string(),
+  updatedAt:     z.string().nullable().optional(),
+});
+export type SurveyorDto = z.infer<typeof SurveyorDtoSchema>;
 
 // Used by policy/coinsurance for the participant picker.
 // Mirrors com.nubeero.cia.setup.org.dto.InsuranceCompanyResponse.
-export interface InsuranceCompanyDto {
-  id:             string;
-  name:           string;
-  rcNumber?:      string | null;
-  naicomLicense?: string | null;
-  address?:       string | null;
-  email?:         string | null;
-  phone?:         string | null;
-  createdAt:      string;
-  updatedAt?:     string | null;
-}
+export const InsuranceCompanyDtoSchema = z.object({
+  id:            z.string(),
+  name:          z.string(),
+  rcNumber:      z.string().nullable().optional(),
+  naicomLicense: z.string().nullable().optional(),
+  address:       z.string().nullable().optional(),
+  email:         z.string().nullable().optional(),
+  phone:         z.string().nullable().optional(),
+  createdAt:     z.string(),
+  updatedAt:     z.string().nullable().optional(),
+});
+export type InsuranceCompanyDto = z.infer<typeof InsuranceCompanyDtoSchema>;
 
 // ── Notification Templates (F7-δ / R7 — Setup → Notification Templates tab) ─
 //

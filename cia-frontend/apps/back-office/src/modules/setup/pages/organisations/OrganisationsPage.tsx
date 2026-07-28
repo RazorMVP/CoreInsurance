@@ -5,9 +5,13 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
+import { z } from 'zod';
 import { useDeleteWithReason } from '@/lib/use-delete-with-reason';
 import {
-  apiClient,
+  validatedGet,
+  BrokerDtoSchema, BranchDtoSchema, SbuDtoSchema, SurveyorDtoSchema,
+  InsuranceCompanyDtoSchema, ReinsuranceCompanyDtoSchema, AdjusterDtoSchema,
+  AgentDtoSchema, RelationshipManagerDtoSchema,
   type BrokerDto, type BranchDto, type SbuDto, type SurveyorDto,
   type InsuranceCompanyDto, type ReinsuranceCompanyDto, type AdjusterDto,
   type AgentDto, type RelationshipManagerDto,
@@ -36,10 +40,7 @@ function BrokersTab() {
 
   const query = useQuery<BrokerDto[]>({
     queryKey: ['setup', 'brokers'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: BrokerDto[] }>('/api/v1/setup/brokers');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/setup/brokers', z.array(BrokerDtoSchema)),
   });
   const rows = query.data ?? [];
 
@@ -96,10 +97,7 @@ function ReinsurersTab() {
 
   const query = useQuery<ReinsuranceCompanyDto[]>({
     queryKey: ['setup', 'reinsurance-companies'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: ReinsuranceCompanyDto[] }>('/api/v1/setup/reinsurance-companies');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/setup/reinsurance-companies', z.array(ReinsuranceCompanyDtoSchema)),
   });
   const rows = query.data ?? [];
 
@@ -146,10 +144,7 @@ function InsurersTab() {
 
   const query = useQuery<InsuranceCompanyDto[]>({
     queryKey: ['setup', 'insurance-companies'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: InsuranceCompanyDto[] }>('/api/v1/setup/insurance-companies');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/setup/insurance-companies', z.array(InsuranceCompanyDtoSchema)),
   });
   const rows = query.data ?? [];
 
@@ -196,10 +191,7 @@ function BranchesTab() {
 
   const query = useQuery<BranchDto[]>({
     queryKey: ['setup', 'branches'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: BranchDto[] }>('/api/v1/setup/branches');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/setup/branches', z.array(BranchDtoSchema)),
   });
   const rows = query.data ?? [];
 
@@ -254,10 +246,7 @@ function SbusTab() {
 
   const query = useQuery<SbuDto[]>({
     queryKey: ['setup', 'sbus'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: SbuDto[] }>('/api/v1/setup/sbus');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/setup/sbus', z.array(SbuDtoSchema)),
   });
   const rows = query.data ?? [];
 
@@ -312,10 +301,7 @@ function SurveyorsTab() {
 
   const query = useQuery<SurveyorDto[]>({
     queryKey: ['setup', 'surveyors'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: SurveyorDto[] }>('/api/v1/setup/surveyors');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/setup/surveyors', z.array(SurveyorDtoSchema)),
   });
   const rows = query.data ?? [];
 
@@ -370,10 +356,7 @@ function AdjustersTab() {
 
   const query = useQuery<AdjusterDto[]>({
     queryKey: ['setup', 'adjusters'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: AdjusterDto[] }>('/api/v1/setup/adjusters');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/setup/adjusters', z.array(AdjusterDtoSchema)),
   });
   const rows = query.data ?? [];
 
@@ -437,10 +420,7 @@ function AgentsTab() {
 
   const query = useQuery<AgentDto[]>({
     queryKey: ['setup', 'agents'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: AgentDto[] }>('/api/v1/setup/agents');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/setup/agents', z.array(AgentDtoSchema)),
   });
   const rows = query.data ?? [];
 
@@ -502,10 +482,7 @@ function RelationshipManagersTab() {
 
   const query = useQuery<RelationshipManagerDto[]>({
     queryKey: ['setup', 'relationship-managers'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: RelationshipManagerDto[] }>('/api/v1/setup/relationship-managers');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/setup/relationship-managers', z.array(RelationshipManagerDtoSchema)),
   });
   const rows = query.data ?? [];
 
