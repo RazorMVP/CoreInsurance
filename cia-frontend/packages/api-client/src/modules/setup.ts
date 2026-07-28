@@ -209,60 +209,66 @@ export const SbuDtoSchema = z.object({
 export type SbuDto = z.infer<typeof SbuDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.vehicle.dto.VehicleMakeResponse.
-export interface VehicleMakeDto {
-  id:         string;
-  name:       string;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const VehicleMakeDtoSchema = z.object({
+  id:        z.string(),
+  name:      z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type VehicleMakeDto = z.infer<typeof VehicleMakeDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.vehicle.dto.VehicleTypeResponse.
-export interface VehicleTypeDto {
-  id:         string;
-  name:       string;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const VehicleTypeDtoSchema = z.object({
+  id:        z.string(),
+  name:      z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type VehicleTypeDto = z.infer<typeof VehicleTypeDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.vehicle.dto.VehicleModelResponse.
 // Nested under a make: makeId + denormalised makeName.
-export interface VehicleModelDto {
-  id:         string;
-  name:       string;
-  makeId:     string;
-  makeName:   string;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const VehicleModelDtoSchema = z.object({
+  id:        z.string(),
+  name:      z.string(),
+  makeId:    z.string(),
+  makeName:  z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type VehicleModelDto = z.infer<typeof VehicleModelDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.loss.dto.ClaimReserveCategoryResponse.
-export interface ClaimReserveCategoryDto {
-  id:         string;
-  name:       string;
-  code:       string;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const ClaimReserveCategoryDtoSchema = z.object({
+  id:        z.string(),
+  name:      z.string(),
+  code:      z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type ClaimReserveCategoryDto = z.infer<typeof ClaimReserveCategoryDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.loss.dto.NatureOfLossResponse.
-export interface NatureOfLossDto {
-  id:         string;
-  name:       string;
-  code:       string;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const NatureOfLossDtoSchema = z.object({
+  id:        z.string(),
+  name:      z.string(),
+  code:      z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type NatureOfLossDto = z.infer<typeof NatureOfLossDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.loss.dto.CauseOfLossResponse. FK-linked to a nature.
-export interface CauseOfLossDto {
-  id:               string;
-  name:             string;
-  code:             string;
-  natureOfLossId:   string;
-  natureOfLossName: string;
-  createdAt:        string;
-  updatedAt?:       string | null;
-}
+export const CauseOfLossDtoSchema = z.object({
+  id:               z.string(),
+  name:             z.string(),
+  code:             z.string(),
+  natureOfLossId:   z.string(),
+  natureOfLossName: z.string(),
+  createdAt:        z.string(),
+  updatedAt:        z.string().nullable().optional(),
+});
+export type CauseOfLossDto = z.infer<typeof CauseOfLossDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.product.dto.ClaimNotificationTimelineResponse (per-product singleton).
 export interface ClaimNotificationTimelineDto {
@@ -274,15 +280,16 @@ export interface ClaimNotificationTimelineDto {
 }
 
 // Mirrors com.nubeero.cia.setup.product.dto.ClaimDocumentRequirementResponse (per-product list row).
-export interface ClaimDocumentRequirementDto {
-  id:           string;
-  productId:    string;
-  documentName: string;
-  mandatory:    boolean;
-  documentType: string;
-  createdAt:    string;
-  updatedAt?:   string | null;
-}
+export const ClaimDocumentRequirementDtoSchema = z.object({
+  id:           z.string(),
+  productId:    z.string(),
+  documentName: z.string(),
+  mandatory:    z.boolean(),
+  documentType: z.string(),
+  createdAt:    z.string(),
+  updatedAt:    z.string().nullable().optional(),
+});
+export type ClaimDocumentRequirementDto = z.infer<typeof ClaimDocumentRequirementDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.org.dto.ReinsuranceCompanyResponse.
 export const ReinsuranceCompanyDtoSchema = z.object({

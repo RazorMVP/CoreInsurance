@@ -7,9 +7,12 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
 import { useDeleteWithReason } from '@/lib/use-delete-with-reason';
 import {
-  apiClient,
+  apiClient, validatedGet,
+  ClaimReserveCategoryDtoSchema, NatureOfLossDtoSchema, CauseOfLossDtoSchema,
+  ClaimDocumentRequirementDtoSchema,
   type ClaimReserveCategoryDto, type NatureOfLossDto, type CauseOfLossDto,
   type ClaimNotificationTimelineDto, type ClaimDocumentRequirementDto, type ProductDto,
 } from '@cia/api-client';
@@ -31,7 +34,7 @@ function ReservesTab() {
   });
   const query = useQuery<ClaimReserveCategoryDto[]>({
     queryKey: ['setup', 'claim-reserve-categories'],
-    queryFn: async () => (await apiClient.get<{ data: ClaimReserveCategoryDto[] }>('/api/v1/setup/claim-reserve-categories')).data.data,
+    queryFn: () => validatedGet('/api/v1/setup/claim-reserve-categories', z.array(ClaimReserveCategoryDtoSchema)),
   });
   const rows = query.data ?? [];
   const columns: ColumnDef<ClaimReserveCategoryDto>[] = [
@@ -75,11 +78,11 @@ function LossTab() {
 
   const naturesQuery = useQuery<NatureOfLossDto[]>({
     queryKey: ['setup', 'nature-of-loss'],
-    queryFn: async () => (await apiClient.get<{ data: NatureOfLossDto[] }>('/api/v1/setup/nature-of-loss')).data.data,
+    queryFn: () => validatedGet('/api/v1/setup/nature-of-loss', z.array(NatureOfLossDtoSchema)),
   });
   const causesQuery = useQuery<CauseOfLossDto[]>({
     queryKey: ['setup', 'cause-of-loss'],
-    queryFn: async () => (await apiClient.get<{ data: CauseOfLossDto[] }>('/api/v1/setup/cause-of-loss')).data.data,
+    queryFn: () => validatedGet('/api/v1/setup/cause-of-loss', z.array(CauseOfLossDtoSchema)),
   });
   const natures = naturesQuery.data ?? [];
   const causes = causesQuery.data ?? [];
@@ -222,7 +225,7 @@ function DocumentsTab() {
   const docsQuery = useQuery<ClaimDocumentRequirementDto[]>({
     queryKey: ['setup', 'claim-document-requirements', productId],
     enabled: !!productId,
-    queryFn: async () => (await apiClient.get<{ data: ClaimDocumentRequirementDto[] }>(`/api/v1/setup/products/${productId}/claim-document-requirements`)).data.data,
+    queryFn: () => validatedGet(`/api/v1/setup/products/${productId}/claim-document-requirements`, z.array(ClaimDocumentRequirementDtoSchema)),
   });
   const rows = docsQuery.data ?? [];
 
