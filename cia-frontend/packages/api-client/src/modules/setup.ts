@@ -48,30 +48,46 @@ export interface PasswordPolicyDto {
   updatedAt?:         string | null;
 }
 
-export interface UserDto {
-  id:              string;
-  email:           string;
-  firstName:       string;
-  lastName:        string;
-  status:          'ACTIVE' | 'INACTIVE' | 'LOCKED';
-  accessGroupId:   string;
-  accessGroupName: string;
-  createdAt:       string;
-}
+export const UserDtoSchema = z.object({
+  id:              z.string(),
+  email:           z.string(),
+  firstName:       z.string(),
+  lastName:        z.string(),
+  status:          z.enum(['ACTIVE', 'INACTIVE', 'LOCKED']),
+  accessGroupId:   z.string(),
+  accessGroupName: z.string(),
+  createdAt:       z.string(),
+});
+export type UserDto = z.infer<typeof UserDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.access.dto.AccessGroupResponse 1:1.
 // `userCount` was previously declared on the frontend but the backend never
 // shipped it — no UI consumer referenced it either, so it's just removed
 // rather than promoted to a computed-from-elsewhere field. Audit timestamps
 // added in Session 97 / Backlog A1.
-export interface AccessGroupDto {
-  id:           string;
-  name:         string;
-  description?: string | null;
-  permissions:  string[];
-  createdAt:    string;
-  updatedAt:    string;
-}
+export const AccessGroupDtoSchema = z.object({
+  id:          z.string(),
+  name:        z.string(),
+  description: z.string().nullable().optional(),
+  permissions: z.array(z.string()),
+  createdAt:   z.string(),
+  updatedAt:   z.string(),
+});
+export type AccessGroupDto = z.infer<typeof AccessGroupDtoSchema>;
+
+// Mirrors com.nubeero.cia.setup.approval.dto.ApprovalGroupResponse.ApprovalLevelResponse.
+// One approver per level (not an array). Backend infers the min-amount band
+// for each level from the previous level's maxAmount, so only maxAmount is
+// stored per row. Declared before ApprovalGroupDtoSchema so the const
+// reference below is initialised (no temporal-dead-zone throw at import).
+export const ApprovalLevelDtoSchema = z.object({
+  id:             z.string(),
+  levelOrder:     z.number(),
+  approverUserId: z.string(),
+  approverName:   z.string(),
+  maxAmount:      z.number(),
+});
+export type ApprovalLevelDto = z.infer<typeof ApprovalLevelDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.approval.dto.ApprovalGroupResponse 1:1.
 // Earlier carried `module` as a UI alias for backend `entityType`, plus a
@@ -79,38 +95,28 @@ export interface AccessGroupDto {
 // — neither matches the backend, which models ONE approver per level keyed
 // by `levelOrder` + `approverUserId` + `maxAmount`. Realigned in Session 99 /
 // Backlog A1b.
-export interface ApprovalGroupDto {
-  id:        string;
-  name:      string;
-  entityType: string;
-  levels:    ApprovalLevelDto[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-// Mirrors com.nubeero.cia.setup.approval.dto.ApprovalGroupResponse.ApprovalLevelResponse.
-// One approver per level (not an array). Backend infers the min-amount band
-// for each level from the previous level's maxAmount, so only maxAmount is
-// stored per row.
-export interface ApprovalLevelDto {
-  id:             string;
-  levelOrder:     number;
-  approverUserId: string;
-  approverName:   string;
-  maxAmount:      number;
-}
+export const ApprovalGroupDtoSchema = z.object({
+  id:         z.string(),
+  name:       z.string(),
+  entityType: z.string(),
+  levels:     z.array(ApprovalLevelDtoSchema),
+  createdAt:  z.string(),
+  updatedAt:  z.string(),
+});
+export type ApprovalGroupDto = z.infer<typeof ApprovalGroupDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.product.dto.ProductSectionResponse 1:1.
 // Used for multi-risk products that have multiple coverage sections each
 // with their own rate. Surfaced on ProductDto.sections in Session 97 /
 // Backlog A1.
-export interface ProductSectionDto {
-  id:      string;
-  name:    string;
-  code:    string;
-  rate:    number;
-  orderNo: number;
-}
+export const ProductSectionDtoSchema = z.object({
+  id:      z.string(),
+  name:    z.string(),
+  code:    z.string(),
+  rate:    z.number(),
+  orderNo: z.number(),
+});
+export type ProductSectionDto = z.infer<typeof ProductSectionDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.product.dto.ProductResponse 1:1.
 // Earlier carried `status: ACTIVE|INACTIVE` (backend exposes `active: boolean`)
@@ -118,33 +124,35 @@ export interface ProductSectionDto {
 // CommissionSourceType — never on the Product row). Jackson silently dropped
 // both fields on the way in; renderers showed `undefined%` once products
 // existed. Aligned in Session 84. `sections` added in Session 97 / Backlog A1.
-export interface ProductDto {
-  id:                  string;
-  name:                string;
-  code:                string;
-  classOfBusinessId:   string;
-  classOfBusinessName: string;
-  type:                'SINGLE_RISK' | 'MULTI_RISK';
-  rate:                number;
-  minPremium:          number;
-  active:              boolean;
-  sections?:           ProductSectionDto[] | null;
-  createdAt:           string;
-  updatedAt?:          string | null;
-}
+export const ProductDtoSchema = z.object({
+  id:                  z.string(),
+  name:                z.string(),
+  code:                z.string(),
+  classOfBusinessId:   z.string(),
+  classOfBusinessName: z.string(),
+  type:                z.enum(['SINGLE_RISK', 'MULTI_RISK']),
+  rate:                z.number(),
+  minPremium:          z.number(),
+  active:              z.boolean(),
+  sections:            z.array(ProductSectionDtoSchema).nullable().optional(),
+  createdAt:           z.string(),
+  updatedAt:           z.string().nullable().optional(),
+});
+export type ProductDto = z.infer<typeof ProductDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.product.dto.ClassOfBusinessResponse 1:1.
 // `products` was previously a UI-side product count that the backend never
 // shipped; removed because no consumer referenced it. Description + audit
 // timestamps added in Session 97 / Backlog A1.
-export interface ClassOfBusinessDto {
-  id:           string;
-  name:         string;
-  code:         string;
-  description?: string | null;
-  createdAt:    string;
-  updatedAt:    string;
-}
+export const ClassOfBusinessDtoSchema = z.object({
+  id:          z.string(),
+  name:        z.string(),
+  code:        z.string(),
+  description: z.string().nullable().optional(),
+  createdAt:   z.string(),
+  updatedAt:   z.string(),
+});
+export type ClassOfBusinessDto = z.infer<typeof ClassOfBusinessDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.product.CommissionSourceType (Session 84 / V50).
 // AGENT — NAICOM-licensed agent representing the insurer.
@@ -363,16 +371,17 @@ export type ClauseType          = 'STANDARD' | 'EXCLUSION' | 'SPECIAL_CONDITION'
 export type ClauseApplicability = 'MANDATORY' | 'OPTIONAL';
 
 // Mirrors com.nubeero.cia.setup.policy.dto.ClauseResponse (V72).
-export interface ClauseDto {
-  id:            string;
-  title:         string;
-  text:          string;
-  type:          ClauseType;
-  applicability: ClauseApplicability;
-  productIds:    string[];
-  createdAt:     string;
-  updatedAt?:    string | null;
-}
+export const ClauseDtoSchema = z.object({
+  id:            z.string(),
+  title:         z.string(),
+  text:          z.string(),
+  type:          z.enum(['STANDARD', 'EXCLUSION', 'SPECIAL_CONDITION', 'WARRANTY']),
+  applicability: z.enum(['MANDATORY', 'OPTIONAL']),
+  productIds:    z.array(z.string()),
+  createdAt:     z.string(),
+  updatedAt:     z.string().nullable().optional(),
+});
+export type ClauseDto = z.infer<typeof ClauseDtoSchema>;
 
 // ClauseSnapshotDto (the frozen snapshot on quotes/policies) is defined canonically in ./policy.
 

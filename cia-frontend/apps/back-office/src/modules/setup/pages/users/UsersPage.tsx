@@ -5,7 +5,8 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type UserDto } from '@cia/api-client';
+import { z } from 'zod';
+import { apiClient, validatedGet, UserDtoSchema, type UserDto } from '@cia/api-client';
 import UserSheet from './UserSheet';
 
 const statusVariant: Record<UserDto['status'], 'active' | 'rejected' | 'draft'> = {
@@ -25,10 +26,7 @@ export default function UsersPage() {
 
   const usersQuery = useQuery<UserDto[]>({
     queryKey: ['setup', 'users'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: UserDto[] }>('/api/v1/setup/users');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/setup/users', z.array(UserDtoSchema)),
   });
   const users = usersQuery.data ?? [];
 

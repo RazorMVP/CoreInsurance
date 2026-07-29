@@ -7,7 +7,8 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type ClauseDto, type ProductDto } from '@cia/api-client';
+import { z } from 'zod';
+import { apiClient, validatedGet, ClauseDtoSchema, type ClauseDto, type ProductDto } from '@cia/api-client';
 import type { ClauseRow, ClauseType, ClauseApplicability } from './clause-types';
 import { CLAUSE_TYPES } from './clause-types';
 import { useDeleteWithReason } from '@/lib/use-delete-with-reason';
@@ -26,10 +27,7 @@ export default function ClauseBankTab() {
 
   const clausesQuery = useQuery<ClauseDto[]>({
     queryKey: ['setup', 'clauses'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: ClauseDto[] }>('/api/v1/setup/clauses');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/setup/clauses', z.array(ClauseDtoSchema)),
   });
   const productsQuery = useQuery<ProductDto[]>({
     queryKey: ['setup', 'products'],

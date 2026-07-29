@@ -5,7 +5,8 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type ProductDto } from '@cia/api-client';
+import { z } from 'zod';
+import { apiClient, validatedGet, ProductDtoSchema, type ProductDto } from '@cia/api-client';
 import ProductSheet from './ProductSheet';
 import CommissionSetupsSheet from './CommissionSetupsSheet';
 
@@ -17,10 +18,7 @@ export default function ProductsPage() {
 
   const productsQuery = useQuery<ProductDto[]>({
     queryKey: ['setup', 'products'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: ProductDto[] }>('/api/v1/setup/products');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/setup/products', z.array(ProductDtoSchema)),
   });
   const products = productsQuery.data ?? [];
 
