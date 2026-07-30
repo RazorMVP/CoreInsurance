@@ -3,6 +3,7 @@ import { render, screen, waitFor, within, cleanup } from '@testing-library/react
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
+import { z } from 'zod';
 import ClaimsConfigPage from './ClaimsConfigPage';
 import type { ClaimReserveCategoryDto } from '@cia/api-client';
 
@@ -35,8 +36,14 @@ vi.mock('@cia/ui', async (importOriginal) => {
 // ── mock @cia/api-client ─────────────────────────────────────────────────
 const get = vi.fn();
 const post = vi.fn();
+const validatedGet = vi.fn();
 vi.mock('@cia/api-client', () => ({
   apiClient: { get: (...a: unknown[]) => get(...a), post: (...a: unknown[]) => post(...a), put: vi.fn(), delete: vi.fn() },
+  validatedGet:                     (...a: unknown[]) => validatedGet(...a),
+  ClaimReserveCategoryDtoSchema:    z.any(),
+  NatureOfLossDtoSchema:            z.any(),
+  CauseOfLossDtoSchema:             z.any(),
+  ClaimDocumentRequirementDtoSchema: z.any(),
 }));
 
 const categories: ClaimReserveCategoryDto[] = [
@@ -53,7 +60,7 @@ describe('ClaimsConfigPage — Reserve Categories tab', () => {
   beforeEach(() => {
     cleanup();
     vi.clearAllMocks();
-    get.mockResolvedValue({ data: { data: categories } });
+    validatedGet.mockResolvedValue(categories);
     post.mockResolvedValue({ data: { data: { id: 'c3', name: 'Legal', code: 'LG', createdAt: '2026-01-01T00:00:00Z' } } });
   });
 
@@ -61,7 +68,7 @@ describe('ClaimsConfigPage — Reserve Categories tab', () => {
     render(React.createElement(ClaimsConfigPage), { wrapper });
     expect(await screen.findByText('Bodily Injury')).toBeInTheDocument();
     expect(screen.getByText('Property Damage')).toBeInTheDocument();
-    expect(get).toHaveBeenCalledWith('/api/v1/setup/claim-reserve-categories');
+    expect(validatedGet).toHaveBeenCalledWith('/api/v1/setup/claim-reserve-categories', expect.anything());
   });
 
   it('creates a category via POST { name, code }', async () => {
