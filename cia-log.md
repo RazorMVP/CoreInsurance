@@ -57,6 +57,16 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-07-31 — CVE bump: Spring Framework 6.2.19 (`chore/cve-spring-framework-6.2.19`)
+
+Time-based CVE drift surfaced by the enforcing backend-image Trivy gate on the S4a-1 PR (#55) — orthogonal to that FE-only slice (an FE diff can't alter backend image contents), so it was split into this dedicated backend slice per the PR #50 precedent. A week after the netty/pgjdbc bump (PR #51), Trivy flagged **4 HIGH CVEs, all in Spring Framework 6.2.18** (the version Boot 3.5.14's BOM pins): CVE-2026-41850 (spring-expression SpEL DoS), CVE-2026-41842 (spring-webflux DoS), CVE-2026-41845 (reflected XSS), + one further Spring Framework HIGH — all fixed in **6.2.19**.
+
+Fix: added `<spring-framework.version>6.2.19</spring-framework.version>` to the parent pom `<properties>`. `spring-framework.version` is a Boot BOM property, so the override re-pins every managed `org.springframework:*` artifact to the patched line (same mechanism as the existing tomcat/netty/postgresql/jackson-bom pins). Verified the property resolves to 6.2.19; the full backend reactor (Testcontainers) + Trivy re-scan in CI are the confirming gates. Drop-in patch (6.2.18→.19), no source change.
+
+**Known follow-ups (backlog reconciliation).** No rows added or removed — recurring time-based CVE hygiene, not a tracked backlog item. (Pattern: the enforcing `backend-image.yml` Trivy gate fails any PR opened after a new HIGH/CRITICAL is disclosed against a pinned dep; each occurrence is a small property-bump slice.)
+
+---
+
 ## 2026-07-30 — Category-C FE gaps: Slice 4a-1 — validatedGet sweep, Setup cluster (`feat/fe-gaps-s4a1-validatedget-setup`)
 
 First execution slice of S4 (`raw-apiclient-list-validatedget-sweep`). The full S4 inventory found ~20 files / ~36 raw-`apiClient.get` list-page call sites; S4 is split — **S4a-1 Setup cluster** (this slice, the biggest: 10 files / ~25 call sites), then S4a-2 (core transaction lists) + S4b (report pages that bind local row types needing schemas authored). Plan: `docs/superpowers/plans/2026-07-27-s4a1-validatedget-setup.md`. FE-only; no backend change.
