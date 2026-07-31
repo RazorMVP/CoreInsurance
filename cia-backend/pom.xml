@@ -64,6 +64,13 @@
     <tomcat.version>10.1.55</tomcat.version>
     <netty.version>4.1.136.Final</netty.version>
     <postgresql.version>42.7.12</postgresql.version>
+    <!-- spring-framework is a Boot BOM property too: the 3.5.14 BOM pins Spring
+         Framework 6.2.18, which four 2026-07 HIGH CVEs flag — CVE-2026-41850
+         (spring-expression SpEL DoS), CVE-2026-41842 (spring-webflux DoS) and
+         CVE-2026-41845 (reflected XSS) among them. 6.2.19 is the same-line patch
+         carrying all fixes (drop-in, no API change). Override here, same
+         mechanism as tomcat/netty/postgresql above. -->
+    <spring-framework.version>6.2.19</spring-framework.version>
     <!-- jackson-bom is a Boot BOM property too: the 3.5.14 BOM pins jackson
          2.21.2, which two 2026-06 HIGH CVEs flag — CVE-2026-54512
          (PolymorphicTypeValidator bypass) + CVE-2026-54513 (array subtype
