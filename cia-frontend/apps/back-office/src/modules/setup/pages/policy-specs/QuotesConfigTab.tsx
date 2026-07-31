@@ -11,10 +11,12 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@cia/api-client';
+import { apiClient, validatedGet } from '@cia/api-client';
 import type { DiscountType, LoadingType, QuoteConfig, CalcSequence } from './quote-config-types';
 
-interface AdjustmentTypeDto { id: string; name: string; createdAt: string }
+// Local shape for the quote-discount/loading-type list endpoints (no shared
+// @cia/api-client DTO — the backend Response has no 1:1 FE counterpart here).
+const AdjustmentTypeDtoSchema = z.object({ id: z.string(), name: z.string(), createdAt: z.string() });
 interface QuoteConfigDto    { id: string; validityDays: number; calcSequence: CalcSequence }
 
 // ── Type editor dialog ────────────────────────────────────────────────────────
@@ -169,18 +171,16 @@ export default function QuotesConfigTab() {
 
   const discountTypesQuery = useQuery<DiscountType[]>({
     queryKey: DISCOUNT_KEY,
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: AdjustmentTypeDto[] }>('/api/v1/setup/quote-discount-types');
-      return res.data.data.map(({ id, name }) => ({ id, name }));
-    },
+    queryFn: () =>
+      validatedGet('/api/v1/setup/quote-discount-types', z.array(AdjustmentTypeDtoSchema))
+        .then((rows) => rows.map(({ id, name }) => ({ id, name }))),
   });
 
   const loadingTypesQuery = useQuery<LoadingType[]>({
     queryKey: LOADING_KEY,
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: AdjustmentTypeDto[] }>('/api/v1/setup/quote-loading-types');
-      return res.data.data.map(({ id, name }) => ({ id, name }));
-    },
+    queryFn: () =>
+      validatedGet('/api/v1/setup/quote-loading-types', z.array(AdjustmentTypeDtoSchema))
+        .then((rows) => rows.map(({ id, name }) => ({ id, name }))),
   });
 
   useEffect(() => {

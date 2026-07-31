@@ -3,6 +3,7 @@ import { render, screen, waitFor, within, cleanup } from '@testing-library/react
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
+import { z } from 'zod';
 import VehicleRegistryPage from './VehicleRegistryPage';
 import type { VehicleMakeDto } from '@cia/api-client';
 
@@ -61,6 +62,7 @@ vi.mock('@cia/ui', async (importOriginal) => {
 // ── mock @cia/api-client ─────────────────────────────────────────────────
 const get = vi.fn();
 const post = vi.fn();
+const validatedGet = vi.fn();
 vi.mock('@cia/api-client', () => ({
   apiClient: {
     get:    (...a: unknown[]) => get(...a),
@@ -68,6 +70,10 @@ vi.mock('@cia/api-client', () => ({
     put:    vi.fn(),
     delete: vi.fn(),
   },
+  validatedGet:          (...a: unknown[]) => validatedGet(...a),
+  VehicleMakeDtoSchema:  z.any(),
+  VehicleTypeDtoSchema:  z.any(),
+  VehicleModelDtoSchema: z.any(),
 }));
 
 const makes: VehicleMakeDto[] = [
@@ -85,7 +91,7 @@ describe('VehicleRegistryPage — Makes tab', () => {
   beforeEach(() => {
     cleanup();
     vi.clearAllMocks();
-    get.mockResolvedValue({ data: { data: makes } });
+    validatedGet.mockResolvedValue(makes);
     post.mockResolvedValue({ data: { data: { id: 'm3', name: 'Ford', createdAt: '2026-01-01T00:00:00Z' } } });
   });
 
@@ -94,7 +100,7 @@ describe('VehicleRegistryPage — Makes tab', () => {
 
     expect(await screen.findByText('Toyota')).toBeInTheDocument();
     expect(screen.getByText('Honda')).toBeInTheDocument();
-    expect(get).toHaveBeenCalledWith('/api/v1/setup/vehicle-makes');
+    expect(validatedGet).toHaveBeenCalledWith('/api/v1/setup/vehicle-makes', expect.anything());
   });
 
   it('creates a make via POST { name }', async () => {

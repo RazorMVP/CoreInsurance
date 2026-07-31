@@ -4,7 +4,8 @@ import {
   PageHeader, Separator, Skeleton,
 } from '@cia/ui';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type ApprovalGroupDto } from '@cia/api-client';
+import { z } from 'zod';
+import { validatedGet, ApprovalGroupDtoSchema, type ApprovalGroupDto } from '@cia/api-client';
 import { type Row } from '@tanstack/react-table';
 import { useDeleteWithReason } from '@/lib/use-delete-with-reason';
 import ApprovalGroupSheet from './ApprovalGroupSheet';
@@ -32,10 +33,7 @@ export default function ApprovalGroupsPage() {
 
   const groupsQuery = useQuery<ApprovalGroupDto[]>({
     queryKey: ['setup', 'approval-groups'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: ApprovalGroupDto[] }>('/api/v1/setup/approval-groups');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/setup/approval-groups', z.array(ApprovalGroupDtoSchema)),
   });
   const groups = groupsQuery.data ?? [];
 

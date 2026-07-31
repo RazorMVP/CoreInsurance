@@ -5,7 +5,8 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type ClassOfBusinessDto } from '@cia/api-client';
+import { z } from 'zod';
+import { validatedGet, ClassOfBusinessDtoSchema, type ClassOfBusinessDto } from '@cia/api-client';
 import { useDeleteWithReason } from '@/lib/use-delete-with-reason';
 import ClassSheet from './ClassSheet';
 
@@ -21,10 +22,7 @@ export default function ClassesPage() {
 
   const classesQuery = useQuery<ClassOfBusinessDto[]>({
     queryKey: ['setup', 'classes-of-business'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: ClassOfBusinessDto[] }>('/api/v1/setup/classes-of-business');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/setup/classes-of-business', z.array(ClassOfBusinessDtoSchema)),
   });
   const classes = classesQuery.data ?? [];
 

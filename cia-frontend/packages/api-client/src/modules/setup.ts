@@ -48,30 +48,46 @@ export interface PasswordPolicyDto {
   updatedAt?:         string | null;
 }
 
-export interface UserDto {
-  id:              string;
-  email:           string;
-  firstName:       string;
-  lastName:        string;
-  status:          'ACTIVE' | 'INACTIVE' | 'LOCKED';
-  accessGroupId:   string;
-  accessGroupName: string;
-  createdAt:       string;
-}
+export const UserDtoSchema = z.object({
+  id:              z.string(),
+  email:           z.string(),
+  firstName:       z.string(),
+  lastName:        z.string(),
+  status:          z.enum(['ACTIVE', 'INACTIVE', 'LOCKED']),
+  accessGroupId:   z.string(),
+  accessGroupName: z.string(),
+  createdAt:       z.string(),
+});
+export type UserDto = z.infer<typeof UserDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.access.dto.AccessGroupResponse 1:1.
 // `userCount` was previously declared on the frontend but the backend never
 // shipped it — no UI consumer referenced it either, so it's just removed
 // rather than promoted to a computed-from-elsewhere field. Audit timestamps
 // added in Session 97 / Backlog A1.
-export interface AccessGroupDto {
-  id:           string;
-  name:         string;
-  description?: string | null;
-  permissions:  string[];
-  createdAt:    string;
-  updatedAt:    string;
-}
+export const AccessGroupDtoSchema = z.object({
+  id:          z.string(),
+  name:        z.string(),
+  description: z.string().nullable().optional(),
+  permissions: z.array(z.string()),
+  createdAt:   z.string(),
+  updatedAt:   z.string(),
+});
+export type AccessGroupDto = z.infer<typeof AccessGroupDtoSchema>;
+
+// Mirrors com.nubeero.cia.setup.approval.dto.ApprovalGroupResponse.ApprovalLevelResponse.
+// One approver per level (not an array). Backend infers the min-amount band
+// for each level from the previous level's maxAmount, so only maxAmount is
+// stored per row. Declared before ApprovalGroupDtoSchema so the const
+// reference below is initialised (no temporal-dead-zone throw at import).
+export const ApprovalLevelDtoSchema = z.object({
+  id:             z.string(),
+  levelOrder:     z.number(),
+  approverUserId: z.string(),
+  approverName:   z.string(),
+  maxAmount:      z.number(),
+});
+export type ApprovalLevelDto = z.infer<typeof ApprovalLevelDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.approval.dto.ApprovalGroupResponse 1:1.
 // Earlier carried `module` as a UI alias for backend `entityType`, plus a
@@ -79,38 +95,28 @@ export interface AccessGroupDto {
 // — neither matches the backend, which models ONE approver per level keyed
 // by `levelOrder` + `approverUserId` + `maxAmount`. Realigned in Session 99 /
 // Backlog A1b.
-export interface ApprovalGroupDto {
-  id:        string;
-  name:      string;
-  entityType: string;
-  levels:    ApprovalLevelDto[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-// Mirrors com.nubeero.cia.setup.approval.dto.ApprovalGroupResponse.ApprovalLevelResponse.
-// One approver per level (not an array). Backend infers the min-amount band
-// for each level from the previous level's maxAmount, so only maxAmount is
-// stored per row.
-export interface ApprovalLevelDto {
-  id:             string;
-  levelOrder:     number;
-  approverUserId: string;
-  approverName:   string;
-  maxAmount:      number;
-}
+export const ApprovalGroupDtoSchema = z.object({
+  id:         z.string(),
+  name:       z.string(),
+  entityType: z.string(),
+  levels:     z.array(ApprovalLevelDtoSchema),
+  createdAt:  z.string(),
+  updatedAt:  z.string(),
+});
+export type ApprovalGroupDto = z.infer<typeof ApprovalGroupDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.product.dto.ProductSectionResponse 1:1.
 // Used for multi-risk products that have multiple coverage sections each
 // with their own rate. Surfaced on ProductDto.sections in Session 97 /
 // Backlog A1.
-export interface ProductSectionDto {
-  id:      string;
-  name:    string;
-  code:    string;
-  rate:    number;
-  orderNo: number;
-}
+export const ProductSectionDtoSchema = z.object({
+  id:      z.string(),
+  name:    z.string(),
+  code:    z.string(),
+  rate:    z.number(),
+  orderNo: z.number(),
+});
+export type ProductSectionDto = z.infer<typeof ProductSectionDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.product.dto.ProductResponse 1:1.
 // Earlier carried `status: ACTIVE|INACTIVE` (backend exposes `active: boolean`)
@@ -118,33 +124,35 @@ export interface ProductSectionDto {
 // CommissionSourceType — never on the Product row). Jackson silently dropped
 // both fields on the way in; renderers showed `undefined%` once products
 // existed. Aligned in Session 84. `sections` added in Session 97 / Backlog A1.
-export interface ProductDto {
-  id:                  string;
-  name:                string;
-  code:                string;
-  classOfBusinessId:   string;
-  classOfBusinessName: string;
-  type:                'SINGLE_RISK' | 'MULTI_RISK';
-  rate:                number;
-  minPremium:          number;
-  active:              boolean;
-  sections?:           ProductSectionDto[] | null;
-  createdAt:           string;
-  updatedAt?:          string | null;
-}
+export const ProductDtoSchema = z.object({
+  id:                  z.string(),
+  name:                z.string(),
+  code:                z.string(),
+  classOfBusinessId:   z.string(),
+  classOfBusinessName: z.string(),
+  type:                z.enum(['SINGLE_RISK', 'MULTI_RISK']),
+  rate:                z.number(),
+  minPremium:          z.number(),
+  active:              z.boolean(),
+  sections:            z.array(ProductSectionDtoSchema).nullable().optional(),
+  createdAt:           z.string(),
+  updatedAt:           z.string().nullable().optional(),
+});
+export type ProductDto = z.infer<typeof ProductDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.product.dto.ClassOfBusinessResponse 1:1.
 // `products` was previously a UI-side product count that the backend never
 // shipped; removed because no consumer referenced it. Description + audit
 // timestamps added in Session 97 / Backlog A1.
-export interface ClassOfBusinessDto {
-  id:           string;
-  name:         string;
-  code:         string;
-  description?: string | null;
-  createdAt:    string;
-  updatedAt:    string;
-}
+export const ClassOfBusinessDtoSchema = z.object({
+  id:          z.string(),
+  name:        z.string(),
+  code:        z.string(),
+  description: z.string().nullable().optional(),
+  createdAt:   z.string(),
+  updatedAt:   z.string(),
+});
+export type ClassOfBusinessDto = z.infer<typeof ClassOfBusinessDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.product.CommissionSourceType (Session 84 / V50).
 // AGENT — NAICOM-licensed agent representing the insurer.
@@ -170,96 +178,105 @@ export interface CommissionSetupDto {
 // Previously carried `status` + `contactPerson` which the backend never accepted
 // (Jackson silently dropped them on the way in). Now matches the entity 1:1.
 // V49 added the optional `licenseNumber` field — NAICOM broker licence.
-export interface BrokerDto {
-  id:             string;
-  name:           string;
-  code:           string;
-  rcNumber?:      string | null;
-  /** NAICOM broker licence number (V49). */
-  licenseNumber?: string | null;
-  address?:       string | null;
-  email?:         string | null;
-  phone?:         string | null;
-  createdAt:      string;
-  updatedAt?:     string | null;
-}
+export const BrokerDtoSchema = z.object({
+  id:            z.string(),
+  name:          z.string(),
+  code:          z.string(),
+  rcNumber:      z.string().nullable().optional(),
+  // NAICOM broker licence number (V49).
+  licenseNumber: z.string().nullable().optional(),
+  address:       z.string().nullable().optional(),
+  email:         z.string().nullable().optional(),
+  phone:         z.string().nullable().optional(),
+  createdAt:     z.string(),
+  updatedAt:     z.string().nullable().optional(),
+});
+export type BrokerDto = z.infer<typeof BrokerDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.org.dto.BranchResponse.
-export interface BranchDto {
-  id:         string;
-  name:       string;
-  code:       string;
-  sbuId?:     string | null;
-  sbuName?:   string | null;
-  address?:   string | null;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const BranchDtoSchema = z.object({
+  id:        z.string(),
+  name:      z.string(),
+  code:      z.string(),
+  sbuId:     z.string().nullable().optional(),
+  sbuName:   z.string().nullable().optional(),
+  address:   z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type BranchDto = z.infer<typeof BranchDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.org.dto.SbuResponse.
-export interface SbuDto {
-  id:         string;
-  name:       string;
-  code:       string;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const SbuDtoSchema = z.object({
+  id:        z.string(),
+  name:      z.string(),
+  code:      z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type SbuDto = z.infer<typeof SbuDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.vehicle.dto.VehicleMakeResponse.
-export interface VehicleMakeDto {
-  id:         string;
-  name:       string;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const VehicleMakeDtoSchema = z.object({
+  id:        z.string(),
+  name:      z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type VehicleMakeDto = z.infer<typeof VehicleMakeDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.vehicle.dto.VehicleTypeResponse.
-export interface VehicleTypeDto {
-  id:         string;
-  name:       string;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const VehicleTypeDtoSchema = z.object({
+  id:        z.string(),
+  name:      z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type VehicleTypeDto = z.infer<typeof VehicleTypeDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.vehicle.dto.VehicleModelResponse.
 // Nested under a make: makeId + denormalised makeName.
-export interface VehicleModelDto {
-  id:         string;
-  name:       string;
-  makeId:     string;
-  makeName:   string;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const VehicleModelDtoSchema = z.object({
+  id:        z.string(),
+  name:      z.string(),
+  makeId:    z.string(),
+  makeName:  z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type VehicleModelDto = z.infer<typeof VehicleModelDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.loss.dto.ClaimReserveCategoryResponse.
-export interface ClaimReserveCategoryDto {
-  id:         string;
-  name:       string;
-  code:       string;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const ClaimReserveCategoryDtoSchema = z.object({
+  id:        z.string(),
+  name:      z.string(),
+  code:      z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type ClaimReserveCategoryDto = z.infer<typeof ClaimReserveCategoryDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.loss.dto.NatureOfLossResponse.
-export interface NatureOfLossDto {
-  id:         string;
-  name:       string;
-  code:       string;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const NatureOfLossDtoSchema = z.object({
+  id:        z.string(),
+  name:      z.string(),
+  code:      z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type NatureOfLossDto = z.infer<typeof NatureOfLossDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.loss.dto.CauseOfLossResponse. FK-linked to a nature.
-export interface CauseOfLossDto {
-  id:               string;
-  name:             string;
-  code:             string;
-  natureOfLossId:   string;
-  natureOfLossName: string;
-  createdAt:        string;
-  updatedAt?:       string | null;
-}
+export const CauseOfLossDtoSchema = z.object({
+  id:               z.string(),
+  name:             z.string(),
+  code:             z.string(),
+  natureOfLossId:   z.string(),
+  natureOfLossName: z.string(),
+  createdAt:        z.string(),
+  updatedAt:        z.string().nullable().optional(),
+});
+export type CauseOfLossDto = z.infer<typeof CauseOfLossDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.product.dto.ClaimNotificationTimelineResponse (per-product singleton).
 export interface ClaimNotificationTimelineDto {
@@ -271,59 +288,63 @@ export interface ClaimNotificationTimelineDto {
 }
 
 // Mirrors com.nubeero.cia.setup.product.dto.ClaimDocumentRequirementResponse (per-product list row).
-export interface ClaimDocumentRequirementDto {
-  id:           string;
-  productId:    string;
-  documentName: string;
-  mandatory:    boolean;
-  documentType: string;
-  createdAt:    string;
-  updatedAt?:   string | null;
-}
+export const ClaimDocumentRequirementDtoSchema = z.object({
+  id:           z.string(),
+  productId:    z.string(),
+  documentName: z.string(),
+  mandatory:    z.boolean(),
+  documentType: z.string(),
+  createdAt:    z.string(),
+  updatedAt:    z.string().nullable().optional(),
+});
+export type ClaimDocumentRequirementDto = z.infer<typeof ClaimDocumentRequirementDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.org.dto.ReinsuranceCompanyResponse.
-export interface ReinsuranceCompanyDto {
-  id:         string;
-  name:       string;
-  rcNumber?:  string | null;
-  address?:   string | null;
-  email?:     string | null;
-  phone?:     string | null;
-  country:    string;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const ReinsuranceCompanyDtoSchema = z.object({
+  id:        z.string(),
+  name:      z.string(),
+  rcNumber:  z.string().nullable().optional(),
+  address:   z.string().nullable().optional(),
+  email:     z.string().nullable().optional(),
+  phone:     z.string().nullable().optional(),
+  country:   z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type ReinsuranceCompanyDto = z.infer<typeof ReinsuranceCompanyDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.org.dto.RelationshipManagerResponse.
 // V46 added the FK on customers.relationship_manager_id; CustomerService
 // denormalises `relationshipManagerName` into customer responses.
-export interface RelationshipManagerDto {
-  id:         string;
-  name:       string;
-  email?:     string | null;
-  phone?:     string | null;
-  branchId?:  string | null;
-  branchName?: string | null;
-  createdAt:  string;
-  updatedAt?: string | null;
-}
+export const RelationshipManagerDtoSchema = z.object({
+  id:         z.string(),
+  name:       z.string(),
+  email:      z.string().nullable().optional(),
+  phone:      z.string().nullable().optional(),
+  branchId:   z.string().nullable().optional(),
+  branchName: z.string().nullable().optional(),
+  createdAt:  z.string(),
+  updatedAt:  z.string().nullable().optional(),
+});
+export type RelationshipManagerDto = z.infer<typeof RelationshipManagerDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.org.AdjusterType (V45).
 export type AdjusterType = 'INTERNAL' | 'EXTERNAL';
 
 // Mirrors com.nubeero.cia.setup.org.dto.AdjusterResponse (V45).
-export interface AdjusterDto {
-  id:             string;
-  name:           string;
-  code:           string;
-  type:           AdjusterType;
-  licenseNumber?: string | null;
-  email?:         string | null;
-  phone?:         string | null;
-  address?:       string | null;
-  createdAt:      string;
-  updatedAt?:     string | null;
-}
+export const AdjusterDtoSchema = z.object({
+  id:            z.string(),
+  name:          z.string(),
+  code:          z.string(),
+  type:          z.enum(['INTERNAL', 'EXTERNAL']),
+  licenseNumber: z.string().nullable().optional(),
+  email:         z.string().nullable().optional(),
+  phone:         z.string().nullable().optional(),
+  address:       z.string().nullable().optional(),
+  createdAt:     z.string(),
+  updatedAt:     z.string().nullable().optional(),
+});
+export type AdjusterDto = z.infer<typeof AdjusterDtoSchema>;
 
 // Mirrors com.nubeero.cia.setup.org.AgentType (V48). Agents represent the
 // INSURER and earn commission on policies sold, distinct from Brokers
@@ -331,34 +352,36 @@ export interface AdjusterDto {
 export type AgentType = 'INDIVIDUAL' | 'CORPORATE';
 
 // Mirrors com.nubeero.cia.setup.org.dto.AgentResponse (V48).
-export interface AgentDto {
-  id:             string;
-  name:           string;
-  code:           string;
-  type:           AgentType;
-  licenseNumber?: string | null;
-  email?:         string | null;
-  phone?:         string | null;
-  address?:       string | null;
-  createdAt:      string;
-  updatedAt?:     string | null;
-}
+export const AgentDtoSchema = z.object({
+  id:            z.string(),
+  name:          z.string(),
+  code:          z.string(),
+  type:          z.enum(['INDIVIDUAL', 'CORPORATE']),
+  licenseNumber: z.string().nullable().optional(),
+  email:         z.string().nullable().optional(),
+  phone:         z.string().nullable().optional(),
+  address:       z.string().nullable().optional(),
+  createdAt:     z.string(),
+  updatedAt:     z.string().nullable().optional(),
+});
+export type AgentDto = z.infer<typeof AgentDtoSchema>;
 
 // Policy clause bank (V72). Mirrors com.nubeero.cia.setup.policy.* enums.
 export type ClauseType          = 'STANDARD' | 'EXCLUSION' | 'SPECIAL_CONDITION' | 'WARRANTY';
 export type ClauseApplicability = 'MANDATORY' | 'OPTIONAL';
 
 // Mirrors com.nubeero.cia.setup.policy.dto.ClauseResponse (V72).
-export interface ClauseDto {
-  id:            string;
-  title:         string;
-  text:          string;
-  type:          ClauseType;
-  applicability: ClauseApplicability;
-  productIds:    string[];
-  createdAt:     string;
-  updatedAt?:    string | null;
-}
+export const ClauseDtoSchema = z.object({
+  id:            z.string(),
+  title:         z.string(),
+  text:          z.string(),
+  type:          z.enum(['STANDARD', 'EXCLUSION', 'SPECIAL_CONDITION', 'WARRANTY']),
+  applicability: z.enum(['MANDATORY', 'OPTIONAL']),
+  productIds:    z.array(z.string()),
+  createdAt:     z.string(),
+  updatedAt:     z.string().nullable().optional(),
+});
+export type ClauseDto = z.infer<typeof ClauseDtoSchema>;
 
 // ClauseSnapshotDto (the frozen snapshot on quotes/policies) is defined canonically in ./policy.
 
@@ -388,30 +411,32 @@ export interface CurrencyDto {
 // Mirrors com.nubeero.cia.setup.org.dto.SurveyorResponse.
 export type SurveyorType = 'INTERNAL' | 'EXTERNAL';
 
-export interface SurveyorDto {
-  id:             string;
-  name:           string;
-  type:           SurveyorType;
-  licenseNumber?: string | null;
-  email?:         string | null;
-  phone?:         string | null;
-  createdAt:      string;
-  updatedAt?:     string | null;
-}
+export const SurveyorDtoSchema = z.object({
+  id:            z.string(),
+  name:          z.string(),
+  type:          z.enum(['INTERNAL', 'EXTERNAL']),
+  licenseNumber: z.string().nullable().optional(),
+  email:         z.string().nullable().optional(),
+  phone:         z.string().nullable().optional(),
+  createdAt:     z.string(),
+  updatedAt:     z.string().nullable().optional(),
+});
+export type SurveyorDto = z.infer<typeof SurveyorDtoSchema>;
 
 // Used by policy/coinsurance for the participant picker.
 // Mirrors com.nubeero.cia.setup.org.dto.InsuranceCompanyResponse.
-export interface InsuranceCompanyDto {
-  id:             string;
-  name:           string;
-  rcNumber?:      string | null;
-  naicomLicense?: string | null;
-  address?:       string | null;
-  email?:         string | null;
-  phone?:         string | null;
-  createdAt:      string;
-  updatedAt?:     string | null;
-}
+export const InsuranceCompanyDtoSchema = z.object({
+  id:            z.string(),
+  name:          z.string(),
+  rcNumber:      z.string().nullable().optional(),
+  naicomLicense: z.string().nullable().optional(),
+  address:       z.string().nullable().optional(),
+  email:         z.string().nullable().optional(),
+  phone:         z.string().nullable().optional(),
+  createdAt:     z.string(),
+  updatedAt:     z.string().nullable().optional(),
+});
+export type InsuranceCompanyDto = z.infer<typeof InsuranceCompanyDtoSchema>;
 
 // ── Notification Templates (F7-δ / R7 — Setup → Notification Templates tab) ─
 //

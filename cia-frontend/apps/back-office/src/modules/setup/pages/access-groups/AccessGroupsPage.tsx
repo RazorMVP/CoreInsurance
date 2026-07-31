@@ -5,7 +5,8 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type AccessGroupDto } from '@cia/api-client';
+import { z } from 'zod';
+import { validatedGet, AccessGroupDtoSchema, type AccessGroupDto } from '@cia/api-client';
 import { useDeleteWithReason } from '@/lib/use-delete-with-reason';
 import AccessGroupSheet from './AccessGroupSheet';
 
@@ -24,10 +25,7 @@ export default function AccessGroupsPage() {
 
   const groupsQuery = useQuery<AccessGroupDto[]>({
     queryKey: ['setup', 'access-groups'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: AccessGroupDto[] }>('/api/v1/setup/access-groups');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/setup/access-groups', z.array(AccessGroupDtoSchema)),
   });
   const groups = groupsQuery.data ?? [];
 

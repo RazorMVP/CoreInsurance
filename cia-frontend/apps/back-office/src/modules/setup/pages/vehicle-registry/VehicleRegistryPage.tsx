@@ -6,9 +6,11 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
+import { z } from 'zod';
 import { useDeleteWithReason } from '@/lib/use-delete-with-reason';
 import {
-  apiClient,
+  validatedGet,
+  VehicleMakeDtoSchema, VehicleTypeDtoSchema, VehicleModelDtoSchema,
   type VehicleMakeDto, type VehicleTypeDto, type VehicleModelDto,
 } from '@cia/api-client';
 import VehicleMakeSheet from './VehicleMakeSheet';
@@ -29,7 +31,7 @@ function MakesTab() {
 
   const query = useQuery<VehicleMakeDto[]>({
     queryKey: ['setup', 'vehicle-makes'],
-    queryFn: async () => (await apiClient.get<{ data: VehicleMakeDto[] }>('/api/v1/setup/vehicle-makes')).data.data,
+    queryFn: () => validatedGet('/api/v1/setup/vehicle-makes', z.array(VehicleMakeDtoSchema)),
   });
   const rows = query.data ?? [];
 
@@ -71,7 +73,7 @@ function TypesTab() {
 
   const query = useQuery<VehicleTypeDto[]>({
     queryKey: ['setup', 'vehicle-types'],
-    queryFn: async () => (await apiClient.get<{ data: VehicleTypeDto[] }>('/api/v1/setup/vehicle-types')).data.data,
+    queryFn: () => validatedGet('/api/v1/setup/vehicle-types', z.array(VehicleTypeDtoSchema)),
   });
   const rows = query.data ?? [];
 
@@ -108,7 +110,7 @@ function ModelsTab() {
 
   const makesQuery = useQuery<VehicleMakeDto[]>({
     queryKey: ['setup', 'vehicle-makes'],
-    queryFn: async () => (await apiClient.get<{ data: VehicleMakeDto[] }>('/api/v1/setup/vehicle-makes')).data.data,
+    queryFn: () => validatedGet('/api/v1/setup/vehicle-makes', z.array(VehicleMakeDtoSchema)),
   });
   const makes = makesQuery.data ?? [];
   const makeName = makes.find((m) => m.id === makeId)?.name ?? '';
@@ -123,7 +125,7 @@ function ModelsTab() {
   const modelsQuery = useQuery<VehicleModelDto[]>({
     queryKey: ['setup', 'vehicle-models', makeId],
     enabled: !!makeId,
-    queryFn: async () => (await apiClient.get<{ data: VehicleModelDto[] }>(`/api/v1/setup/vehicle-makes/${makeId}/models`)).data.data,
+    queryFn: () => validatedGet(`/api/v1/setup/vehicle-makes/${makeId}/models`, z.array(VehicleModelDtoSchema)),
   });
   const rows = modelsQuery.data ?? [];
 
