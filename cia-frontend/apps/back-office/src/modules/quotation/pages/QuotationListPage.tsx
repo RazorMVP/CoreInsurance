@@ -7,7 +7,8 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type QuoteSummaryDto } from '@cia/api-client';
+import { z } from 'zod';
+import { apiClient, validatedGet, QuoteSummaryDtoSchema, type QuoteSummaryDto } from '@cia/api-client';
 import { formatNaira } from '@/lib/format';
 import SingleRiskQuoteSheet from './create/SingleRiskQuoteSheet';
 import MultiRiskQuoteSheet  from './create/MultiRiskQuoteSheet';
@@ -29,10 +30,7 @@ export default function QuotationListPage() {
 
   const quotesQuery = useQuery<QuoteSummaryDto[]>({
     queryKey: ['quotes'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: QuoteSummaryDto[] }>('/api/v1/quotes');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/quotes', z.array(QuoteSummaryDtoSchema)),
   });
   const quotes = quotesQuery.data ?? [];
 
