@@ -71,6 +71,13 @@
          carrying all fixes (drop-in, no API change). Override here, same
          mechanism as tomcat/netty/postgresql above. -->
     <spring-framework.version>6.2.19</spring-framework.version>
+    <!-- spring-data-bom is a Boot BOM property too: the 3.5.14 BOM pins the
+         Spring Data 2025.0.11 release train (spring-data-commons 3.5.11), which
+         CVE-2026-41695 (Spring Data Commons DoS, HIGH) flags. The 2025.0.12
+         train ships spring-data-commons 3.5.12 with the fix (same-line patch,
+         drop-in, no API change). Override here, same mechanism as the other
+         Boot-BOM-property pins above. -->
+    <spring-data-bom.version>2025.0.12</spring-data-bom.version>
     <!-- jackson-bom is a Boot BOM property too: the 3.5.14 BOM pins jackson
          2.21.2, which two 2026-06 HIGH CVEs flag — CVE-2026-54512
          (PolymorphicTypeValidator bypass) + CVE-2026-54513 (array subtype
