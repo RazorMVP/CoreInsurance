@@ -59,6 +59,16 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-08-03 — CVE bump: Spring Data Commons 3.5.12 (`chore/cve-spring-data-commons-3.5.12`)
+
+Third time-based CVE-drift bump surfaced by the enforcing backend-image Trivy gate — this one on the S4a-2 PR (#58), orthogonal to that FE-only slice (an FE diff can't alter backend image contents), split into a dedicated backend slice per the established pattern (PRs #51, #56). Trivy flagged **1 HIGH**: CVE-2026-41695 (Spring Data Commons DoS) against `spring-data-commons` 3.5.11 — the version the Boot 3.5.14 BOM's Spring Data 2025.0.11 release train pins.
+
+Fix: added `<spring-data-bom.version>2025.0.12</spring-data-bom.version>` to the parent pom `<properties>`. `spring-data-bom.version` is a Boot BOM property (verified: it resolved to 2025.0.11 before, 2025.0.12 after); the 2025.0.12 release train ships `spring-data-commons` 3.5.12 with the fix (same-line patch, drop-in, no API change) — same mechanism as the existing tomcat/netty/postgresql/jackson-bom/spring-framework pins. Backend reactor (Testcontainers) + Trivy re-scan in CI are the confirming gates.
+
+**Known follow-ups (backlog reconciliation).** No rows added or removed — recurring time-based CVE hygiene (the enforcing `backend-image.yml` Trivy gate fails any PR opened after a new HIGH/CRITICAL is disclosed against a pinned dep; each occurrence is a small property-bump slice). Third instance in ~10 days (netty/pgjdbc → spring-framework → spring-data-commons).
+
+---
+
 ## 2026-08-01 — Category-C FE gaps: Slice 4a-2 — validatedGet sweep, core transaction lists (`feat/fe-gaps-s4a2-validatedget-core-lists`)
 
 Second execution slice of S4 (`raw-apiclient-list-validatedget-sweep`), after S4a-1 (Setup cluster, PR #55). Migrated the four core transaction list pages off raw `apiClient.get(...).then(r => r.data.data)` onto `validatedGet(url, z.array(XSchema))`. Plan: `docs/superpowers/plans/2026-08-01-s4a2-validatedget-core-lists.md`. FE-only; no backend change.
