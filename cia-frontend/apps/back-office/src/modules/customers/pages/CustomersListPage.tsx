@@ -7,12 +7,13 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient, customerLabel, type CustomerDto } from '@cia/api-client';
+import { z } from 'zod';
+import { apiClient, validatedGet, CustomerSummaryDtoSchema, type CustomerSummaryDto } from '@cia/api-client';
 import IndividualOnboardingSheet from './individual/IndividualOnboardingSheet';
 import CorporateOnboardingSheet from './corporate/CorporateOnboardingSheet';
 
-const kycVariant: Record<CustomerDto['kycStatus'], 'active' | 'pending' | 'rejected'> = { VERIFIED: 'active', PENDING: 'pending', FAILED: 'rejected', RESUBMIT: 'pending' };
-const statusVariant: Record<CustomerDto['customerStatus'], 'active' | 'draft' | 'rejected'> = { ACTIVE: 'active', INACTIVE: 'draft', BLACKLISTED: 'rejected' };
+const kycVariant: Record<CustomerSummaryDto['kycStatus'], 'active' | 'pending' | 'rejected'> = { VERIFIED: 'active', PENDING: 'pending', FAILED: 'rejected', RESUBMIT: 'pending' };
+const statusVariant: Record<CustomerSummaryDto['customerStatus'], 'active' | 'draft' | 'rejected'> = { ACTIVE: 'active', INACTIVE: 'draft', BLACKLISTED: 'rejected' };
 
 export default function CustomersListPage() {
   const navigate = useNavigate();
@@ -22,14 +23,11 @@ export default function CustomersListPage() {
   // Blacklist confirmation — POST /api/v1/customers/{id}/blacklist with a
   // mandatory reason. Re-uses ConfirmDeleteDialog because the reason-required
   // shape is identical; the action is destructive even though it's not a delete.
-  const [blacklistTarget, setBlacklistTarget] = useState<CustomerDto | null>(null);
+  const [blacklistTarget, setBlacklistTarget] = useState<CustomerSummaryDto | null>(null);
 
-  const customersQuery = useQuery<CustomerDto[]>({
+  const customersQuery = useQuery<CustomerSummaryDto[]>({
     queryKey: ['customers'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: CustomerDto[] }>('/api/v1/customers');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/customers', z.array(CustomerSummaryDtoSchema)),
   });
   const customers = customersQuery.data ?? [];
 
@@ -47,17 +45,17 @@ export default function CustomersListPage() {
     },
   });
 
-  const columns: ColumnDef<CustomerDto>[] = [
+  const columns: ColumnDef<CustomerSummaryDto>[] = [
     {
       id: 'name',
-      accessorFn: (row) => customerLabel(row),
+      accessorFn: (row) => row.displayName,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Customer" />,
       cell: ({ row }) => (
         <button
           className="text-left hover:underline"
           onClick={() => navigate(`/customers/${row.original.id}`)}
         >
-          <p className="font-medium text-foreground">{customerLabel(row.original)}</p>
+          <p className="font-medium text-foreground">{row.original.displayName}</p>
           <p className="text-xs text-muted-foreground font-mono">{row.original.customerNumber}</p>
         </button>
       ),
@@ -70,12 +68,12 @@ export default function CustomersListPage() {
     {
       accessorKey: 'kycStatus',
       header: ({ column }) => <DataTableColumnHeader column={column} title="KYC" />,
-      cell: ({ getValue }) => { const s = getValue() as CustomerDto['kycStatus']; return <Badge variant={kycVariant[s]}>{s.toLowerCase()}</Badge>; },
+      cell: ({ getValue }) => { const s = getValue() as CustomerSummaryDto['kycStatus']; return <Badge variant={kycVariant[s]}>{s.toLowerCase()}</Badge>; },
     },
     {
       accessorKey: 'customerStatus',
       header: 'Status',
-      cell: ({ getValue }) => { const s = getValue() as CustomerDto['customerStatus']; return <Badge variant={statusVariant[s]}>{s.toLowerCase()}</Badge>; },
+      cell: ({ getValue }) => { const s = getValue() as CustomerSummaryDto['customerStatus']; return <Badge variant={statusVariant[s]}>{s.toLowerCase()}</Badge>; },
     },
     {
       accessorKey: 'createdAt',
@@ -95,7 +93,7 @@ export default function CustomersListPage() {
             { label: 'Update KYC',   onClick: (r) => navigate(`/customers/${r.original.id}`) },
             ...(isBlacklisted ? [] : [{
               label: 'Blacklist',
-              onClick: (r: { original: CustomerDto }) => setBlacklistTarget(r.original),
+              onClick: (r: { original: CustomerSummaryDto }) => setBlacklistTarget(r.original),
               separator: true,
               className: 'text-destructive',
             }]),
@@ -135,7 +133,7 @@ export default function CustomersListPage() {
         open={blacklistTarget !== null}
         onOpenChange={(v) => { if (!v) setBlacklistTarget(null); }}
         entityLabel="Blacklist customer"
-        entityName={blacklistTarget ? customerLabel(blacklistTarget) : undefined}
+        entityName={blacklistTarget ? blacklistTarget.displayName : undefined}
         busy={blacklist.isPending}
         onConfirm={(reason) => { if (blacklistTarget) blacklist.mutate({ id: blacklistTarget.id, reason }); }}
       />

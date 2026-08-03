@@ -1,5 +1,7 @@
 // ── Endorsements — DTOs ───────────────────────────────────────────────────
 
+import { z } from 'zod';
+
 export type EndorsementStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
 export type EndorsementType =
   | 'RENEWAL'
@@ -27,51 +29,53 @@ export const ENDORSEMENT_TYPE_LABELS: Record<EndorsementType, string> = {
 };
 
 // Mirror of EndorsementRiskResponse (cia-endorsement.dto).
-export interface EndorsementRiskDto {
-  id:                string;
-  description:       string;
-  sumInsured:        number;
-  premium:           number;
-  sectionId:         string | null;
-  sectionName:       string | null;
-  riskDetails:       Record<string, unknown> | null;
-  vehicleRegNumber:  string | null;
-  orderNo:           number;
-}
+export const EndorsementRiskDtoSchema = z.object({
+  id:               z.string(),
+  description:      z.string(),
+  sumInsured:       z.number(),
+  premium:          z.number(),
+  sectionId:        z.string().nullable(),
+  sectionName:      z.string().nullable(),
+  riskDetails:      z.record(z.string(), z.unknown()).nullable(),
+  vehicleRegNumber: z.string().nullable(),
+  orderNo:          z.number(),
+});
+export type EndorsementRiskDto = z.infer<typeof EndorsementRiskDtoSchema>;
 
 // Mirror of EndorsementResponse (cia-endorsement.dto) 1:1.
 // The old-vs-new diff lives in (oldSumInsured / newSumInsured / oldNetPremium /
 // newNetPremium / premiumAdjustment). premiumAdjustment is the signed pro-rata
 // delta — negative means a credit note will be raised on approval.
-export interface EndorsementDto {
-  id:                  string;
-  endorsementNumber:   string;
-  status:              EndorsementStatus;
-  endorsementType:     EndorsementType;
-  policyId:            string;
-  policyNumber:        string;
-  customerId:          string;
-  customerName:        string;
-  productName:         string;
-  classOfBusinessName: string;
-  brokerId:            string | null;
-  brokerName:          string | null;
-  effectiveDate:       string;
-  policyEndDate:       string;
-  remainingDays:       number;
-  oldSumInsured:       number;
-  newSumInsured:       number;
-  oldNetPremium:       number;
-  newNetPremium:       number;
-  premiumAdjustment:   number;
-  currencyCode:        string;
-  description:         string | null;
-  notes:               string | null;
-  approvedBy:          string | null;
-  approvedAt:          string | null;
-  rejectedBy:          string | null;
-  rejectedAt:          string | null;
-  rejectionReason:     string | null;
-  createdAt:           string;
-  risks:               EndorsementRiskDto[];
-}
+export const EndorsementDtoSchema = z.object({
+  id:                  z.string(),
+  endorsementNumber:   z.string(),
+  status:              z.enum(['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED']),
+  endorsementType:     z.enum(['RENEWAL', 'EXTENSION', 'CANCELLATION', 'REVERSAL', 'REDUCTION', 'CHANGE_PERIOD', 'INCREASE_SI', 'DECREASE_SI', 'ADD_ITEMS', 'DELETE_ITEMS']),
+  policyId:            z.string(),
+  policyNumber:        z.string(),
+  customerId:          z.string(),
+  customerName:        z.string(),
+  productName:         z.string(),
+  classOfBusinessName: z.string(),
+  brokerId:            z.string().nullable(),
+  brokerName:          z.string().nullable(),
+  effectiveDate:       z.string(),
+  policyEndDate:       z.string(),
+  remainingDays:       z.number(),
+  oldSumInsured:       z.number(),
+  newSumInsured:       z.number(),
+  oldNetPremium:       z.number(),
+  newNetPremium:       z.number(),
+  premiumAdjustment:   z.number(),
+  currencyCode:        z.string(),
+  description:         z.string().nullable(),
+  notes:               z.string().nullable(),
+  approvedBy:          z.string().nullable(),
+  approvedAt:          z.string().nullable(),
+  rejectedBy:          z.string().nullable(),
+  rejectedAt:          z.string().nullable(),
+  rejectionReason:     z.string().nullable(),
+  createdAt:           z.string(),
+  risks:               z.array(EndorsementRiskDtoSchema),
+});
+export type EndorsementDto = z.infer<typeof EndorsementDtoSchema>;

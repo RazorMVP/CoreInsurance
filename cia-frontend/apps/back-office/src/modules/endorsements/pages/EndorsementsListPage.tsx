@@ -6,7 +6,8 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, ENDORSEMENT_TYPE_LABELS, type EndorsementDto } from '@cia/api-client';
+import { z } from 'zod';
+import { validatedGet, EndorsementDtoSchema, ENDORSEMENT_TYPE_LABELS, type EndorsementDto } from '@cia/api-client';
 import { formatNaira } from '@/lib/format';
 import CreateEndorsementSheet from './create/CreateEndorsementSheet';
 
@@ -23,10 +24,7 @@ export default function EndorsementsListPage() {
 
   const endorsementsQuery = useQuery<EndorsementDto[]>({
     queryKey: ['endorsements'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: EndorsementDto[] }>('/api/v1/endorsements');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/endorsements', z.array(EndorsementDtoSchema)),
   });
   const endorsements = endorsementsQuery.data ?? [];
 

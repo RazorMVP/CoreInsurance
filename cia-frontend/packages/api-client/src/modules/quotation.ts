@@ -11,7 +11,9 @@
 // Added supporting types: AdjustmentEntryDto (for per-risk + quote-level
 // loadings/discounts), QuoteCoinsuranceParticipantDto, AdjustmentFormat enum.
 
+import { z } from 'zod';
 import type { BusinessType, ClauseSnapshotDto } from './policy';
+import { BusinessTypeSchema } from './policy';
 
 export type QuoteStatus      = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'CONVERTED' | 'EXPIRED';
 export type AdjustmentFormat = 'PERCENT' | 'FLAT';
@@ -131,21 +133,22 @@ export interface QuoteDto {
  * and omits risks/clauses/adjustments. List pages MUST bind to this type — using
  * `QuoteDto` lets TS believe fields exist that the summary payload never sends.
  */
-export interface QuoteSummaryDto {
-  id:                  string;
-  quoteNumber:         string;
-  status:              QuoteStatus;
-  customerId:          string;
-  customerName:        string;
-  productName:         string;
-  classOfBusinessName: string;
-  brokerName?:         string | null;
-  agentName?:          string | null;
-  businessType:        BusinessType;
-  policyStartDate:     string;
-  policyEndDate:       string;
-  totalSumInsured:     number;
-  netPremium:          number;
-  expiresAt?:          string | null;
-  createdAt:           string;
-}
+export const QuoteSummaryDtoSchema = z.object({
+  id:                  z.string(),
+  quoteNumber:         z.string(),
+  status:              z.enum(['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED', 'CONVERTED', 'EXPIRED']),
+  customerId:          z.string(),
+  customerName:        z.string(),
+  productName:         z.string(),
+  classOfBusinessName: z.string(),
+  brokerName:          z.string().nullable().optional(),
+  agentName:           z.string().nullable().optional(),
+  businessType:        BusinessTypeSchema,
+  policyStartDate:     z.string(),
+  policyEndDate:       z.string(),
+  totalSumInsured:     z.number(),
+  netPremium:          z.number(),
+  expiresAt:           z.string().nullable().optional(),
+  createdAt:           z.string(),
+});
+export type QuoteSummaryDto = z.infer<typeof QuoteSummaryDtoSchema>;

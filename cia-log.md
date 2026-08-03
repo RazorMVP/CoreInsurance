@@ -59,6 +59,22 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-08-01 — Category-C FE gaps: Slice 4a-2 — validatedGet sweep, core transaction lists (`feat/fe-gaps-s4a2-validatedget-core-lists`)
+
+Second execution slice of S4 (`raw-apiclient-list-validatedget-sweep`), after S4a-1 (Setup cluster, PR #55). Migrated the four core transaction list pages off raw `apiClient.get(...).then(r => r.data.data)` onto `validatedGet(url, z.array(XSchema))`. Plan: `docs/superpowers/plans/2026-08-01-s4a2-validatedget-core-lists.md`. FE-only; no backend change.
+
+- **T1 — Policy:** pure swap — `PolicySummaryDtoSchema` already existed; `PolicyListPage` → `validatedGet`, `apiClient` dropped.
+- **T2 — Quotation:** authored `QuoteSummaryDtoSchema` (`QuoteStatus` inlined; `businessType` reuses the exported `BusinessTypeSchema` from `./policy`); `QuotationListPage` list get → `validatedGet` (`apiClient` kept — convert-to-policy `.post`).
+- **T3 — Endorsement:** authored `EndorsementRiskDtoSchema` + `EndorsementDtoSchema` (`EndorsementStatus`/`EndorsementType` inlined; nested `risks: z.array(...)`; `riskDetails: z.record(z.string(), z.unknown()).nullable()`); `EndorsementsListPage` → `validatedGet`, `apiClient` dropped. The list endpoint returns the **full** `EndorsementResponse` (incl. risks), so the strict schema is correct.
+- **T4 — Customer (latent-bug fix):** the `/api/v1/customers` list returns the lean `CustomerSummaryResponse`, but `CustomersListPage` bound the **full** `CustomerDto` and labelled rows via `customerLabel()` — which reads `firstName`/`lastName`/`companyName`, fields **absent** from the summary response, so **customer names rendered blank**. Authored a new `CustomerSummaryDto` + `CustomerSummaryDtoSchema` (mirrors `CustomerSummaryResponse`, has `displayName`), rebound the page to it, and switched the label + blacklist-dialog name to `displayName`. `apiClient` kept (blacklist `.post`). This is the guard-blind-spot "list page over-claims its DTO" class the CLAUDE.md DTO-drift note calls out — surfaced by the migration, fixed in-flight (intrinsic to migrating Customer correctly).
+- **T5 — test:** `customers/core-lists-envelope-parse.test.ts` — asserts each schema rejects a Page-shaped payload, the endorsement nested `risks` parse, and `CustomerSummaryDtoSchema` requires `displayName`.
+
+**Drift coverage:** `check-dto-drift` Pattern 3 keeps every converted `z.infer` alias checked against its `*Response`; the new `CustomerSummaryDto`↔`CustomerSummaryResponse` maps cleanly. FE build (tsc + vite) + `check-api-wiring` + `check-dto-drift` green; full back-office Vitest **26/26** (11 files), coverage above all floors.
+
+**Known follow-ups (backlog reconciliation).** `raw-apiclient-list-validatedget-sweep` **stays open** — S4a-1 (Setup) + S4a-2 (core txn lists) have migrated the straightforward `*Dto`/`*SummaryDto` list pages; the row closes when **S4b** (report pages that bind *local* row interfaces — customer/endorsement report tables + the report hooks — needing schemas authored/hoisted into `@cia/api-client`) lands. No new rows. The Customer blank-name bug was closed in-flight (surfaced by, and intrinsic to, this slice — no separate row).
+
+---
+
 ## 2026-07-31 — CVE bump: Spring Framework 6.2.19 (`chore/cve-spring-framework-6.2.19`)
 
 Time-based CVE drift surfaced by the enforcing backend-image Trivy gate on the S4a-1 PR (#55) — orthogonal to that FE-only slice (an FE diff can't alter backend image contents), so it was split into this dedicated backend slice per the PR #50 precedent. A week after the netty/pgjdbc bump (PR #51), Trivy flagged **4 HIGH CVEs, all in Spring Framework 6.2.18** (the version Boot 3.5.14's BOM pins): CVE-2026-41850 (spring-expression SpEL DoS), CVE-2026-41842 (spring-webflux DoS), CVE-2026-41845 (reflected XSS), + one further Spring Framework HIGH — all fixed in **6.2.19**.

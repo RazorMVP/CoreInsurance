@@ -7,7 +7,8 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type PolicySummaryDto } from '@cia/api-client';
+import { z } from 'zod';
+import { validatedGet, PolicySummaryDtoSchema, type PolicySummaryDto } from '@cia/api-client';
 import CreatePolicySheet from './create/CreatePolicySheet';
 
 const statusVariant: Record<PolicySummaryDto['status'], 'active' | 'pending' | 'draft' | 'cancelled' | 'rejected'> = {
@@ -32,10 +33,7 @@ export default function PolicyListPage() {
 
   const policiesQuery = useQuery<PolicySummaryDto[]>({
     queryKey: ['policies'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: PolicySummaryDto[] }>('/api/v1/policies');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/policies', z.array(PolicySummaryDtoSchema)),
   });
   const policies = policiesQuery.data ?? [];
 

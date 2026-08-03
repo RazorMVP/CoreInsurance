@@ -1,5 +1,8 @@
 // ── Customer Onboarding — DTOs ────────────────────────────────────────────
 //
+// (zod imported for the summary-list schema; the detail DTOs remain plain
+//  interfaces mirrored against CustomerResponse.)
+//
 // Session 94 / Backlog A2: rewrote CustomerDto + CustomerDirectorDto to mirror
 // the backend response shape 1:1, removing the silent-drop projections
 // (`displayName`, `status` aliasing customerStatus, `brokerId`/`brokerName`
@@ -10,10 +13,32 @@
 // customer's name — replaces the old top-level `displayName` field that
 // Jackson silently dropped.
 
+import { z } from 'zod';
+
 export type CustomerType   = 'INDIVIDUAL' | 'CORPORATE';
 export type KycStatus      = 'PENDING' | 'VERIFIED' | 'FAILED' | 'RESUBMIT';
 export type CustomerStatus = 'ACTIVE' | 'INACTIVE' | 'BLACKLISTED';
 export type IdType         = 'NIN' | 'VOTERS_CARD' | 'DRIVERS_LICENSE' | 'PASSPORT';
+
+// Mirrors com.nubeero.cia.customer.dto.CustomerSummaryResponse — the lean row
+// the LIST endpoint (`GET /api/v1/customers`) returns. Distinct from the full
+// CustomerDto (the detail `GET /{id}` shape): the summary carries a server-built
+// `displayName` (there is no first/last/company on it), so the list page labels
+// rows via `displayName`, not `customerLabel(...)` (which needs full-DTO fields).
+export const CustomerSummaryDtoSchema = z.object({
+  id:                      z.string(),
+  customerNumber:          z.string(),
+  customerType:            z.enum(['INDIVIDUAL', 'CORPORATE']),
+  customerStatus:          z.enum(['ACTIVE', 'INACTIVE', 'BLACKLISTED']),
+  kycStatus:               z.enum(['PENDING', 'VERIFIED', 'FAILED', 'RESUBMIT']),
+  displayName:             z.string(),
+  email:                   z.string().nullable().optional(),
+  phone:                   z.string().nullable().optional(),
+  relationshipManagerId:   z.string().nullable().optional(),
+  relationshipManagerName: z.string().nullable().optional(),
+  createdAt:               z.string(),
+});
+export type CustomerSummaryDto = z.infer<typeof CustomerSummaryDtoSchema>;
 
 // Mirrors com.nubeero.cia.customer.dto.CustomerResponse 1:1.
 // Type-discriminated: individual fields are non-null when customerType is
