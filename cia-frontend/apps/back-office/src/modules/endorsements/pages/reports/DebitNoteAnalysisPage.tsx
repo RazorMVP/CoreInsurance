@@ -1,31 +1,35 @@
 import { useNavigate } from 'react-router-dom';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, PageHeader, Skeleton, StatCard } from '@cia/ui';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@cia/api-client';
+import { z } from 'zod';
+import { validatedGet } from '@cia/api-client';
 
-interface PeriodRow { period: string; endorsements: number; debits: number; credits: number; netPremium: number; }
-interface TypeRow   { type: string; count: number; totalPremium: number; }
+const PeriodRowSchema = z.object({
+  period:       z.string(),
+  endorsements: z.number(),
+  debits:       z.number(),
+  credits:      z.number(),
+  netPremium:   z.number(),
+});
+type PeriodRow = z.infer<typeof PeriodRowSchema>;
+
+const TypeRowSchema = z.object({
+  type:         z.string(),
+  count:        z.number(),
+  totalPremium: z.number(),
+});
+type TypeRow = z.infer<typeof TypeRowSchema>;
 
 export default function DebitNoteAnalysisPage() {
   const navigate = useNavigate();
 
   const byPeriodQuery = useQuery<PeriodRow[]>({
     queryKey: ['endorsements', 'reports', 'debit-note-by-period'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: PeriodRow[] }>(
-        '/api/v1/endorsements/reports/debit-note-by-period',
-      );
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/endorsements/reports/debit-note-by-period', z.array(PeriodRowSchema)),
   });
   const byTypeQuery = useQuery<TypeRow[]>({
     queryKey: ['endorsements', 'reports', 'debit-note-by-type'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: TypeRow[] }>(
-        '/api/v1/endorsements/reports/debit-note-by-type',
-      );
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/endorsements/reports/debit-note-by-type', z.array(TypeRowSchema)),
   });
   const byPeriod = byPeriodQuery.data ?? [];
   const byType   = byTypeQuery.data   ?? [];
