@@ -1,18 +1,20 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle, PageHeader, Skeleton, StatCard } from '@cia/ui';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@cia/api-client';
+import { z } from 'zod';
+import { validatedGet } from '@cia/api-client';
 
-interface LossRatioRow { class: string; premiums: number; claims: number; lossRatio: number; }
+const LossRatioRowSchema = z.object({
+  class:     z.string(),
+  premiums:  z.number(),
+  claims:    z.number(),
+  lossRatio: z.number(),
+});
+type LossRatioRow = z.infer<typeof LossRatioRowSchema>;
 
 export default function LossRatioReportPage() {
   const reportQuery = useQuery<LossRatioRow[]>({
     queryKey: ['customers', 'reports', 'loss-ratio-by-class'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: LossRatioRow[] }>(
-        '/api/v1/customers/reports/loss-ratio-by-class',
-      );
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/customers/reports/loss-ratio-by-class', z.array(LossRatioRowSchema)),
   });
   const data = reportQuery.data ?? [];
   const avgLossRatio = data.length ? (data.reduce((s, r) => s + r.lossRatio, 0) / data.length).toFixed(1) : '0.0';

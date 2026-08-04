@@ -1,18 +1,20 @@
 import { Card, CardContent, CardHeader, CardTitle, PageHeader, Skeleton, StatCard } from '@cia/ui';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@cia/api-client';
+import { z } from 'zod';
+import { validatedGet } from '@cia/api-client';
 
-interface ActiveCustomersRow { broker: string; individual: number; corporate: number; total: number; }
+const ActiveCustomersRowSchema = z.object({
+  broker:     z.string(),
+  individual: z.number(),
+  corporate:  z.number(),
+  total:      z.number(),
+});
+type ActiveCustomersRow = z.infer<typeof ActiveCustomersRowSchema>;
 
 export default function ActiveCustomersReportPage() {
   const reportQuery = useQuery<ActiveCustomersRow[]>({
     queryKey: ['customers', 'reports', 'active-by-channel'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: ActiveCustomersRow[] }>(
-        '/api/v1/customers/reports/active-by-channel',
-      );
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/customers/reports/active-by-channel', z.array(ActiveCustomersRowSchema)),
   });
   const data = reportQuery.data ?? [];
   const totalCustomers = data.reduce((s, r) => s + r.total, 0);
