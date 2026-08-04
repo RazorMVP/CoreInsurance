@@ -1,16 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@cia/api-client';
+import { z } from 'zod';
+import { apiClient, validatedGet } from '@cia/api-client';
+import { ReportAccessPolicySchema } from '../types/report.types';
 import type { ReportAccessPolicy } from '../types/report.types';
 
 export function useReportAccessPolicies(accessGroupId: string | undefined) {
   return useQuery<ReportAccessPolicy[]>({
     queryKey: ['reports', 'access-policies', accessGroupId],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: ReportAccessPolicy[] }>(
-        `/api/v1/reports/access-policies?accessGroupId=${accessGroupId}`
-      );
-      return res.data.data;
-    },
+    queryFn: () => validatedGet(
+      `/api/v1/reports/access-policies?accessGroupId=${accessGroupId}`,
+      z.array(ReportAccessPolicySchema),
+    ),
     enabled: !!accessGroupId,
   });
 }

@@ -1,16 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@cia/api-client';
+import { z } from 'zod';
+import { apiClient, validatedGet } from '@cia/api-client';
+import { ReportDefinitionSchema } from '../types/report.types';
 import type { ReportCategory, ReportDefinition } from '../types/report.types';
 
 export function useReportDefinitions(category?: ReportCategory) {
   return useQuery<ReportDefinition[]>({
     queryKey: ['reports', 'definitions', category ?? 'all'],
-    queryFn: async () => {
+    queryFn: () => {
       const params = category ? `?category=${category}` : '';
-      const res = await apiClient.get<{ data: ReportDefinition[] }>(
-        `/api/v1/reports/definitions${params}`
-      );
-      return res.data.data;
+      return validatedGet(`/api/v1/reports/definitions${params}`, z.array(ReportDefinitionSchema));
     },
     staleTime: 5 * 60 * 1000,
   });
