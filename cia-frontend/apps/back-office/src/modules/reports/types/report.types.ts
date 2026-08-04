@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export type ReportCategory =
   | 'UNDERWRITING'
   | 'CLAIMS'
@@ -35,49 +37,59 @@ export type FieldType = 'STRING' | 'MONEY' | 'PERCENT' | 'DATE' | 'NUMBER' | 'IN
 export type FilterType = 'DATE' | 'DATE_RANGE' | 'SELECT' | 'MULTI_SELECT' | 'TEXT' | 'NUMBER';
 export type ChartType = 'BAR' | 'LINE' | 'PIE' | 'TABLE_ONLY';
 
-export interface ReportField {
-  key: string;
-  label: string;
-  type: FieldType;
-  computed: boolean;
-}
+export const ReportFieldSchema = z.object({
+  key:      z.string(),
+  label:    z.string(),
+  type:     z.enum(['STRING', 'MONEY', 'PERCENT', 'DATE', 'NUMBER', 'INTEGER']),
+  computed: z.boolean(),
+});
+export type ReportField = z.infer<typeof ReportFieldSchema>;
 
-export interface ReportFilter {
-  key: string;
-  label: string;
-  type: FilterType;
-  required: boolean;
+export const ReportFilterSchema = z.object({
+  key:      z.string(),
+  label:    z.string(),
+  type:     z.enum(['DATE', 'DATE_RANGE', 'SELECT', 'MULTI_SELECT', 'TEXT', 'NUMBER']),
+  required: z.boolean(),
   /** Optional default value set in the Builder; pre-fills the Viewer's filter input. */
-  defaultValue?: string;
-}
+  defaultValue: z.string().optional(),
+});
+export type ReportFilter = z.infer<typeof ReportFilterSchema>;
 
-export interface ReportChart {
-  type: ChartType;
-  xAxis?: string;
-  yAxis?: string;
-}
+export const ReportChartSchema = z.object({
+  type:  z.enum(['BAR', 'LINE', 'PIE', 'TABLE_ONLY']),
+  xAxis: z.string().optional(),
+  yAxis: z.string().optional(),
+});
+export type ReportChart = z.infer<typeof ReportChartSchema>;
 
-export interface ReportConfig {
-  fields: ReportField[];
-  filters: ReportFilter[];
-  groupBy?: string;
-  sortBy?: string;
-  sortDir?: 'ASC' | 'DESC';
-  chart?: ReportChart;
-}
+export const ReportConfigSchema = z.object({
+  fields:  z.array(ReportFieldSchema),
+  filters: z.array(ReportFilterSchema),
+  groupBy: z.string().optional(),
+  sortBy:  z.string().optional(),
+  sortDir: z.enum(['ASC', 'DESC']).optional(),
+  chart:   ReportChartSchema.optional(),
+});
+export type ReportConfig = z.infer<typeof ReportConfigSchema>;
 
-export interface ReportDefinition {
-  id: string;
-  name: string;
-  description?: string;
-  category: ReportCategory;
-  type: ReportType;
-  dataSource: DataSource;
-  config: ReportConfig;
-  pinnable: boolean;
-  active: boolean;
-  createdAt: string;
-}
+export const ReportDefinitionSchema = z.object({
+  id:          z.string(),
+  name:        z.string(),
+  description: z.string().optional(),
+  category:    z.enum(['UNDERWRITING', 'CLAIMS', 'FINANCE', 'REINSURANCE', 'CUSTOMER', 'REGULATORY', 'CLOSURES']),
+  type:        z.enum(['SYSTEM', 'CUSTOM']),
+  dataSource:  z.enum([
+    'POLICIES', 'CLAIMS', 'FINANCE', 'REINSURANCE', 'CUSTOMERS', 'ENDORSEMENTS',
+    'TRIAL_BALANCE', 'GENERAL_LEDGER', 'GL_PERIOD_LOCK', 'PAA_LRC', 'PAA_GROUPS',
+    'IFRS17_MOVEMENT', 'IFRS9_HOLDINGS', 'IFRS9_CARRYING', 'IFRS9_MOVEMENT',
+    'RM_COMMISSION', 'UNDERWRITING_PERFORMANCE',
+  ]),
+  config:    ReportConfigSchema,
+  pinnable:  z.boolean(),
+  active:    z.boolean(),
+  createdAt: z.string(),
+});
+export type ReportDefinition = z.infer<typeof ReportDefinitionSchema>;
 
 export interface ReportResultDto {
   columns: ReportField[];
@@ -99,15 +111,16 @@ export interface CreateReportRequest {
   config: ReportConfig;
 }
 
-export interface ReportAccessPolicy {
-  id: string;
-  accessGroupId: string;
-  category?: ReportCategory;
-  report?: ReportDefinition;
-  canView: boolean;
-  canExportCsv: boolean;
-  canExportPdf: boolean;
-}
+export const ReportAccessPolicySchema = z.object({
+  id:            z.string(),
+  accessGroupId: z.string(),
+  category:      z.enum(['UNDERWRITING', 'CLAIMS', 'FINANCE', 'REINSURANCE', 'CUSTOMER', 'REGULATORY', 'CLOSURES']).optional(),
+  report:        ReportDefinitionSchema.optional(),
+  canView:       z.boolean(),
+  canExportCsv:  z.boolean(),
+  canExportPdf:  z.boolean(),
+});
+export type ReportAccessPolicy = z.infer<typeof ReportAccessPolicySchema>;
 
 export const CATEGORY_LABELS: Record<ReportCategory, string> = {
   UNDERWRITING: 'Underwriting',

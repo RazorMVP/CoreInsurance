@@ -1,14 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@cia/api-client';
+import { z } from 'zod';
+import { apiClient, validatedGet } from '@cia/api-client';
+import { ReportDefinitionSchema } from '../types/report.types';
 import type { ReportDefinition } from '../types/report.types';
 
 export function useReportPins() {
   return useQuery<ReportDefinition[]>({
     queryKey: ['reports', 'pins'],
-    queryFn: async () => {
-      const res = await apiClient.get<{ data: ReportDefinition[] }>('/api/v1/reports/pins');
-      return res.data.data;
-    },
+    queryFn: () => validatedGet('/api/v1/reports/pins', z.array(ReportDefinitionSchema)),
   });
 }
 
