@@ -17,6 +17,7 @@ import { formatPhone } from '../../lib/formatPhone';
 import type { BulkDownloadItem, FinanceEntityType, PaymentListItemResponse } from '@cia/api-client';
 import { formatNaira } from '@/lib/format';
 import { formatEnumLabel } from '@/lib/format';
+import { useServerPagination } from '@/lib/use-server-pagination';
 
 interface EmailTarget {
   cnId:           string;
@@ -47,15 +48,15 @@ const paymentStatusVariant: Record<'POSTED' | 'REVERSED', 'active' | 'rejected'>
 };
 
 export default function PaymentsListSection() {
-  const [status,         setStatus]         = useState<'POSTED' | 'REVERSED' | undefined>(undefined);
-  const [page,           setPage]           = useState(0);
+  const { page, size, filters, setPage, setSize, setFilter } = useServerPagination({ defaultSize: 20 });
+  const status = (filters.status as 'POSTED' | 'REVERSED') || undefined;
   const [reverseTarget,  setReverseTarget]  = useState<ReverseTarget | null>(null);
   const [emailTarget,    setEmailTarget]    = useState<EmailTarget | null>(null);
   const [smsTarget,      setSmsTarget]      = useState<SmsTarget | null>(null);
   const [rowSelection,   setRowSelection]   = useState<Record<string, boolean>>({});
   const [bulkEmailOpen,  setBulkEmailOpen]  = useState(false);
 
-  const paymentsQuery = usePaymentList({ status, page, size: 20 });
+  const paymentsQuery = usePaymentList({ status, page, size });
   const payments = paymentsQuery.data?.data ?? [];
   const meta     = paymentsQuery.data?.meta;
 
@@ -255,7 +256,7 @@ export default function PaymentsListSection() {
             <RecentDownloadsPanel />
             <Select
               value={status ?? 'ALL'}
-              onValueChange={(v) => { setStatus(v === 'ALL' ? undefined : (v as 'POSTED' | 'REVERSED')); setPage(0); }}
+              onValueChange={(v) => setFilter('status', v === 'ALL' ? '' : v)}
             >
               <SelectTrigger className="w-40">
                 <SelectValue placeholder="Status" />
@@ -288,30 +289,8 @@ export default function PaymentsListSection() {
           columns={columns}
           data={payments}
           toolbar={{ searchColumn: 'beneficiaryReference', searchPlaceholder: 'Search payments…' }}
+          serverPagination={{ page, size, total: meta?.total ?? 0, onPageChange: setPage, onSizeChange: setSize }}
         />
-        {meta && (
-          <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
-            <span>Showing {payments.length} of {meta.total} payments</span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page === 0}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={payments.length < 20}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
       </PageSection>
 
       <ReverseTransactionDialog

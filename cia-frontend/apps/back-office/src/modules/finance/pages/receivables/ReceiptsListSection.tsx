@@ -17,6 +17,7 @@ import { formatPhone } from '../../lib/formatPhone';
 import type { BulkDownloadItem, ReceiptListItemResponse } from '@cia/api-client';
 import { formatNaira } from '@/lib/format';
 import { formatEnumLabel } from '@/lib/format';
+import { useServerPagination } from '@/lib/use-server-pagination';
 
 interface EmailTarget {
   dnId:           string;
@@ -38,15 +39,15 @@ const receiptStatusVariant: Record<'POSTED' | 'REVERSED', 'active' | 'rejected'>
 };
 
 export default function ReceiptsListSection() {
-  const [status,         setStatus]         = useState<'POSTED' | 'REVERSED' | undefined>(undefined);
-  const [page,           setPage]           = useState(0);
+  const { page, size, filters, setPage, setSize, setFilter } = useServerPagination({ defaultSize: 20 });
+  const status = (filters.status as 'POSTED' | 'REVERSED') || undefined;
   const [reverseTarget,  setReverseTarget]  = useState<ReverseTarget | null>(null);
   const [emailTarget,    setEmailTarget]    = useState<EmailTarget | null>(null);
   const [smsTarget,      setSmsTarget]      = useState<SmsTarget | null>(null);
   const [rowSelection,   setRowSelection]   = useState<Record<string, boolean>>({});
   const [bulkEmailOpen,  setBulkEmailOpen]  = useState(false);
 
-  const receiptsQuery = useReceiptList({ status, page, size: 20 });
+  const receiptsQuery = useReceiptList({ status, page, size });
   const receipts = receiptsQuery.data?.data ?? [];
   const meta     = receiptsQuery.data?.meta;
 
@@ -233,7 +234,7 @@ export default function ReceiptsListSection() {
             <RecentDownloadsPanel />
             <Select
               value={status ?? 'ALL'}
-              onValueChange={(v) => { setStatus(v === 'ALL' ? undefined : (v as 'POSTED' | 'REVERSED')); setPage(0); }}
+              onValueChange={(v) => setFilter('status', v === 'ALL' ? '' : v)}
             >
               <SelectTrigger className="w-40">
                 <SelectValue placeholder="Status" />
@@ -266,30 +267,8 @@ export default function ReceiptsListSection() {
           columns={columns}
           data={receipts}
           toolbar={{ searchColumn: 'customerName', searchPlaceholder: 'Search receipts…' }}
+          serverPagination={{ page, size, total: meta?.total ?? 0, onPageChange: setPage, onSizeChange: setSize }}
         />
-        {meta && (
-          <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
-            <span>Showing {receipts.length} of {meta.total} receipts</span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page === 0}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={receipts.length < 20}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
       </PageSection>
 
       <ReverseTransactionDialog
