@@ -48,10 +48,10 @@ export function ServerPaginationFooter({
         <p className="text-xs font-medium text-muted-foreground">Page {page + 1} of {pageCount}</p>
 
         <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onPageChange(0)} disabled={!canPrev}><ChevronsLeft className="h-4 w-4" /></Button>
-          <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onPageChange(page - 1)} disabled={!canPrev}><ChevronLeft className="h-4 w-4" /></Button>
-          <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onPageChange(page + 1)} disabled={!canNext}><ChevronRight className="h-4 w-4" /></Button>
-          <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onPageChange(pageCount - 1)} disabled={!canNext}><ChevronsRight className="h-4 w-4" /></Button>
+          <Button aria-label="First page" variant="outline" size="icon" className="h-7 w-7" onClick={() => onPageChange(0)} disabled={!canPrev}><ChevronsLeft className="h-4 w-4" /></Button>
+          <Button aria-label="Previous page" variant="outline" size="icon" className="h-7 w-7" onClick={() => onPageChange(page - 1)} disabled={!canPrev}><ChevronLeft className="h-4 w-4" /></Button>
+          <Button aria-label="Next page" variant="outline" size="icon" className="h-7 w-7" onClick={() => onPageChange(page + 1)} disabled={!canNext}><ChevronRight className="h-4 w-4" /></Button>
+          <Button aria-label="Last page" variant="outline" size="icon" className="h-7 w-7" onClick={() => onPageChange(pageCount - 1)} disabled={!canNext}><ChevronsRight className="h-4 w-4" /></Button>
         </div>
       </div>
     </div>
