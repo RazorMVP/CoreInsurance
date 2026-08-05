@@ -76,6 +76,8 @@ export { DataTableRowActions }    from './components/data-table/data-table-row-a
 export { DataTableToolbar }       from './components/data-table/data-table-toolbar';
 export type { RowAction }         from './components/data-table/data-table-row-actions';
 export type { DataTableToolbarProps } from './components/data-table/data-table-toolbar';
+export { ServerPaginationFooter } from './components/data-table/server-pagination-footer';
+export type { ServerPaginationFooterProps } from './components/data-table/server-pagination-footer';
 
 // ── Layout ───────────────────────────────────────────────────────────────
 export { PageHeader }  from './components/layout/page-header';
