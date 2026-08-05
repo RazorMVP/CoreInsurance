@@ -14,12 +14,21 @@ import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { DataTablePagination } from './data-table-pagination';
 import { DataTableToolbar, type DataTableToolbarProps } from './data-table-toolbar';
+import { ServerPaginationFooter, type ServerPaginationFooterProps } from './server-pagination-footer';
 
 interface DataTableProps<TData, TValue> {
   columns:    ColumnDef<TData, TValue>[];
   data:       TData[];
   toolbar?:   Omit<DataTableToolbarProps<TData>, 'table'>;
   className?: string;
+  /**
+   * Present ⇒ server-driven pagination: the client pagination row model is
+   * dropped and ServerPaginationFooter replaces the client pager. Client
+   * sort/filter of the *current* page are preserved (server sort/filter —
+   * manualSorting/manualFiltering — is a future extension). Absent ⇒ fully
+   * client-side, behaviour unchanged.
+   */
+  serverPagination?: ServerPaginationFooterProps;
 }
 
 export function DataTable<TData, TValue>({
@@ -27,6 +36,7 @@ export function DataTable<TData, TValue>({
   data,
   toolbar,
   className,
+  serverPagination,
 }: DataTableProps<TData, TValue>) {
   const [sorting,         setSorting]         = React.useState<SortingState>([]);
   const [columnFilters,   setColumnFilters]   = React.useState<ColumnFiltersState>([]);
@@ -37,6 +47,7 @@ export function DataTable<TData, TValue>({
     data,
     columns,
     state: { sorting, columnFilters, columnVisibility, rowSelection },
+    manualPagination:        !!serverPagination,
     enableRowSelection:      true,
     onRowSelectionChange:    setRowSelection,
     onSortingChange:         setSorting,
@@ -44,8 +55,8 @@ export function DataTable<TData, TValue>({
     onColumnVisibilityChange:setColumnVisibility,
     getCoreRowModel:         getCoreRowModel(),
     getFilteredRowModel:     getFilteredRowModel(),
-    getPaginationRowModel:   getPaginationRowModel(),
     getSortedRowModel:       getSortedRowModel(),
+    ...(serverPagination ? {} : { getPaginationRowModel: getPaginationRowModel() }),
   });
 
   return (
@@ -100,7 +111,9 @@ export function DataTable<TData, TValue>({
         </table>
       </div>
 
-      <DataTablePagination table={table} />
+      {serverPagination
+        ? <ServerPaginationFooter {...serverPagination} />
+        : <DataTablePagination table={table} />}
     </div>
   );
 }

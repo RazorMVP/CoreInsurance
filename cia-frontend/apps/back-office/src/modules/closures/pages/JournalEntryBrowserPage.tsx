@@ -6,8 +6,10 @@ import {
   Input,
   PageHeader, PageSection,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  ServerPaginationFooter,
   Skeleton, StatCard,
 } from '@cia/ui';
+import { useServerPagination } from '@/lib/use-server-pagination';
 import {
   apiClient,
   apiEnvelope,
@@ -31,13 +33,12 @@ function formatNGN(amount: number) {
 }
 
 export default function JournalEntryBrowserPage() {
-  const [status,        setStatus]        = useState<StatusFilter>('ALL');
-  const [sourceModule,  setSourceModule]  = useState<string>('');
-  const [accountCode,   setAccountCode]   = useState<string>('');
-  const [businessFrom,  setBusinessFrom]  = useState<string>('');
-  const [businessTo,    setBusinessTo]    = useState<string>('');
-  const [page,          setPage]          = useState(0);
-  const pageSize = 20;
+  const { page, size, filters, setPage, setSize, setFilter, resetFilters } = useServerPagination({ defaultSize: 20 });
+  const status       = (filters.status as StatusFilter) || 'ALL';
+  const sourceModule = filters.sourceModule ?? '';
+  const accountCode  = filters.accountCode  ?? '';
+  const businessFrom = filters.businessFrom ?? '';
+  const businessTo   = filters.businessTo   ?? '';
 
   const [detailJeId, setDetailJeId] = useState<string | null>(null);
 
@@ -50,9 +51,9 @@ export default function JournalEntryBrowserPage() {
     if (businessFrom)             p.set('businessFrom', businessFrom);
     if (businessTo)               p.set('businessTo', businessTo);
     p.set('page', page.toString());
-    p.set('size', pageSize.toString());
+    p.set('size', size.toString());
     return p.toString();
-  }, [status, sourceModule, accountCode, businessFrom, businessTo, page]);
+  }, [status, sourceModule, accountCode, businessFrom, businessTo, page, size]);
 
   const listQuery = useQuery({
     queryKey: ['closures', 'journal-entries', queryString],
@@ -67,15 +68,6 @@ export default function JournalEntryBrowserPage() {
   const totalElements = pageData?.totalElements ?? 0;
   const totalPages    = pageData?.totalPages ?? 0;
 
-  function resetFilters() {
-    setStatus('ALL');
-    setSourceModule('');
-    setAccountCode('');
-    setBusinessFrom('');
-    setBusinessTo('');
-    setPage(0);
-  }
-
   return (
     <div className="p-6 space-y-5">
       <PageHeader
@@ -86,13 +78,13 @@ export default function JournalEntryBrowserPage() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard label="Entries (filtered)" value={totalElements.toLocaleString()} />
         <StatCard label="Page"               value={`${page + 1} / ${Math.max(totalPages, 1)}`} />
-        <StatCard label="Per page"           value={pageSize.toString()} />
+        <StatCard label="Per page"           value={size.toString()} />
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <div className="space-y-1">
           <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</label>
-          <Select value={status} onValueChange={(v) => { setStatus(v as StatusFilter); setPage(0); }}>
+          <Select value={status} onValueChange={(v) => setFilter('status', v === 'ALL' ? '' : v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">ALL</SelectItem>
@@ -104,19 +96,19 @@ export default function JournalEntryBrowserPage() {
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Source module</label>
-          <Input value={sourceModule} onChange={(e) => { setSourceModule(e.target.value); setPage(0); }} placeholder="e.g. MANUAL, POLICY" />
+          <Input value={sourceModule} onChange={(e) => setFilter('sourceModule', e.target.value)} placeholder="e.g. MANUAL, POLICY" />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Account code</label>
-          <Input value={accountCode} onChange={(e) => { setAccountCode(e.target.value); setPage(0); }} placeholder="e.g. 1120" />
+          <Input value={accountCode} onChange={(e) => setFilter('accountCode', e.target.value)} placeholder="e.g. 1120" />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Business from</label>
-          <Input type="date" value={businessFrom} onChange={(e) => { setBusinessFrom(e.target.value); setPage(0); }} />
+          <Input type="date" value={businessFrom} onChange={(e) => setFilter('businessFrom', e.target.value)} />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Business to</label>
-          <Input type="date" value={businessTo} onChange={(e) => { setBusinessTo(e.target.value); setPage(0); }} />
+          <Input type="date" value={businessTo} onChange={(e) => setFilter('businessTo', e.target.value)} />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">&nbsp;</label>
@@ -184,16 +176,11 @@ export default function JournalEntryBrowserPage() {
         )}
       </PageSection>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <div className="text-xs text-muted-foreground">
-            {totalElements} {totalElements === 1 ? 'entry' : 'entries'} · page {page + 1} of {totalPages}
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>← Previous</Button>
-            <Button size="sm" variant="outline" disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)}>Next →</Button>
-          </div>
-        </div>
+      {totalElements > 0 && (
+        <ServerPaginationFooter
+          page={page} size={size} total={totalElements}
+          onPageChange={setPage} onSizeChange={setSize}
+        />
       )}
 
       <JournalEntryDetailSheet
