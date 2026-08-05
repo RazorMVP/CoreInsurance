@@ -23,12 +23,17 @@ interface DataTableProps<TData, TValue> {
   className?: string;
   /**
    * Present ⇒ server-driven pagination: the client pagination row model is
-   * dropped and ServerPaginationFooter replaces the client pager. Client
-   * sort/filter of the *current* page are preserved (server sort/filter —
-   * manualSorting/manualFiltering — is a future extension). Absent ⇒ fully
-   * client-side, behaviour unchanged.
+   * dropped and ServerPaginationFooter replaces the client pager. Absent ⇒
+   * fully client-side, behaviour unchanged.
+   *
+   * `sort` + `onSortChange` opt into server sort (manualSorting): the header
+   * sort controls emit `<accessorKey>,<asc|desc>` instead of sorting the
+   * current page client-side. Omit them to keep client sort of the page.
    */
-  serverPagination?: ServerPaginationFooterProps;
+  serverPagination?: ServerPaginationFooterProps & {
+    sort?:         string;
+    onSortChange?: (sort: string) => void;
+  };
 }
 
 export function DataTable<TData, TValue>({
@@ -43,19 +48,33 @@ export function DataTable<TData, TValue>({
   const [columnVisibility,setColumnVisibility]= React.useState<VisibilityState>({});
   const [rowSelection,    setRowSelection]    = React.useState({});
 
+  const useServerSort = !!serverPagination?.onSortChange;
+  const serverSorting: SortingState = React.useMemo(() => {
+    if (!serverPagination?.sort) return [];
+    const [id, dir] = serverPagination.sort.split(',');
+    return id ? [{ id, desc: dir === 'desc' }] : [];
+  }, [serverPagination?.sort]);
+
   const table = useReactTable({
     data,
     columns,
-    state: { sorting, columnFilters, columnVisibility, rowSelection },
+    state: { sorting: useServerSort ? serverSorting : sorting, columnFilters, columnVisibility, rowSelection },
     manualPagination:        !!serverPagination,
+    manualSorting:           useServerSort,
     enableRowSelection:      true,
     onRowSelectionChange:    setRowSelection,
-    onSortingChange:         setSorting,
+    onSortingChange: useServerSort
+      ? (updater) => {
+          const next = typeof updater === 'function' ? updater(serverSorting) : updater;
+          const s = next[0];
+          serverPagination!.onSortChange!(s ? `${s.id},${s.desc ? 'desc' : 'asc'}` : '');
+        }
+      : setSorting,
     onColumnFiltersChange:   setColumnFilters,
     onColumnVisibilityChange:setColumnVisibility,
     getCoreRowModel:         getCoreRowModel(),
     getFilteredRowModel:     getFilteredRowModel(),
-    getSortedRowModel:       getSortedRowModel(),
+    ...(useServerSort ? {} : { getSortedRowModel: getSortedRowModel() }),
     ...(serverPagination ? {} : { getPaginationRowModel: getPaginationRowModel() }),
   });
 

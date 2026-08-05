@@ -35,4 +35,27 @@ describe('DataTable server mode', () => {
     expect(container.textContent).toContain('row(s)');       // client DataTablePagination
     expect(container.textContent).not.toContain('Showing 1–'); // no server footer
   });
+
+  it('server sort: a header sort toggle emits `<accessorKey>,<dir>` via onSortChange', () => {
+    const onSortChange = vi.fn();
+    // Plain-button header (not the Radix DataTableColumnHeader dropdown, which
+    // doesn't open in jsdom) — this exercises DataTable's manualSorting +
+    // onSortingChange translation, the code under test here.
+    const sortableCols: ColumnDef<Row>[] = [
+      {
+        accessorKey: 'name',
+        header: ({ column }) => <button onClick={() => column.toggleSorting(false)}>sort-name</button>,
+        cell: ({ row }) => row.original.name,
+      },
+    ];
+    render(
+      <DataTable
+        columns={sortableCols}
+        data={data}
+        serverPagination={{ page: 0, size: 20, total: 2, onPageChange: vi.fn(), onSizeChange: vi.fn(), sort: '', onSortChange }}
+      />,
+    );
+    fireEvent.click(screen.getByText('sort-name')); // toggleSorting(false) → ascending
+    expect(onSortChange).toHaveBeenCalledWith('name,asc');
+  });
 });

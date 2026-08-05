@@ -7,6 +7,9 @@ export interface DataTableToolbarProps<TData> {
   table:           Table<TData>;
   searchColumn?:   string;
   searchPlaceholder?: string;
+  /** Server-search mode: controlled value + handler (bypasses the client column filter). */
+  searchValue?:    string;
+  onSearchChange?: (value: string) => void;
   children?:       React.ReactNode;
 }
 
@@ -14,6 +17,8 @@ export function DataTableToolbar<TData>({
   table,
   searchColumn,
   searchPlaceholder = 'Search…',
+  searchValue,
+  onSearchChange,
   children,
 }: DataTableToolbarProps<TData>) {
   const isFiltered = table.getState().columnFilters.length > 0;
@@ -21,11 +26,15 @@ export function DataTableToolbar<TData>({
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="flex flex-1 items-center gap-2">
-        {searchColumn && (
+        {(searchColumn || onSearchChange) && (
           <Input
             placeholder={searchPlaceholder}
-            value={(table.getColumn(searchColumn)?.getFilterValue() as string) ?? ''}
-            onChange={(e) => table.getColumn(searchColumn)?.setFilterValue(e.target.value)}
+            value={onSearchChange
+              ? (searchValue ?? '')
+              : ((table.getColumn(searchColumn!)?.getFilterValue() as string) ?? '')}
+            onChange={(e) => onSearchChange
+              ? onSearchChange(e.target.value)
+              : table.getColumn(searchColumn!)?.setFilterValue(e.target.value)}
             className="h-8 w-full max-w-xs"
           />
         )}
