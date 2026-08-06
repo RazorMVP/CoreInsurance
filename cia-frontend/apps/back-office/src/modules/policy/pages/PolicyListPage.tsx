@@ -1,15 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-  EmptyState, PageHeader, Skeleton,
+  EmptyState, PageHeader,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Skeleton,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { z } from 'zod';
-import { validatedGet, PolicySummaryDtoSchema, type PolicySummaryDto } from '@cia/api-client';
+import { validatedList, PolicySummaryDtoSchema, type PolicySummaryDto } from '@cia/api-client';
+import { useServerPagination } from '@/lib/use-server-pagination';
+import { useDebouncedValue } from '@/lib/use-debounced-value';
 import CreatePolicySheet from './create/CreatePolicySheet';
+
+const POLICY_STATUSES = ['DRAFT', 'PENDING_APPROVAL', 'ACTIVE', 'REINSTATED', 'EXPIRED', 'CANCELLED', 'REJECTED', 'LAPSED'] as const;
 
 const statusVariant: Record<PolicySummaryDto['status'], 'active' | 'pending' | 'draft' | 'cancelled' | 'rejected'> = {
   ACTIVE:           'active',
@@ -31,11 +36,21 @@ export default function PolicyListPage() {
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
 
-  const policiesQuery = useQuery<PolicySummaryDto[]>({
-    queryKey: ['policies'],
-    queryFn: () => validatedGet('/api/v1/policies', z.array(PolicySummaryDtoSchema)),
+  const { page, size, sort, filters, setPage, setSize, setSort, setFilter } =
+    useServerPagination({ defaultSize: 20, defaultSort: 'createdAt,desc' });
+  const status = filters.status ?? '';
+  const [searchInput, setSearchInput] = useState(filters.q ?? '');
+  const debouncedSearch = useDebouncedValue(searchInput, 300);
+  useEffect(() => { setFilter('q', debouncedSearch); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [debouncedSearch]);
+
+  const policiesQuery = useQuery({
+    queryKey: ['policies', page, size, sort, status, filters.q ?? ''],
+    queryFn: () => validatedList('/api/v1/policies', PolicySummaryDtoSchema, {
+      params: { page, size, sort, ...(status ? { status } : {}), ...(filters.q ? { q: filters.q } : {}) },
+    }),
   });
-  const policies = policiesQuery.data ?? [];
+  const policies = policiesQuery.data?.data ?? [];
+  const total    = policiesQuery.data?.meta.total ?? 0;
 
   const columns: ColumnDef<PolicySummaryDto>[] = [
     {
@@ -83,10 +98,12 @@ export default function PolicyListPage() {
     },
     {
       // Computed column — DB enforces broker XOR agent (ck_policies_broker_xor_agent).
-      // Falls back to "Direct" when both are null.
-      id:         'intermediary',
-      accessorFn: (row) => row.brokerName ?? row.agentName ?? 'Direct',
-      header:     ({ column }) => <DataTableColumnHeader column={column} title="Intermediary" />,
+      // Falls back to "Direct" when both are null. No backing entity property, so
+      // server sort is disabled (a plain label header, not the sort control).
+      id:           'intermediary',
+      enableSorting: false,
+      accessorFn:   (row) => row.brokerName ?? row.agentName ?? 'Direct',
+      header:       'Intermediary',
       cell: ({ row }) => {
         const { brokerName, agentName } = row.original;
         if (brokerName) {
@@ -159,25 +176,36 @@ export default function PolicyListPage() {
         title="Policies"
         description="Manage the full policy lifecycle from issuance through renewal."
         actions={
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button>New Policy ▾</Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setCreateOpen(true)}>
-                Convert from approved quote
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateOpen(true)}>
-                Create without quote
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-2">
+            <Select value={status || 'ALL'} onValueChange={(v) => setFilter('status', v === 'ALL' ? '' : v)}>
+              <SelectTrigger className="w-44"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All statuses</SelectItem>
+                {POLICY_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>{s.toLowerCase().replace('_', ' ')}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button>New Policy ▾</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setCreateOpen(true)}>
+                  Convert from approved quote
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCreateOpen(true)}>
+                  Create without quote
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         }
       />
 
       {policiesQuery.isLoading ? (
         <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
-      ) : policies.length === 0 ? (
+      ) : total === 0 && !status && !filters.q ? (
         <EmptyState
           title="No policies yet"
           description="Issue your first policy by converting an approved quote or creating one directly."
@@ -187,7 +215,8 @@ export default function PolicyListPage() {
         <DataTable
           columns={columns}
           data={policies}
-          toolbar={{ searchColumn: 'customerName', searchPlaceholder: 'Search by customer…' }}
+          toolbar={{ searchPlaceholder: 'Search policies…', searchValue: searchInput, onSearchChange: setSearchInput }}
+          serverPagination={{ page, size, total, onPageChange: setPage, onSizeChange: setSize, sort, onSortChange: setSort }}
         />
       )}
 

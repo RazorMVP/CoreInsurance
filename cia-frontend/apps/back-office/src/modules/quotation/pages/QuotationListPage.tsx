@@ -1,17 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-  EmptyState, PageHeader, Skeleton, toast,
+  EmptyState, PageHeader,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Skeleton, toast,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { z } from 'zod';
-import { apiClient, validatedGet, QuoteSummaryDtoSchema, type QuoteSummaryDto } from '@cia/api-client';
+import { apiClient, validatedList, QuoteSummaryDtoSchema, type QuoteSummaryDto } from '@cia/api-client';
+import { useServerPagination } from '@/lib/use-server-pagination';
+import { useDebouncedValue } from '@/lib/use-debounced-value';
 import { formatNaira } from '@/lib/format';
 import SingleRiskQuoteSheet from './create/SingleRiskQuoteSheet';
 import MultiRiskQuoteSheet  from './create/MultiRiskQuoteSheet';
+
+const QUOTE_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'CONVERTED', 'REJECTED', 'EXPIRED'] as const;
 
 const statusVariant: Record<QuoteSummaryDto['status'], 'active' | 'pending' | 'rejected' | 'draft' | 'cancelled'> = {
   APPROVED:  'active',
@@ -28,11 +33,21 @@ export default function QuotationListPage() {
   const [singleOpen, setSingleOpen] = useState(false);
   const [multiOpen,  setMultiOpen]  = useState(false);
 
-  const quotesQuery = useQuery<QuoteSummaryDto[]>({
-    queryKey: ['quotes'],
-    queryFn: () => validatedGet('/api/v1/quotes', z.array(QuoteSummaryDtoSchema)),
+  const { page, size, sort, filters, setPage, setSize, setSort, setFilter } =
+    useServerPagination({ defaultSize: 20, defaultSort: 'createdAt,desc' });
+  const status = filters.status ?? '';
+  const [searchInput, setSearchInput] = useState(filters.q ?? '');
+  const debouncedSearch = useDebouncedValue(searchInput, 300);
+  useEffect(() => { setFilter('q', debouncedSearch); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [debouncedSearch]);
+
+  const quotesQuery = useQuery({
+    queryKey: ['quotes', page, size, sort, status, filters.q ?? ''],
+    queryFn: () => validatedList('/api/v1/quotes', QuoteSummaryDtoSchema, {
+      params: { page, size, sort, ...(status ? { status } : {}), ...(filters.q ? { q: filters.q } : {}) },
+    }),
   });
-  const quotes = quotesQuery.data ?? [];
+  const quotes = quotesQuery.data?.data ?? [];
+  const total  = quotesQuery.data?.meta.total ?? 0;
 
   // Duplicate — deep-copies the quote into a new DRAFT (F1c, Session 110).
   // Backend cascades risks + coinsurance participants + JSONB lists.
@@ -99,9 +114,10 @@ export default function QuotationListPage() {
       // Mirror of PolicyListPage's Intermediary column (B3 / Session 104).
       // ck_quotes_broker_xor_agent (V55) guarantees at most one of
       // brokerName / agentName is non-null — both null = Direct.
-      id:         'intermediary',
-      accessorFn: (row) => row.brokerName ?? row.agentName ?? 'Direct',
-      header:     ({ column }) => <DataTableColumnHeader column={column} title="Intermediary" />,
+      id:            'intermediary',
+      enableSorting: false,
+      accessorFn:    (row) => row.brokerName ?? row.agentName ?? 'Direct',
+      header:        'Intermediary',
       cell: ({ row }) => {
         const { brokerName, agentName } = row.original;
         if (brokerName) {
@@ -172,6 +188,15 @@ export default function QuotationListPage() {
         description="Create and manage insurance quotes through the approval workflow."
         actions={
           <div className="flex gap-2">
+            <Select value={status || 'ALL'} onValueChange={(v) => setFilter('status', v === 'ALL' ? '' : v)}>
+              <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All statuses</SelectItem>
+                {QUOTE_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>{s.toLowerCase()}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button variant="outline" onClick={() => navigate('/quotation/bulk-upload')}>
               Bulk Upload
             </Button>
@@ -198,7 +223,7 @@ export default function QuotationListPage() {
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
         </div>
-      ) : quotes.length === 0 ? (
+      ) : total === 0 && !status && !filters.q ? (
         <EmptyState
           title="No quotes yet"
           description="Create your first quote to start the underwriting process."
@@ -208,7 +233,8 @@ export default function QuotationListPage() {
         <DataTable
           columns={columns}
           data={quotes}
-          toolbar={{ searchColumn: 'customerName', searchPlaceholder: 'Search by customer…' }}
+          toolbar={{ searchPlaceholder: 'Search quotes…', searchValue: searchInput, onSearchChange: setSearchInput }}
+          serverPagination={{ page, size, total, onPageChange: setPage, onSizeChange: setSize, sort, onSortChange: setSort }}
         />
       )}
 
