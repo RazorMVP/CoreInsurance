@@ -44,6 +44,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -83,16 +84,12 @@ public class PolicyService {
     // ─── Queries ──────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public Page<PolicySummaryResponse> list(PolicyStatus status, UUID customerId, Pageable pageable) {
-        Page<Policy> page;
-        if (status != null) {
-            page = repository.findAllByStatusAndDeletedAtIsNull(status, pageable);
-        } else if (customerId != null) {
-            page = repository.findAllByCustomerIdAndDeletedAtIsNull(customerId, pageable);
-        } else {
-            page = repository.findAllByDeletedAtIsNull(pageable);
-        }
-        return page.map(this::toSummary);
+    public Page<PolicySummaryResponse> list(PolicyStatus status, UUID customerId, String q, Pageable pageable) {
+        Specification<Policy> spec = Specification.where(PolicySpecs.notDeleted())
+                .and(PolicySpecs.statusEquals(status))
+                .and(PolicySpecs.customerIdEquals(customerId))
+                .and(PolicySpecs.qLike(q));
+        return repository.findAll(spec, pageable).map(this::toSummary);
     }
 
     @Transactional(readOnly = true)
