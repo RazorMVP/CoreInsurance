@@ -10405,6 +10405,14 @@
             }
           },
           {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "pageable",
             "in": "query",
             "required": true,
@@ -10731,6 +10739,14 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           },
           {
@@ -13601,12 +13617,33 @@
             }
           },
           {
+            "name": "endorsementType",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ADDITIONAL_PREMIUM",
+                "RETURN_PREMIUM",
+                "NON_PREMIUM_BEARING"
+              ]
+            }
+          },
+          {
             "name": "customerId",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           },
           {
@@ -15401,7 +15438,7 @@
           "Claims (Module 5)"
         ],
         "summary": "List claims (paginated, filterable)",
-        "description": "Filter by any combination of policyId, status, customerId. Returns claim summaries (no nested reserves/expenses/documents).",
+        "description": "Filter by any combination of policyId, status, customerId, and free-text q (matches claim number, customer name, policy number). Returns claim summaries (no nested reserves/expenses/documents).",
         "operationId": "list_44",
         "parameters": [
           {
@@ -15438,6 +15475,14 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           },
           {
@@ -19912,7 +19957,7 @@
           "Customers (Module 7)"
         ],
         "summary": "List customers (paginated, filterable)",
-        "description": "Filter by customer type (INDIVIDUAL / CORPORATE) and/or KYC status (PENDING / VERIFIED / FAILED). Returns lightweight summary projection.",
+        "description": "Filter by customer type (INDIVIDUAL / CORPORATE), KYC status, account status (ACTIVE / INACTIVE / BLACKLISTED), and free-text q (matches customer number, first/last name, email, phone \u2014 never the encrypted PII). Returns lightweight summary projection.",
         "operationId": "list_54",
         "parameters": [
           {
@@ -19940,6 +19985,27 @@
                 "FAILED",
                 "EXPIRED"
               ]
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ACTIVE",
+                "INACTIVE",
+                "BLACKLISTED"
+              ]
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           },
           {
@@ -20693,6 +20759,39 @@
           },
           "404": {
             "description": "Document not found"
+          }
+        },
+        "security": [
+          {
+            "bearer-jwt": []
+          }
+        ]
+      }
+    },
+    "/api/v1/claims/stats": {
+      "get": {
+        "tags": [
+          "Claims (Module 5)"
+        ],
+        "summary": "Claims dashboard aggregate (StatCards)",
+        "description": "Server-computed totals over every non-deleted claim: open count (excludes SETTLED / WITHDRAWN), total reserve, total approved. Computed server-side so the numbers stay correct once the list is paged.",
+        "operationId": "stats_2",
+        "responses": {
+          "200": {
+            "description": "Claim stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimStatsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden \u2014 caller lacks CLAIMS_VIEW"
           }
         },
         "security": [
@@ -32066,6 +32165,21 @@
           "receivedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "ClaimStatsResponse": {
+        "type": "object",
+        "properties": {
+          "openCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalReserve": {
+            "type": "number"
+          },
+          "totalApproved": {
+            "type": "number"
           }
         }
       },
