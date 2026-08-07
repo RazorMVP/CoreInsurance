@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -49,16 +50,14 @@ public class CustomerService {
     // ─── Queries ────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public Page<CustomerSummaryResponse> list(CustomerType type, KycStatus kycStatus, Pageable pageable) {
-        Page<Customer> page;
-        if (type != null) {
-            page = repository.findAllByCustomerTypeAndDeletedAtIsNull(type, pageable);
-        } else if (kycStatus != null) {
-            page = repository.findAllByKycStatusAndDeletedAtIsNull(kycStatus, pageable);
-        } else {
-            page = repository.findAllByDeletedAtIsNull(pageable);
-        }
-        return page.map(this::toSummary);
+    public Page<CustomerSummaryResponse> list(CustomerType type, KycStatus kycStatus,
+                                              CustomerStatus status, String q, Pageable pageable) {
+        Specification<Customer> spec = Specification.where(CustomerSpecs.notDeleted())
+                .and(CustomerSpecs.typeEquals(type))
+                .and(CustomerSpecs.kycStatusEquals(kycStatus))
+                .and(CustomerSpecs.customerStatusEquals(status))
+                .and(CustomerSpecs.qLike(q));
+        return repository.findAll(spec, pageable).map(this::toSummary);
     }
 
     @Transactional(readOnly = true)

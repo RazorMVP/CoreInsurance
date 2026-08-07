@@ -36,7 +36,7 @@ public class CustomerController {
     @GetMapping
     @PreAuthorize("hasRole('CUSTOMER_VIEW')")
     @Operation(summary = "List customers (paginated, filterable)",
-               description = "Filter by customer type (INDIVIDUAL / CORPORATE) and/or KYC status (PENDING / VERIFIED / FAILED). Returns lightweight summary projection.")
+               description = "Filter by customer type (INDIVIDUAL / CORPORATE), KYC status, account status (ACTIVE / INACTIVE / BLACKLISTED), and free-text q (matches customer number, first/last name, email, phone — never the encrypted PII). Returns lightweight summary projection.")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Customer page",
             content = @Content(schema = @Schema(implementation = CustomerSummaryResponse.class))),
@@ -46,8 +46,10 @@ public class CustomerController {
     public ApiResponse<List<CustomerSummaryResponse>> list(
             @RequestParam(required = false) CustomerType type,
             @RequestParam(required = false) KycStatus kycStatus,
+            @RequestParam(required = false) CustomerStatus status,
+            @RequestParam(required = false) String q,
             @PageableDefault(size = 2000) Pageable pageable) {
-        var page = service.list(type, kycStatus, pageable);
+        var page = service.list(type, kycStatus, status, q, pageable);
         return ApiResponse.success(page.getContent(),
                 ApiMeta.builder()
                         .total(page.getTotalElements())
