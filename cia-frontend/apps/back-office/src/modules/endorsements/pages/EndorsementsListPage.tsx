@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
-  EmptyState, PageHeader, Skeleton,
+  EmptyState, PageHeader,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Skeleton,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { z } from 'zod';
-import { validatedGet, EndorsementDtoSchema, ENDORSEMENT_TYPE_LABELS, type EndorsementDto } from '@cia/api-client';
+import { validatedList, EndorsementDtoSchema, ENDORSEMENT_TYPE_LABELS, type EndorsementDto } from '@cia/api-client';
+import { useServerPagination } from '@/lib/use-server-pagination';
+import { useDebouncedValue } from '@/lib/use-debounced-value';
 import { formatNaira } from '@/lib/format';
 import CreateEndorsementSheet from './create/CreateEndorsementSheet';
 
@@ -18,15 +21,34 @@ const statusVariant: Record<EndorsementDto['status'], 'active' | 'pending' | 'dr
   REJECTED:  'rejected',
 };
 
+const ENDORSEMENT_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'] as const;
+const ENDORSEMENT_TYPES = Object.keys(ENDORSEMENT_TYPE_LABELS) as EndorsementDto['endorsementType'][];
+
 export default function EndorsementsListPage() {
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
 
-  const endorsementsQuery = useQuery<EndorsementDto[]>({
-    queryKey: ['endorsements'],
-    queryFn: () => validatedGet('/api/v1/endorsements', z.array(EndorsementDtoSchema)),
+  const { page, size, sort, filters, setPage, setSize, setSort, setFilter } =
+    useServerPagination({ defaultSize: 20, defaultSort: 'createdAt,desc' });
+  const status = filters.status ?? '';
+  const type   = filters.endorsementType ?? '';
+  const [searchInput, setSearchInput] = useState(filters.q ?? '');
+  const debouncedSearch = useDebouncedValue(searchInput, 300);
+  useEffect(() => { setFilter('q', debouncedSearch); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [debouncedSearch]);
+
+  const endorsementsQuery = useQuery({
+    queryKey: ['endorsements', page, size, sort, status, type, filters.q ?? ''],
+    queryFn: () => validatedList('/api/v1/endorsements', EndorsementDtoSchema, {
+      params: {
+        page, size, sort,
+        ...(status ? { status } : {}),
+        ...(type ? { endorsementType: type } : {}),
+        ...(filters.q ? { q: filters.q } : {}),
+      },
+    }),
   });
-  const endorsements = endorsementsQuery.data ?? [];
+  const endorsements = endorsementsQuery.data?.data ?? [];
+  const total        = endorsementsQuery.data?.meta.total ?? 0;
 
   const columns: ColumnDef<EndorsementDto>[] = [
     {
@@ -116,6 +138,24 @@ export default function EndorsementsListPage() {
         description="Manage policy amendments — renewals, extensions, cancellations and sum insured changes."
         actions={
           <div className="flex gap-2">
+            <Select value={status || 'ALL'} onValueChange={(v) => setFilter('status', v === 'ALL' ? '' : v)}>
+              <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All statuses</SelectItem>
+                {ENDORSEMENT_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>{s.toLowerCase()}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={type || 'ALL'} onValueChange={(v) => setFilter('endorsementType', v === 'ALL' ? '' : v)}>
+              <SelectTrigger className="w-48"><SelectValue placeholder="Type" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All types</SelectItem>
+                {ENDORSEMENT_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>{ENDORSEMENT_TYPE_LABELS[t]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant="outline"
               onClick={() => navigate('/endorsements/reports/debit-note-analysis')}
@@ -129,7 +169,7 @@ export default function EndorsementsListPage() {
 
       {endorsementsQuery.isLoading ? (
         <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
-      ) : endorsements.length === 0 ? (
+      ) : total === 0 && !status && !type && !filters.q ? (
         <EmptyState
           title="No endorsements yet"
           description="Create an endorsement to amend an existing policy."
@@ -139,7 +179,8 @@ export default function EndorsementsListPage() {
         <DataTable
           columns={columns}
           data={endorsements}
-          toolbar={{ searchColumn: 'policyNumber', searchPlaceholder: 'Search by policy…' }}
+          toolbar={{ searchPlaceholder: 'Search endorsements…', searchValue: searchInput, onSearchChange: setSearchInput }}
+          serverPagination={{ page, size, total, onPageChange: setPage, onSizeChange: setSize, sort, onSortChange: setSort }}
         />
       )}
 

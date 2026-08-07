@@ -48,9 +48,11 @@ public class EndorsementController {
     public ApiResponse<List<EndorsementResponse>> list(
             @RequestParam(required = false) UUID policyId,
             @RequestParam(required = false) EndorsementStatus status,
+            @RequestParam(required = false) EndorsementType endorsementType,
             @RequestParam(required = false) UUID customerId,
+            @RequestParam(required = false) String q,
             @PageableDefault(size = 2000) Pageable pageable) {
-        var page = service.list(policyId, status, customerId, pageable);
+        var page = service.list(policyId, status, endorsementType, customerId, q, pageable);
         return ApiResponse.success(page.map(this::toResponse).getContent(),
                 ApiMeta.builder()
                         .total(page.getTotalElements())

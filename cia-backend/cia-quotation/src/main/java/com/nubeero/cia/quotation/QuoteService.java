@@ -32,6 +32,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -68,16 +69,12 @@ public class QuoteService {
     // ── Queries ───────────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public Page<QuoteSummaryResponse> list(QuoteStatus status, UUID customerId, Pageable pageable) {
-        Page<Quote> page;
-        if (status != null) {
-            page = repository.findAllByStatusAndDeletedAtIsNull(status, pageable);
-        } else if (customerId != null) {
-            page = repository.findAllByCustomerIdAndDeletedAtIsNull(customerId, pageable);
-        } else {
-            page = repository.findAllByDeletedAtIsNull(pageable);
-        }
-        return page.map(this::toSummary);
+    public Page<QuoteSummaryResponse> list(QuoteStatus status, UUID customerId, String q, Pageable pageable) {
+        Specification<Quote> spec = Specification.where(QuoteSpecs.notDeleted())
+                .and(QuoteSpecs.statusEquals(status))
+                .and(QuoteSpecs.customerIdEquals(customerId))
+                .and(QuoteSpecs.qLike(q));
+        return repository.findAll(spec, pageable).map(this::toSummary);
     }
 
     @Transactional(readOnly = true)

@@ -47,8 +47,9 @@ public class QuoteController {
     public ApiResponse<List<QuoteSummaryResponse>> list(
             @RequestParam(required = false) QuoteStatus status,
             @RequestParam(required = false) UUID customerId,
+            @RequestParam(required = false) String q,
             @PageableDefault(size = 2000) Pageable pageable) {
-        var page = service.list(status, customerId, pageable);
+        var page = service.list(status, customerId, q, pageable);
         return ApiResponse.success(page.getContent(),
                 ApiMeta.builder()
                         .total(page.getTotalElements())

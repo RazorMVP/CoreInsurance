@@ -19,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,16 +48,16 @@ public class EndorsementService {
 
     // ─── Queries ──────────────────────────────────────────────────────────
 
-    public Page<Endorsement> list(UUID policyId, EndorsementStatus status, UUID customerId,
-                                   Pageable pageable) {
-        if (policyId != null) {
-            return endorsementRepository.findAllByPolicyIdAndDeletedAtIsNull(policyId, pageable);
-        } else if (status != null) {
-            return endorsementRepository.findAllByStatusAndDeletedAtIsNull(status, pageable);
-        } else if (customerId != null) {
-            return endorsementRepository.findAllByCustomerIdAndDeletedAtIsNull(customerId, pageable);
-        }
-        return endorsementRepository.findAllByDeletedAtIsNull(pageable);
+    public Page<Endorsement> list(UUID policyId, EndorsementStatus status,
+                                   EndorsementType endorsementType, UUID customerId,
+                                   String q, Pageable pageable) {
+        Specification<Endorsement> spec = Specification.where(EndorsementSpecs.notDeleted())
+                .and(EndorsementSpecs.policyIdEquals(policyId))
+                .and(EndorsementSpecs.statusEquals(status))
+                .and(EndorsementSpecs.endorsementTypeEquals(endorsementType))
+                .and(EndorsementSpecs.customerIdEquals(customerId))
+                .and(EndorsementSpecs.qLike(q));
+        return endorsementRepository.findAll(spec, pageable);
     }
 
     public Endorsement findOrThrow(UUID id) {
