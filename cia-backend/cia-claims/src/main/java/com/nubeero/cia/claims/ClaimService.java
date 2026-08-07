@@ -22,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,15 +46,28 @@ public class ClaimService {
 
     // ─── Queries ──────────────────────────────────────────────────────────
 
-    public Page<Claim> list(UUID policyId, ClaimStatus status, UUID customerId, Pageable pageable) {
-        if (policyId != null) return claimRepository.findAllByPolicyIdAndDeletedAtIsNull(policyId, pageable);
-        if (status != null)   return claimRepository.findAllByStatusAndDeletedAtIsNull(status, pageable);
-        if (customerId != null) return claimRepository.findAllByCustomerIdAndDeletedAtIsNull(customerId, pageable);
-        return claimRepository.findAllByDeletedAtIsNull(pageable);
+    public Page<Claim> list(ClaimStatus status, UUID policyId, UUID customerId,
+                            String q, Pageable pageable) {
+        Specification<Claim> spec = Specification.where(ClaimSpecs.notDeleted())
+                .and(ClaimSpecs.statusEquals(status))
+                .and(ClaimSpecs.policyIdEquals(policyId))
+                .and(ClaimSpecs.customerIdEquals(customerId))
+                .and(ClaimSpecs.qLike(q));
+        return claimRepository.findAll(spec, pageable);
     }
 
     public Page<Claim> search(String query, Pageable pageable) {
         return claimRepository.search(query, pageable);
+    }
+
+    /** Server-computed dashboard aggregate for the claims list StatCards. */
+    public ClaimStatsResponse stats() {
+        ClaimRepository.ClaimStatsProjection p = claimRepository.stats();
+        return ClaimStatsResponse.builder()
+                .openCount(p.getOpenCount())
+                .totalReserve(p.getTotalReserve())
+                .totalApproved(p.getTotalApproved())
+                .build();
     }
 
     public Claim findOrThrow(UUID id) {

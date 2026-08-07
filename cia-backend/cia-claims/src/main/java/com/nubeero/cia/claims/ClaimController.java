@@ -41,7 +41,7 @@ public class ClaimController {
     @GetMapping
     @PreAuthorize("hasRole('CLAIMS_VIEW')")
     @Operation(summary = "List claims (paginated, filterable)",
-               description = "Filter by any combination of policyId, status, customerId. Returns claim summaries (no nested reserves/expenses/documents).")
+               description = "Filter by any combination of policyId, status, customerId, and free-text q (matches claim number, customer name, policy number). Returns claim summaries (no nested reserves/expenses/documents).")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Claim page",
             content = @Content(schema = @Schema(implementation = ClaimResponse.class))),
@@ -52,14 +52,29 @@ public class ClaimController {
             @RequestParam(required = false) UUID policyId,
             @RequestParam(required = false) ClaimStatus status,
             @RequestParam(required = false) UUID customerId,
+            @RequestParam(required = false) String q,
             @PageableDefault(size = 2000) Pageable pageable) {
-        var page = service.list(policyId, status, customerId, pageable);
+        var page = service.list(status, policyId, customerId, q, pageable);
         return ApiResponse.success(page.map(this::toResponse).getContent(),
                 ApiMeta.builder()
                         .total(page.getTotalElements())
                         .page(page.getNumber())
                         .size(page.getSize())
                         .build());
+    }
+
+    @GetMapping("/stats")
+    @PreAuthorize("hasRole('CLAIMS_VIEW')")
+    @Operation(summary = "Claims dashboard aggregate (StatCards)",
+               description = "Server-computed totals over every non-deleted claim: open count (excludes SETTLED / WITHDRAWN), total reserve, total approved. Computed server-side so the numbers stay correct once the list is paged.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Claim stats",
+            content = @Content(schema = @Schema(implementation = ClaimStatsResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — caller lacks CLAIMS_VIEW", content = @Content)
+    })
+    public ApiResponse<ClaimStatsResponse> stats() {
+        return ApiResponse.success(service.stats());
     }
 
     @GetMapping("/search")

@@ -3,13 +3,15 @@ package com.nubeero.cia.claims;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface ClaimRepository extends JpaRepository<Claim, UUID> {
+public interface ClaimRepository extends JpaRepository<Claim, UUID>, JpaSpecificationExecutor<Claim> {
 
     Optional<Claim> findByIdAndDeletedAtIsNull(UUID id);
 
@@ -48,5 +50,28 @@ public interface ClaimRepository extends JpaRepository<Claim, UUID> {
     interface ClaimBeneficiaryView {
         UUID getCustomerId();
         String getCustomerName();
+    }
+
+    /**
+     * Dashboard aggregate for the claims list StatCards. Summed over every
+     * non-deleted claim (not the current page) so the numbers stay correct
+     * once the list is server-paged. {@code openCount} excludes the terminal
+     * SETTLED / WITHDRAWN states — matching the FE's
+     * {@code !['SETTLED','WITHDRAWN'].includes(status)} filter.
+     */
+    @Query("""
+            SELECT COALESCE(SUM(CASE WHEN c.status NOT IN
+                      (com.nubeero.cia.claims.ClaimStatus.SETTLED,
+                       com.nubeero.cia.claims.ClaimStatus.WITHDRAWN) THEN 1 ELSE 0 END), 0) AS openCount,
+                   COALESCE(SUM(c.reserveAmount), 0)  AS totalReserve,
+                   COALESCE(SUM(c.approvedAmount), 0) AS totalApproved
+            FROM Claim c WHERE c.deletedAt IS NULL""")
+    ClaimStatsProjection stats();
+
+    /** Projection for {@link #stats()}. */
+    interface ClaimStatsProjection {
+        long getOpenCount();
+        BigDecimal getTotalReserve();
+        BigDecimal getTotalApproved();
     }
 }
