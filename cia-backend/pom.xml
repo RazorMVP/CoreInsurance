@@ -64,6 +64,13 @@
     <tomcat.version>10.1.55</tomcat.version>
     <netty.version>4.1.136.Final</netty.version>
     <postgresql.version>42.7.12</postgresql.version>
+    <!-- micrometer is a Boot BOM property too (micrometer-bom): the 3.5.14 BOM
+         pins 1.15.11, which two 2026-07 HIGH CVEs flag — CVE-2026-40983
+         (micrometer-core DoS via crafted gRPC requests) + CVE-2026-40984
+         (micrometer-jetty11/12 DoS via crafted HTTP requests). 1.15.12 is the
+         same-line patch (stay on the 1.15.x line Boot 3.5.x ships; do not jump
+         to 1.16). Surfaced by the backend-image Trivy gate on S5.3/PR #63. -->
+    <micrometer.version>1.15.12</micrometer.version>
     <!-- spring-framework is a Boot BOM property too: the 3.5.14 BOM pins Spring
          Framework 6.2.18, which four 2026-07 HIGH CVEs flag — CVE-2026-41850
          (spring-expression SpEL DoS), CVE-2026-41842 (spring-webflux DoS) and
