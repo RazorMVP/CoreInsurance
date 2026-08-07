@@ -1,14 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Badge, Button, DataTable, DataTableColumnHeader, DataTableRowActions,
-  EmptyState, PageHeader, Skeleton, StatCard,
+  EmptyState, PageHeader,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Skeleton, StatCard,
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { z } from 'zod';
-import { validatedGet, ClaimDtoSchema, type ClaimDto } from '@cia/api-client';
+import { validatedGet, validatedList, ClaimDtoSchema, ClaimStatsDtoSchema, type ClaimDto } from '@cia/api-client';
 import { formatNaira } from '@/lib/format';
+import { useServerPagination } from '@/lib/use-server-pagination';
+import { useDebouncedValue } from '@/lib/use-debounced-value';
 import RegisterClaimSheet from './register/RegisterClaimSheet';
 import SubmitClaimDialog  from './detail/SubmitClaimDialog';
 import CancelClaimDialog  from './detail/CancelClaimDialog';
@@ -23,6 +26,7 @@ const statusVariant: Record<ClaimDto['status'], 'active' | 'pending' | 'draft' |
   SETTLED:             'active',
   WITHDRAWN:           'cancelled',
 };
+const CLAIM_STATUSES = Object.keys(statusVariant) as ClaimDto['status'][];
 
 export default function ClaimsListPage() {
   const navigate = useNavigate();
@@ -30,18 +34,30 @@ export default function ClaimsListPage() {
   const [submitTarget,  setSubmitTarget]  = useState<ClaimDto | null>(null);
   const [cancelTarget,  setCancelTarget]  = useState<ClaimDto | null>(null);
 
-  const claimsQuery = useQuery<ClaimDto[]>({
-    queryKey: ['claims'],
-    queryFn: () => validatedGet('/api/v1/claims', z.array(ClaimDtoSchema)),
-  });
-  const claims = claimsQuery.data ?? [];
+  const { page, size, sort, filters, setPage, setSize, setSort, setFilter } =
+    useServerPagination({ defaultSize: 20, defaultSort: 'createdAt,desc' });
+  const status = filters.status ?? '';
+  const [searchInput, setSearchInput] = useState(filters.q ?? '');
+  const debouncedSearch = useDebouncedValue(searchInput, 300);
+  useEffect(() => { setFilter('q', debouncedSearch); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [debouncedSearch]);
 
-  // Dashboard stats. "Paid" is approximated by approvedAmount — the actual
-  // paid status is tracked via credit-note + payment chain in cia-finance,
-  // but approvedAmount is what's been authorised for payment.
-  const open      = claims.filter(c => !['SETTLED', 'WITHDRAWN'].includes(c.status)).length;
-  const reserved  = claims.reduce((s, c) => s + c.reserveAmount, 0);
-  const approved  = claims.reduce((s, c) => s + (c.approvedAmount ?? 0), 0);
+  const claimsQuery = useQuery({
+    queryKey: ['claims', page, size, sort, status, filters.q ?? ''],
+    queryFn: () => validatedList('/api/v1/claims', ClaimDtoSchema, {
+      params: { page, size, sort, ...(status ? { status } : {}), ...(filters.q ? { q: filters.q } : {}) },
+    }),
+  });
+  const claims = claimsQuery.data?.data ?? [];
+  const total  = claimsQuery.data?.meta.total ?? 0;
+
+  // Dashboard stats are server-computed over ALL claims (not the current page).
+  // "Approved" ≈ authorised-for-payment; the actual paid status lives in the
+  // credit-note + payment chain in cia-finance.
+  const statsQuery = useQuery({
+    queryKey: ['claims', 'stats'],
+    queryFn: () => validatedGet('/api/v1/claims/stats', ClaimStatsDtoSchema),
+  });
+  const stats = statsQuery.data;
 
   const columns: ColumnDef<ClaimDto>[] = [
     {
@@ -136,23 +152,32 @@ export default function ClaimsListPage() {
         title="Claims"
         description="Manage the full claims lifecycle from notification through settlement."
         actions={
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <Select value={status || 'ALL'} onValueChange={(v) => setFilter('status', v === 'ALL' ? '' : v)}>
+              <SelectTrigger className="w-44"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All statuses</SelectItem>
+                {CLAIM_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>{s.toLowerCase().replace('_', ' ')}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button variant="outline" onClick={() => navigate('/claims/bulk')}>Bulk Register</Button>
             <Button onClick={() => setRegisterOpen(true)}>Register Claim</Button>
           </div>
         }
       />
 
-      {/* Dashboard summary */}
+      {/* Dashboard summary — server-computed over all claims */}
       <div className="grid grid-cols-3 gap-4">
-        <StatCard label="Open Claims"      value={String(open)} sub={`${claims.length} total`} />
-        <StatCard label="Total Reserve"    value={`₦${reserved.toLocaleString()}`} sub="Outstanding reserve" />
-        <StatCard label="Total Approved (YTD)" value={`₦${approved.toLocaleString()}`} sub="Year to date" />
+        <StatCard label="Open Claims"      value={String(stats?.openCount ?? 0)} sub={`${total} total`} />
+        <StatCard label="Total Reserve"    value={`₦${(stats?.totalReserve ?? 0).toLocaleString()}`} sub="Outstanding reserve" />
+        <StatCard label="Total Approved (YTD)" value={`₦${(stats?.totalApproved ?? 0).toLocaleString()}`} sub="Year to date" />
       </div>
 
       {claimsQuery.isLoading ? (
         <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
-      ) : claims.length === 0 ? (
+      ) : total === 0 && !status && !filters.q ? (
         <EmptyState
           title="No claims yet"
           description="Register a claim notification to start the claims process."
@@ -162,7 +187,8 @@ export default function ClaimsListPage() {
         <DataTable
           columns={columns}
           data={claims}
-          toolbar={{ searchColumn: 'customerName', searchPlaceholder: 'Search by customer…' }}
+          toolbar={{ searchPlaceholder: 'Search claims…', searchValue: searchInput, onSearchChange: setSearchInput }}
+          serverPagination={{ page, size, total, onPageChange: setPage, onSizeChange: setSize, sort, onSortChange: setSort }}
         />
       )}
 

@@ -109,6 +109,15 @@ export const ClaimDtoSchema = z.object({
 });
 export type ClaimDto = z.infer<typeof ClaimDtoSchema>;
 
+// Mirrors com.nubeero.cia.claims.dto.ClaimStatsResponse — dashboard aggregate
+// (server-computed so the StatCards don't sum a single paged array).
+export const ClaimStatsDtoSchema = z.object({
+  openCount:     z.number(),
+  totalReserve:  z.number(),
+  totalApproved: z.number(),
+});
+export type ClaimStatsDto = z.infer<typeof ClaimStatsDtoSchema>;
+
 // ── Reserve ───────────────────────────────────────────────────────────────
 
 export const ClaimReserveDtoSchema = z.object({

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Badge, Button, DataTable, DataTableColumnHeader,
   Input, PageSection, Skeleton,
@@ -6,11 +6,12 @@ import {
 } from '@cia/ui';
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
-import { z } from 'zod';
 import {
-  validatedGet, AuditLogDtoSchema,
+  validatedList, AuditLogDtoSchema,
   type AuditAction, type AuditLogDto,
 } from '@cia/api-client';
+import { useServerPagination } from '@/lib/use-server-pagination';
+import { useDebouncedValue } from '@/lib/use-debounced-value';
 import AuditEventDetailSheet from './AuditEventDetailSheet';
 import { formatTimestamp } from '@/lib/format';
 
@@ -52,32 +53,41 @@ function exportCSV(data: AuditLogDto[]) {
 }
 
 export default function AuditLogTab() {
-  const auditQuery = useQuery<AuditLogDto[]>({
-    queryKey: ['audit', 'logs'],
-    // List endpoint returns the array directly in `data` with pagination in
-    // `meta` (Session-77 convention). validatedGet unwraps + validates it.
-    queryFn: () => validatedGet('/api/v1/audit/logs', z.array(AuditLogDtoSchema)),
-  });
+  const [detail, setDetail] = useState<AuditLogDto | null>(null);
+
+  // Server-side filter + pagination (URL-synced). The backend AuditLogFilter
+  // supports entityType/action (exact), userId/entityId (exact) and a
+  // timestamp range (from/to) — see AuditQueryService.buildSpec. The two
+  // free-text inputs are therefore EXACT match, not substring (a substring `q`
+  // would need adding to AuditLogFilter — tracked: audit-server-substring).
+  const { page, size, sort, filters, setPage, setSize, setSort, setFilter } =
+    useServerPagination({ defaultSize: 20, defaultSort: 'timestamp,desc' });
+  const entityType = filters.entityType ?? 'ALL';
+  const action     = filters.action     ?? 'ALL';
+  const [userInput,     setUserInput]     = useState(filters.userId   ?? '');
+  const [entityIdInput, setEntityIdInput] = useState(filters.entityId ?? '');
+  const debouncedUser     = useDebouncedValue(userInput, 350);
+  const debouncedEntityId = useDebouncedValue(entityIdInput, 350);
+  useEffect(() => { setFilter('userId', debouncedUser); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [debouncedUser]);
+  useEffect(() => { setFilter('entityId', debouncedEntityId); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [debouncedEntityId]);
+
+  const params = {
+    page, size, sort,
+    ...(entityType !== 'ALL' ? { entityType } : {}),
+    ...(action     !== 'ALL' ? { action } : {}),
+    ...(filters.userId   ? { userId: filters.userId } : {}),
+    ...(filters.entityId ? { entityId: filters.entityId } : {}),
+    ...(filters.from ? { from: `${filters.from}T00:00:00Z` } : {}),
+    ...(filters.to   ? { to:   `${filters.to}T23:59:59Z` } : {}),
+  };
   // No fabricated fallback: this is a compliance surface, so a failed load must
   // read as empty-with-error, never as plausible-but-fake audit rows.
-  const auditLog = auditQuery.data ?? [];
-  const [detail,     setDetail]     = useState<AuditLogDto | null>(null);
-  const [entityType, setEntityType] = useState('ALL');
-  const [action,     setAction]     = useState('ALL');
-  const [user,       setUser]       = useState('');
-  const [entityIdQ,  setEntityIdQ]  = useState('');
-  const [dateFrom,   setDateFrom]   = useState('');
-  const [dateTo,     setDateTo]     = useState('');
-
-  const filtered = useMemo(() => auditLog.filter(e => {
-    if (entityType !== 'ALL' && e.entityType !== entityType) return false;
-    if (action     !== 'ALL' && e.action     !== action)     return false;
-    if (user       && !(e.userName ?? '').toLowerCase().includes(user.toLowerCase())) return false;
-    if (entityIdQ  && !(e.entityId  ?? '').toLowerCase().includes(entityIdQ.toLowerCase())) return false;
-    if (dateFrom   && e.timestamp < dateFrom) return false;
-    if (dateTo     && e.timestamp > dateTo + 'T23:59:59Z') return false;
-    return true;
-  }), [auditLog, entityType, action, user, entityIdQ, dateFrom, dateTo]);
+  const auditQuery = useQuery({
+    queryKey: ['audit', 'logs', params],
+    queryFn: () => validatedList('/api/v1/audit/logs', AuditLogDtoSchema, { params }),
+  });
+  const rows  = auditQuery.data?.data ?? [];
+  const total = auditQuery.data?.meta.total ?? 0;
 
   const columns: ColumnDef<AuditLogDto>[] = [
     {
@@ -128,37 +138,39 @@ export default function AuditLogTab() {
         description="Complete record of all create, update, delete, approve and send operations."
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => exportCSV(filtered)}>
-              Export CSV ({filtered.length})
+            {/* Exports the current page only (server-paginated). A full-set
+                server export is a follow-up — tracked: audit-csv-server-export. */}
+            <Button variant="outline" size="sm" onClick={() => exportCSV(rows)}>
+              Export CSV ({rows.length})
             </Button>
           </div>
         }
       >
-        {/* Filter bar */}
+        {/* Filter bar — all server-side (URL-synced). */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-          <Select value={entityType} onValueChange={setEntityType}>
+          <Select value={entityType} onValueChange={(v) => setFilter('entityType', v === 'ALL' ? '' : v)}>
             <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Entity type" /></SelectTrigger>
             <SelectContent>{ENTITY_TYPES.map(t => <SelectItem key={t} value={t}>{t === 'ALL' ? 'All entities' : t}</SelectItem>)}</SelectContent>
           </Select>
-          <Select value={action} onValueChange={setAction}>
+          <Select value={action} onValueChange={(v) => setFilter('action', v === 'ALL' ? '' : v)}>
             <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Action" /></SelectTrigger>
             <SelectContent>{ACTIONS.map(a => <SelectItem key={a} value={a}>{a === 'ALL' ? 'All actions' : a}</SelectItem>)}</SelectContent>
           </Select>
           <Input
-            className="h-8 text-xs" placeholder="Filter by user…"
-            value={user} onChange={(e) => setUser(e.target.value)}
+            className="h-8 text-xs" placeholder="User ID (exact)…"
+            value={userInput} onChange={(e) => setUserInput(e.target.value)}
           />
           <Input
-            className="h-8 text-xs" placeholder="Entity ID…"
-            value={entityIdQ} onChange={(e) => setEntityIdQ(e.target.value)}
-          />
-          <Input
-            className="h-8 text-xs" type="date"
-            value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+            className="h-8 text-xs" placeholder="Entity ID (exact)…"
+            value={entityIdInput} onChange={(e) => setEntityIdInput(e.target.value)}
           />
           <Input
             className="h-8 text-xs" type="date"
-            value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+            value={filters.from ?? ''} onChange={(e) => setFilter('from', e.target.value)}
+          />
+          <Input
+            className="h-8 text-xs" type="date"
+            value={filters.to ?? ''} onChange={(e) => setFilter('to', e.target.value)}
           />
         </div>
 
@@ -171,8 +183,8 @@ export default function AuditLogTab() {
         ) : (
           <DataTable
             columns={columns}
-            data={filtered}
-            toolbar={{ searchColumn: 'entityType', searchPlaceholder: 'Search…' }}
+            data={rows}
+            serverPagination={{ page, size, total, onPageChange: setPage, onSizeChange: setSize, sort, onSortChange: setSort }}
           />
         )}
       </PageSection>
