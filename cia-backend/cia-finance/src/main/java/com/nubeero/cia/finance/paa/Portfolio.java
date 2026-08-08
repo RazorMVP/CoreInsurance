@@ -3,6 +3,8 @@ package com.nubeero.cia.finance.paa;
 import com.nubeero.cia.common.entity.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -21,6 +23,11 @@ import java.util.UUID;
  * than a {@code @ManyToOne} so the PAA module doesn't pull the
  * {@code ClassOfBusiness} mapping into its persistence context — same loose-
  * coupling pattern as {@code JournalEntryLine.portfolioId}.
+ *
+ * <p>{@code contractNature} (V76, FAC / IFRS-17 PAA workstream Task 1)
+ * distinguishes direct-policy portfolios from facultative-reinsurance
+ * portfolios reserved for a later slice. Every portfolio created by
+ * {@code ContractGroupingService} today is {@link ContractNature#DIRECT}.
  */
 @Getter
 @Setter
@@ -43,4 +50,8 @@ public class Portfolio extends BaseEntity {
 
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "contract_nature", updatable = false)
+    private ContractNature contractNature = ContractNature.DIRECT;
 }

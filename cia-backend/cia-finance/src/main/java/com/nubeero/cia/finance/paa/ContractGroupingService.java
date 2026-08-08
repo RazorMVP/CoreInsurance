@@ -23,12 +23,13 @@ import java.util.UUID;
  * <ol>
  *   <li>resolves the {@link Portfolio} for the policy's class-of-business
  *       (lazy-creates one if absent — first-policy-of-class bootstraps the
- *       portfolio);</li>
+ *       portfolio); direct-policy portfolios are always
+ *       {@link ContractNature#DIRECT};</li>
  *   <li>resolves the {@link GroupOfContracts} for
  *       {@code (portfolio, cohort_year, onerousness)} (lazy-creates if
  *       absent);</li>
- *   <li>writes a {@link PolicyGroupAssignment} row linking the policy to
- *       the group.</li>
+ *   <li>writes a {@link ContractGroupAssignment} row (type
+ *       {@link ContractType#POLICY}) linking the policy to the group.</li>
  * </ol>
  *
  * <h2>Execution model</h2>
@@ -40,10 +41,12 @@ import java.util.UUID;
  * IFRS 17.
  *
  * <h2>Idempotency</h2>
- * <p>{@code policy_group_assignment.policy_id} carries a UNIQUE constraint
- * (V37), so a duplicate {@code PolicyApprovedEvent} re-fire produces a
- * constraint violation rather than a duplicate assignment. As the fast
- * path the service checks {@link PolicyGroupAssignmentRepository#existsByPolicyIdAndDeletedAtIsNull}
+ * <p>{@code contract_group_assignment (contract_type, contract_id)} carries
+ * a UNIQUE constraint (V77; generalised from V37's policy-only
+ * {@code UNIQUE(policy_id)}), so a duplicate {@code PolicyApprovedEvent}
+ * re-fire produces a constraint violation rather than a duplicate
+ * assignment. As the fast path the service checks
+ * {@link ContractGroupAssignmentRepository#findByContractTypeAndContractIdAndDeletedAtIsNull}
  * and short-circuits before any further work.
  *
  * <h2>Onerousness</h2>
@@ -81,7 +84,7 @@ public class ContractGroupingService {
 
     private final PortfolioRepository portfolioRepository;
     private final GroupOfContractsRepository groupRepository;
-    private final PolicyGroupAssignmentRepository assignmentRepository;
+    private final ContractGroupAssignmentRepository assignmentRepository;
     private final ClassOfBusinessRepository classOfBusinessRepository;
     private final Clock clock;
 
@@ -97,9 +100,10 @@ public class ContractGroupingService {
      *
      * @return the (existing or newly-created) assignment row
      */
-    public PolicyGroupAssignment replayPolicyApproved(PolicyApprovedEvent event) {
-        Optional<PolicyGroupAssignment> existing =
-            assignmentRepository.findByPolicyIdAndDeletedAtIsNull(event.policyId());
+    public ContractGroupAssignment replayPolicyApproved(PolicyApprovedEvent event) {
+        Optional<ContractGroupAssignment> existing =
+            assignmentRepository.findByContractTypeAndContractIdAndDeletedAtIsNull(
+                ContractType.POLICY, event.policyId());
         if (existing.isPresent()) {
             log.debug("Policy {} already assigned to group {}; skipping",
                 event.policyNumber(), existing.get().getGroup().getId());
@@ -111,11 +115,12 @@ public class ContractGroupingService {
         Onerousness onerousness = assessOnerousness(event);
         GroupOfContracts group = resolveOrCreateGroup(portfolio, cohortYear, onerousness);
 
-        PolicyGroupAssignment assignment = new PolicyGroupAssignment();
-        assignment.setPolicyId(event.policyId());
+        ContractGroupAssignment assignment = new ContractGroupAssignment();
+        assignment.setContractType(ContractType.POLICY);
+        assignment.setContractId(event.policyId());
         assignment.setGroup(group);
         assignment.setAssignedAt(Instant.now(clock));
-        PolicyGroupAssignment saved = assignmentRepository.save(assignment);
+        ContractGroupAssignment saved = assignmentRepository.save(assignment);
 
         log.info("Assigned policy {} ({}) to group {}/{}/{} (group id {})",
             event.policyNumber(), event.policyId(),
@@ -165,6 +170,9 @@ public class ContractGroupingService {
             p.setName(name);
             p.setClassOfBusinessId(classOfBusinessId);
             p.setActive(true);
+            // Direct-policy path only (Task 1 of the FAC/IFRS-17 PAA workstream);
+            // a later slice generalises this signature to accept the nature.
+            p.setContractNature(ContractNature.DIRECT);
             Portfolio saved = portfolioRepository.save(p);
             log.info("Auto-created portfolio {} ({}) for class_of_business {}", code, name, classOfBusinessId);
             return saved;

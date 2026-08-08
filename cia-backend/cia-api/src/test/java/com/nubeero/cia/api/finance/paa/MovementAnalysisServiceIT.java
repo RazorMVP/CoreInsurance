@@ -87,7 +87,7 @@ class MovementAnalysisServiceIT {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.target", () -> "49");
+        registry.add("spring.flyway.target", () -> "77");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 
@@ -307,8 +307,8 @@ class MovementAnalysisServiceIT {
             UUID.randomUUID(), "Test COB", "COB-MA",
             startDate, endDate, new BigDecimal(netPremium), "NGN", "APPROVED", "test");
         jdbcTemplate.update(
-            "INSERT INTO policy_group_assignment (id, policy_id, group_id, assigned_at, created_by) " +
-            "VALUES (?, ?, ?, now(), ?)",
+            "INSERT INTO contract_group_assignment (id, contract_type, contract_id, group_id, assigned_at, created_by) " +
+            "VALUES (?, 'POLICY', ?, ?, now(), ?)",
             UUID.randomUUID(), policyId, groupId, "test");
         return policyId;
     }

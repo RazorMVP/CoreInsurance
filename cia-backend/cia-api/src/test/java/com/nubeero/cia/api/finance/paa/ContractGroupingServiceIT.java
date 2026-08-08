@@ -1,12 +1,13 @@
 package com.nubeero.cia.api.finance.paa;
 
 import com.nubeero.cia.common.event.PolicyApprovedEvent;
+import com.nubeero.cia.finance.paa.ContractGroupAssignment;
+import com.nubeero.cia.finance.paa.ContractGroupAssignmentRepository;
 import com.nubeero.cia.finance.paa.ContractGroupingService;
+import com.nubeero.cia.finance.paa.ContractType;
 import com.nubeero.cia.finance.paa.GroupOfContractsRepository;
 import com.nubeero.cia.finance.paa.GroupStatus;
 import com.nubeero.cia.finance.paa.Onerousness;
-import com.nubeero.cia.finance.paa.PolicyGroupAssignment;
-import com.nubeero.cia.finance.paa.PolicyGroupAssignmentRepository;
 import com.nubeero.cia.finance.paa.PortfolioRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,14 +34,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * End-to-end Testcontainers IT for {@link ContractGroupingService}. Each test
  * builds a {@link PolicyApprovedEvent}, hands it to the service (mimicking the
  * Spring event publisher) and verifies the resulting state across three tables:
- * {@code portfolio}, {@code group_of_contracts}, {@code policy_group_assignment}.
+ * {@code portfolio}, {@code group_of_contracts}, {@code contract_group_assignment}.
  *
- * <p>Schema: Flyway runs through V37 so all the PAA tables (V36) and the
- * link table (V37) exist. A class_of_business + policy row are seeded per
- * test via {@code JdbcTemplate} so the {@link
- * com.nubeero.cia.setup.product.ClassOfBusinessRepository} lookup resolves
- * and the FK from {@code policy_group_assignment.policy_id → policies.id}
- * is satisfied.
+ * <p>Schema: Flyway runs through V77 so all the PAA tables (V36) and the
+ * polymorphic link table (V77, generalised from V37's policy-only
+ * {@code policy_group_assignment}) exist. A class_of_business + policy row
+ * are seeded per test via {@code JdbcTemplate} so the {@link
+ * com.nubeero.cia.setup.product.ClassOfBusinessRepository} lookup resolves.
  *
  * <p>Pattern lifted from {@code SubledgerPostingServiceIT} (Slice 1.5) —
  * @DataJpaTest + AutoConfigureTestDatabase.NONE + explicit @Import for the
@@ -68,7 +68,7 @@ class ContractGroupingServiceIT {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.target", () -> "49");
+        registry.add("spring.flyway.target", () -> "77");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 
@@ -77,7 +77,7 @@ class ContractGroupingServiceIT {
     @Autowired private EntityManager entityManager;
     @Autowired private PortfolioRepository portfolioRepository;
     @Autowired private GroupOfContractsRepository groupRepository;
-    @Autowired private PolicyGroupAssignmentRepository assignmentRepository;
+    @Autowired private ContractGroupAssignmentRepository assignmentRepository;
 
     private UUID motorCobId;
 
@@ -111,7 +111,7 @@ class ContractGroupingServiceIT {
         assertThat(group).isPresent();
         assertThat(group.get().getStatus()).isEqualTo(GroupStatus.OPEN);
 
-        var assignment = assignmentRepository.findByPolicyIdAndDeletedAtIsNull(policyId);
+        var assignment = assignmentRepository.findByContractTypeAndContractIdAndDeletedAtIsNull(ContractType.POLICY, policyId);
         assertThat(assignment).isPresent();
         assertThat(assignment.get().getGroup().getId()).isEqualTo(group.get().getId());
     }
@@ -133,8 +133,8 @@ class ContractGroupingServiceIT {
             .hasSize(1);
         assertThat(groupRepository.findByCohortYearAndDeletedAtIsNullOrderByPortfolioIdAsc(2026))
             .hasSize(1);
-        assertThat(assignmentRepository.findByPolicyIdAndDeletedAtIsNull(policyId1)).isPresent();
-        assertThat(assignmentRepository.findByPolicyIdAndDeletedAtIsNull(policyId2)).isPresent();
+        assertThat(assignmentRepository.findByContractTypeAndContractIdAndDeletedAtIsNull(ContractType.POLICY, policyId1)).isPresent();
+        assertThat(assignmentRepository.findByContractTypeAndContractIdAndDeletedAtIsNull(ContractType.POLICY, policyId2)).isPresent();
     }
 
     // ── 3. Different cohort year creates new group under same portfolio ──────
@@ -168,15 +168,15 @@ class ContractGroupingServiceIT {
         PolicyApprovedEvent event = buildEvent(policyId, "POL-IDP-001", motorCobId,
             LocalDate.of(2026, 5, 1), new BigDecimal("100000.00"));
 
-        PolicyGroupAssignment first = service.replayPolicyApproved(event);
+        ContractGroupAssignment first = service.replayPolicyApproved(event);
         entityManager.flush();
-        PolicyGroupAssignment second = service.replayPolicyApproved(event);
+        ContractGroupAssignment second = service.replayPolicyApproved(event);
         entityManager.flush();
 
         assertThat(second.getId()).isEqualTo(first.getId());
 
         Long count = jdbcTemplate.queryForObject(
-            "SELECT count(*) FROM policy_group_assignment WHERE policy_id = ?",
+            "SELECT count(*) FROM contract_group_assignment WHERE contract_type = 'POLICY' AND contract_id = ?",
             Long.class, policyId);
         assertThat(count).isEqualTo(1L);
     }
@@ -205,7 +205,7 @@ class ContractGroupingServiceIT {
         assertThat(portfolio).isPresent();
         assertThat(portfolio.get().getClassOfBusinessId()).isNull();
 
-        var assignment = assignmentRepository.findByPolicyIdAndDeletedAtIsNull(policyId);
+        var assignment = assignmentRepository.findByContractTypeAndContractIdAndDeletedAtIsNull(ContractType.POLICY, policyId);
         assertThat(assignment).isPresent();
         assertThat(assignment.get().getGroup().getPortfolio().getCode()).isEqualTo("UNCLASSIFIED");
     }
@@ -224,7 +224,7 @@ class ContractGroupingServiceIT {
         var portfolio = portfolioRepository.findByCodeAndDeletedAtIsNull("UNCLASSIFIED");
         assertThat(portfolio).isPresent();
 
-        var assignment = assignmentRepository.findByPolicyIdAndDeletedAtIsNull(policyId);
+        var assignment = assignmentRepository.findByContractTypeAndContractIdAndDeletedAtIsNull(ContractType.POLICY, policyId);
         assertThat(assignment).isPresent();
         assertThat(assignment.get().getGroup().getPortfolio().getCode()).isEqualTo("UNCLASSIFIED");
     }

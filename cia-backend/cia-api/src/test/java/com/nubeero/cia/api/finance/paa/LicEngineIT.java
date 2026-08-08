@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * End-to-end Testcontainers IT for {@link LicEngine} — Slice 2.4.
  *
  * <p>Each test seeds: fiscal year + months, portfolio + group, a policy,
- * a policy_group_assignment, then one or more claims at the right
+ * a contract_group_assignment (contract_type = POLICY), then one or more claims at the right
  * approved_at / settled_at / dv_amount values to exercise the SQL roll-
  * forward. Invokes {@link LicEngine#recognise(UUID)} and verifies the
  * resulting {@code paa_lic} row.
@@ -77,7 +77,7 @@ class LicEngineIT {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.target", () -> "49");
+        registry.add("spring.flyway.target", () -> "77");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 
@@ -363,8 +363,8 @@ class LicEngineIT {
             LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
             new BigDecimal("100000.00"), "NGN", "APPROVED", "test");
         jdbcTemplate.update(
-            "INSERT INTO policy_group_assignment (id, policy_id, group_id, assigned_at, created_by) " +
-            "VALUES (?, ?, ?, now(), ?)",
+            "INSERT INTO contract_group_assignment (id, contract_type, contract_id, group_id, assigned_at, created_by) " +
+            "VALUES (?, 'POLICY', ?, ?, now(), ?)",
             UUID.randomUUID(), policyId, groupId, "test");
         return policyId;
     }

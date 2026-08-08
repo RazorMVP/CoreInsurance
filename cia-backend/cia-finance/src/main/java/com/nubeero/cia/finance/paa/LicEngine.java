@@ -26,7 +26,9 @@ import java.util.UUID;
  * <p>The LIC mirror of {@link LrcEngine}: for a target fiscal period, walks
  * every IFRS 17 group of contracts and computes the LIC roll-forward by
  * aggregating claim activity (approvals + settlements) from the claims
- * table — joined to the group via {@code policy_group_assignment}.
+ * table — joined to the group via {@code contract_group_assignment}
+ * filtered to {@code contract_type = 'POLICY'} (direct claims only — FAC
+ * LIC is a later slice of the FAC / IFRS-17 PAA workstream).
  *
  * <h2>v1 does NOT post a JE</h2>
  * <p>Unlike {@link LrcEngine} which posts insurance-revenue JEs, the LIC
@@ -164,9 +166,9 @@ public class LicEngine {
 
     /**
      * Aggregate claim activity for one group + one period via a single
-     * conditional-sum native query. Joins claims to policy_group_assignment
-     * on policy_id so a group's claims are the union of claims on all
-     * policies in the group.
+     * conditional-sum native query. Joins claims to contract_group_assignment
+     * on contract_id (filtered to contract_type = 'POLICY') so a group's
+     * claims are the union of claims on all direct policies in the group.
      *
      * <p>Date predicates use timestamps because the claims table stores
      * approved_at / settled_at as {@code TIMESTAMPTZ}. period.start_date is
@@ -196,7 +198,7 @@ public class LicEngine {
             "  MIN(c.currency_code) AS min_ccy, " +
             "  MAX(c.currency_code) AS max_ccy " +
             "FROM claims c " +
-            "JOIN policy_group_assignment pga ON pga.policy_id = c.policy_id " +
+            "JOIN contract_group_assignment pga ON pga.contract_id = c.policy_id AND pga.contract_type = 'POLICY' " +
             "WHERE pga.group_id = ? " +
             "  AND c.deleted_at IS NULL " +
             "  AND pga.deleted_at IS NULL " +

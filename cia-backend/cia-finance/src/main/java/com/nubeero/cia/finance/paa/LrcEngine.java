@@ -103,7 +103,7 @@ public class LrcEngine {
 
     private final FiscalPeriodRepository fiscalPeriodRepository;
     private final GroupOfContractsRepository groupRepository;
-    private final PolicyGroupAssignmentRepository assignmentRepository;
+    private final ContractGroupAssignmentRepository assignmentRepository;
     private final PaaLrcRepository lrcRepository;
     private final JournalEntryService journalEntryService;
     private final JdbcTemplate jdbcTemplate;
@@ -175,7 +175,7 @@ public class LrcEngine {
      * policy data — same inputs always produce same outputs.
      */
     private GroupRollForward computeRollForward(GroupOfContracts group, FiscalPeriod period) {
-        List<PolicyGroupAssignment> assignments =
+        List<ContractGroupAssignment> assignments =
             assignmentRepository.findByGroupIdAndDeletedAtIsNullOrderByAssignedAtAsc(group.getId());
 
         if (assignments.isEmpty()) {
@@ -188,10 +188,13 @@ public class LrcEngine {
         BigDecimal closing = BigDecimal.ZERO;
         String currency = null;
 
-        for (PolicyGroupAssignment a : assignments) {
-            PolicyPricing policy = loadPolicyPricing(a.getPolicyId());
+        // v1 (Task 1 of the FAC/IFRS-17 PAA workstream): every assignment is
+        // still ContractType.POLICY — FAC LRC measurement is out of scope
+        // for this slice, so no branch on getContractType() is needed yet.
+        for (ContractGroupAssignment a : assignments) {
+            PolicyPricing policy = loadPolicyPricing(a.getContractId());
             if (policy == null) {
-                log.warn("Skipping assignment {} — policy {} not found or deleted", a.getId(), a.getPolicyId());
+                log.warn("Skipping assignment {} — policy {} not found or deleted", a.getId(), a.getContractId());
                 continue;
             }
 
