@@ -13,8 +13,6 @@ public interface ContractGroupAssignmentRepository extends JpaRepository<Contrac
     Optional<ContractGroupAssignment> findByContractTypeAndContractIdAndDeletedAtIsNull(
         ContractType contractType, UUID contractId);
 
-    boolean existsByContractTypeAndContractIdAndDeletedAtIsNull(ContractType contractType, UUID contractId);
-
     /**
      * All assignments under a given group — used by downstream IFRS-17
      * measurement (LRC/LIC engines) to enumerate the contracts feeding each
