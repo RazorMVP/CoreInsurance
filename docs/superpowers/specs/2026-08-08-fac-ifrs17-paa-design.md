@@ -188,6 +188,8 @@ Each slice is independently shippable + reviewable, one stated goal, and keeps t
 
 ## 10. Accounting sign-off gate (REQUIRED before build)
 
+> **SIGN-OFF OBTAINED 2026-08-08** — the accounting owner confirmed both gate items below (§65 commission-netting for outward, and the modified-prospective transition stance). Build execution is unblocked.
+
 The build slices do **not** run until the accounting owner confirms the following. The inward liability-mirror (§4.1) is low-controversy; the two items most needing review:
 
 1. **§65 commission-netting (outward, §4.2 / §4.3(2))** — confirm FAC ceding commissions are non-claims-contingent (true for the current flat-commission data model), so netting into the reinsurance-held asset is correct rather than immediate income.
