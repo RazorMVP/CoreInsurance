@@ -6,6 +6,7 @@ import com.nubeero.cia.common.event.RiFacInwardAcceptedEvent;
 import com.nubeero.cia.finance.gl.PolicyClassResolver;
 import com.nubeero.cia.setup.product.ClassOfBusiness;
 import com.nubeero.cia.setup.product.ClassOfBusinessRepository;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -18,6 +19,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -91,10 +93,21 @@ import java.util.UUID;
  * carries a coverage-start date, so {@link #inwardCoverStartYear} /
  * {@link #outwardCoverStartYear} resolve it via a scalar native-SQL read
  * against {@code ri_fac_inwards.cover_from} / {@code ri_fac_covers.cover_from}
- * — mirroring {@code LrcEngine.loadPolicyPricing}'s native-SQL pattern to
- * avoid pulling cia-reinsurance entities into cia-finance's persistence
- * context (the same loose-coupling {@link PolicyClassResolver} already
- * establishes for {@code policies}).
+ * — mirroring {@code LrcEngine.loadPolicyPricing}'s native-SQL pattern (list
+ * query, empty-safe, no {@code queryForObject} exception path) to avoid
+ * pulling cia-reinsurance entities into cia-finance's persistence context
+ * (the same loose-coupling {@link PolicyClassResolver} already establishes
+ * for {@code policies}).
+ *
+ * <p><strong>Same-transaction visibility.</strong> {@code RiFacInwardService.create()}
+ * / {@code FacCoverService}'s ceding path {@code repository.save(...)} the
+ * FAC row (Hibernate buffers the INSERT — {@code BaseEntity.id} is
+ * client-assigned {@link jakarta.persistence.GenerationType#UUID}, so nothing
+ * forces an immediate flush) and then publish the accepted/ceded event
+ * <em>synchronously in the same open transaction</em>. A raw JDBC read run at
+ * that point can miss the not-yet-flushed row. Both cohort-year helpers
+ * therefore call {@link EntityManager#flush()} before reading — deterministic,
+ * and not reliant on some unrelated listener happening to flush first.
  */
 @Service
 @Slf4j
@@ -121,6 +134,7 @@ public class ContractGroupingService {
     private final ClassOfBusinessRepository classOfBusinessRepository;
     private final PolicyClassResolver policyClassResolver;
     private final JdbcTemplate jdbcTemplate;
+    private final EntityManager entityManager;
     private final Clock clock;
 
     @EventListener
@@ -234,9 +248,20 @@ public class ContractGroupingService {
      * auto-created portfolios from colliding across natures (or with
      * user-created ones), and truncating the suffix so the result fits the
      * {@code VARCHAR(20)} portfolio.code column.
+     *
+     * <p><strong>Truncation collision.</strong> Two distinct class-of-business
+     * codes that share their first {@code 20 - prefix.length()} characters
+     * truncate to the identical portfolio code. This method deliberately does
+     * <em>not</em> disambiguate — the {@code COB-<code>} scheme (and its FAC
+     * siblings) must stay byte-identical to what already-provisioned tenant
+     * data expects, so short codes are never affected and the truncation rule
+     * itself never changes shape. Instead, {@link #findOrCreatePortfolioByCode}
+     * detects the collision when it actually happens (a differing
+     * {@code classOfBusinessId} reusing the same code) and fails loudly rather
+     * than silently mis-grouping the second class-of-business's contracts.
      */
     private static String autoPortfolioCode(String cobCode, ContractNature nature) {
-        String prefix = AUTO_PORTFOLIO_PREFIX.get(nature);
+        String prefix = prefixFor(nature);
         int suffixBudget = PORTFOLIO_CODE_MAX_LENGTH - prefix.length();
         String suffix = cobCode.length() <= suffixBudget ? cobCode : cobCode.substring(0, suffixBudget);
         return prefix + suffix;
@@ -252,45 +277,108 @@ public class ContractGroupingService {
     private static String unclassifiedPortfolioCode(ContractNature nature) {
         return nature == ContractNature.DIRECT
             ? UNCLASSIFIED_PORTFOLIO_CODE
-            : AUTO_PORTFOLIO_PREFIX.get(nature) + UNCLASSIFIED_PORTFOLIO_CODE;
+            : prefixFor(nature) + UNCLASSIFIED_PORTFOLIO_CODE;
     }
 
+    /**
+     * {@link #AUTO_PORTFOLIO_PREFIX} lookup that fails loudly instead of
+     * NPE-ing if a future {@link ContractNature} value is added without a
+     * matching map entry.
+     */
+    private static String prefixFor(ContractNature nature) {
+        String prefix = AUTO_PORTFOLIO_PREFIX.get(nature);
+        if (prefix == null) {
+            throw new IllegalStateException("unmapped ContractNature: " + nature);
+        }
+        return prefix;
+    }
+
+    /**
+     * Resolves the portfolio for {@code code}, creating it if absent.
+     *
+     * <p>When a portfolio with this exact code already exists, its
+     * {@code classOfBusinessId} MUST match the one the caller is resolving
+     * for — otherwise this is a truncation collision (see
+     * {@link #autoPortfolioCode}: two different class-of-business codes
+     * produced the same 20-char auto-code) and reusing the existing portfolio
+     * would silently group the second class-of-business's contracts under
+     * the first's. The unclassified-fallback callers always pass a
+     * {@code null classOfBusinessId} on both sides, so this check never
+     * fires for them — it fires only for the auto-code collision case.
+     */
     private Portfolio findOrCreatePortfolioByCode(String code, String name, UUID classOfBusinessId, ContractNature nature) {
-        return portfolioRepository.findByCodeAndDeletedAtIsNull(code).orElseGet(() -> {
-            Portfolio p = new Portfolio();
-            p.setCode(code);
-            p.setName(name);
-            p.setClassOfBusinessId(classOfBusinessId);
-            p.setActive(true);
-            p.setContractNature(nature);
-            Portfolio saved = portfolioRepository.save(p);
-            log.info("Auto-created {} portfolio {} ({}) for class_of_business {}", nature, code, name, classOfBusinessId);
-            return saved;
-        });
+        Optional<Portfolio> existing = portfolioRepository.findByCodeAndDeletedAtIsNull(code);
+        if (existing.isPresent()) {
+            Portfolio p = existing.get();
+            if (!Objects.equals(p.getClassOfBusinessId(), classOfBusinessId)) {
+                throw new IllegalStateException(
+                    "Portfolio code collision: auto-generated code '" + code + "' for class_of_business "
+                        + classOfBusinessId + " (" + nature + ") already belongs to a different class_of_business "
+                        + p.getClassOfBusinessId() + " — two class-of-business codes truncate to the same "
+                        + "VARCHAR(20) portfolio code. Rename one class-of-business code, or seed a portfolio "
+                        + "for it manually with a distinct code, to disambiguate.");
+            }
+            return p;
+        }
+
+        Portfolio p = new Portfolio();
+        p.setCode(code);
+        p.setName(name);
+        p.setClassOfBusinessId(classOfBusinessId);
+        p.setActive(true);
+        p.setContractNature(nature);
+        Portfolio saved = portfolioRepository.save(p);
+        log.info("Auto-created {} portfolio {} ({}) for class_of_business {}", nature, code, name, classOfBusinessId);
+        return saved;
     }
 
     /**
      * Scalar native-SQL read of {@code ri_fac_inwards.cover_from} — mirrors
-     * {@code LrcEngine.loadPolicyPricing}'s pattern, avoiding a cia-reinsurance
-     * entity dependency from cia-finance.
+     * {@code LrcEngine.loadPolicyPricing}'s pattern (list query, empty-safe),
+     * avoiding a cia-reinsurance entity dependency from cia-finance.
+     *
+     * <p>Flushes first: {@code RiFacInwardService.create()}/{@code renew()}/
+     * {@code extend()} save the {@code RiFacInward} row and publish
+     * {@link RiFacInwardAcceptedEvent} synchronously in the same open
+     * transaction, without an intervening flush — a raw JDBC read here could
+     * otherwise miss the not-yet-flushed INSERT.
      */
     private int inwardCoverStartYear(UUID facInwardId) {
-        LocalDate coverFrom = jdbcTemplate.queryForObject(
+        entityManager.flush();
+        List<LocalDate> rows = jdbcTemplate.query(
             "SELECT cover_from FROM ri_fac_inwards WHERE id = ? AND deleted_at IS NULL",
-            LocalDate.class, facInwardId);
-        return coverFrom.getYear();
+            (rs, rowNum) -> rs.getDate("cover_from").toLocalDate(),
+            facInwardId);
+        if (rows.isEmpty()) {
+            throw new IllegalStateException(
+                "ri_fac_inwards " + facInwardId + " not found (or soft-deleted) when resolving cohort year "
+                    + "for grouping — data integrity error: the row must exist and be visible by the time "
+                    + "RiFacInwardAcceptedEvent fires");
+        }
+        return rows.get(0).getYear();
     }
 
     /**
      * Scalar native-SQL read of {@code ri_fac_covers.cover_from} — mirrors
-     * {@code LrcEngine.loadPolicyPricing}'s pattern, avoiding a cia-reinsurance
-     * entity dependency from cia-finance.
+     * {@code LrcEngine.loadPolicyPricing}'s pattern (list query, empty-safe),
+     * avoiding a cia-reinsurance entity dependency from cia-finance. Flushes
+     * first for the same same-transaction-visibility reason as
+     * {@link #inwardCoverStartYear} (kept symmetric even though the current
+     * outward save path is not known to race).
      */
     private int outwardCoverStartYear(UUID facCoverId) {
-        LocalDate coverFrom = jdbcTemplate.queryForObject(
+        entityManager.flush();
+        List<LocalDate> rows = jdbcTemplate.query(
             "SELECT cover_from FROM ri_fac_covers WHERE id = ? AND deleted_at IS NULL",
-            LocalDate.class, facCoverId);
-        return coverFrom.getYear();
+            (rs, rowNum) -> rs.getDate("cover_from").toLocalDate(),
+            facCoverId);
+        if (rows.isEmpty()) {
+            throw new IllegalStateException(
+                "ri_fac_covers " + facCoverId + " not found (or soft-deleted) when resolving cohort year "
+                    + "for grouping — data integrity error: the row must exist and be visible by the time "
+                    + "FacPremiumCededEvent fires");
+        }
+        return rows.get(0).getYear();
     }
 
     private GroupOfContracts resolveOrCreateGroup(Portfolio portfolio, int cohortYear, Onerousness onerousness) {

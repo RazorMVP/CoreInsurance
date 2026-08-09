@@ -8,6 +8,7 @@ import com.nubeero.cia.finance.paa.ContractGroupingService;
 import com.nubeero.cia.finance.paa.ContractNature;
 import com.nubeero.cia.finance.paa.ContractType;
 import com.nubeero.cia.finance.gl.PolicyClassResolver;
+import com.nubeero.cia.reinsurance.RiFacInward;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -47,6 +48,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  * native-SQL read against {@code ri_fac_inwards.cover_from} /
  * {@code ri_fac_covers.cover_from} — so each test seeds the relevant row
  * with the event's id as the primary key <em>before</em> publishing.
+ *
+ * <p>{@link #inwardFacGroupsCorrectlyWhenRowNotYetFlushed()} is the
+ * regression test for the same-transaction visibility bug (Fix round 1):
+ * unlike the other tests, which seed via a raw {@code jdbcTemplate.update}
+ * that is already committed/visible to any reader, this one JPA-{@code
+ * persist}s the {@code RiFacInward} row with <em>no</em> explicit flush
+ * before publishing the event — reproducing exactly what
+ * {@code RiFacInwardService.create()} does in production (buffered
+ * {@code repository.save(...)}, then a synchronous event publish in the
+ * same open transaction).
  */
 @Testcontainers
 @DataJpaTest
@@ -149,6 +160,47 @@ class FacContractGroupingIT {
             "SELECT count(*) FROM contract_group_assignment WHERE contract_type = 'FAC_INWARD' AND contract_id = ?",
             Long.class, facInwardId);
         assertThat(count).isEqualTo(1L);
+    }
+
+    // ── 4. Regression: unflushed row in the same open transaction is still visible ──
+    @Test
+    @DisplayName("inward FAC grouping does not miss a same-transaction, not-yet-flushed row")
+    void inwardFacGroupsCorrectlyWhenRowNotYetFlushed() {
+        RiFacInward inward = RiFacInward.builder()
+            .facInwardReference("FIN-2026-UNFLUSHED")
+            .cedingCompanyId(UUID.randomUUID())
+            .cedingCompanyName("Test Ceding Co")
+            .classOfBusinessId(motorCobId)
+            .classOfBusinessName("Motor Comprehensive")
+            .sumInsured(new BigDecimal("1000000.00"))
+            .ourSharePct(new BigDecimal("50.0000"))
+            .acceptedSumInsured(new BigDecimal("500000.00"))
+            .premiumRate(new BigDecimal("2.500000"))
+            .grossPremium(new BigDecimal("12500.00"))
+            .netPremium(new BigDecimal("11250.00"))
+            .coverFrom(LocalDate.of(2026, 4, 1))
+            .coverTo(LocalDate.of(2027, 4, 1))
+            .build();
+
+        // JPA persist assigns the client-visible id immediately (GenerationType.UUID),
+        // WITHOUT flushing the INSERT to the wire — mirrors
+        // RiFacInwardService.create()'s repository.save(inward) exactly.
+        entityManager.persist(inward);
+        UUID facInwardId = inward.getId();
+
+        // No entityManager.flush() here — the whole point of this test. If
+        // ContractGroupingService's cohort-year read doesn't flush first, this
+        // publish throws EmptyResultDataAccessException / IllegalStateException
+        // and the assignment is never written.
+        publisher.publishEvent(inwardAcceptedEvent(facInwardId, motorCobId));
+
+        ContractGroupAssignment assignment = assignmentRepository
+            .findByContractTypeAndContractIdAndDeletedAtIsNull(ContractType.FAC_INWARD, facInwardId)
+            .orElseThrow();
+
+        assertThat(assignment.getGroup().getPortfolio().getContractNature())
+            .isEqualTo(ContractNature.FAC_INWARD);
+        assertThat(assignment.getGroup().getCohortYear()).isEqualTo(2026);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

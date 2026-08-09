@@ -4,6 +4,7 @@ import com.nubeero.cia.common.event.PolicyApprovedEvent;
 import com.nubeero.cia.finance.paa.ContractGroupAssignment;
 import com.nubeero.cia.finance.paa.ContractGroupAssignmentRepository;
 import com.nubeero.cia.finance.paa.ContractGroupingService;
+import com.nubeero.cia.finance.paa.ContractNature;
 import com.nubeero.cia.finance.paa.ContractType;
 import com.nubeero.cia.finance.paa.GroupOfContractsRepository;
 import com.nubeero.cia.finance.paa.GroupStatus;
@@ -30,6 +31,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * End-to-end Testcontainers IT for {@link ContractGroupingService}. Each test
@@ -111,7 +113,7 @@ class ContractGroupingServiceIT {
             LocalDate.of(2026, 3, 15), new BigDecimal("500000.00")));
         entityManager.flush();
 
-        var portfolios = portfolioRepository.findByClassOfBusinessIdAndDeletedAtIsNullOrderByCodeAsc(motorCobId);
+        var portfolios = portfolioRepository.findByClassOfBusinessIdAndContractNatureAndDeletedAtIsNullOrderByCodeAsc(motorCobId, ContractNature.DIRECT);
         assertThat(portfolios).hasSize(1);
         assertThat(portfolios.get(0).getCode()).isEqualTo("COB-MOTOR-COMP");
         assertThat(portfolios.get(0).getName()).isEqualTo("Motor Comprehensive");
@@ -140,7 +142,7 @@ class ContractGroupingServiceIT {
             LocalDate.of(2026, 6, 1), new BigDecimal("200000.00")));
         entityManager.flush();
 
-        assertThat(portfolioRepository.findByClassOfBusinessIdAndDeletedAtIsNullOrderByCodeAsc(motorCobId))
+        assertThat(portfolioRepository.findByClassOfBusinessIdAndContractNatureAndDeletedAtIsNullOrderByCodeAsc(motorCobId, ContractNature.DIRECT))
             .hasSize(1);
         assertThat(groupRepository.findByCohortYearAndDeletedAtIsNullOrderByPortfolioIdAsc(2026))
             .hasSize(1);
@@ -162,7 +164,7 @@ class ContractGroupingServiceIT {
         entityManager.flush();
 
         // One portfolio for the class, two groups (2026, 2027)
-        var portfolios = portfolioRepository.findByClassOfBusinessIdAndDeletedAtIsNullOrderByCodeAsc(motorCobId);
+        var portfolios = portfolioRepository.findByClassOfBusinessIdAndContractNatureAndDeletedAtIsNullOrderByCodeAsc(motorCobId, ContractNature.DIRECT);
         assertThat(portfolios).hasSize(1);
 
         var groups = jdbcTemplate.queryForList(
@@ -257,7 +259,7 @@ class ContractGroupingServiceIT {
             LocalDate.of(2026, 7, 1), new BigDecimal("50000.00")));
         entityManager.flush();
 
-        var portfolios = portfolioRepository.findByClassOfBusinessIdAndDeletedAtIsNullOrderByCodeAsc(longCobId);
+        var portfolios = portfolioRepository.findByClassOfBusinessIdAndContractNatureAndDeletedAtIsNullOrderByCodeAsc(longCobId, ContractNature.DIRECT);
         assertThat(portfolios).hasSize(1);
         // "COB-" (4) + first 16 chars of "VERY-LONG-COB-1234" = "COB-VERY-LONG-COB-12"
         // Exactly 20 chars = VARCHAR(20) limit.
@@ -265,6 +267,37 @@ class ContractGroupingServiceIT {
             .as("auto-portfolio code must fit VARCHAR(20)")
             .hasSize(20)
             .isEqualTo("COB-VERY-LONG-COB-12");
+    }
+
+    // ── 8. Truncation collision across two different classes fails fast (Fix round 1) ─
+    @Test
+    @DisplayName("two class-of-business codes truncating to the same auto-code fail fast instead of silently mis-grouping")
+    void truncationCollisionAcrossDifferentClassesFailsFast() {
+        // Both codes are 17 chars and share their first 16 — "COB-" (4) + 16
+        // leaves no room to tell them apart, so both truncate to the exact
+        // same portfolio code "COB-COLLIDE-CODE-A".
+        UUID cobAId = UUID.randomUUID();
+        UUID cobBId = UUID.randomUUID();
+        jdbcTemplate.update(
+            "INSERT INTO classes_of_business (id, name, code, description, created_by) VALUES (?, ?, ?, ?, ?)",
+            cobAId, "Collide A", "COLLIDE-CODE-AAA1", "collision test A", "test");
+        jdbcTemplate.update(
+            "INSERT INTO classes_of_business (id, name, code, description, created_by) VALUES (?, ?, ?, ?, ?)",
+            cobBId, "Collide B", "COLLIDE-CODE-AAA2", "collision test B", "test");
+
+        UUID policyIdA = seedPolicy("POL-COLLIDE-A", cobAId, LocalDate.of(2026, 8, 1));
+        service.onPolicyApproved(buildEvent(policyIdA, "POL-COLLIDE-A", cobAId,
+            LocalDate.of(2026, 8, 1), new BigDecimal("10000.00")));
+        entityManager.flush();
+
+        UUID policyIdB = seedPolicy("POL-COLLIDE-B", cobBId, LocalDate.of(2026, 8, 1));
+        PolicyApprovedEvent eventB = buildEvent(policyIdB, "POL-COLLIDE-B", cobBId,
+            LocalDate.of(2026, 8, 1), new BigDecimal("10000.00"));
+
+        assertThatThrownBy(() -> service.onPolicyApproved(eventB))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Portfolio code collision")
+            .hasMessageContaining("COB-COLLIDE-CODE-A");
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

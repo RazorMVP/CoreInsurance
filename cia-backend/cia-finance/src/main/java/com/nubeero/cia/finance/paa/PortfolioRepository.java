@@ -16,8 +16,6 @@ public interface PortfolioRepository extends JpaRepository<Portfolio, UUID> {
 
     List<Portfolio> findByActiveTrueAndDeletedAtIsNullOrderByCodeAsc();
 
-    List<Portfolio> findByClassOfBusinessIdAndDeletedAtIsNullOrderByCodeAsc(UUID classOfBusinessId);
-
     /**
      * Nature-scoped lookup — a class-of-business can have a DIRECT portfolio
      * AND a FAC_INWARD/FAC_OUTWARD portfolio at the same time (segregated by
