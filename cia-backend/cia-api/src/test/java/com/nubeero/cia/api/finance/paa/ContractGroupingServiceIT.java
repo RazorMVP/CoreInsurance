@@ -9,6 +9,7 @@ import com.nubeero.cia.finance.paa.GroupOfContractsRepository;
 import com.nubeero.cia.finance.paa.GroupStatus;
 import com.nubeero.cia.finance.paa.Onerousness;
 import com.nubeero.cia.finance.paa.PortfolioRepository;
+import com.nubeero.cia.finance.gl.PolicyClassResolver;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,7 +45,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>Pattern lifted from {@code SubledgerPostingServiceIT} (Slice 1.5) —
  * @DataJpaTest + AutoConfigureTestDatabase.NONE + explicit @Import for the
- * service under test.
+ * service under test. {@link PolicyClassResolver} is {@code @MockBean}'d
+ * because {@code ContractGroupingService}'s constructor gained it as a
+ * dependency in the FAC / IFRS-17 PAA workstream Task 2 — required at
+ * bean-creation time regardless of which listener a given test exercises,
+ * but only ever invoked by the FAC-outward listener ({@code onFacPremiumCeded},
+ * exercised by {@code FacContractGroupingIT}, not here), so an unstubbed mock
+ * is sufficient for every test in this class (all exercise the direct-policy
+ * path, {@code onPolicyApproved}).
  */
 @Testcontainers
 @DataJpaTest
@@ -54,6 +62,9 @@ import static org.assertj.core.api.Assertions.assertThat;
     ContractGroupingService.class
 })
 class ContractGroupingServiceIT {
+
+    @org.springframework.boot.test.mock.mockito.MockBean
+    private PolicyClassResolver policyClassResolver;
 
     @Container
     @SuppressWarnings("resource")

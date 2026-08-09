@@ -1,51 +1,69 @@
 package com.nubeero.cia.finance.paa;
 
+import com.nubeero.cia.common.event.FacPremiumCededEvent;
 import com.nubeero.cia.common.event.PolicyApprovedEvent;
+import com.nubeero.cia.common.event.RiFacInwardAcceptedEvent;
+import com.nubeero.cia.finance.gl.PolicyClassResolver;
 import com.nubeero.cia.setup.product.ClassOfBusiness;
 import com.nubeero.cia.setup.product.ClassOfBusinessRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Assigns each approved policy to an IFRS 17 group of contracts at initial
- * recognition (§22). Module 12 Phase 2 Slice 2.2.
+ * Assigns each approved policy — and, as of the FAC / IFRS-17 PAA workstream
+ * Task 2, each accepted inward FAC cover and each ceded outward FAC cover —
+ * to an IFRS 17 group of contracts at initial recognition (§22). Module 12
+ * Phase 2 Slice 2.2; generalised to facultative reinsurance in Task 2.
  *
- * <p>On every {@code PolicyApprovedEvent}, this service:
+ * <p>On every {@code PolicyApprovedEvent} / {@code RiFacInwardAcceptedEvent}
+ * / {@code FacPremiumCededEvent}, {@link #assign} does the same three things
+ * for whichever {@link ContractType} the event represents:
  * <ol>
- *   <li>resolves the {@link Portfolio} for the policy's class-of-business
- *       (lazy-creates one if absent — first-policy-of-class bootstraps the
- *       portfolio); direct-policy portfolios are always
- *       {@link ContractNature#DIRECT};</li>
+ *   <li>resolves the {@link Portfolio} for the contract's class-of-business
+ *       <em>and</em> {@link ContractNature} (lazy-creates one if absent —
+ *       first-contract-of-(class, nature) bootstraps the portfolio);</li>
  *   <li>resolves the {@link GroupOfContracts} for
  *       {@code (portfolio, cohort_year, onerousness)} (lazy-creates if
  *       absent);</li>
- *   <li>writes a {@link ContractGroupAssignment} row (type
- *       {@link ContractType#POLICY}) linking the policy to the group.</li>
+ *   <li>writes a {@link ContractGroupAssignment} row linking the contract to
+ *       the group.</li>
  * </ol>
+ *
+ * <p>{@link ContractType} (the assignment discriminator: POLICY /
+ * FAC_INWARD / FAC_OUTWARD) and {@link ContractNature} (the portfolio
+ * dimension: DIRECT / FAC_INWARD / FAC_OUTWARD) are deliberately distinct —
+ * see their javadoc. A direct policy is always {@code ContractType.POLICY}
+ * inside a {@code ContractNature.DIRECT} portfolio; an accepted inward FAC
+ * is {@code ContractType.FAC_INWARD} inside a {@code ContractNature.FAC_INWARD}
+ * portfolio; a ceded outward FAC is {@code ContractType.FAC_OUTWARD} inside a
+ * {@code ContractNature.FAC_OUTWARD} portfolio.
  *
  * <h2>Execution model</h2>
  * <p>Mirrors {@code SubledgerPostingService}: {@link EventListener} +
- * {@link Transactional} on the class. The listener joins the publisher's
- * transaction (REQUIRED propagation) — if grouping fails, the policy
- * approval rolls back too. Atomicity is non-negotiable: a policy that is
- * "approved but not assigned to a group" is impossible to measure under
- * IFRS 17.
+ * {@link Transactional} on the class. Each listener joins the publisher's
+ * transaction (REQUIRED propagation) — if grouping fails, the triggering
+ * approval/acceptance/cession rolls back too. Atomicity is non-negotiable:
+ * a contract that is "approved but not assigned to a group" is impossible
+ * to measure under IFRS 17.
  *
  * <h2>Idempotency</h2>
  * <p>{@code contract_group_assignment (contract_type, contract_id)} carries
  * a UNIQUE constraint (V77; generalised from V37's policy-only
- * {@code UNIQUE(policy_id)}), so a duplicate {@code PolicyApprovedEvent}
- * re-fire produces a constraint violation rather than a duplicate
- * assignment. As the fast path the service checks
+ * {@code UNIQUE(policy_id)}), so a duplicate event re-fire produces a
+ * constraint violation rather than a duplicate assignment. As the fast path
+ * {@link #assign} checks
  * {@link ContractGroupAssignmentRepository#findByContractTypeAndContractIdAndDeletedAtIsNull}
  * and short-circuits before any further work.
  *
@@ -61,11 +79,22 @@ import java.util.UUID;
  *
  * <h2>Portfolio bootstrap race</h2>
  * <p>The portfolio code uniqueness ({@code uq_portfolio_code} in V36) means
- * two threads racing to create the first portfolio for the same class of
- * business won't both succeed — one rolls back on the UNIQUE constraint
- * and the policy-approval transaction surfaces a retryable error. In
- * practice this race window is the very first policy approved per
- * class-of-business per tenant; tenants with seeded portfolios never hit it.
+ * two threads racing to create the first portfolio for the same
+ * (class-of-business, nature) won't both succeed — one rolls back on the
+ * UNIQUE constraint and the triggering transaction surfaces a retryable
+ * error. In practice this race window is the very first contract of a given
+ * nature approved per class-of-business per tenant; tenants with seeded
+ * portfolios never hit it.
+ *
+ * <h2>Cohort year for FAC contracts</h2>
+ * <p>Neither {@code RiFacInwardAcceptedEvent} nor {@code FacPremiumCededEvent}
+ * carries a coverage-start date, so {@link #inwardCoverStartYear} /
+ * {@link #outwardCoverStartYear} resolve it via a scalar native-SQL read
+ * against {@code ri_fac_inwards.cover_from} / {@code ri_fac_covers.cover_from}
+ * — mirroring {@code LrcEngine.loadPolicyPricing}'s native-SQL pattern to
+ * avoid pulling cia-reinsurance entities into cia-finance's persistence
+ * context (the same loose-coupling {@link PolicyClassResolver} already
+ * establishes for {@code policies}).
  */
 @Service
 @Slf4j
@@ -73,10 +102,14 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ContractGroupingService {
 
-    /** Portfolio code prefix for lazy-created portfolios. Keeps user-created codes from colliding with auto-codes. */
-    private static final String AUTO_PORTFOLIO_PREFIX = "COB-";
+    /** Portfolio code prefixes for lazy-created portfolios, keyed by {@link ContractNature}. Keeps user-created codes from colliding with auto-codes and segregates natures. */
+    private static final Map<ContractNature, String> AUTO_PORTFOLIO_PREFIX = Map.of(
+        ContractNature.DIRECT, "COB-",
+        ContractNature.FAC_INWARD, "FIN-",
+        ContractNature.FAC_OUTWARD, "FOU-"
+    );
 
-    /** Fallback portfolio code used when a policy event arrives without a class-of-business or with an unknown one. */
+    /** Fallback portfolio code (DIRECT nature) used when a policy event arrives without a class-of-business or with an unknown one. Preserved unprefixed for backward compatibility with pre-Task-2 data. */
     private static final String UNCLASSIFIED_PORTFOLIO_CODE = "UNCLASSIFIED";
 
     /** {@link Portfolio#getCode()} max length per V36 schema. */
@@ -86,6 +119,8 @@ public class ContractGroupingService {
     private final GroupOfContractsRepository groupRepository;
     private final ContractGroupAssignmentRepository assignmentRepository;
     private final ClassOfBusinessRepository classOfBusinessRepository;
+    private final PolicyClassResolver policyClassResolver;
+    private final JdbcTemplate jdbcTemplate;
     private final Clock clock;
 
     @EventListener
@@ -101,82 +136,161 @@ public class ContractGroupingService {
      * @return the (existing or newly-created) assignment row
      */
     public ContractGroupAssignment replayPolicyApproved(PolicyApprovedEvent event) {
+        return assign(ContractType.POLICY, event.policyId(), event.classOfBusinessId(),
+            event.policyStartDate().getYear(), ContractNature.DIRECT);
+    }
+
+    /**
+     * An inward FAC cover accepted (create/renew) or extended — grouped into
+     * a {@link ContractNature#FAC_INWARD} portfolio under the ceding cover's
+     * own class-of-business. Cohort year = coverage-start year.
+     *
+     * @since FAC / IFRS-17 PAA workstream Task 2
+     */
+    @EventListener
+    @Transactional
+    public void onFacInwardAccepted(RiFacInwardAcceptedEvent event) {
+        assign(ContractType.FAC_INWARD, event.facInwardId(), event.classOfBusinessId(),
+            inwardCoverStartYear(event.facInwardId()), ContractNature.FAC_INWARD);
+    }
+
+    /**
+     * An outward FAC premium ceded — grouped into a
+     * {@link ContractNature#FAC_OUTWARD} portfolio under the class-of-business
+     * of the policy the ceded risk originates from (resolved via
+     * {@link PolicyClassResolver}, the same loose-coupling seam
+     * {@code SubledgerPostingService} uses for outward-COB resolution).
+     * Cohort year = coverage-start year.
+     *
+     * @since FAC / IFRS-17 PAA workstream Task 2
+     */
+    @EventListener
+    @Transactional
+    public void onFacPremiumCeded(FacPremiumCededEvent event) {
+        UUID cob = policyClassResolver.findClassByPolicyId(event.policyId());
+        assign(ContractType.FAC_OUTWARD, event.facCoverId(), cob,
+            outwardCoverStartYear(event.facCoverId()), ContractNature.FAC_OUTWARD);
+    }
+
+    /**
+     * Common assignment body shared by the direct-policy and both FAC entry
+     * points: idempotency short-circuit, portfolio resolution, group
+     * resolution, assignment write.
+     *
+     * @return the (existing or newly-created) assignment row
+     */
+    private ContractGroupAssignment assign(ContractType type, UUID contractId, UUID classOfBusinessId,
+                                            int cohortYear, ContractNature nature) {
         Optional<ContractGroupAssignment> existing =
-            assignmentRepository.findByContractTypeAndContractIdAndDeletedAtIsNull(
-                ContractType.POLICY, event.policyId());
+            assignmentRepository.findByContractTypeAndContractIdAndDeletedAtIsNull(type, contractId);
         if (existing.isPresent()) {
-            log.debug("Policy {} already assigned to group {}; skipping",
-                event.policyNumber(), existing.get().getGroup().getId());
+            log.debug("{} {} already assigned to group {}; skipping",
+                type, contractId, existing.get().getGroup().getId());
             return existing.get();
         }
 
-        Portfolio portfolio = resolveOrCreatePortfolio(event.classOfBusinessId());
-        int cohortYear = event.policyStartDate().getYear();
-        Onerousness onerousness = assessOnerousness(event);
+        Portfolio portfolio = resolveOrCreatePortfolio(classOfBusinessId, nature);
+        Onerousness onerousness = assessOnerousness();
         GroupOfContracts group = resolveOrCreateGroup(portfolio, cohortYear, onerousness);
 
         ContractGroupAssignment assignment = new ContractGroupAssignment();
-        assignment.setContractType(ContractType.POLICY);
-        assignment.setContractId(event.policyId());
+        assignment.setContractType(type);
+        assignment.setContractId(contractId);
         assignment.setGroup(group);
         assignment.setAssignedAt(Instant.now(clock));
         ContractGroupAssignment saved = assignmentRepository.save(assignment);
 
-        log.info("Assigned policy {} ({}) to group {}/{}/{} (group id {})",
-            event.policyNumber(), event.policyId(),
-            portfolio.getCode(), cohortYear, onerousness, group.getId());
+        log.info("Assigned {} {} to group {}/{}/{} (group id {})",
+            type, contractId, portfolio.getCode(), cohortYear, onerousness, group.getId());
 
         return saved;
     }
 
-    private Portfolio resolveOrCreatePortfolio(UUID classOfBusinessId) {
+    private Portfolio resolveOrCreatePortfolio(UUID classOfBusinessId, ContractNature nature) {
         if (classOfBusinessId == null) {
-            return findOrCreatePortfolioByCode(UNCLASSIFIED_PORTFOLIO_CODE, "Unclassified", null);
+            return findOrCreatePortfolioByCode(unclassifiedPortfolioCode(nature), "Unclassified", null, nature);
         }
 
-        List<Portfolio> existing =
-            portfolioRepository.findByClassOfBusinessIdAndDeletedAtIsNullOrderByCodeAsc(classOfBusinessId);
+        List<Portfolio> existing = portfolioRepository
+            .findByClassOfBusinessIdAndContractNatureAndDeletedAtIsNullOrderByCodeAsc(classOfBusinessId, nature);
         if (!existing.isEmpty()) {
             return existing.get(0);
         }
 
         Optional<ClassOfBusiness> cob = classOfBusinessRepository.findById(classOfBusinessId);
         if (cob.isEmpty()) {
-            log.warn("class_of_business {} referenced by PolicyApprovedEvent but not found; "
-                + "assigning policy to UNCLASSIFIED portfolio", classOfBusinessId);
-            return findOrCreatePortfolioByCode(UNCLASSIFIED_PORTFOLIO_CODE, "Unclassified", null);
+            log.warn("class_of_business {} referenced by a {} grouping event but not found; "
+                + "assigning contract to UNCLASSIFIED portfolio", classOfBusinessId, nature);
+            return findOrCreatePortfolioByCode(unclassifiedPortfolioCode(nature), "Unclassified", null, nature);
         }
 
-        String autoCode = autoPortfolioCode(cob.get().getCode());
-        return findOrCreatePortfolioByCode(autoCode, cob.get().getName(), classOfBusinessId);
+        String autoCode = autoPortfolioCode(cob.get().getCode(), nature);
+        return findOrCreatePortfolioByCode(autoCode, cob.get().getName(), classOfBusinessId, nature);
     }
 
     /**
      * Builds a portfolio code from a class-of-business code, prefixing with
-     * {@link #AUTO_PORTFOLIO_PREFIX} to keep auto-created portfolios from
-     * colliding with user-created ones, and truncating the suffix so the
-     * result fits the {@code VARCHAR(20)} portfolio.code column.
+     * the {@link #AUTO_PORTFOLIO_PREFIX} entry for the given nature to keep
+     * auto-created portfolios from colliding across natures (or with
+     * user-created ones), and truncating the suffix so the result fits the
+     * {@code VARCHAR(20)} portfolio.code column.
      */
-    private static String autoPortfolioCode(String cobCode) {
-        int suffixBudget = PORTFOLIO_CODE_MAX_LENGTH - AUTO_PORTFOLIO_PREFIX.length();
+    private static String autoPortfolioCode(String cobCode, ContractNature nature) {
+        String prefix = AUTO_PORTFOLIO_PREFIX.get(nature);
+        int suffixBudget = PORTFOLIO_CODE_MAX_LENGTH - prefix.length();
         String suffix = cobCode.length() <= suffixBudget ? cobCode : cobCode.substring(0, suffixBudget);
-        return AUTO_PORTFOLIO_PREFIX + suffix;
+        return prefix + suffix;
     }
 
-    private Portfolio findOrCreatePortfolioByCode(String code, String name, UUID classOfBusinessId) {
+    /**
+     * DIRECT keeps the historical unprefixed {@link #UNCLASSIFIED_PORTFOLIO_CODE}
+     * (pre-Task-2 data + {@code ContractGroupingServiceIT} depend on the exact
+     * literal). FAC natures get their own nature-prefixed unclassified code so
+     * an inward/outward fallback never collides with — or gets swept into —
+     * the direct-policy UNCLASSIFIED portfolio.
+     */
+    private static String unclassifiedPortfolioCode(ContractNature nature) {
+        return nature == ContractNature.DIRECT
+            ? UNCLASSIFIED_PORTFOLIO_CODE
+            : AUTO_PORTFOLIO_PREFIX.get(nature) + UNCLASSIFIED_PORTFOLIO_CODE;
+    }
+
+    private Portfolio findOrCreatePortfolioByCode(String code, String name, UUID classOfBusinessId, ContractNature nature) {
         return portfolioRepository.findByCodeAndDeletedAtIsNull(code).orElseGet(() -> {
             Portfolio p = new Portfolio();
             p.setCode(code);
             p.setName(name);
             p.setClassOfBusinessId(classOfBusinessId);
             p.setActive(true);
-            // Direct-policy path only (Task 1 of the FAC/IFRS-17 PAA workstream);
-            // a later slice generalises this signature to accept the nature.
-            p.setContractNature(ContractNature.DIRECT);
+            p.setContractNature(nature);
             Portfolio saved = portfolioRepository.save(p);
-            log.info("Auto-created portfolio {} ({}) for class_of_business {}", code, name, classOfBusinessId);
+            log.info("Auto-created {} portfolio {} ({}) for class_of_business {}", nature, code, name, classOfBusinessId);
             return saved;
         });
+    }
+
+    /**
+     * Scalar native-SQL read of {@code ri_fac_inwards.cover_from} — mirrors
+     * {@code LrcEngine.loadPolicyPricing}'s pattern, avoiding a cia-reinsurance
+     * entity dependency from cia-finance.
+     */
+    private int inwardCoverStartYear(UUID facInwardId) {
+        LocalDate coverFrom = jdbcTemplate.queryForObject(
+            "SELECT cover_from FROM ri_fac_inwards WHERE id = ? AND deleted_at IS NULL",
+            LocalDate.class, facInwardId);
+        return coverFrom.getYear();
+    }
+
+    /**
+     * Scalar native-SQL read of {@code ri_fac_covers.cover_from} — mirrors
+     * {@code LrcEngine.loadPolicyPricing}'s pattern, avoiding a cia-reinsurance
+     * entity dependency from cia-finance.
+     */
+    private int outwardCoverStartYear(UUID facCoverId) {
+        LocalDate coverFrom = jdbcTemplate.queryForObject(
+            "SELECT cover_from FROM ri_fac_covers WHERE id = ? AND deleted_at IS NULL",
+            LocalDate.class, facCoverId);
+        return coverFrom.getYear();
     }
 
     private GroupOfContracts resolveOrCreateGroup(Portfolio portfolio, int cohortYear, Onerousness onerousness) {
@@ -212,8 +326,11 @@ public class ContractGroupingService {
      *
      * <p>Per IFRS 17 §22 the assignment is permanent; later deterioration is
      * recognised as a loss component on the assigned group (Slice 2.7).
+     *
+     * <p>Shared across all three {@link ContractType}s — v1 makes no
+     * distinction between direct policies and FAC contracts here.
      */
-    private Onerousness assessOnerousness(PolicyApprovedEvent event) {
+    private Onerousness assessOnerousness() {
         return Onerousness.NOT_ONEROUS;
     }
 }
