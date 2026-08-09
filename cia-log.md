@@ -64,6 +64,17 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-08-09 — `fac-ifrs17-paa-workstream` (P2): spec + plan approved, execution underway (checkpoint)
+
+Brainstorm→spec→plan for the FAC↔IFRS-17 PAA workstream completed and approved; execution started via subagent-driven development on branch `feat/fac-ifrs17-paa-workstream`. Not yet landed — this is an interim checkpoint; the full session entry + backlog reconciliation will replace it when the workstream ships.
+
+- **Spec** `docs/superpowers/specs/2026-08-08-fac-ifrs17-paa-design.md` (commit `af60b7a`) — Approach A (polymorphic `contract_group_assignment` + `portfolio.contract_nature`); inward FAC = LRC liability mirror (`2210`→`4330`), outward FAC = reinsurance-held asset (`1410`→`5210`) with §65 commission-netting; modified-prospective transition; onerous-test guard excluding `FAC_OUTWARD`. **Accounting sign-off obtained 2026-08-08** (§10 gate cleared, commit `8716006`).
+- **Plan** `docs/superpowers/plans/2026-08-08-fac-ifrs17-paa-lrc.md` (commit `d7af31f`) — 7 TDD tasks (spec Slices 1–6). Slice 7 (FAC LIC + §66A loss-recovery) scoped to its own future sub-project.
+- **Task 1 landed** (data model): commits `8ab0a72` + fix `48d1a5f` — polymorphic `contract_group_assignment` (backfilled from `policy_group_assignment` as POLICY, old table dropped), `portfolio.contract_nature`, `ContractType`/`ContractNature` enums; direct path byte-identical; V76/V77 migrations + two-phase backfill guard; **58 ITs green**. Review: spec ✅, one Important (backfill row-transform test) + minors fixed in round 1. SDD ledger at `.superpowers/sdd/2026-08-08-fac-ifrs17-paa-lrc/progress.md`.
+- **In flight:** Tasks 2–7 (grouping ingestion → inward/outward LRC → lifecycle → downstream surfacing → FE).
+
+---
+
 ## 2026-08-08 — `fac-ifrs17-paa-workstream` (P2): brainstorm kickoff + coupling investigation (checkpoint, awaiting accounting-basis decision)
 
 Started the brainstorm for the next backlog item after the category-C batch: bring **both** inward + outward facultative reinsurance onto the IFRS-17 PAA LRC/LIC engine (proper premium earning over coverage, instead of the current simple immediate-income postings). No code yet — exploration + design only; awaiting the user's accounting-basis decision before writing the spec.
