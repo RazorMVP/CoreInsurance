@@ -72,8 +72,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <p>Harness mirrors {@code SubledgerPostingServiceIT} (Testcontainers
  * Postgres + {@code @DataJpaTest} + {@code AutoConfigureTestDatabase.NONE})
  * but pins {@code spring.flyway.target=75} — the COA rows this posting
- * resolves ({@code 4330}/{@code 5240}) are seeded by V75; {@code 1330}
- * pre-dates it (V32).
+ * resolves ({@code 5240}) are seeded by V75; {@code 1330}/{@code 2210}
+ * pre-date it (V32).
+ *
+ * <p><strong>FAC / IFRS-17 PAA workstream Task 3:</strong> the accept
+ * posting's credit leg moved from {@code 4330} (immediate income) to
+ * {@code 2210} (LRC liability) — accept now sets up the liability at the
+ * full gross premium; {@code LrcEngineIT}/{@code InwardFacLrcIT} cover the
+ * periodic release of that liability to {@code 4330}.
  */
 @Testcontainers
 @DataJpaTest
@@ -165,7 +171,7 @@ class RiFacInwardFinanceIT {
 
     @Test
     @DisplayName("RiFacInwardAccepted → DebitNote receivable (REINSURANCE, OUTSTANDING, amount=netPremium) "
-        + "AND balanced 3-line JE hitting 1330/5240/4330")
+        + "AND balanced 3-line JE hitting 1330/5240/2210 (Task 3: LRC liability, not income)")
     void inwardFacAccepted_createsDebitNoteAndBalancedJe() {
         UUID facInwardId = UUID.randomUUID();
         UUID cedingCompanyId = UUID.randomUUID();
@@ -218,7 +224,7 @@ class RiFacInwardFinanceIT {
 
         assertLine(jeId, "1330", netPremium, BigDecimal.ZERO);
         assertLine(jeId, "5240", commissionAmount, BigDecimal.ZERO);
-        assertLine(jeId, "4330", BigDecimal.ZERO, grossPremium);
+        assertLine(jeId, "2210", BigDecimal.ZERO, grossPremium);
 
         BigDecimal net = jdbcTemplate.queryForObject(
             "SELECT COALESCE(SUM(debit_amount), 0) - COALESCE(SUM(credit_amount), 0) " +
@@ -229,7 +235,7 @@ class RiFacInwardFinanceIT {
 
     @Test
     @DisplayName("Zero-commission inward FAC accept (commissionRate omitted/0 — the OPTIONAL field's "
-        + "default and the default FE form state) → balanced 2-line JE (Dr 1330 net / Cr 4330 gross, "
+        + "default and the default FE form state) → balanced 2-line JE (Dr 1330 net / Cr 2210 gross, "
         + "NO zero-amount Dr 5240 line) + DebitNote. Regression guard: the zero-amount line was "
         + "rejected by JournalEntryService's per-line XOR rule, rolling back the whole accept.")
     void zeroCommissionAccept_createsBalancedTwoLineJe() {
@@ -276,7 +282,7 @@ class RiFacInwardFinanceIT {
         assertThat(line5240).as("commission-expense line absent when commission is zero").isEqualTo(0L);
 
         assertLine(jeId, "1330", netPremium, BigDecimal.ZERO);
-        assertLine(jeId, "4330", BigDecimal.ZERO, grossPremium);
+        assertLine(jeId, "2210", BigDecimal.ZERO, grossPremium);
 
         BigDecimal net = jdbcTemplate.queryForObject(
             "SELECT COALESCE(SUM(debit_amount), 0) - COALESCE(SUM(credit_amount), 0) " +

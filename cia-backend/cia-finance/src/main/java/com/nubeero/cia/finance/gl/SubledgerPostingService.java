@@ -102,7 +102,13 @@ public class SubledgerPostingService {
     // (V75 — 4330/5240 net new; 1330 pre-existed from V32 R1=A scope decision.)
     private static final String COA_INWARD_PREMIUM_RECEIVABLE = "1330"; // Premium receivable - Coinsurer (inward)
     private static final String COA_INWARD_COMMISSION_EXPENSE  = "5240"; // Inward reinsurance commission expense
-    private static final String COA_INWARD_PREMIUM_INCOME      = "4330"; // Inward reinsurance premium income
+    // FAC / IFRS-17 PAA workstream Task 3 — the credit leg moved from 4330
+    // (immediate income) to 2210 (LRC liability, V32 seed, ifrs17_role=LRC_BEL):
+    // accept now SETS UP the liability at the full gross premium instead of
+    // booking income immediately. 4330 (Inward reinsurance premium income,
+    // V75 seed) is credited only by LrcEngine's periodic release from here on
+    // — see LrcEngine.COA_INWARD_PREMIUM_INCOME.
+    private static final String COA_INWARD_LRC = "2210"; // Inward reinsurance LRC (was COA_INWARD_PREMIUM_INCOME = "4330")
 
     private final JournalEntryService journalEntryService;
     private final PostingRuleService postingRuleService;
@@ -371,13 +377,17 @@ public class SubledgerPostingService {
      * <pre>
      *   Dr 1330 Premium receivable - Coinsurer (inward) = netPremium
      *   Dr 5240 Inward reinsurance commission expense    = commissionAmount
-     *   Cr 4330 Inward reinsurance premium income        = grossPremium
+     *   Cr 2210 Inward reinsurance LRC                   = grossPremium
      * </pre>
      *
      * <p>Invariant: {@code grossPremium == commissionAmount + netPremium}.
      * {@link JournalEntryService#post} re-checks this at the GL boundary.
-     * Simple income posting (not IFRS-17 PAA — backlog
-     * fac-ifrs17-paa-workstream).
+     * <strong>IFRS-17 PAA LRC posting (FAC / IFRS-17 PAA workstream Task 3):</strong>
+     * accept sets up the LRC liability at the full gross premium instead of
+     * booking income immediately (the pre-Task-3 shape credited 4330 here).
+     * {@link com.nubeero.cia.finance.paa.LrcEngine} releases the earned
+     * portion to 4330 (Inward reinsurance premium income) straight-line over
+     * the FAC's cover period each fiscal period-close.
      *
      * <p><strong>Idempotency reference:</strong> only {@code create} followed
      * by a same-day {@code extend}, or two same-day {@code extend}s, publish
@@ -420,7 +430,7 @@ public class SubledgerPostingService {
         // facultative case and the default FE form state — would otherwise post
         // a Dr 5240 = 0.00 line, be rejected (422), and roll back the whole
         // accept. With zero commission net == gross, so the 2-line
-        // Dr 1330 (net) / Cr 4330 (gross) balances on its own. Same guard covers
+        // Dr 1330 (net) / Cr 2210 (gross) balances on its own. Same guard covers
         // an extend whose pro-rata delta commission rounds to 0.00 while delta
         // gross > 0. (The outward replayFacPremiumCeded shares this latent shape
         // — backlog fac-zero-commission-je-line.)
@@ -429,7 +439,7 @@ public class SubledgerPostingService {
         if (event.commissionAmount() != null && event.commissionAmount().signum() > 0) {
             lines.add(line(COA_INWARD_COMMISSION_EXPENSE, event.commissionAmount(), BigDecimal.ZERO, event.currencyCode(), event.classOfBusinessId()));
         }
-        lines.add(line(COA_INWARD_PREMIUM_INCOME, BigDecimal.ZERO, event.grossPremium(), event.currencyCode(), event.classOfBusinessId()));
+        lines.add(line(COA_INWARD_LRC, BigDecimal.ZERO, event.grossPremium(), event.currencyCode(), event.classOfBusinessId()));
 
         PostJournalEntryRequest request = new PostJournalEntryRequest(
             businessDate,
