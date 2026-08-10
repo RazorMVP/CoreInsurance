@@ -64,6 +64,18 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-08-10 — `fac-ifrs17-paa-workstream` (P2): Tasks 1–3 landed on branch (checkpoint)
+
+Execution continuing via subagent-driven development on `feat/fac-ifrs17-paa-workstream` (not yet merged; full session entry + backlog reconciliation replace this on ship). Two-stage review per task is catching real defects.
+
+- **Task 1 — data model** (`8ab0a72`+`48d1a5f`): polymorphic `contract_group_assignment` (backfilled from `policy_group_assignment` as POLICY, old table dropped) + `portfolio.contract_nature` + `ContractType`/`ContractNature` enums; direct path byte-identical; V76/V77 + two-phase backfill guard. Review clean after 1 fix round.
+- **Task 2 — FAC grouping ingestion** (`2709724..000bc0c`): `ContractGroupingService` gains `onFacInwardAccepted`/`onFacPremiumCeded` listeners + nature-aware portfolio resolution + shared `assign(...)`; outward COB via `PolicyClassResolver`; native-SQL `cover_from` reads. **Review caught a real same-transaction visibility bug** — the inward `cover_from` raw-JDBC read of a not-yet-flushed JPA write could roll back the accept; fixed with `entityManager.flush()` before the read + a real-write-path IT (negative-control validated). Review clean after 1 fix round.
+- **Task 3 — inward FAC LRC liability** (`3422f0b`): `LrcEngine` dispatches pricing by `contract_type` (POLICY unchanged; FAC_INWARD reads `ri_fac_inwards` gross) + `NatureAccounts` (DIRECT `2110`/`4110`, FAC_INWARD `2210`/`4330`); **accept posting `Cr 4330 → Cr 2210`** (sets up the LRC liability), periodic release `Dr 2210 / Cr 4330` straight-line over coverage. `InwardFacLrcIT` + `LrcEngineIT` (DIRECT unchanged) + `RiFacInwardFinanceIT` green. Under review.
+- **Remaining:** T4 (outward reinsurance-held asset + onerous-test guard), T5 (cancel derecognition + cutover), T6 (contract_nature surfacing + V78), T7 (closures FE).
+- **Ops note:** subagents share the working checkout, so the session-gate hook false-fires continuously while an implementer holds uncommitted work; the SDD ledger (`.superpowers/sdd/2026-08-08-fac-ifrs17-paa-lrc/progress.md`) is the recovery source of truth.
+
+---
+
 ## 2026-08-09 — `fac-ifrs17-paa-workstream` (P2): spec + plan approved, execution underway (checkpoint)
 
 Brainstorm→spec→plan for the FAC↔IFRS-17 PAA workstream completed and approved; execution started via subagent-driven development on branch `feat/fac-ifrs17-paa-workstream`. Not yet landed — this is an interim checkpoint; the full session entry + backlog reconciliation will replace it when the workstream ships.
