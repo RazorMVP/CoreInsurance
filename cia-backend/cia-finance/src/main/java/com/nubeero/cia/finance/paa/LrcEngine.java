@@ -78,17 +78,22 @@ import java.util.UUID;
  *       (true while Nigerian-only). Throws if a group mixes currencies.</li>
  * </ul>
  *
- * <h2>Contract-type dispatch (FAC / IFRS-17 PAA workstream Task 3)</h2>
+ * <h2>Contract-type dispatch (FAC / IFRS-17 PAA workstream Task 3 + 4)</h2>
  * <p>Pricing is loaded per {@link ContractGroupAssignment#getContractType()}
  * via {@link #loadPricing}: {@code POLICY} reads {@code policies}
  * (net premium is the LRC basis); {@code FAC_INWARD} reads
  * {@code ri_fac_inwards} (gross premium is the LRC basis — the accepted
  * inward cover's whole gross premium sets up the liability, mirroring the
- * accept-time posting). {@code FAC_OUTWARD} is not yet measured (Task 4)
- * and is skipped exactly like a not-found contract. The posting accounts
- * (debit LRC / credit revenue) are resolved once per group from
+ * accept-time posting); {@code FAC_OUTWARD} reads {@code ri_fac_covers}
+ * (NET premium is the LRC basis — §65 commission-netting, see Task 4). The
+ * posting accounts are resolved once per group from
  * {@link Portfolio#getContractNature()} via {@link #accountsFor} — DIRECT
- * posts Dr 2110 / Cr 4110 (unchanged); FAC_INWARD posts Dr 2210 / Cr 4330.
+ * posts Dr 2110 / Cr 4110 (unchanged); FAC_INWARD posts Dr 2210 / Cr 4330
+ * (a liability release — {@code Dr LRC / Cr revenue}). {@code FAC_OUTWARD}
+ * is the mirror-image <em>asset</em> shape: it posts
+ * {@code Dr 5210 (RI premium expense) / Cr 1410 (reinsurance-held LRC
+ * asset)} — the asset is credited (run down) as it amortises to expense,
+ * the inverse of the liability-release sign used by DIRECT/FAC_INWARD.
  */
 @Service
 @Slf4j
@@ -118,6 +123,26 @@ public class LrcEngine {
      * credits it now.
      */
     static final String COA_INWARD_PREMIUM_INCOME = "4330";
+
+    /**
+     * FAC_OUTWARD — Outward reinsurance premium expense. V32 seed. Mirrors
+     * {@code SubledgerPostingService.COA_RI_PREMIUM_EXPENSE} — no longer
+     * receives the full ceded premium at confirm time (Task 4 nets that
+     * into {@link #COA_REINSURANCE_HELD_LRC_ASSET}); only this engine's
+     * periodic straight-line amortisation debits it now.
+     */
+    static final String COA_RI_PREMIUM_EXPENSE = "5210";
+
+    /**
+     * FAC_OUTWARD — Reinsurance-held LRC asset. V32 seed,
+     * ifrs17_role=LRC_REINSURANCE. Set up at confirm time
+     * ({@code SubledgerPostingService.replayFacPremiumCeded}) at the NET
+     * ceded premium (§65 commission-netting), then run down (credited) to
+     * expense over the cover period by this engine — the sign-flip mirror
+     * of {@link #COA_INWARD_LRC}, which is a liability credited at accept
+     * and debited down as it releases to income.
+     */
+    static final String COA_REINSURANCE_HELD_LRC_ASSET = "1410";
 
     // ── Idempotency triple slot values ───────────────────────────────────────
     static final String MODULE_PAA = "paa";
@@ -342,47 +367,50 @@ public class LrcEngine {
     }
 
     /**
-     * Nature-selected LRC posting accounts (debit LRC liability / credit
-     * revenue), resolved once per group from {@link Portfolio#getContractNature()}.
-     * DIRECT is unchanged from pre-Task-3 behaviour; FAC_INWARD is new in
-     * this task. FAC_OUTWARD is Task 4's job — structured so adding it is a
-     * one-line swap of the {@code throw} for a real {@link NatureAccounts}.
+     * Nature-selected LRC posting accounts, resolved once per group from
+     * {@link Portfolio#getContractNature()}. DIRECT and FAC_INWARD both
+     * release a <em>liability</em> to revenue — {@code (debit=LRC, credit=
+     * revenue)}, matching how {@link #postJe} always posts
+     * {@code Dr <debitAccount>=earned / Cr <creditAccount>=earned}.
      *
-     * <p>Unreachable for FAC_OUTWARD in Task 3: every {@code FAC_OUTWARD}
-     * assignment's pricing lookup returns {@code null} (see {@link #loadPricing}),
-     * so a FAC_OUTWARD group's roll-forward is always {@link GroupRollForward#allZero()}
-     * and {@link #postJe} — the only caller of this method — is never invoked
-     * for it.
+     * <p>{@code FAC_OUTWARD} is the mirror-image <em>asset</em> shape (Task
+     * 4): the reinsurance-held asset is <em>credited</em> (run down) as it
+     * amortises, and the corresponding outward RI premium expense is
+     * <em>debited</em>. So for FAC_OUTWARD, {@code NatureAccounts.debitAccount}
+     * is the expense account ({@link #COA_RI_PREMIUM_EXPENSE}) and
+     * {@code creditAccount} is the asset account
+     * ({@link #COA_REINSURANCE_HELD_LRC_ASSET}) — the same
+     * {@code (debitAccount, creditAccount)} tuple shape as DIRECT/FAC_INWARD,
+     * just pointed at a debit-expense/credit-asset pair instead of a
+     * debit-liability/credit-revenue pair.
      */
     private static NatureAccounts accountsFor(ContractNature nature) {
         return switch (nature) {
             case DIRECT -> new NatureAccounts(COA_LRC_BEL, COA_REVENUE_LRC_RELEASE);
             case FAC_INWARD -> new NatureAccounts(COA_INWARD_LRC, COA_INWARD_PREMIUM_INCOME);
-            case FAC_OUTWARD -> throw new IllegalStateException(
-                "FAC_OUTWARD LRC posting accounts are not yet defined — Task 4 of the FAC/IFRS-17 PAA "
-                    + "workstream. This should be unreachable in Task 3: FAC_OUTWARD assignments are "
-                    + "skipped during pricing (loadPricing returns null), so a FAC_OUTWARD group's "
-                    + "roll-forward is always all-zero and postJe is never called for it.");
+            case FAC_OUTWARD -> new NatureAccounts(COA_RI_PREMIUM_EXPENSE, COA_REINSURANCE_HELD_LRC_ASSET);
         };
     }
 
     /**
      * Dispatches the pricing lookup by {@link ContractType} — the LRC basis
      * differs per contract type: a direct policy's <em>net</em> premium
-     * ({@code policies.net_premium}) vs. an accepted inward FAC's
+     * ({@code policies.net_premium}); an accepted inward FAC's
      * <em>gross</em> premium ({@code ri_fac_inwards.gross_premium} — the
      * whole gross premium is what {@code SubledgerPostingService
      * .replayFacPremiumAccepted} sets up as the LRC liability at accept
      * time, so gross is what this engine must release to income over the
-     * cover period). {@code FAC_OUTWARD} returns {@code null} unconditionally
-     * — not yet measured (Task 4) — so it is skipped exactly like a
-     * not-found/deleted contract.
+     * cover period); a ceded outward FAC's <em>net</em> premium
+     * ({@code ri_fac_covers.net_premium} — §65 commission-netting: the
+     * commission is netted into the asset at confirm time by
+     * {@code SubledgerPostingService.replayFacPremiumCeded}, so net is what
+     * this engine must amortise to expense over the cover period).
      */
     private PolicyPricing loadPricing(ContractType type, UUID contractId) {
         return switch (type) {
             case POLICY -> loadPolicyPricing(contractId);
             case FAC_INWARD -> loadFacInwardPricing(contractId);
-            case FAC_OUTWARD -> null;
+            case FAC_OUTWARD -> loadFacOutwardPricing(contractId);
         };
     }
 
@@ -419,17 +447,44 @@ public class LrcEngine {
         return rows.isEmpty() ? null : rows.get(0);
     }
 
+    /**
+     * LRC basis = NET premium (§65 commission-netting — see {@link
+     * #loadPricing} javadoc). Mirrors {@link #loadFacInwardPricing}'s
+     * native-SQL list-query pattern.
+     */
+    private PolicyPricing loadFacOutwardPricing(UUID facCoverId) {
+        List<PolicyPricing> rows = jdbcTemplate.query(
+            "SELECT cover_from, cover_to, net_premium, currency_code " +
+            "FROM ri_fac_covers WHERE id = ? AND deleted_at IS NULL",
+            (rs, rowNum) -> new PolicyPricing(
+                rs.getDate("cover_from").toLocalDate(),
+                rs.getDate("cover_to").toLocalDate(),
+                rs.getBigDecimal("net_premium"),
+                rs.getString("currency_code")),
+            facCoverId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
     // ── Internal aggregates ──────────────────────────────────────────────────
 
     /**
      * Snapshot of the contract fields the engine needs — pulled via native
      * SQL, not a JPA entity, to avoid cross-module entity coupling.
      * {@code premiumAmount} is the LRC basis: net premium for {@code POLICY},
-     * gross premium for {@code FAC_INWARD} — see {@link #loadPricing}.
+     * gross premium for {@code FAC_INWARD}, net premium for
+     * {@code FAC_OUTWARD} — see {@link #loadPricing}.
      */
     record PolicyPricing(LocalDate startDate, LocalDate endDate, BigDecimal premiumAmount, String currencyCode) {}
 
-    /** Nature-selected posting accounts for one group's LRC release JE. */
+    /**
+     * Nature-selected posting accounts for one group's period JE. For
+     * DIRECT/FAC_INWARD this is {@code (debit=LRC liability, credit=revenue)}
+     * — a liability release. For FAC_OUTWARD this is {@code (debit=RI
+     * premium expense, credit=reinsurance-held asset)} — the mirror-image
+     * asset amortisation. In both cases {@link #postJe} posts
+     * {@code Dr debitAccount=earned / Cr creditAccount=earned} unchanged;
+     * only the account identities differ by nature.
+     */
     record NatureAccounts(String debitAccount, String creditAccount) {}
 
     /** Group-aggregate roll-forward values for one period. */

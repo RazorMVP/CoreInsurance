@@ -1,9 +1,9 @@
 {
   "_description" : "Slice 1.9b — expected trial balance after playing the 200-event canonical fixture. Regenerate with -Dsnapshot.update=true.",
   "balanced" : true,
-  "totalDebits" : "11175000.00",
-  "totalCredits" : "11175000.00",
-  "lineCount" : 420,
+  "totalDebits" : "10975000.00",
+  "totalCredits" : "10975000.00",
+  "lineCount" : 400,
   "accounts" : {
     "1120" : {
       "name" : "Bank current accounts",
@@ -15,6 +15,12 @@
       "name" : "Premium receivable - Direct",
       "type" : "ASSET",
       "debitBalance" : "6025000.00",
+      "creditBalance" : "0.00"
+    },
+    "1410" : {
+      "name" : "Reinsurance - LRC asset",
+      "type" : "ASSET",
+      "debitBalance" : "800000.00",
       "creditBalance" : "0.00"
     },
     "2110" : {
@@ -41,12 +47,6 @@
       "debitBalance" : "0.00",
       "creditBalance" : "200000.00"
     },
-    "4300" : {
-      "name" : "Reinsurance income (ceded)",
-      "type" : "INCOME",
-      "debitBalance" : "0.00",
-      "creditBalance" : "200000.00"
-    },
     "5110" : {
       "name" : "Incurred claims",
       "type" : "EXPENSE",
@@ -57,12 +57,6 @@
       "name" : "Other directly attributable expenses",
       "type" : "EXPENSE",
       "debitBalance" : "200000.00",
-      "creditBalance" : "0.00"
-    },
-    "5210" : {
-      "name" : "Outward reinsurance premium",
-      "type" : "EXPENSE",
-      "debitBalance" : "1000000.00",
       "creditBalance" : "0.00"
     }
   }
