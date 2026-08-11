@@ -7,6 +7,7 @@ import com.nubeero.cia.finance.gl.PostingRuleService;
 import com.nubeero.cia.finance.paa.LrcEngine;
 import com.nubeero.cia.finance.paa.LrcRecognitionResult;
 import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * End-to-end Testcontainers IT for {@link LrcEngine}'s FAC_INWARD dispatch —
  * FAC / IFRS-17 PAA workstream Task 3.
  *
- * <p>Proves the two things Task 3 adds on top of the already-merged Task 1
+ * <p>Proves the things Task 3 adds on top of the already-merged Task 1
  * (data model) / Task 2 (FAC grouping) slices:
  * <ol>
  *   <li>a {@code contract_group_assignment} row of type {@code FAC_INWARD}
@@ -49,7 +50,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>the resulting JE posts to the FAC_INWARD nature's accounts
  *       (Dr 2210 / Cr 4330) rather than the DIRECT nature's (Dr 2110 /
  *       Cr 4110) — proving {@code LrcEngine}'s new per-group
- *       {@code NatureAccounts} dispatch, not just the pricing dispatch.</li>
+ *       {@code NatureAccounts} dispatch, not just the pricing dispatch;</li>
+ *   <li>a {@code contract_group_assignment} row of type {@code FAC_OUTWARD}
+ *       is safely skipped — Task 3 deliberately does NOT implement outward
+ *       measurement (that's Task 4), and {@code recognise()} must complete
+ *       without throwing and without writing a {@code paa_lrc} row or JE for
+ *       that group. Regression guard: {@code LrcEngine.accountsFor} throws
+ *       for {@code FAC_OUTWARD}, reachable only if a future change (e.g.
+ *       Task 4 landing incompletely) ever lets a FAC_OUTWARD group's
+ *       roll-forward stop being all-zero without also wiring its accounts.</li>
  * </ol>
  *
  * <p>Harness mirrors {@code LrcEngineIT} exactly (same {@code @Import} list,
@@ -213,6 +222,32 @@ class InwardFacLrcIT {
         assertNoLine((UUID) facJe.get("id"), "4110");
     }
 
+    // ── 3. FAC_OUTWARD is safely skipped this task (Task 4's job) — no throw,
+    //      no paa_lrc row, no JE ────────────────────────────────────────────
+    @Test
+    @DisplayName("FAC_OUTWARD group is safely skipped — recognise() completes without throwing, no paa_lrc row, no JE")
+    void facOutwardGroup_safelySkipped_noThrowNoLrcRowNoJe() {
+        UUID groupId = seedFacOutwardGroup("FOU-IT-001", 2026, "NOT_ONEROUS");
+        seedFacOutwardAssignment(groupId);
+        entityManager.flush();
+
+        LrcRecognitionResult result = Assertions.assertDoesNotThrow(() -> engine.recognise(janPeriodId));
+        entityManager.flush();
+
+        assertThat(result.groupsWithJournalEntry())
+            .as("a FAC_OUTWARD group must never be counted as having a JE this task")
+            .isZero();
+
+        Long lrcCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM paa_lrc WHERE group_id = ?", Long.class, groupId);
+        assertThat(lrcCount).as("no paa_lrc row written for a FAC_OUTWARD group this task").isZero();
+
+        Long jeCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM journal_entry WHERE source_reference = ?",
+            Long.class, janPeriodId + ":" + groupId);
+        assertThat(jeCount).as("no JE posted for a FAC_OUTWARD group this task").isZero();
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private UUID seedDirectGroup(String portfolioCode, int cohortYear, String onerousness) {
@@ -282,6 +317,34 @@ class InwardFacLrcIT {
             "INSERT INTO contract_group_assignment (id, contract_type, contract_id, group_id, assigned_at, created_by) " +
             "VALUES (?, 'FAC_INWARD', ?, ?, now(), ?)",
             UUID.randomUUID(), facInwardId, groupId, "test");
+    }
+
+    private UUID seedFacOutwardGroup(String portfolioCode, int cohortYear, String onerousness) {
+        UUID portfolioId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        jdbcTemplate.update(
+            "INSERT INTO portfolio (id, code, name, contract_nature, created_by) VALUES (?, ?, ?, 'FAC_OUTWARD', ?)",
+            portfolioId, portfolioCode, "Test " + portfolioCode, "test");
+        jdbcTemplate.update(
+            "INSERT INTO group_of_contracts (id, portfolio_id, cohort_year, onerousness, status, created_by) " +
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            groupId, portfolioId, cohortYear, onerousness, "OPEN", "test");
+        return groupId;
+    }
+
+    /**
+     * Lightest possible seed for a {@code FAC_OUTWARD} assignment: a bare
+     * {@code contract_group_assignment} row pointing at a random
+     * {@code contract_id}. No {@code ri_fac_covers} row is needed —
+     * {@code contract_id} carries no FK (V77) and {@code LrcEngine
+     * .loadPricing} returns {@code null} unconditionally for
+     * {@code ContractType.FAC_OUTWARD} without ever querying it.
+     */
+    private void seedFacOutwardAssignment(UUID groupId) {
+        jdbcTemplate.update(
+            "INSERT INTO contract_group_assignment (id, contract_type, contract_id, group_id, assigned_at, created_by) " +
+            "VALUES (?, 'FAC_OUTWARD', ?, ?, now(), ?)",
+            UUID.randomUUID(), UUID.randomUUID(), groupId, "test");
     }
 
     private void assertLine(UUID journalEntryId, String accountCode,
