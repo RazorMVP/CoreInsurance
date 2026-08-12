@@ -61,6 +61,23 @@ import java.util.UUID;
  * posts through the same nature-selected accounts ({@link
  * LrcEngine#accountsFor}) — {@code Dr 2210 / Cr 4330} for FAC_INWARD,
  * {@code Dr 5210 / Cr 1410} for FAC_OUTWARD.
+ *
+ * <h2>GL is the sole source of truth (fix round 2)</h2>
+ * <p>{@link #postCatchUp} posts the catch-up GL journal entry ONLY — it does
+ * NOT write a {@code paa_lrc} row (see {@link #postCatchUp}'s javadoc for
+ * why: it would collide with {@link LrcEngine#recognise(UUID)}'s own row for
+ * the same {@code (group, period)} and abort recognition tenant-wide). The
+ * subsequent ordinary {@code recognise(periodId)} call for the open period
+ * produces the group's first {@code paa_lrc} row on its own, correctly.
+ *
+ * <h2>Idempotency across repeated {@code runCutover} calls</h2>
+ * <p>Re-running {@link #runCutover(UUID)} against the same (or a later)
+ * period is a no-op for contracts already grouped — {@link
+ * #findUngroupedInward} / {@link #findUngroupedOutward} exclude any contract
+ * that already has a {@link ContractGroupAssignment} row, so a second call
+ * never re-enumerates (and therefore never re-catches-up) a contract the
+ * first call already processed. {@link #postCatchUp}'s own JE idempotency
+ * pre-check is a second, independent guard for the same invariant.
  */
 @Service
 @Slf4j
@@ -74,7 +91,6 @@ public class FacPaaCutoverService {
     private final FiscalPeriodRepository fiscalPeriodRepository;
     private final ContractGroupingService contractGroupingService;
     private final LrcEngine lrcEngine;
-    private final PaaLrcRepository lrcRepository;
     private final JournalEntryRepository journalEntryRepository;
     private final JournalEntryService journalEntryService;
     private final PolicyClassResolver policyClassResolver;
@@ -136,9 +152,33 @@ public class FacPaaCutoverService {
     /**
      * Posts the one-time catch-up JE for {@code contractId}'s group, bounded
      * to {@code [pricing.startDate, period.startDate − 1 day]}. Returns zero
-     * (no JE, no {@link PaaLrc} row) when the contract's cover starts on or
-     * after the cutover period's start date — nothing pre-dates the
-     * transition for that contract.
+     * (no JE) when the contract's cover starts on or after the cutover
+     * period's start date — nothing pre-dates the transition for that
+     * contract.
+     *
+     * <p><strong>No {@code paa_lrc} row is written here (fix round 2).</strong>
+     * {@link LrcEngine} is the sole writer of {@code paa_lrc} — it recomputes
+     * every group's earning from scratch on every {@link
+     * LrcEngine#recognise(UUID)} call, keyed uniquely by {@code (group,
+     * period)}. Writing an ad-hoc row for {@code (group, periodId)} here
+     * would collide with the engine's own row the next time {@code
+     * recognise(periodId)} runs for the SAME open period — the engine's
+     * idempotency pre-check runs BEFORE its zero-activity skip, so the
+     * collision would throw {@link LrcRecognitionAlreadyDoneException} and
+     * roll back recognition for EVERY group in the tenant, not just this
+     * one. The catch-up GL JE is posted regardless (that IS the mandated
+     * accounting); the subsequent ordinary {@code recognise(periodId)} run
+     * produces the correct {@code paa_lrc} row for the open period on its
+     * own — its {@code openingAmount(period.startDate)} already equals
+     * {@code premium − backlog}, which reconciles against the GL account
+     * this catch-up JE just reduced by the backlog.
+     *
+     * <p><strong>Operational ordering assumption:</strong> cutover MUST run
+     * before the open period's first {@code recognise()} call — that is the
+     * modified-prospective transition sequence (cut over once, then resume
+     * normal closes). The backlog {@code [coverFrom, periodStart − 1]}
+     * belongs to this catch-up; {@code [periodStart, periodEnd]} onward
+     * belongs to {@code recognise()}.
      */
     private BigDecimal postCatchUp(GroupOfContracts group, ContractType type, UUID contractId, FiscalPeriod period) {
         LrcEngine.PolicyPricing pricing = lrcEngine.loadPricing(type, contractId);
@@ -164,20 +204,6 @@ public class FacPaaCutoverService {
             log.info("Cutover catch-up already posted for {} {} — skipping (idempotent)", type, contractId);
             return BigDecimal.ZERO;
         }
-
-        // Roll-forward continuity: opening=0 (never tracked before this
-        // catch-up), earned=catch-up, closing=what a normally-tracked
-        // contract's openingAmount(period.startDate) would already be.
-        BigDecimal closing = pricing.premiumAmount().subtract(earned);
-        PaaLrc lrc = new PaaLrc();
-        lrc.setGroup(group);
-        lrc.setPeriod(period);
-        lrc.setOpeningBalance(BigDecimal.ZERO.setScale(2));
-        lrc.setPremiumReceived(BigDecimal.ZERO.setScale(2));
-        lrc.setPremiumEarned(earned);
-        lrc.setClosingBalance(closing);
-        lrc.setCurrencyCode(pricing.currencyCode());
-        lrcRepository.save(lrc);
 
         LrcEngine.NatureAccounts accounts = LrcEngine.accountsFor(group.getPortfolio().getContractNature());
 
@@ -217,6 +243,13 @@ public class FacPaaCutoverService {
                 rs.getDate("cover_from").toLocalDate()));
     }
 
+    /**
+     * The per-row {@link PolicyClassResolver#findClassByPolicyId} call below
+     * is an N+1 query pattern — accepted here because {@code runCutover} is
+     * a rare one-time (or small, infrequent) batch, not a hot request path;
+     * the row count is bounded by "in-force FAC contracts never yet grouped
+     * under PAA", which shrinks to zero after the first successful cutover.
+     */
     private List<InForceContract> findUngroupedOutward() {
         return jdbcTemplate.query(
             "SELECT fc.id, fc.policy_id, fc.cover_from " +

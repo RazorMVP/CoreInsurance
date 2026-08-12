@@ -148,8 +148,12 @@ public class LrcEngine {
     static final String MODULE_PAA = "paa";
     static final String EVENT_LRC_RECOGNITION = "LRC_RECOGNITION";
 
-    /** Decimal scale matching DECIMAL(18,2) on paa_lrc / journal_entry_line. */
-    private static final int MONEY_SCALE = 2;
+    /**
+     * Decimal scale matching DECIMAL(18,2) on paa_lrc / journal_entry_line.
+     * Package-private (Task 5 fix round 2) so {@code FacDerecognitionListener}
+     * reuses this constant instead of duplicating it.
+     */
+    static final int MONEY_SCALE = 2;
 
     /** Scale for intermediate fraction computation — big enough to keep round-trip errors below 1 kobo on yearly policies. */
     private static final int FRACTION_SCALE = 12;
@@ -408,6 +412,21 @@ public class LrcEngine {
      * commission is netted into the asset at confirm time by
      * {@code SubledgerPostingService.replayFacPremiumCeded}, so net is what
      * this engine must amortise to expense over the cover period).
+     *
+     * <p><strong>In-force filter (FAC / IFRS-17 PAA workstream Task 5, fix
+     * round 2 - C2).</strong> {@link #loadFacInwardPricing} / {@link
+     * #loadFacOutwardPricing} filter on the contract's in-force status
+     * ({@code ACTIVE} / {@code CONFIRMED}) in addition to {@code deleted_at
+     * IS NULL}. This engine is stateless and re-derives every group's
+     * earning from scratch on every {@link #recognise} call - without this
+     * filter, a CANCELLED contract (whose remaining balance {@code
+     * FacDerecognitionListener} already released via a one-time GL JE) would
+     * keep being "found" and re-earned every subsequent period, silently
+     * double-booking against the account the derecognition JE already
+     * zeroed out. Excluding the row from the denominator computation
+     * (rather than shrinking {@code cover_to}, which would rebase the
+     * original-window day-count denominator and retroactively corrupt
+     * already-posted prior periods) is the safe way to stop future earning.
      */
     PolicyPricing loadPricing(ContractType type, UUID contractId) {
         return switch (type) {
@@ -436,11 +455,16 @@ public class LrcEngine {
      * avoids pulling a cia-reinsurance entity into cia-finance's persistence
      * context (same loose-coupling seam {@code ContractGroupingService}
      * already established for {@code ri_fac_inwards.cover_from}).
+     *
+     * <p>{@code status = 'ACTIVE'} (Task 5 fix round 2) — a CANCELLED inward
+     * cover returns no pricing, so {@link #computeRollForward} skips it (logs
+     * and continues) and it earns zero in every future period. Matches
+     * {@code RiFacInwardStatus.ACTIVE}, the only in-force inward status.
      */
     private PolicyPricing loadFacInwardPricing(UUID facInwardId) {
         List<PolicyPricing> rows = jdbcTemplate.query(
             "SELECT cover_from, cover_to, gross_premium, currency_code " +
-            "FROM ri_fac_inwards WHERE id = ? AND deleted_at IS NULL",
+            "FROM ri_fac_inwards WHERE id = ? AND status = 'ACTIVE' AND deleted_at IS NULL",
             (rs, rowNum) -> new PolicyPricing(
                 rs.getDate("cover_from").toLocalDate(),
                 rs.getDate("cover_to").toLocalDate(),
@@ -454,11 +478,16 @@ public class LrcEngine {
      * LRC basis = NET premium (§65 commission-netting — see {@link
      * #loadPricing} javadoc). Mirrors {@link #loadFacInwardPricing}'s
      * native-SQL list-query pattern.
+     *
+     * <p>{@code status = 'CONFIRMED'} (Task 5 fix round 2) — a CANCELLED
+     * outward cover returns no pricing, for the same in-force-only reason as
+     * {@link #loadFacInwardPricing}. Matches {@code FacCoverStatus.CONFIRMED},
+     * the only in-force outward status.
      */
     private PolicyPricing loadFacOutwardPricing(UUID facCoverId) {
         List<PolicyPricing> rows = jdbcTemplate.query(
             "SELECT cover_from, cover_to, net_premium, currency_code " +
-            "FROM ri_fac_covers WHERE id = ? AND deleted_at IS NULL",
+            "FROM ri_fac_covers WHERE id = ? AND status = 'CONFIRMED' AND deleted_at IS NULL",
             (rs, rowNum) -> new PolicyPricing(
                 rs.getDate("cover_from").toLocalDate(),
                 rs.getDate("cover_to").toLocalDate(),

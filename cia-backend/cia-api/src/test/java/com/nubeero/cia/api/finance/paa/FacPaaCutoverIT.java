@@ -15,6 +15,7 @@ import com.nubeero.cia.finance.paa.ContractGroupingService;
 import com.nubeero.cia.finance.paa.CutoverResult;
 import com.nubeero.cia.finance.paa.FacPaaCutoverService;
 import com.nubeero.cia.finance.paa.LrcEngine;
+import com.nubeero.cia.finance.paa.LrcRecognitionResult;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,6 +39,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
@@ -51,6 +53,17 @@ import static org.mockito.Mockito.mock;
  * IFRS-17 PAA workstream Task 5's modified-prospective transition for
  * in-force facultative reinsurance that pre-dates this system's PAA
  * measurement.
+ *
+ * <h2>Fix round 2 — GL is the sole source of truth</h2>
+ * <p>{@link FacPaaCutoverService#runCutover(UUID)}'s catch-up posting no
+ * longer writes an ad-hoc {@code paa_lrc} row (see {@code
+ * FacPaaCutoverService.postCatchUp}'s javadoc) — writing one collided with
+ * {@link LrcEngine}'s own row for the SAME {@code (group, period)} the next
+ * time {@code recognise} ran for that period, aborting recognition
+ * tenant-wide. {@link #cutoverThenRecognise_backlogAndOpenPeriodSliceEachEarnOnce_noDoubleCount()}
+ * is this fix's core regression guard: cutover, then an ordinary {@code
+ * recognise()} for the SAME period, must not throw and must not
+ * double-count.
  *
  * <p>Harness mirrors {@code OutwardFacLrcIT} (real {@code
  * ContractGroupingService} + {@code LrcEngine}, Testcontainers Postgres,
@@ -95,6 +108,7 @@ class FacPaaCutoverIT {
     }
 
     @Autowired private FacPaaCutoverService cutoverService;
+    @Autowired private LrcEngine lrcEngine;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private EntityManager entityManager;
 
@@ -118,10 +132,11 @@ class FacPaaCutoverIT {
     }
 
     // ── 1. Happy path: ungrouped in-force inward + outward FAC get grouped and
-    //      caught up, bounded entirely into the given OPEN period ─────────────
+    //      caught up, bounded entirely into the given OPEN period; GL only —
+    //      no paa_lrc row exists until the next ordinary recognise() ──────────
     @Test
     @DisplayName("runCutover groups ungrouped in-force FAC (inward + outward) and posts the "
-        + "inception-to-period-start catch-up into the OPEN period only")
+        + "inception-to-period-start catch-up into the OPEN period only, GL only (no paa_lrc row yet)")
     void runCutover_groupsAndPostsCatchUpIntoOpenPeriodOnly() {
         UUID marchPeriodId = seedOpenMonthPeriod(LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31));
 
@@ -142,12 +157,12 @@ class FacPaaCutoverIT {
         // 1200 x 59 / 365 = 193.9726... -> 193.97
         BigDecimal expectedInwardCatchUp = new BigDecimal("1200.00")
             .multiply(BigDecimal.valueOf(59))
-            .divide(BigDecimal.valueOf(365), 2, java.math.RoundingMode.HALF_UP);
+            .divide(BigDecimal.valueOf(365), 2, RoundingMode.HALF_UP);
         assertThat(expectedInwardCatchUp).isEqualByComparingTo("193.97");
         // 1000 x 59 / 365 = 161.6438... -> 161.64
         BigDecimal expectedOutwardCatchUp = new BigDecimal("1000.00")
             .multiply(BigDecimal.valueOf(59))
-            .divide(BigDecimal.valueOf(365), 2, java.math.RoundingMode.HALF_UP);
+            .divide(BigDecimal.valueOf(365), 2, RoundingMode.HALF_UP);
         assertThat(expectedOutwardCatchUp).isEqualByComparingTo("161.64");
 
         assertThat(result.totalCatchUpEarned())
@@ -185,23 +200,128 @@ class FacPaaCutoverIT {
         assertLine(outwardJeId, "5210", expectedOutwardCatchUp, BigDecimal.ZERO);
         assertLine(outwardJeId, "1410", BigDecimal.ZERO, expectedOutwardCatchUp);
 
-        // ── paa_lrc rows for the cutover period ──
-        Map<String, Object> inwardLrc = jdbcTemplate.queryForMap(
-            "SELECT premium_earned, closing_balance FROM paa_lrc WHERE group_id = ? AND period_id = ?",
-            inwardGroupId, marchPeriodId);
-        assertThat((BigDecimal) inwardLrc.get("premium_earned")).isEqualByComparingTo(expectedInwardCatchUp);
-        assertThat((BigDecimal) inwardLrc.get("closing_balance"))
-            .isEqualByComparingTo(new BigDecimal("1200.00").subtract(expectedInwardCatchUp));
-
-        Map<String, Object> outwardLrc = jdbcTemplate.queryForMap(
-            "SELECT premium_earned, closing_balance FROM paa_lrc WHERE group_id = ? AND period_id = ?",
-            outwardGroupId, marchPeriodId);
-        assertThat((BigDecimal) outwardLrc.get("premium_earned")).isEqualByComparingTo(expectedOutwardCatchUp);
-        assertThat((BigDecimal) outwardLrc.get("closing_balance"))
-            .isEqualByComparingTo(new BigDecimal("1000.00").subtract(expectedOutwardCatchUp));
+        // ── GL is the sole source of truth: the catch-up writes NO paa_lrc row ──
+        Long inwardLrcCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM paa_lrc WHERE group_id = ?", Long.class, inwardGroupId);
+        assertThat(inwardLrcCount).as("cutover catch-up must not write a paa_lrc row").isZero();
+        Long outwardLrcCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM paa_lrc WHERE group_id = ?", Long.class, outwardGroupId);
+        assertThat(outwardLrcCount).isZero();
     }
 
-    // ── 2. Guard: a CLOSED period rejects BEFORE any grouping or posting ─────
+    // ── 2. Core fix-round-2 regression guard: cutover THEN an ordinary
+    //      recognise() for the SAME period must not throw and must not
+    //      double-count — the backlog and the open-period slice are each
+    //      earned exactly once, reconciling to the true cumulative total ────
+    @Test
+    @DisplayName("cutover THEN recognise() for the same OPEN period: no throw, backlog earned once by "
+        + "cutover, open-period slice earned once by recognise, no double-count")
+    void cutoverThenRecognise_backlogAndOpenPeriodSliceEachEarnOnce_noDoubleCount() {
+        UUID marchPeriodId = seedOpenMonthPeriod(LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31));
+        UUID facInwardId = seedInwardFac(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31), "1200.00");
+        entityManager.flush();
+
+        CutoverResult cutoverResult = cutoverService.runCutover(marchPeriodId);
+        entityManager.flush();
+
+        BigDecimal expectedBacklog = new BigDecimal("1200.00")
+            .multiply(BigDecimal.valueOf(59))
+            .divide(BigDecimal.valueOf(365), 2, RoundingMode.HALF_UP);
+        assertThat(expectedBacklog).isEqualByComparingTo("193.97");
+        assertThat(cutoverResult.totalCatchUpEarned()).isEqualByComparingTo(expectedBacklog);
+
+        Map<String, Object> assignment = jdbcTemplate.queryForMap(
+            "SELECT group_id FROM contract_group_assignment WHERE contract_type = 'FAC_INWARD' AND contract_id = ?",
+            facInwardId);
+        UUID groupId = (UUID) assignment.get("group_id");
+
+        // (a) no throw — the whole point of the fix: no paa_lrc collision with the cutover's catch-up.
+        LrcRecognitionResult marchResult = lrcEngine.recognise(marchPeriodId);
+        entityManager.flush();
+        assertThat(marchResult.groupsWithJournalEntry())
+            .as("the group earns its March slice via the ordinary recognise() call")
+            .isEqualTo(1);
+
+        // ── (b) the March-only slice, earned by recognise(), independent of the backlog ──
+        // 1200 x 31(March) / 365 = 101.9178... -> 101.92
+        BigDecimal expectedMarchSlice = new BigDecimal("1200.00")
+            .multiply(BigDecimal.valueOf(31))
+            .divide(BigDecimal.valueOf(365), 2, RoundingMode.HALF_UP);
+        assertThat(expectedMarchSlice).isEqualByComparingTo("101.92");
+
+        Map<String, Object> marchLrc = jdbcTemplate.queryForMap(
+            "SELECT opening_balance, premium_earned, closing_balance FROM paa_lrc " +
+            "WHERE group_id = ? AND period_id = ?", groupId, marchPeriodId);
+        assertThat((BigDecimal) marchLrc.get("premium_earned")).isEqualByComparingTo(expectedMarchSlice);
+        // opening = premium - backlog = 1200 - 193.97 = 1006.03, which is exactly what a
+        // normally-tracked contract's openingAmount(marchStart) would independently compute
+        // (daysBetween(Mar1, Dec31) = 306 days: 1200 x 306 / 365 = 1006.0273... -> 1006.03).
+        assertThat((BigDecimal) marchLrc.get("opening_balance")).isEqualByComparingTo("1006.03");
+        assertThat((BigDecimal) marchLrc.get("closing_balance"))
+            .isEqualByComparingTo(new BigDecimal("1006.03").subtract(expectedMarchSlice));
+
+        Map<String, Object> marchJe = jdbcTemplate.queryForMap(
+            "SELECT id FROM journal_entry WHERE source_module = 'paa' AND source_event_type = 'LRC_RECOGNITION' " +
+            "AND source_reference = ?", marchPeriodId + ":" + groupId);
+        UUID marchJeId = (UUID) marchJe.get("id");
+        assertLine(marchJeId, "2210", expectedMarchSlice, BigDecimal.ZERO);
+        assertLine(marchJeId, "4330", BigDecimal.ZERO, expectedMarchSlice);
+
+        // ── (c) no double-count: total 2210 debits across BOTH JEs (cutover catch-up +
+        //     ordinary recognise) equal the true cumulative earned-through-Mar-31 figure,
+        //     independently computed as premium x daysBetween(Jan1,Mar31) / totalDays. ──
+        BigDecimal totalDebited2210 = jdbcTemplate.queryForObject(
+            "SELECT SUM(l.debit_amount) FROM journal_entry_line l " +
+            "JOIN chart_of_account a ON a.id = l.account_id " +
+            "JOIN journal_entry je ON je.id = l.journal_entry_id " +
+            "WHERE a.code = '2210' AND je.source_module = 'paa' " +
+            "AND je.source_reference IN (?, ?)",
+            BigDecimal.class,
+            "FAC_INWARD:" + facInwardId, marchPeriodId + ":" + groupId);
+        BigDecimal expectedCumulative = new BigDecimal("1200.00")
+            .multiply(BigDecimal.valueOf(90))   // Jan(31) + Feb(28) + Mar(31) = 90 days
+            .divide(BigDecimal.valueOf(365), 2, RoundingMode.HALF_UP);
+        assertThat(expectedCumulative).isEqualByComparingTo("295.89");
+        assertThat(totalDebited2210)
+            .as("backlog + open-period slice reconcile to the true cumulative total — no double-count")
+            .isEqualByComparingTo(expectedCumulative);
+        assertThat(expectedBacklog.add(expectedMarchSlice)).isEqualByComparingTo(expectedCumulative);
+    }
+
+    // ── 3. Re-running runCutover against the same period is idempotent per
+    //      contract — each contract's catch-up posts exactly once ──────────
+    @Test
+    @DisplayName("re-running runCutover against the same OPEN period posts each contract's catch-up "
+        + "exactly once — the second run groups nothing new")
+    void runCutover_reRunAgainstSamePeriod_postsEachContractOnce() {
+        UUID marchPeriodId = seedOpenMonthPeriod(LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31));
+        UUID facInwardId = seedInwardFac(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31), "1200.00");
+        entityManager.flush();
+
+        CutoverResult first = cutoverService.runCutover(marchPeriodId);
+        entityManager.flush();
+        assertThat(first.contractsGrouped()).isEqualTo(1);
+
+        CutoverResult second = cutoverService.runCutover(marchPeriodId);
+        entityManager.flush();
+        assertThat(second.contractsGrouped())
+            .as("the contract is already grouped — the second run finds nothing ungrouped left")
+            .isZero();
+        assertThat(second.totalCatchUpEarned()).isEqualByComparingTo(BigDecimal.ZERO);
+
+        Long jeCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM journal_entry WHERE source_module = 'paa' " +
+            "AND source_event_type = 'PAA_CUTOVER' AND source_reference = ?",
+            Long.class, "FAC_INWARD:" + facInwardId);
+        assertThat(jeCount).as("catch-up posted exactly once across both runs").isEqualTo(1L);
+
+        Long assignmentCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM contract_group_assignment WHERE contract_type = 'FAC_INWARD' AND contract_id = ?",
+            Long.class, facInwardId);
+        assertThat(assignmentCount).as("no duplicate assignment row from the second run").isEqualTo(1L);
+    }
+
+    // ── 4. Guard: a CLOSED period rejects BEFORE any grouping or posting ─────
     @Test
     @DisplayName("runCutover against a HARD-closed period throws PeriodLockedException before any work")
     void runCutover_closedPeriod_throwsPeriodLockedExceptionBeforeAnyWork() {

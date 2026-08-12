@@ -333,7 +333,9 @@ class OutwardFacLrcIT {
             "cover_from, cover_to, created_by) " +
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             id, facReference, policyId, policyNumber,
-            UUID.randomUUID(), "Munich Re", "APPROVED", new BigDecimal("500000.00"), new BigDecimal("2.500000"),
+            // status = CONFIRMED (FacCoverStatus.CONFIRMED, the only in-force outward status) —
+            // LrcEngine.loadFacOutwardPricing (Task 5 fix round 2) now filters on it.
+            UUID.randomUUID(), "Munich Re", "CONFIRMED", new BigDecimal("500000.00"), new BigDecimal("2.500000"),
             new BigDecimal(premiumCeded), new BigDecimal("0.166667"), new BigDecimal(commissionAmount),
             new BigDecimal(netPremium),
             "NGN", coverFrom, coverTo, "test");

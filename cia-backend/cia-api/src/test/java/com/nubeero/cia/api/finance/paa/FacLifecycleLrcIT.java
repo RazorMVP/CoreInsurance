@@ -7,6 +7,7 @@ import com.nubeero.cia.finance.gl.JournalEntryService;
 import com.nubeero.cia.finance.gl.PostingRuleService;
 import com.nubeero.cia.finance.paa.FacDerecognitionListener;
 import com.nubeero.cia.finance.paa.LrcEngine;
+import com.nubeero.cia.finance.paa.LrcRecognitionResult;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,8 +40,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * End-to-end Testcontainers IT for FAC / IFRS-17 PAA workstream Task 5's
  * lifecycle handling: cancellation derecognises the remaining LRC/asset
- * balance, and an {@code extend} recomputes the roll-forward over the new
- * cover window with zero special posting code.
+ * balance via a GL journal entry ONLY, and an {@code extend} recomputes the
+ * roll-forward over the new cover window with zero special posting code.
+ *
+ * <h2>Fix round 2 — GL is the sole source of truth</h2>
+ * <p>An earlier version of {@code FacDerecognitionListener} also wrote an
+ * ad-hoc {@code paa_lrc} row for the derecognition. That collided with
+ * {@link LrcEngine}'s own row for the SAME {@code (group, period)} the next
+ * time {@code recognise} ran for that period — the engine's idempotency
+ * pre-check runs BEFORE its zero-activity skip, so the collision threw and
+ * rolled back recognition for EVERY group in the tenant, not just the
+ * cancelled FAC's. This suite now asserts the corrected shape: derecognition
+ * posts a GL journal entry ONLY (no {@code paa_lrc} row), and a subsequent
+ * {@code recognise()} call for a later period neither throws nor re-earns
+ * the cancelled contract — the in-force status filter in {@link
+ * LrcEngine#loadFacInwardPricing} / {@code loadFacOutwardPricing} (Task 5
+ * fix round 2) stops it from being found at all.
  *
  * <p>Harness mirrors {@code InwardFacLrcIT} / {@code OutwardFacLrcIT} (same
  * {@code @DataJpaTest} + Testcontainers Postgres + explicit {@code @Import}
@@ -51,9 +66,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * cia-reinsurance/cia-documents/cia-setup bean graph) — the same "publish
  * the event, exercise the real {@code @EventListener}" pattern {@code
  * FacContractGroupingIT} and {@code OutwardFacLrcIT} already establish for
- * this workstream. The production wiring that {@code cancel()} actually
- * publishes {@link FacDerecognisedEvent} is a small, directly-readable diff
- * in {@code RiFacInwardService}/{@code FacCoverService} (Task 5 Step 3).
+ * this workstream. Each test manually flips the underlying {@code
+ * ri_fac_inwards}/{@code ri_fac_covers} row's status to {@code CANCELLED}
+ * before publishing — simulating exactly what {@code cancel()} does before
+ * it publishes the event in production.
  */
 @Testcontainers
 @DataJpaTest
@@ -94,12 +110,14 @@ class FacLifecycleLrcIT {
 
     private UUID janPeriodId;
     private UUID febPeriodId;
+    private UUID marchPeriodId;
 
     @BeforeEach
     void seedFiscalYearAndPeriods() {
         UUID fiscalYearId = UUID.randomUUID();
         janPeriodId = UUID.randomUUID();
         febPeriodId = UUID.randomUUID();
+        marchPeriodId = UUID.randomUUID();
         jdbcTemplate.update(
             "INSERT INTO fiscal_year (id, name, start_date, end_date, status, created_by) " +
             "VALUES (?, ?, ?, ?, ?, ?)",
@@ -115,12 +133,20 @@ class FacLifecycleLrcIT {
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             febPeriodId, fiscalYearId, "MONTH",
             LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28), "OPEN", "test");
+        jdbcTemplate.update(
+            "INSERT INTO fiscal_period (id, fiscal_year_id, period_type, start_date, end_date, status, created_by) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            marchPeriodId, fiscalYearId, "MONTH",
+            LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31), "OPEN", "test");
     }
 
-    // ── 1. Inward FAC cancel mid-Feb derecognises the remaining LRC liability ──
+    // ── 1. Inward FAC cancel mid-Feb derecognises the remaining LRC liability,
+    //      posts GL ONLY (no paa_lrc row), and a later recognise() neither
+    //      throws nor re-earns the cancelled contract ─────────────────────────
     @Test
-    @DisplayName("cancel mid-Feb: Dr 2210 / Cr 4330 for the remaining unearned LRC; group's paa_lrc closing -> zero")
-    void inwardCancel_derecognisesRemainingLrc() {
+    @DisplayName("cancel mid-Feb: Dr 2210 / Cr 4330 for the remaining unearned LRC, GL only; "
+        + "a later recognise() does not throw and does not re-earn the cancelled contract")
+    void inwardCancel_derecognisesRemainingLrc_andStopsFutureEarning() {
         UUID groupId = seedFacInwardGroup("FIN-LC-001");
         UUID facInwardId = UUID.randomUUID();
         seedFacInwardAssignment(groupId, facInwardId, "FAC-IN-LC-001",
@@ -139,22 +165,13 @@ class FacLifecycleLrcIT {
         BigDecimal remaining = new BigDecimal("1200.00").subtract(janEarned);
         assertThat(remaining).isEqualByComparingTo("1098.08");
 
+        // Mirrors RiFacInwardService.cancel(): status -> CANCELLED BEFORE the event publishes.
+        jdbcTemplate.update("UPDATE ri_fac_inwards SET status = 'CANCELLED' WHERE id = ?", facInwardId);
         publisher.publishEvent(new FacDerecognisedEvent(
             FacDerecognisedEvent.ContractType.FAC_INWARD, facInwardId, LocalDate.of(2026, 2, 15)));
         entityManager.flush();
 
-        // ── (a) the new Feb paa_lrc row releases the WHOLE remaining balance ──
-        Map<String, Object> febLrc = jdbcTemplate.queryForMap(
-            "SELECT opening_balance, premium_earned, closing_balance " +
-            "FROM paa_lrc WHERE group_id = ? AND period_id = ?",
-            groupId, febPeriodId);
-        assertThat((BigDecimal) febLrc.get("opening_balance")).isEqualByComparingTo(remaining);
-        assertThat((BigDecimal) febLrc.get("premium_earned")).isEqualByComparingTo(remaining);
-        assertThat((BigDecimal) febLrc.get("closing_balance"))
-            .as("group's paa_lrc closing goes to zero for remaining coverage")
-            .isEqualByComparingTo("0.00");
-
-        // ── (b) JE Dr 2210 / Cr 4330 for the remaining balance ──
+        // ── (a) JE Dr 2210 / Cr 4330 for the remaining balance ──
         Map<String, Object> je = jdbcTemplate.queryForMap(
             "SELECT id FROM journal_entry " +
             "WHERE source_module = 'paa' AND source_event_type = 'FAC_DERECOGNITION' " +
@@ -169,12 +186,37 @@ class FacLifecycleLrcIT {
             "FROM journal_entry_line WHERE journal_entry_id = ?",
             BigDecimal.class, jeId);
         assertThat(net).as("Sigma debit == Sigma credit").isEqualByComparingTo(BigDecimal.ZERO);
+
+        // ── (b) GL is the sole source of truth: no ad-hoc paa_lrc row anywhere beyond the Jan recognise() ──
+        Long postJanLrcCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM paa_lrc WHERE group_id = ? AND period_id <> ?",
+            Long.class, groupId, janPeriodId);
+        assertThat(postJanLrcCount)
+            .as("derecognition must not write a paa_lrc row — LrcEngine.recognise is the sole writer")
+            .isZero();
+
+        // ── (c) a later recognise() neither throws NOR re-earns the cancelled contract ──
+        LrcRecognitionResult marchResult = engine.recognise(marchPeriodId);
+        entityManager.flush();
+        assertThat(marchResult.groupsWithJournalEntry())
+            .as("cancelled contract's group earns nothing in a later period")
+            .isZero();
+        Long marchLrcCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM paa_lrc WHERE group_id = ? AND period_id = ?",
+            Long.class, groupId, marchPeriodId);
+        assertThat(marchLrcCount).as("no paa_lrc row for the cancelled contract's group in March").isZero();
+        Long marchJeCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM journal_entry WHERE source_reference = ?",
+            Long.class, marchPeriodId + ":" + groupId);
+        assertThat(marchJeCount).as("no double-earn JE posted for March").isZero();
     }
 
-    // ── 2. Outward FAC cancel mid-Feb derecognises the remaining reinsurance-held asset ──
+    // ── 2. Outward FAC cancel mid-Feb derecognises the remaining reinsurance-held
+    //      asset, posts GL ONLY, and a later recognise() does not re-earn it ────
     @Test
-    @DisplayName("cancel mid-Feb: Dr 5210 / Cr 1410 for the remaining unamortised asset; group's paa_lrc closing -> zero")
-    void outwardCancel_derecognisesRemainingAsset() {
+    @DisplayName("cancel mid-Feb: Dr 5210 / Cr 1410 for the remaining unamortised asset, GL only; "
+        + "a later recognise() does not throw and does not re-earn the cancelled contract")
+    void outwardCancel_derecognisesRemainingAsset_andStopsFutureEarning() {
         UUID groupId = seedFacOutwardGroup("FOU-LC-001");
         UUID facCoverId = UUID.randomUUID();
         seedFacOutwardAssignment(groupId, facCoverId,
@@ -193,19 +235,10 @@ class FacLifecycleLrcIT {
         BigDecimal remaining = new BigDecimal("1000.00").subtract(janEarned);
         assertThat(remaining).isEqualByComparingTo("915.07");
 
+        jdbcTemplate.update("UPDATE ri_fac_covers SET status = 'CANCELLED' WHERE id = ?", facCoverId);
         publisher.publishEvent(new FacDerecognisedEvent(
             FacDerecognisedEvent.ContractType.FAC_OUTWARD, facCoverId, LocalDate.of(2026, 2, 15)));
         entityManager.flush();
-
-        Map<String, Object> febLrc = jdbcTemplate.queryForMap(
-            "SELECT opening_balance, premium_earned, closing_balance " +
-            "FROM paa_lrc WHERE group_id = ? AND period_id = ?",
-            groupId, febPeriodId);
-        assertThat((BigDecimal) febLrc.get("opening_balance")).isEqualByComparingTo(remaining);
-        assertThat((BigDecimal) febLrc.get("premium_earned")).isEqualByComparingTo(remaining);
-        assertThat((BigDecimal) febLrc.get("closing_balance"))
-            .as("group's paa_lrc closing goes to zero for remaining coverage")
-            .isEqualByComparingTo("0.00");
 
         Map<String, Object> je = jdbcTemplate.queryForMap(
             "SELECT id FROM journal_entry " +
@@ -221,6 +254,23 @@ class FacLifecycleLrcIT {
             "FROM journal_entry_line WHERE journal_entry_id = ?",
             BigDecimal.class, jeId);
         assertThat(net).as("Sigma debit == Sigma credit").isEqualByComparingTo(BigDecimal.ZERO);
+
+        Long postJanLrcCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM paa_lrc WHERE group_id = ? AND period_id <> ?",
+            Long.class, groupId, janPeriodId);
+        assertThat(postJanLrcCount)
+            .as("derecognition must not write a paa_lrc row")
+            .isZero();
+
+        LrcRecognitionResult marchResult = engine.recognise(marchPeriodId);
+        entityManager.flush();
+        assertThat(marchResult.groupsWithJournalEntry())
+            .as("cancelled contract's group earns nothing in a later period")
+            .isZero();
+        Long marchLrcCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM paa_lrc WHERE group_id = ? AND period_id = ?",
+            Long.class, groupId, marchPeriodId);
+        assertThat(marchLrcCount).isZero();
     }
 
     // ── 3. A re-fired derecognition posts once (idempotent) ──────────────────
@@ -237,6 +287,7 @@ class FacLifecycleLrcIT {
         engine.recognise(janPeriodId);
         entityManager.flush();
 
+        jdbcTemplate.update("UPDATE ri_fac_inwards SET status = 'CANCELLED' WHERE id = ?", facInwardId);
         FacDerecognisedEvent event = new FacDerecognisedEvent(
             FacDerecognisedEvent.ContractType.FAC_INWARD, facInwardId, LocalDate.of(2026, 2, 15));
         publisher.publishEvent(event);
@@ -249,11 +300,6 @@ class FacLifecycleLrcIT {
             "AND source_event_type = 'FAC_DERECOGNITION' AND source_reference = ?",
             Long.class, "FAC_INWARD:" + facInwardId);
         assertThat(jeCount).as("derecognition posts exactly once even if the event re-fires").isEqualTo(1L);
-
-        Long lrcCount = jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM paa_lrc WHERE group_id = ? AND period_id = ?",
-            Long.class, groupId, febPeriodId);
-        assertThat(lrcCount).as("only one paa_lrc row for the derecognition period").isEqualTo(1L);
     }
 
     // ── 4. extend moves cover_to; a later recognise() recomputes over the new
@@ -302,6 +348,69 @@ class FacLifecycleLrcIT {
         assertThat((BigDecimal) febLrc.get("premium_earned"))
             .as("Feb earning recomputed over the EXTENDED 730-day window, not the original 365")
             .isEqualByComparingTo(febEarnedExtended);
+    }
+
+    // ── 5. Fix 3 — cancel BEFORE any recognise() ever ran releases the FULL
+    //      LRC-basis premium (a status-agnostic direct read, since loadPricing's
+    //      in-force filter would otherwise return nothing for a CANCELLED row) ──
+    @Test
+    @DisplayName("inward: cancel before any recognise() ever ran releases the FULL gross premium "
+        + "(the accept-time 2210 liability would otherwise linger forever)")
+    void inwardCancelBeforeAnyRecognise_releasesFullGrossPremium() {
+        UUID groupId = seedFacInwardGroup("FIN-LC-NOPRIOR");
+        UUID facInwardId = UUID.randomUUID();
+        seedFacInwardAssignment(groupId, facInwardId, "FAC-IN-LC-NOPRIOR",
+            LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
+            "1200.00", "1000.00", "200.00");
+        entityManager.flush();
+        // Deliberately NO engine.recognise(...) call before cancelling — no paa_lrc history exists.
+
+        jdbcTemplate.update("UPDATE ri_fac_inwards SET status = 'CANCELLED' WHERE id = ?", facInwardId);
+        publisher.publishEvent(new FacDerecognisedEvent(
+            FacDerecognisedEvent.ContractType.FAC_INWARD, facInwardId, LocalDate.of(2026, 1, 20)));
+        entityManager.flush();
+
+        Map<String, Object> je = jdbcTemplate.queryForMap(
+            "SELECT id FROM journal_entry " +
+            "WHERE source_module = 'paa' AND source_event_type = 'FAC_DERECOGNITION' " +
+            "AND source_reference = ?",
+            "FAC_INWARD:" + facInwardId);
+        UUID jeId = (UUID) je.get("id");
+        assertLine(jeId, "2210", new BigDecimal("1200.00"), BigDecimal.ZERO);
+        assertLine(jeId, "4330", BigDecimal.ZERO, new BigDecimal("1200.00"));
+
+        Long lrcCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM paa_lrc WHERE group_id = ?", Long.class, groupId);
+        assertThat(lrcCount).as("still no paa_lrc row ever written for this group").isZero();
+    }
+
+    @Test
+    @DisplayName("outward: cancel before any recognise() ever ran releases the FULL net premium")
+    void outwardCancelBeforeAnyRecognise_releasesFullNetPremium() {
+        UUID groupId = seedFacOutwardGroup("FOU-LC-NOPRIOR");
+        UUID facCoverId = UUID.randomUUID();
+        seedFacOutwardAssignment(groupId, facCoverId,
+            LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
+            "1000.00");
+        entityManager.flush();
+
+        jdbcTemplate.update("UPDATE ri_fac_covers SET status = 'CANCELLED' WHERE id = ?", facCoverId);
+        publisher.publishEvent(new FacDerecognisedEvent(
+            FacDerecognisedEvent.ContractType.FAC_OUTWARD, facCoverId, LocalDate.of(2026, 1, 20)));
+        entityManager.flush();
+
+        Map<String, Object> je = jdbcTemplate.queryForMap(
+            "SELECT id FROM journal_entry " +
+            "WHERE source_module = 'paa' AND source_event_type = 'FAC_DERECOGNITION' " +
+            "AND source_reference = ?",
+            "FAC_OUTWARD:" + facCoverId);
+        UUID jeId = (UUID) je.get("id");
+        assertLine(jeId, "5210", new BigDecimal("1000.00"), BigDecimal.ZERO);
+        assertLine(jeId, "1410", BigDecimal.ZERO, new BigDecimal("1000.00"));
+
+        Long lrcCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM paa_lrc WHERE group_id = ?", Long.class, groupId);
+        assertThat(lrcCount).isZero();
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

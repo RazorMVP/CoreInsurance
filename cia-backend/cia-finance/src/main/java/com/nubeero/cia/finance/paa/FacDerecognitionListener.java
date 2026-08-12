@@ -3,13 +3,12 @@ package com.nubeero.cia.finance.paa;
 import com.nubeero.cia.common.event.FacDerecognisedEvent;
 import com.nubeero.cia.finance.dto.JournalEntryLineRequest;
 import com.nubeero.cia.finance.dto.PostJournalEntryRequest;
-import com.nubeero.cia.finance.gl.FiscalPeriod;
-import com.nubeero.cia.finance.gl.FiscalPeriodResolver;
 import com.nubeero.cia.finance.gl.JournalEntryRepository;
 import com.nubeero.cia.finance.gl.JournalEntryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,24 +21,54 @@ import java.util.UUID;
 /**
  * FAC / IFRS-17 PAA workstream Task 5 — derecognises a cancelled facultative
  * reinsurance contract's remaining LRC liability (inward) or unamortised
- * reinsurance-held asset (outward), releasing it in the currently OPEN
- * fiscal period.
+ * reinsurance-held asset (outward), releasing it in a single GL journal
+ * entry dated the cancellation's effective date.
  *
  * <p>Listens for {@link FacDerecognisedEvent}, published by {@code
  * RiFacInwardService.cancel} / {@code FacCoverService.cancel} after the
  * contract's status row is persisted as {@code CANCELLED}.
  *
- * <h2>Remaining-balance computation (v1 scope)</h2>
- * <p>The remaining balance is read off the cancelled contract's <em>group's</em>
- * latest {@link PaaLrc} closing balance ({@link
- * PaaLrcRepository#findFirstByGroupIdAndDeletedAtIsNullOrderByPeriodEndDateDesc}),
- * not recomputed from the contract's own pricing. This is exact for a
- * single-contract group (today's only production shape — Task 2's grouping
- * keys purely off portfolio/cohort/onerousness, so multiple FAC contracts
- * CAN land in the same group); a future multi-contract-per-group scenario
- * would need this handler to compute the cancelled contract's own unearned
- * portion instead of releasing the whole group's balance. Not a concern at
- * this workstream's scope — flagged here for the next reader.
+ * <h2>GL is the sole source of truth — no {@code paa_lrc} write (fix round 2)</h2>
+ * <p>{@link LrcEngine} is a <em>stateless</em> batch engine: {@code
+ * recognise(periodId)} recomputes every group's earning from scratch from
+ * contract dates on every call, and is the SOLE writer of {@code paa_lrc}
+ * rows — uniquely keyed {@code (group, period)} by {@code
+ * uq_paa_lrc_group_period}, with a service-layer idempotency pre-check
+ * ({@link LrcRecognitionAlreadyDoneException}) that runs BEFORE the
+ * zero-activity skip. An earlier version of this listener also wrote an
+ * ad-hoc {@code paa_lrc} row for the derecognition — that collided with the
+ * engine's own row for the SAME {@code (group, period)} the next time {@code
+ * recognise} ran for that period, throwing and rolling back recognition for
+ * EVERY group in the tenant, not just the cancelled FAC's. This listener now
+ * posts the GL journal entry ONLY; {@link LrcEngine#loadFacInwardPricing} /
+ * {@link LrcEngine#loadFacOutwardPricing} filter on the contract's in-force
+ * status, so once cancelled the engine simply stops finding — and therefore
+ * stops re-earning — the contract in every future period. No {@code
+ * paa_lrc} row ever needs to exist for a derecognition event; the {@code
+ * paa_lrc}-level disclosure of this movement (so the roll-forward view
+ * reflects it) is Task 6's job (V78 movement-view rebuild), not this one's.
+ *
+ * <h2>Remaining-balance computation</h2>
+ * <p>Two branches, both keyed off the cancelled contract's <em>group</em>
+ * (Task 2's grouping keys purely off portfolio/cohort/onerousness — a
+ * multi-contract group is possible; releasing the whole group's balance on
+ * one contract's cancellation is a known v1-scope simplification, exact for
+ * today's only production shape: single-contract groups):
+ * <ol>
+ *   <li><strong>Group has {@code paa_lrc} history</strong> — release the
+ *       group's latest closing balance ({@link
+ *       PaaLrcRepository#findFirstByGroupIdAndDeletedAtIsNullOrderByPeriodEndDateDesc}).</li>
+ *   <li><strong>Group has no {@code paa_lrc} history yet</strong> (cancelled
+ *       before any {@code recognise()} ever ran for it) — the accept-time
+ *       posting ({@code SubledgerPostingService.replayFacPremiumAccepted} /
+ *       {@code replayFacPremiumCeded}) already set up the FULL LRC-basis
+ *       premium as a standing balance ({@code 2210} gross for inward,
+ *       {@code 1410} net for outward) that would otherwise linger forever.
+ *       Release it via a small <em>status-agnostic</em> direct read
+ *       ({@link #readFullPremiumStatusAgnostic}) — the contract is already
+ *       CANCELLED at this point, so {@link LrcEngine#loadPricing}'s
+ *       in-force filter would (correctly) return nothing.</li>
+ * </ol>
  *
  * <h2>Posting shape (reused from {@link LrcEngine})</h2>
  * <p>{@link LrcEngine#accountsFor} resolves the same {@code (debitAccount,
@@ -74,13 +103,11 @@ public class FacDerecognitionListener {
 
     static final String EVENT_FAC_DERECOGNITION = "FAC_DERECOGNITION";
 
-    private static final int MONEY_SCALE = 2;
-
     private final ContractGroupAssignmentRepository assignmentRepository;
     private final PaaLrcRepository lrcRepository;
-    private final FiscalPeriodResolver fiscalPeriodResolver;
     private final JournalEntryRepository journalEntryRepository;
     private final JournalEntryService journalEntryService;
+    private final JdbcTemplate jdbcTemplate;
 
     @EventListener
     @Transactional
@@ -105,36 +132,31 @@ public class FacDerecognitionListener {
             return;
         }
 
+        BigDecimal remaining;
+        String currency;
+
         Optional<PaaLrc> latest =
             lrcRepository.findFirstByGroupIdAndDeletedAtIsNullOrderByPeriodEndDateDesc(group.getId());
-        if (latest.isEmpty()) {
-            log.info("Group {} has no paa_lrc history — nothing recognised yet for contract {} {}, "
-                    + "no derecognition posting needed", group.getId(), event.contractType(), event.contractId());
-            return;
+        if (latest.isPresent()) {
+            PaaLrc lastRow = latest.get();
+            remaining = lastRow.getClosingBalance().setScale(LrcEngine.MONEY_SCALE, RoundingMode.HALF_UP);
+            currency = lastRow.getCurrencyCode();
+        } else {
+            FullPremium full = readFullPremiumStatusAgnostic(financeType, event.contractId());
+            if (full == null || full.amount() == null) {
+                log.info("Group {} has no paa_lrc history and no premium found for contract {} {} — "
+                        + "nothing to derecognise", group.getId(), event.contractType(), event.contractId());
+                return;
+            }
+            remaining = full.amount().setScale(LrcEngine.MONEY_SCALE, RoundingMode.HALF_UP);
+            currency = full.currencyCode();
         }
 
-        PaaLrc lastRow = latest.get();
-        BigDecimal remaining = lastRow.getClosingBalance().setScale(MONEY_SCALE, RoundingMode.HALF_UP);
         if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
             log.info("Group {} has no remaining LRC/asset balance to derecognise (contract {} {})",
                 group.getId(), event.contractType(), event.contractId());
             return;
         }
-
-        FiscalPeriod period = fiscalPeriodResolver.resolveMonthForBusinessDate(event.effectiveDate());
-        String currency = lastRow.getCurrencyCode();
-
-        // Roll forward: the whole remaining balance is "earned" (released) at
-        // once, so the group's next roll-forward row correctly opens at zero.
-        PaaLrc derecognitionRow = new PaaLrc();
-        derecognitionRow.setGroup(group);
-        derecognitionRow.setPeriod(period);
-        derecognitionRow.setOpeningBalance(remaining);
-        derecognitionRow.setPremiumReceived(BigDecimal.ZERO.setScale(MONEY_SCALE));
-        derecognitionRow.setPremiumEarned(remaining);
-        derecognitionRow.setClosingBalance(BigDecimal.ZERO.setScale(MONEY_SCALE));
-        derecognitionRow.setCurrencyCode(currency);
-        lrcRepository.save(derecognitionRow);
 
         LrcEngine.NatureAccounts accounts = LrcEngine.accountsFor(group.getPortfolio().getContractNature());
 
@@ -158,10 +180,36 @@ public class FacDerecognitionListener {
         journalEntryService.post(request);
     }
 
+    /**
+     * Status-agnostic full-premium read for the "cancelled before any
+     * recognise() ever ran" branch — deliberately does NOT filter on
+     * status (the contract is already CANCELLED by the time this fires, so
+     * {@link LrcEngine#loadPricing}'s in-force filter would return nothing).
+     * Gross for inward (the accept-time LRC basis), net for outward (§65
+     * commission-netting basis) — matches {@link LrcEngine#loadPricing}'s
+     * per-nature basis exactly.
+     */
+    private FullPremium readFullPremiumStatusAgnostic(ContractType type, UUID contractId) {
+        String sql = switch (type) {
+            case FAC_INWARD -> "SELECT gross_premium, currency_code FROM ri_fac_inwards "
+                + "WHERE id = ? AND deleted_at IS NULL";
+            case FAC_OUTWARD -> "SELECT net_premium, currency_code FROM ri_fac_covers "
+                + "WHERE id = ? AND deleted_at IS NULL";
+            case POLICY -> throw new IllegalStateException(
+                "FacDerecognitionListener never handles ContractType.POLICY");
+        };
+        List<FullPremium> rows = jdbcTemplate.query(sql,
+            (rs, rowNum) -> new FullPremium(rs.getBigDecimal(1), rs.getString(2)),
+            contractId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
     private static ContractType toFinanceType(FacDerecognisedEvent.ContractType eventType) {
         return switch (eventType) {
             case FAC_INWARD -> ContractType.FAC_INWARD;
             case FAC_OUTWARD -> ContractType.FAC_OUTWARD;
         };
     }
+
+    private record FullPremium(BigDecimal amount, String currencyCode) {}
 }
