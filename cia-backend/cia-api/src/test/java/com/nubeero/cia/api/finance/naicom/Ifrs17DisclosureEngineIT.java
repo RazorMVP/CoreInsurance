@@ -45,6 +45,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>FiscalPeriodNotFoundException for missing / deleted period.</li>
  *   <li>Payload envelope matches NAICOM contract (submissionType,
  *       period, generatedAt, notes).</li>
+ *   <li>FAC / IFRS-17 PAA workstream Task 6 (review fix round): a
+ *       DIRECT-natured group's payload row carries {@code contractNature =
+ *       "DIRECT"} (the V76 default); a FAC_INWARD-natured group's payload
+ *       row carries {@code contractNature = "FAC_INWARD"}.</li>
  * </ol>
  */
 @Testcontainers
@@ -70,7 +74,13 @@ class Ifrs17DisclosureEngineIT {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.target", () -> "49");
+        // Bumped 49 → 78 (FAC / IFRS-17 PAA workstream Task 6, review fix round):
+        // Ifrs17DisclosureEngine now relays GroupMovementEntry.contractNature
+        // (sourced from portfolio.contract_nature, V76, via the V78-recreated
+        // paa_movement_analysis view) — a schema pinned below V76 can never
+        // observe that behaviour. Target 49 also predates V77, which DROPS
+        // policy_group_assignment; @BeforeEach below is updated to match.
+        registry.add("spring.flyway.target", () -> "78");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 
@@ -85,7 +95,7 @@ class Ifrs17DisclosureEngineIT {
     void seedFiscalPeriod() {
         jdbcTemplate.update("DELETE FROM paa_lrc");
         jdbcTemplate.update("DELETE FROM paa_lic");
-        jdbcTemplate.update("DELETE FROM policy_group_assignment");
+        jdbcTemplate.update("DELETE FROM contract_group_assignment");
         jdbcTemplate.update("DELETE FROM policies");
         jdbcTemplate.update("DELETE FROM group_of_contracts");
         jdbcTemplate.update("DELETE FROM portfolio");
@@ -256,11 +266,33 @@ class Ifrs17DisclosureEngineIT {
         assertThat(entry.get("groupStatus")).isEqualTo("OPEN");
         assertThat(entry.get("currencyCode")).isEqualTo("NGN");
         assertThat(entry.get("groupId")).isInstanceOf(String.class);
+        // V76 default — this group's portfolio was seeded via seedGroup() with
+        // no contract_nature override.
+        assertThat(entry.get("contractNature")).isEqualTo("DIRECT");
 
         @SuppressWarnings("unchecked")
         Map<String, Object> lrc = (Map<String, Object>) entry.get("lrc");
         assertThat((BigDecimal) lrc.get("lossComponent")).isEqualByComparingTo("5000.00");
         assertThat((BigDecimal) lrc.get("lossComponentChange")).isEqualByComparingTo("5000.00");
+    }
+
+    @Test
+    @DisplayName("FAC_INWARD-natured group's payload row carries contractNature = FAC_INWARD")
+    void groupEntryCarriesNonDirectContractNature() {
+        UUID groupId = seedGroupWithNature("PORT-FIN-IFRS17", 2026, "NOT_ONEROUS", "FAC_INWARD");
+        seedLrc(groupId,
+            "0.00", "1200.00", "101.92",
+            "0.00", "0.00",
+            "0.00", "0.00",
+            "1098.08");
+
+        Map<String, Object> payload = engine.computePayload(fy2026PeriodId);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> byGroup = (List<Map<String, Object>>) payload.get("byGroup");
+        assertThat(byGroup).hasSize(1);
+        assertThat(byGroup.get(0).get("portfolioCode")).isEqualTo("PORT-FIN-IFRS17");
+        assertThat(byGroup.get(0).get("contractNature")).isEqualTo("FAC_INWARD");
     }
 
     @Test
@@ -293,6 +325,25 @@ class Ifrs17DisclosureEngineIT {
         jdbcTemplate.update(
             "INSERT INTO portfolio (id, code, name, created_by) VALUES (?, ?, ?, ?)",
             portfolioId, portfolioCode, "Test " + portfolioCode, "test");
+        jdbcTemplate.update(
+            "INSERT INTO group_of_contracts (id, portfolio_id, cohort_year, onerousness, status, created_by) " +
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            groupId, portfolioId, cohortYear, onerousness, "OPEN", "test");
+        return groupId;
+    }
+
+    /**
+     * Same as {@link #seedGroup} but with an explicit {@code portfolio.contract_nature}
+     * (V76) rather than relying on its DIRECT default — used by the FAC / IFRS-17 PAA
+     * workstream Task 6 review-fix coverage for a non-DIRECT contractNature relay.
+     */
+    private UUID seedGroupWithNature(String portfolioCode, int cohortYear, String onerousness,
+                                      String contractNature) {
+        UUID portfolioId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        jdbcTemplate.update(
+            "INSERT INTO portfolio (id, code, name, contract_nature, created_by) VALUES (?, ?, ?, ?, ?)",
+            portfolioId, portfolioCode, "Test " + portfolioCode, contractNature, "test");
         jdbcTemplate.update(
             "INSERT INTO group_of_contracts (id, portfolio_id, cohort_year, onerousness, status, created_by) " +
             "VALUES (?, ?, ?, ?, ?, ?)",

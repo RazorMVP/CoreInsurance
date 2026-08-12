@@ -86,13 +86,20 @@ class V78MovementViewMigrationTest {
     @Test
     @DisplayName("every pre-existing V38 disclosure column is still present after V78")
     void priorDisclosureColumnsUnchanged() throws SQLException {
+        // Full V38 column set (31 columns), in SELECT order, plus V78's trailing
+        // contract_nature (32nd). Every one of these must resolve — this is the
+        // regression guard that V78's CREATE OR REPLACE VIEW didn't drop or
+        // reorder anything V38 already shipped.
         String[] expectedColumns = {
             "period_id", "period_start", "period_end",
-            "portfolio_id", "portfolio_code", "group_id", "cohort_year", "onerousness",
-            "lrc_opening", "premium_received", "premium_earned", "lrc_closing",
-            "lic_opening", "claims_incurred", "claims_paid", "lic_closing",
-            "loss_component", "loss_component_change",
-            "discount_unwind", "risk_adjustment",
+            "portfolio_id", "portfolio_code", "portfolio_name",
+            "group_id", "cohort_year", "onerousness", "group_status",
+            "lrc_opening", "premium_received", "premium_earned",
+            "acquisition_costs_deferred", "acquisition_costs_amortised",
+            "loss_component", "loss_component_change", "lrc_closing",
+            "lic_opening", "claims_incurred", "claims_paid",
+            "case_reserve_change", "ibnr_estimate", "ibnr_change",
+            "risk_adjustment", "risk_adjustment_change", "discount_unwind", "lic_closing",
             "total_opening", "total_closing", "currency_code",
             "contract_nature"
         };
