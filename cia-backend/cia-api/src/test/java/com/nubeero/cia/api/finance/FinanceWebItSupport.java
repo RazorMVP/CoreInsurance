@@ -56,7 +56,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * </ul>
  *
  * <h2>Database</h2>
- * A <em>singleton</em> Postgres 16 Testcontainers instance migrated to V74.
+ * A <em>singleton</em> Postgres 16 Testcontainers instance migrated to V78.
  * The container is started exactly once for the JVM (in a static initializer
  * block, no {@code @Container} / {@code @Testcontainers}) and is cleaned up by
  * the JVM-level shutdown hook Testcontainers installs via Ryuk.
@@ -138,7 +138,14 @@ public abstract class FinanceWebItSupport {
         // quotes.selected_clauses), which the Policy/Quote entities now always
         // INSERT. A subclass that persists a Policy entity (e.g.
         // PolicyRmCommissionDerivationIT) would otherwise hit "column does not exist".
-        registry.add("spring.flyway.target", () -> "74");
+        // Bumped 74 → 78 (FAC / IFRS-17 PAA workstream Task 6): ReportQueryBuilder's
+        // PAA_GROUPS / IFRS17_MOVEMENT sources now unconditionally SELECT
+        // portfolio.contract_nature (V76) / paa_movement_analysis.contract_nature
+        // (V78) — SystemReportSmokeIT + BusinessReportValueIT (both extend this
+        // base and execute every SYSTEM report, including the 4 PAA_GROUPS/
+        // IFRS17_MOVEMENT-sourced CLOSURES reports) would otherwise fail with
+        // "column contract_nature does not exist" on a schema pinned below V76.
+        registry.add("spring.flyway.target", () -> "78");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 }

@@ -19,8 +19,8 @@ import java.util.UUID;
 /**
  * Computes the IFRS 17 §103 {@link MovementAnalysis} for one fiscal
  * period. Reads exclusively from the {@code paa_movement_analysis} view
- * (V38) — no joins or computation logic lives here; the view is the
- * single source of truth.
+ * (V38; V78 appends {@code contract_nature}) — no joins or computation
+ * logic lives here; the view is the single source of truth.
  *
  * <p>Module 12 Phase 2 Slice 2.8. Read-only — never writes anything,
  * never posts a JE. Phase 4's NAICOM submission tooling will also consume
@@ -137,7 +137,8 @@ public class MovementAnalysisService {
                 rRiskAdjustment, rRiskAdjustmentChange,
                 rDiscountUnwind, rLicClosing,
                 rTotalOpening, rTotalClosing,
-                (String) r.get("currency_code")));
+                (String) r.get("currency_code"),
+                (String) r.get("contract_nature")));
         }
 
         log.info("Movement analysis computed for period {} — {} groups; "

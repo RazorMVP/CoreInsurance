@@ -54,6 +54,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>Per-group breakdown ordered by (portfolio_code, cohort_year, onerousness).</li>
  *   <li>Aggregate totals = sum of per-group rows.</li>
  *   <li>Total opening / closing liability = LRC + LIC.</li>
+ *   <li>FAC / IFRS-17 PAA workstream Task 6: DIRECT, FAC_INWARD, and
+ *       FAC_OUTWARD groups each surface their {@code contractNature} in
+ *       the movement analysis, sourced from {@code portfolio.contract_nature}
+ *       via the V78-recreated {@code paa_movement_analysis} view.</li>
  * </ol>
  */
 @Testcontainers
@@ -87,7 +91,7 @@ class MovementAnalysisServiceIT {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.target", () -> "77");
+        registry.add("spring.flyway.target", () -> "78");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 
@@ -274,6 +278,39 @@ class MovementAnalysisServiceIT {
         assertThat(entry.portfolioName()).isEqualTo("Test PORT-DIMS-MA");
     }
 
+    // ── 8. FAC / IFRS-17 PAA workstream Task 6: contract_nature surfacing ───
+    @Test
+    @DisplayName("DIRECT, FAC_INWARD, and FAC_OUTWARD groups each surface their contractNature")
+    void facGroupsSurfaceContractNature() {
+        UUID directGroupId = seedGroup("PORT-CN-DIRECT", 2026);
+        seedPolicyAndAssignment(directGroupId, "POL-CN-DIRECT",
+            LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31), "365000.00");
+
+        UUID inwardGroupId = seedFacInwardGroup("FIN-CN", 2026);
+        seedFacInwardAssignment(inwardGroupId, "FAC-IN-CN-001",
+            LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
+            "1200.00", "1000.00", "200.00");
+
+        UUID outwardGroupId = seedFacOutwardGroup("FOU-CN", 2026);
+        seedFacOutwardAssignment(outwardGroupId, "FAC-OUT-CN-001",
+            LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
+            "1200.00", "1000.00");
+
+        runMeasurementUpstream();
+
+        MovementAnalysis ma = service.compute(janPeriodId);
+
+        assertThat(ma.byGroup()).hasSize(3);
+        var byPortfolioCode = ma.byGroup().stream()
+            .collect(java.util.stream.Collectors.toMap(
+                MovementAnalysis.GroupMovementEntry::portfolioCode,
+                MovementAnalysis.GroupMovementEntry::contractNature));
+
+        assertThat(byPortfolioCode.get("PORT-CN-DIRECT")).isEqualTo("DIRECT");
+        assertThat(byPortfolioCode.get("FIN-CN")).isEqualTo("FAC_INWARD");
+        assertThat(byPortfolioCode.get("FOU-CN")).isEqualTo("FAC_OUTWARD");
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static Timestamp ts(int y, int m, int d, int hour, int min) {
@@ -311,6 +348,86 @@ class MovementAnalysisServiceIT {
             "VALUES (?, 'POLICY', ?, ?, now(), ?)",
             UUID.randomUUID(), policyId, groupId, "test");
         return policyId;
+    }
+
+    /** Mirrors {@code InwardFacLrcIT#seedFacInwardGroup} — a portfolio with contract_nature = FAC_INWARD. */
+    private UUID seedFacInwardGroup(String portfolioCode, int cohortYear) {
+        UUID portfolioId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        jdbcTemplate.update(
+            "INSERT INTO portfolio (id, code, name, contract_nature, created_by) VALUES (?, ?, ?, 'FAC_INWARD', ?)",
+            portfolioId, portfolioCode, "Test " + portfolioCode, "test");
+        jdbcTemplate.update(
+            "INSERT INTO group_of_contracts (id, portfolio_id, cohort_year, onerousness, status, created_by) " +
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            groupId, portfolioId, cohortYear, "NOT_ONEROUS", "OPEN", "test");
+        return groupId;
+    }
+
+    /** Mirrors {@code InwardFacLrcIT#seedFacInwardAssignment} — an ACTIVE ri_fac_inwards row + assignment. */
+    private void seedFacInwardAssignment(UUID groupId, String facReference,
+                                          LocalDate coverFrom, LocalDate coverTo,
+                                          String grossPremium, String netPremium, String commissionAmount) {
+        UUID facInwardId = UUID.randomUUID();
+        jdbcTemplate.update(
+            "INSERT INTO ri_fac_inwards (id, fac_inward_reference, ceding_company_id, ceding_company_name, " +
+            "class_of_business_id, class_of_business_name, status, " +
+            "sum_insured, our_share_pct, accepted_sum_insured, premium_rate, " +
+            "gross_premium, commission_rate, commission_amount, net_premium, " +
+            "currency_code, cover_from, cover_to, created_by) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            facInwardId, facReference, UUID.randomUUID(), "Test Ceding Co",
+            UUID.randomUUID(), "Test COB", "ACTIVE",
+            new BigDecimal("10000000.00"), new BigDecimal("0.5000"), new BigDecimal("5000000.00"),
+            new BigDecimal("0.024000"),
+            new BigDecimal(grossPremium), new BigDecimal("0.2000"), new BigDecimal(commissionAmount),
+            new BigDecimal(netPremium),
+            "NGN", coverFrom, coverTo, "test");
+        jdbcTemplate.update(
+            "INSERT INTO contract_group_assignment (id, contract_type, contract_id, group_id, assigned_at, created_by) " +
+            "VALUES (?, 'FAC_INWARD', ?, ?, now(), ?)",
+            UUID.randomUUID(), facInwardId, groupId, "test");
+    }
+
+    /** A portfolio with contract_nature = FAC_OUTWARD. */
+    private UUID seedFacOutwardGroup(String portfolioCode, int cohortYear) {
+        UUID portfolioId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        jdbcTemplate.update(
+            "INSERT INTO portfolio (id, code, name, contract_nature, created_by) VALUES (?, ?, ?, 'FAC_OUTWARD', ?)",
+            portfolioId, portfolioCode, "Test " + portfolioCode, "test");
+        jdbcTemplate.update(
+            "INSERT INTO group_of_contracts (id, portfolio_id, cohort_year, onerousness, status, created_by) " +
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            groupId, portfolioId, cohortYear, "NOT_ONEROUS", "OPEN", "test");
+        return groupId;
+    }
+
+    /**
+     * A CONFIRMED ri_fac_covers row + FAC_OUTWARD assignment — the LRC basis is
+     * ri_fac_covers.net_premium (§65 commission-netting; see LrcEngine#loadFacOutwardPricing).
+     * policy_id carries no FK (V10), so no policies row needs seeding.
+     */
+    private void seedFacOutwardAssignment(UUID groupId, String facReference,
+                                           LocalDate coverFrom, LocalDate coverTo,
+                                           String premiumCeded, String netPremium) {
+        UUID facCoverId = UUID.randomUUID();
+        jdbcTemplate.update(
+            "INSERT INTO ri_fac_covers (id, fac_reference, policy_id, policy_number, " +
+            "reinsurance_company_id, reinsurance_company_name, status, " +
+            "sum_insured_ceded, premium_rate, premium_ceded, commission_rate, commission_amount, net_premium, " +
+            "currency_code, cover_from, cover_to, created_by) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            facCoverId, facReference, UUID.randomUUID(), "POL-FOR-" + facReference,
+            UUID.randomUUID(), "Test Reinsurer", "CONFIRMED",
+            new BigDecimal("5000000.00"), new BigDecimal("0.024000"), new BigDecimal(premiumCeded),
+            new BigDecimal("0.2000"), new BigDecimal(premiumCeded).subtract(new BigDecimal(netPremium)),
+            new BigDecimal(netPremium),
+            "NGN", coverFrom, coverTo, "test");
+        jdbcTemplate.update(
+            "INSERT INTO contract_group_assignment (id, contract_type, contract_id, group_id, assigned_at, created_by) " +
+            "VALUES (?, 'FAC_OUTWARD', ?, ?, now(), ?)",
+            UUID.randomUUID(), facCoverId, groupId, "test");
     }
 
     private void seedClaim(UUID policyId, String claimNumber, String status,
