@@ -16,6 +16,7 @@ import org.mockito.quality.Strictness;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -59,7 +60,7 @@ class FacPremiumCededEventContractTest {
     @BeforeEach
     void setUp() {
         service = new FacCoverService(facCoverRepository, reinsuranceCompanyRepository,
-                numberService, eventPublisher);
+                numberService, eventPublisher, Clock.systemUTC());
     }
 
     @Test

@@ -191,10 +191,19 @@ public class ContractGroupingService {
      * points: idempotency short-circuit, portfolio resolution, group
      * resolution, assignment write.
      *
+     * <p>Package-private (Task 5, FAC / IFRS-17 PAA workstream) —
+     * {@code FacPaaCutoverService} calls this directly for in-force FAC
+     * contracts being brought onto PAA at cutover, bypassing the
+     * accept/cede event entirely (a synthetic {@code RiFacInwardAcceptedEvent}
+     * / {@code FacPremiumCededEvent} would also re-trigger
+     * {@code SubledgerPostingService}'s accept-time GL posting, which is
+     * wrong for contracts that were already accepted before this system
+     * existed — cutover needs grouping only, not a re-post).
+     *
      * @return the (existing or newly-created) assignment row
      */
-    private ContractGroupAssignment assign(ContractType type, UUID contractId, UUID classOfBusinessId,
-                                            int cohortYear, ContractNature nature) {
+    ContractGroupAssignment assign(ContractType type, UUID contractId, UUID classOfBusinessId,
+                                    int cohortYear, ContractNature nature) {
         Optional<ContractGroupAssignment> existing =
             assignmentRepository.findByContractTypeAndContractIdAndDeletedAtIsNull(type, contractId);
         if (existing.isPresent()) {

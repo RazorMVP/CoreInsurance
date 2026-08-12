@@ -206,6 +206,39 @@ public class PeriodLockService {
         lockRepository.save(lock);
     }
 
+    /**
+     * Up-front guard for callers that must fail <strong>before doing any
+     * work</strong> if the target period isn't OPEN — as opposed to
+     * {@link #checkWrite}, which is a per-entity decision invoked at
+     * Hibernate flush time (via {@link PeriodLockInterceptor}) and so only
+     * fires once a write is already in flight.
+     *
+     * <p>{@code FacPaaCutoverService.runCutover} (FAC / IFRS-17 PAA
+     * workstream Task 5) calls this first, before enumerating or grouping
+     * any contract, so a modified-prospective cutover against a closed
+     * period throws {@link PeriodLockedException} with zero side effects —
+     * including in test harnesses that never wire {@link
+     * PeriodLockInterceptor} into the {@code EntityManagerFactory}.
+     *
+     * <p>Rejects on ANY active lock (SOFT or HARD) — unlike {@code
+     * checkWrite}, there is no soft-close grace-window / override carve-out
+     * here; a bulk one-time cutover run always requires a fully OPEN (or
+     * REOPENED) period.
+     *
+     * @throws PeriodLockedException if the period carries an active lock
+     */
+    @Transactional(readOnly = true)
+    public void assertOpenForPosting(UUID periodId) {
+        FiscalPeriod period = mustFindPeriod(periodId);
+        Optional<PeriodLock> active = lockRepository.findFirstByFiscalPeriodIdAndReleasedAtIsNullAndDeletedAtIsNull(periodId);
+        if (active.isPresent()) {
+            PeriodLock lock = active.get();
+            throw new PeriodLockedException(LockDecision.reject(
+                period.getId(), labelFor(period), period.getStatus(), lock.getGraceWindowUntil(),
+                List.of(), "Period is " + lock.getLockType() + "-closed — this operation requires an OPEN period"));
+        }
+    }
+
     // ─── Read paths ────────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)

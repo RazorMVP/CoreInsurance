@@ -1,5 +1,6 @@
 package com.nubeero.cia.reinsurance;
 
+import com.nubeero.cia.common.event.FacDerecognisedEvent;
 import com.nubeero.cia.common.event.FacPremiumCededEvent;
 import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
@@ -17,7 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Service
@@ -28,6 +31,7 @@ public class FacCoverService {
     private final ReinsuranceCompanyRepository reinsuranceCompanyRepository;
     private final RiNumberService numberService;
     private final ApplicationEventPublisher eventPublisher;
+    private final Clock clock;
 
     @Transactional
     public RiFacCover create(CreateFacCoverRequest req) {
@@ -103,7 +107,14 @@ public class FacCoverService {
         cover.setCancelledBy(username);
         cover.setCancelledAt(Instant.now());
         cover.setCancellationReason(reason);
-        return facCoverRepository.save(cover);
+        RiFacCover saved = facCoverRepository.save(cover);
+
+        // FAC / IFRS-17 PAA workstream Task 5 — derecognition: cia-finance
+        // expenses the group's remaining unamortised reinsurance-held asset
+        // for this contract in the currently OPEN period.
+        eventPublisher.publishEvent(new FacDerecognisedEvent(
+                FacDerecognisedEvent.ContractType.FAC_OUTWARD, saved.getId(), LocalDate.now(clock)));
+        return saved;
     }
 
     public RiFacCover findOrThrow(UUID id) {

@@ -379,12 +379,15 @@ public class LrcEngine {
      * <em>debited</em>. So for FAC_OUTWARD, {@code NatureAccounts.debitAccount}
      * is the expense account ({@link #COA_RI_PREMIUM_EXPENSE}) and
      * {@code creditAccount} is the asset account
-     * ({@link #COA_REINSURANCE_HELD_LRC_ASSET}) — the same
+     * ({@link #COA_REINSURANCE_HELD_LRC_ASSET}) — package-private (Task 5)
+     * so {@code FacDerecognitionListener} / {@code FacPaaCutoverService} can
+     * reuse the exact same nature-account resolution for a derecognition or
+     * cutover-catch-up JE — the same
      * {@code (debitAccount, creditAccount)} tuple shape as DIRECT/FAC_INWARD,
      * just pointed at a debit-expense/credit-asset pair instead of a
      * debit-liability/credit-revenue pair.
      */
-    private static NatureAccounts accountsFor(ContractNature nature) {
+    static NatureAccounts accountsFor(ContractNature nature) {
         return switch (nature) {
             case DIRECT -> new NatureAccounts(COA_LRC_BEL, COA_REVENUE_LRC_RELEASE);
             case FAC_INWARD -> new NatureAccounts(COA_INWARD_LRC, COA_INWARD_PREMIUM_INCOME);
@@ -406,7 +409,7 @@ public class LrcEngine {
      * {@code SubledgerPostingService.replayFacPremiumCeded}, so net is what
      * this engine must amortise to expense over the cover period).
      */
-    private PolicyPricing loadPricing(ContractType type, UUID contractId) {
+    PolicyPricing loadPricing(ContractType type, UUID contractId) {
         return switch (type) {
             case POLICY -> loadPolicyPricing(contractId);
             case FAC_INWARD -> loadFacInwardPricing(contractId);

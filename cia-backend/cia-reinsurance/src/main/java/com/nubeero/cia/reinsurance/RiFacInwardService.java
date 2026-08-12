@@ -1,5 +1,6 @@
 package com.nubeero.cia.reinsurance;
 
+import com.nubeero.cia.common.event.FacDerecognisedEvent;
 import com.nubeero.cia.common.event.RiFacInwardAcceptedEvent;
 import com.nubeero.cia.common.exception.BusinessRuleException;
 import com.nubeero.cia.common.exception.ResourceNotFoundException;
@@ -23,7 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
@@ -46,6 +49,7 @@ public class RiFacInwardService {
     private final ClassOfBusinessRepository classOfBusinessRepository;
     private final DocumentGenerationService documentGenerationService;
     private final ApplicationEventPublisher eventPublisher;
+    private final Clock clock;
 
     /** Pure amount computation — unit-tested independently. */
     record Amounts(BigDecimal acceptedSumInsured, BigDecimal grossPremium,
@@ -189,7 +193,14 @@ public class RiFacInwardService {
         cover.setCancelledBy(currentUsername());
         cover.setCancelledAt(Instant.now());
         cover.setCancellationReason(reason);
-        return repository.save(cover);
+        RiFacInward saved = repository.save(cover);
+
+        // FAC / IFRS-17 PAA workstream Task 5 — derecognition: cia-finance
+        // releases the group's remaining unearned LRC liability for this
+        // contract in the currently OPEN period.
+        eventPublisher.publishEvent(new FacDerecognisedEvent(
+                FacDerecognisedEvent.ContractType.FAC_INWARD, saved.getId(), LocalDate.now(clock)));
+        return saved;
     }
 
     public RiFacInward findOrThrow(UUID id) {
