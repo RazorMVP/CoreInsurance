@@ -11,7 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -20,11 +22,39 @@ import java.util.UUID;
  * Computes the IFRS 17 §103 {@link MovementAnalysis} for one fiscal
  * period. Reads exclusively from the {@code paa_movement_analysis} view
  * (V38; V78 appends {@code contract_nature}) — no joins or computation
- * logic lives here; the view is the single source of truth.
+ * logic lives here; the view is the single source of truth for the
+ * {@code paa_lrc}/{@code paa_lic}-backed roll-forward.
  *
  * <p>Module 12 Phase 2 Slice 2.8. Read-only — never writes anything,
  * never posts a JE. Phase 4's NAICOM submission tooling will also consume
  * the view directly without going through this service.
+ *
+ * <h2>FAC-derecognition composition (FAC / IFRS-17 PAA workstream Task 6b)</h2>
+ * <p>{@code FacDerecognitionListener} (Task 5) releases a cancelled FAC
+ * group's remaining LRC liability / reinsurance-held asset as a GL journal
+ * entry ONLY — it deliberately writes no {@code paa_lrc} row (see that
+ * class's javadoc for why: a second writer would collide with {@link
+ * LrcEngine}'s idempotency key on the same {@code (group, period)}). Left
+ * alone, a group whose only activity in a period is a derecognition would
+ * be invisible in this disclosure, because the view's {@code WHERE
+ * lrc.id IS NOT NULL OR lic.id IS NOT NULL} filter never sees it.
+ * {@link #compute} closes that gap by composing a second aggregate read —
+ * {@link #queryDerecognitionReleases} — over {@code journal_entry_line}
+ * for {@code FAC_DERECOGNITION} JEs in the period, mirroring the shape
+ * {@code Ifrs9MovementAnalysisService.computePremiumReceivableSection}
+ * already established for deriving a roll-forward section from a JE
+ * aggregate rather than a dedicated table.
+ *
+ * <p>Accounting treatment: the derecognition JE credits {@code 4330}
+ * (inward premium income) / debits {@code 5210} (outward RI expense) —
+ * the SAME income/expense accounts periodic LRC recognition uses. A
+ * derecognition is therefore modelled as accelerated premium
+ * earning/amortisation, not a new movement category: the released amount
+ * becomes {@code lrcOpening == premiumEarned}, with {@code lrcClosing}
+ * zeroed. A group already present in {@code byGroup} for the period (LRC
+ * engine recognised, then the group's contract was cancelled in the SAME
+ * period) has the release folded into its existing {@code premiumEarned}
+ * and its {@code lrcClosing} zeroed, rather than emitting a duplicate row.
  */
 @Service
 @Slf4j
@@ -47,7 +77,12 @@ public class MovementAnalysisService {
             "ORDER BY portfolio_code, cohort_year, onerousness",
             periodId);
 
-        List<MovementAnalysis.GroupMovementEntry> byGroup = new ArrayList<>(rows.size());
+        // LinkedHashMap keyed by groupId (not a List) so the FAC-derecognition
+        // composition pass below can look up / replace an existing entry by
+        // group id while preserving the view's insertion order for everything
+        // else. Newly-appended synthetic derecognition-only entries land at
+        // the end, after all view rows.
+        Map<UUID, MovementAnalysis.GroupMovementEntry> byGroup = new LinkedHashMap<>(rows.size());
 
         // LRC totals
         BigDecimal lrcOpening = BigDecimal.ZERO;
@@ -122,8 +157,9 @@ public class MovementAnalysisService {
             totalOpening = totalOpening.add(rTotalOpening);
             totalClosing = totalClosing.add(rTotalClosing);
 
-            byGroup.add(new MovementAnalysis.GroupMovementEntry(
-                (UUID) r.get("group_id"),
+            UUID groupId = (UUID) r.get("group_id");
+            byGroup.put(groupId, new MovementAnalysis.GroupMovementEntry(
+                groupId,
                 (String) r.get("portfolio_code"),
                 (String) r.get("portfolio_name"),
                 (Integer) r.get("cohort_year"),
@@ -139,6 +175,67 @@ public class MovementAnalysisService {
                 rTotalOpening, rTotalClosing,
                 (String) r.get("currency_code"),
                 (String) r.get("contract_nature")));
+        }
+
+        // ── FAC-derecognition composition (Task 6b) ─────────────────────────
+        // See class javadoc. For each group with FAC_DERECOGNITION release
+        // activity in this period: fold it into an existing view-sourced
+        // entry (recognise-then-cancel in the same period), or append a
+        // synthetic derecognition-only entry (the group had no other LRC/LIC
+        // activity this period, so the view never surfaced it).
+        for (Map<String, Object> d : queryDerecognitionReleases(period.getStartDate(), period.getEndDate())) {
+            BigDecimal released = bd(d.get("released"));
+            if (released.signum() <= 0) {
+                // Defensive: FacDerecognitionListener never posts a
+                // non-positive release, so this branch is not expected to be
+                // reachable — skip rather than emit a no-op synthetic row.
+                continue;
+            }
+
+            UUID groupId = (UUID) d.get("group_id");
+            MovementAnalysis.GroupMovementEntry existing = byGroup.get(groupId);
+
+            if (existing != null) {
+                BigDecimal releasedLrcClosing = existing.lrcClosing();
+                byGroup.put(groupId, new MovementAnalysis.GroupMovementEntry(
+                    existing.groupId(), existing.portfolioCode(), existing.portfolioName(),
+                    existing.cohortYear(), existing.onerousness(), existing.groupStatus(),
+                    existing.lrcOpening(), existing.premiumReceived(), existing.premiumEarned().add(released),
+                    existing.acquisitionCostsDeferred(), existing.acquisitionCostsAmortised(),
+                    existing.lossComponent(), existing.lossComponentChange(), BigDecimal.ZERO,
+                    existing.licOpening(), existing.claimsIncurred(), existing.claimsPaid(),
+                    existing.caseReserveChange(), existing.ibnrEstimate(), existing.ibnrChange(),
+                    existing.riskAdjustment(), existing.riskAdjustmentChange(),
+                    existing.discountUnwind(), existing.licClosing(),
+                    existing.totalOpening(), existing.totalClosing().subtract(releasedLrcClosing),
+                    existing.currencyCode(), existing.contractNature()));
+
+                premiumEarned = premiumEarned.add(released);
+                lrcClosing = lrcClosing.subtract(releasedLrcClosing);
+                totalClosing = totalClosing.subtract(releasedLrcClosing);
+            } else {
+                byGroup.put(groupId, new MovementAnalysis.GroupMovementEntry(
+                    groupId,
+                    (String) d.get("portfolio_code"),
+                    (String) d.get("portfolio_name"),
+                    (Integer) d.get("cohort_year"),
+                    (String) d.get("onerousness"),
+                    (String) d.get("group_status"),
+                    released, BigDecimal.ZERO, released,
+                    BigDecimal.ZERO, BigDecimal.ZERO,
+                    BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                    BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                    BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                    BigDecimal.ZERO, BigDecimal.ZERO,
+                    BigDecimal.ZERO, BigDecimal.ZERO,
+                    released, BigDecimal.ZERO,
+                    (String) d.get("currency_code"),
+                    (String) d.get("contract_nature")));
+
+                lrcOpening = lrcOpening.add(released);
+                premiumEarned = premiumEarned.add(released);
+                totalOpening = totalOpening.add(released);
+            }
         }
 
         log.info("Movement analysis computed for period {} — {} groups; "
@@ -163,7 +260,57 @@ public class MovementAnalysisService {
                 scale(discountUnwind), scale(licClosing)),
             scale(totalOpening),
             scale(totalClosing),
-            byGroup);
+            new ArrayList<>(byGroup.values()));
+    }
+
+    /**
+     * Aggregates {@code FAC_DERECOGNITION} JE releases per group for the
+     * period — mirrors {@code Ifrs9MovementAnalysisService
+     * .sumPremiumReceivableAllowance}'s "derive a roll-forward figure from a
+     * journal_entry_line aggregate" shape.
+     *
+     * <p>{@code FacDerecognitionListener} posts exactly two lines per JE: a
+     * pure-debit leg on {@code 2210} (inward) or a pure-credit leg on
+     * {@code 1410} (outward) carries the released amount — the OTHER leg
+     * (revenue/expense side, {@code 4330}/{@code 5210}) is excluded by the
+     * {@code coa.code IN (...)} filter. Since each matched line is
+     * pure-debit XOR pure-credit, {@code SUM(debit_amount + credit_amount)}
+     * over the matched lines equals the released amount per group.
+     *
+     * <p>{@code business_date} is filtered inclusively within the period's
+     * {@code [start, end]} — matching {@code JournalEntryRepository}'s
+     * {@code businessDate >= / <=} range convention.
+     */
+    private List<Map<String, Object>> queryDerecognitionReleases(LocalDate periodStart, LocalDate periodEnd) {
+        return jdbcTemplate.queryForList(
+            "SELECT g.id AS group_id, " +
+            "       p.code AS portfolio_code, " +
+            "       p.name AS portfolio_name, " +
+            "       g.cohort_year AS cohort_year, " +
+            "       g.onerousness AS onerousness, " +
+            "       g.status AS group_status, " +
+            "       l.currency_code AS currency_code, " +
+            "       p.contract_nature AS contract_nature, " +
+            "       SUM(l.debit_amount + l.credit_amount) AS released " +
+            "FROM journal_entry_line l " +
+            "JOIN journal_entry je ON je.id = l.journal_entry_id " +
+            "JOIN chart_of_account coa ON coa.id = l.account_id " +
+            "JOIN group_of_contracts g ON g.id = l.contract_group_id " +
+            "JOIN portfolio p ON p.id = g.portfolio_id " +
+            "WHERE je.source_module = ? " +
+            "  AND je.source_event_type = ? " +
+            "  AND coa.code IN (?, ?) " +
+            "  AND je.business_date >= ? AND je.business_date <= ? " +
+            "  AND l.deleted_at IS NULL " +
+            "  AND je.deleted_at IS NULL " +
+            "  AND g.deleted_at IS NULL " +
+            "  AND p.deleted_at IS NULL " +
+            "GROUP BY g.id, p.code, p.name, g.cohort_year, g.onerousness, g.status, " +
+            "         l.currency_code, p.contract_nature " +
+            "ORDER BY p.code, g.cohort_year, g.onerousness",
+            LrcEngine.MODULE_PAA, FacDerecognitionListener.EVENT_FAC_DERECOGNITION,
+            LrcEngine.COA_INWARD_LRC, LrcEngine.COA_REINSURANCE_HELD_LRC_ASSET,
+            java.sql.Date.valueOf(periodStart), java.sql.Date.valueOf(periodEnd));
     }
 
     private static BigDecimal bd(Object o) {
