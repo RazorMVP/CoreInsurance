@@ -61,6 +61,12 @@ export const JournalEntryStatusSchema = z.enum(['DRAFT', 'POSTED', 'REVERSED']);
 export const OnerousnessSchema = z.enum(['NOT_ONEROUS', 'NO_SIGNIFICANT_POSSIBILITY', 'ONEROUS']);
 export const GroupStatusSchema = z.enum(['OPEN', 'CLOSED']);
 
+// Portfolio contract-nature dimension (V76, FAC / IFRS-17 PAA workstream Task 7)
+// — distinguishes direct-policy portfolios from facultative reinsurance
+// accepted (inward) / ceded (outward). Distinct from the ContractType
+// entity discriminator (a direct policy is POLICY inside a DIRECT portfolio).
+export const ContractNatureSchema = z.enum(['DIRECT', 'FAC_INWARD', 'FAC_OUTWARD']);
+
 // IFRS 9 holdings (Slice 3.2)
 export const AssetTypeSchema = z.enum(['DEBT', 'EQUITY', 'MONEY_MARKET', 'DERIVATIVE']);
 export const InvestmentClassificationSchema = z.enum([
@@ -105,6 +111,7 @@ export type Ifrs9Role                = z.infer<typeof Ifrs9RoleSchema>;
 export type JournalEntryStatus       = z.infer<typeof JournalEntryStatusSchema>;
 export type Onerousness              = z.infer<typeof OnerousnessSchema>;
 export type GroupStatus              = z.infer<typeof GroupStatusSchema>;
+export type ContractNature           = z.infer<typeof ContractNatureSchema>;
 export type AssetType                = z.infer<typeof AssetTypeSchema>;
 export type InvestmentClassification = z.infer<typeof InvestmentClassificationSchema>;
 export type HoldingStatus            = z.infer<typeof HoldingStatusSchema>;
@@ -480,6 +487,7 @@ export const ContractGroupSummaryDtoSchema = z.object({
   portfolioId:    z.string(),
   portfolioCode:  z.string(),
   portfolioName:  z.string(),
+  contractNature: ContractNatureSchema,
   cohortYear:     z.number(),
   onerousness:    OnerousnessSchema,
   status:         GroupStatusSchema,
@@ -556,6 +564,7 @@ export const GroupMovementEntrySchema = z.object({
   totalOpening:              z.number(),
   totalClosing:              z.number(),
   currencyCode:              z.string().nullable().optional(),
+  contractNature:            z.string().nullable().optional(),
 });
 export type GroupMovementEntryDto = z.infer<typeof GroupMovementEntrySchema>;
 

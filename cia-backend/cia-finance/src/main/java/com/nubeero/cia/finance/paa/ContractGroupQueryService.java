@@ -50,6 +50,7 @@ public class ContractGroupQueryService {
             p.getId(),
             p.getCode(),
             p.getName(),
+            p.getContractNature(),
             g.getCohortYear(),
             g.getOnerousness(),
             g.getStatus(),

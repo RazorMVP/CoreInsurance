@@ -31047,6 +31047,9 @@
           },
           "currencyCode": {
             "type": "string"
+          },
+          "contractNature": {
+            "type": "string"
           }
         }
       },
@@ -31165,6 +31168,14 @@
           },
           "portfolioName": {
             "type": "string"
+          },
+          "contractNature": {
+            "type": "string",
+            "enum": [
+              "DIRECT",
+              "FAC_INWARD",
+              "FAC_OUTWARD"
+            ]
           },
           "cohortYear": {
             "type": "integer",

@@ -26,6 +26,20 @@ function formatPeriodLabel(p: FiscalPeriodDto) {
   return new Date(p.startDate).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 }
 
+// contractNature arrives as the raw enum name string (DIRECT / FAC_INWARD /
+// FAC_OUTWARD) — same portfolio dimension surfaced on ContractGroupsPage.
+const NATURE_LABEL: Record<string, string> = {
+  DIRECT:      'Direct',
+  FAC_INWARD:  'FAC Inward',
+  FAC_OUTWARD: 'FAC Outward',
+};
+
+const NATURE_VARIANT: Record<string, 'outline' | 'default' | 'draft'> = {
+  DIRECT:      'outline',
+  FAC_INWARD:  'default',
+  FAC_OUTWARD: 'draft',
+};
+
 // LRC row keys + labels, in §103(a) presentation order.
 const LRC_ROWS: { key: keyof LrcMovementTotalsDto; label: string; sign?: '+' | '−' }[] = [
   { key: 'opening',                   label: 'Opening balance' },
@@ -182,6 +196,7 @@ export default function PaaMovementAnalysisPage() {
                   <tr>
                     <th className="text-left py-2 px-2">Group</th>
                     <th className="text-left py-2 px-2">Portfolio</th>
+                    <th className="text-left py-2 px-2">Nature</th>
                     <th className="text-right py-2 px-2">Cohort</th>
                     <th className="text-left py-2 px-2">Onerous?</th>
                     <th className="text-right py-2 px-2">LRC opening</th>
@@ -198,6 +213,15 @@ export default function PaaMovementAnalysisPage() {
                       <td className="py-1.5 px-2">
                         <div>{g.portfolioName ?? '—'}</div>
                         <div className="font-mono text-[10px] text-muted-foreground">{g.portfolioCode ?? '—'}</div>
+                      </td>
+                      <td className="py-1.5 px-2">
+                        {g.contractNature ? (
+                          <Badge variant={NATURE_VARIANT[g.contractNature] ?? 'outline'} className="text-[10px]">
+                            {NATURE_LABEL[g.contractNature] ?? g.contractNature}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td className="py-1.5 px-2 text-right font-mono">{g.cohortYear ?? '—'}</td>
                       <td className="py-1.5 px-2">
