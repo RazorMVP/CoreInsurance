@@ -66,6 +66,15 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-08-14 — `fac-ifrs17-paa-workstream` (P2): Task 6b landed — FAC-derecognition surfaced in §103 movement analysis (checkpoint)
+
+Execution continuing on `feat/fac-ifrs17-paa-workstream` (not yet merged; full session entry + backlog reconciliation replace all checkpoints on ship).
+
+- **Task 6b — FAC-derecognition §103 movement composition** complete (`56d88a31` + fix `a4af0d59`, review-clean after 1 fix round). Closes a §103 disclosure gap created by this branch's own Task-5 design: FAC cancellation posts derecognition as GL journal entries only (no `paa_lrc` row — `LrcEngine.recognise` is the sole `paa_lrc` writer), so a cancelled FAC group was invisible in the IFRS-17 §103 movement analysis (the `paa_movement_analysis` view filters out groups with no LRC/LIC row). Fixed read-side: `MovementAnalysisService.compute` now composes the view read with a `FAC_DERECOGNITION` GL-JE aggregate (mirroring the `Ifrs9MovementAnalysisService` precedent), surfacing each cancelled group as an accelerated-earning line (`opening = premiumEarned = released, closing = 0` — accounting-consistent, since derecognition credits `4330`/debits `5210`, the same income/expense accounts periodic recognition uses). `Ifrs17DisclosureEngine` relays the synthetic entries to NAICOM unchanged. **The salvaged-then-finished production passed all 5 new scenario ITs first-run** (an implementer died mid-task on an API stall; the production code was controller-verified sound and a fresh agent finished the ITs + commit). The review then found 3 Minors — all fixed: a drift-detection `log.warn` on the merge invariant (M1), a final stable sort so synthetic entries interleave in §103 order rather than appending at the tail (M2), and a `status='POSTED' AND reversal_of IS NULL` filter so a reversed derecognition contributes zero — needed because the FAC query's `SUM(debit+credit)` magnitude shape doesn't self-net like Ifrs9's `SUM(credit−debit)` (M3). Unit 183/183; failsafe 33 (MovementAnalysisServiceIT 14 + the 4 FAC/disclosure guard suites green).
+- **Remaining on this branch:** Task 7 (closures-UI `contract_nature` column + filter — frontend), then the final whole-branch review + finishing-a-development-branch. The systemic fixed-source CLOSURES-report bug found during Task 6 stays a **separate P1 PR** (backlog `closures-fixed-source-report-column-misalignment`), off this branch, per the 2026-08-13 decision.
+
+---
+
 ## 2026-08-13 — `fac-ifrs17-paa-workstream` (P2): Task 5 + Task 6 landed; surfaced a systemic CLOSURES-report bug (checkpoint)
 
 Execution continuing on `feat/fac-ifrs17-paa-workstream` (not yet merged; full session entry + backlog reconciliation replace all checkpoints on ship). Two-stage review continues to pay off.
