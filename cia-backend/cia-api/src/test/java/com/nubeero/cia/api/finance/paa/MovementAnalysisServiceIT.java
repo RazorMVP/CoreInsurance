@@ -50,6 +50,7 @@ import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -457,6 +458,20 @@ class MovementAnalysisServiceIT {
         assertThat(janSlice).isEqualByComparingTo("101.92");
         assertThat(released).isEqualByComparingTo("1098.08");
 
+        // M1 (Task 6b review): test-pin the invariant the merge branch relies on —
+        // FacDerecognitionListener releases the group's latest persisted
+        // paa_lrc.closing_balance, which is exactly what "released" (computed
+        // independently above from the day-count formula) must equal. Read the
+        // ACTUAL persisted row rather than re-deriving the same formula in Java,
+        // so a future engine change that breaks the tie shows up here.
+        Map<String, Object> janLrcRow = jdbcTemplate.queryForMap(
+            "SELECT closing_balance FROM paa_lrc WHERE group_id = ? AND period_id = ?", groupId, janPeriodId);
+        assertThat((BigDecimal) janLrcRow.get("closing_balance"))
+            .as("M1 invariant: the derecognition's released amount must equal the group's persisted "
+                + "paa_lrc.closing_balance for the period — this is what the merge branch's hardcoded "
+                + "lrcClosing = 0 assumes")
+            .isEqualByComparingTo(released);
+
         // Cancellation effective WITHIN the same January period.
         jdbcTemplate.update("UPDATE ri_fac_inwards SET status = 'CANCELLED' WHERE id = ?", facInwardId);
         publisher.publishEvent(new FacDerecognisedEvent(
@@ -573,6 +588,18 @@ class MovementAnalysisServiceIT {
 
         assertThat(ma.byGroup()).hasSize(2);
 
+        // M2 (Task 6b review): "FIN-DERC-MIX" (the synthetic derecognition-only
+        // entry) sorts alphabetically BEFORE "PORT-DERC-DIRECT" (the ordinary
+        // view row). Before the fix, synthetic entries were appended after the
+        // loop regardless of sort key, so this group would have landed at the
+        // TAIL (position 1) instead of the front (position 0) — asserting the
+        // exact sequence pins the whole-list re-sort, not just presence.
+        assertThat(ma.byGroup())
+            .as("synthetic derecognition-only entry is sorted alongside view rows by portfolio_code, "
+                + "not appended at the tail")
+            .extracting(MovementAnalysis.GroupMovementEntry::portfolioCode)
+            .containsExactly("FIN-DERC-MIX", "PORT-DERC-DIRECT");
+
         var directEntry = ma.byGroup().stream()
             .filter(g -> g.groupId().equals(directGroupId)).findFirst().orElseThrow();
         assertThat(directEntry.contractNature()).isEqualTo("DIRECT");
@@ -584,6 +611,97 @@ class MovementAnalysisServiceIT {
             .filter(g -> g.groupId().equals(facGroupId)).findFirst().orElseThrow();
         assertThat(facEntry.contractNature()).isEqualTo("FAC_INWARD");
         assertThat(facEntry.lrcClosing()).isEqualByComparingTo("0.00");
+    }
+
+    // ── 14. Task 6b review M3: a REVERSED derecognition JE contributes ZERO —
+    //      the aggregate is a magnitude sum (SUM(debit+credit)), which does
+    //      not self-net like Ifrs9's SUM(credit-debit), so the reversal
+    //      exclusion filter (status = 'POSTED' AND reversal_of IS NULL) is
+    //      load-bearing ─────────────────────────────────────────────────────
+    @Test
+    @DisplayName("Task 6b (M3): a REVERSED FAC_DERECOGNITION JE contributes ZERO to the movement analysis — "
+        + "no synthetic entry for the group")
+    void reversedDerecognition_contributesZeroToMovementAnalysis() {
+        UUID febPeriodId = seedPeriod(LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28));
+
+        UUID groupId = seedFacInwardGroup("FIN-DERC-REV", 2026);
+        UUID facInwardId = UUID.randomUUID();
+        seedFacInwardAssignmentWithId(groupId, facInwardId, "FAC-IN-DERC-REV",
+            LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31),
+            "1200.00", "1000.00", "200.00");
+        entityManager.flush();
+
+        lrcEngine.recognise(janPeriodId);
+        entityManager.flush();
+
+        jdbcTemplate.update("UPDATE ri_fac_inwards SET status = 'CANCELLED' WHERE id = ?", facInwardId);
+        publisher.publishEvent(new FacDerecognisedEvent(
+            FacDerecognisedEvent.ContractType.FAC_INWARD, facInwardId, LocalDate.of(2026, 2, 15)));
+        entityManager.flush();
+
+        // Sanity: before reversal, the release surfaces normally (mirrors test #9).
+        MovementAnalysis before = service.compute(febPeriodId);
+        assertThat(before.byGroup()).as("release surfaces before reversal").hasSize(1);
+
+        Map<String, Object> je = jdbcTemplate.queryForMap(
+            "SELECT id FROM journal_entry " +
+            "WHERE source_module = 'paa' AND source_event_type = 'FAC_DERECOGNITION' " +
+            "AND source_reference = ?",
+            "FAC_INWARD:" + facInwardId);
+        UUID jeId = (UUID) je.get("id");
+
+        // Simulate JournalEntryService.reverse(jeId, reason) at the DB level —
+        // flips the original to REVERSED and inserts a mirror-image JE with
+        // reversalOf set and sourceEventType = REVERSAL (JournalEntryService
+        // .REVERSAL_EVENT_TYPE, never FAC_DERECOGNITION), exactly what the real
+        // service persists (see JournalEntryService.reverse). Done via raw JDBC
+        // rather than the real service call because reverse() resolves the
+        // reversal JE's period from the WALL CLOCK (LocalDate.now()) via
+        // FiscalPeriodResolver, which this fixture's Jan/Feb-2026-only periods
+        // don't cover — the DB-level simulation is deterministic regardless of
+        // when the suite runs, and exercises exactly the two facts this test
+        // cares about: original status flips to REVERSED, and a sibling
+        // REVERSAL-typed JE exists.
+        jdbcTemplate.update("UPDATE journal_entry SET status = 'REVERSED' WHERE id = ?", jeId);
+
+        UUID reversalJeId = UUID.randomUUID();
+        jdbcTemplate.update(
+            "INSERT INTO journal_entry (id, posting_date, business_date, period_id, source_module, " +
+            "source_event_type, source_reference, narrative, posted_by, status, reversal_of, created_by) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'POSTED', ?, ?)",
+            reversalJeId, LocalDate.of(2026, 2, 20), LocalDate.of(2026, 2, 20), febPeriodId,
+            "paa", "REVERSAL", jeId.toString(),
+            "REVERSAL of JE " + jeId + ": Task 6b M3 test", "test", jeId, "test");
+
+        List<Map<String, Object>> originalLines = jdbcTemplate.queryForList(
+            "SELECT account_id, debit_amount, credit_amount, currency_code, cohort_year, portfolio_id, " +
+            "contract_group_id, class_of_business_id FROM journal_entry_line WHERE journal_entry_id = ?", jeId);
+        int lineNo = 1;
+        for (Map<String, Object> line : originalLines) {
+            jdbcTemplate.update(
+                "INSERT INTO journal_entry_line (id, journal_entry_id, line_no, account_id, debit_amount, " +
+                "credit_amount, currency_code, cohort_year, portfolio_id, contract_group_id, " +
+                "class_of_business_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                UUID.randomUUID(), reversalJeId, lineNo++, line.get("account_id"),
+                line.get("credit_amount"), line.get("debit_amount"), // swapped — mirrors reverse()
+                line.get("currency_code"), line.get("cohort_year"), line.get("portfolio_id"),
+                line.get("contract_group_id"), line.get("class_of_business_id"), "test");
+        }
+        entityManager.flush();
+
+        String originalStatus = jdbcTemplate.queryForObject(
+            "SELECT status FROM journal_entry WHERE id = ?", String.class, jeId);
+        assertThat(originalStatus).isEqualTo("REVERSED");
+
+        MovementAnalysis after = service.compute(febPeriodId);
+
+        assertThat(after.byGroup())
+            .as("a reversed derecognition must not surface as a synthetic release — the magnitude-sum "
+                + "aggregate excludes it via status = 'POSTED' AND reversal_of IS NULL")
+            .noneMatch(g -> g.groupId().equals(groupId));
+        assertThat(after.lrcTotals().premiumEarned())
+            .as("the reversed release must not inflate LRC totals either")
+            .isEqualByComparingTo("0.00");
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

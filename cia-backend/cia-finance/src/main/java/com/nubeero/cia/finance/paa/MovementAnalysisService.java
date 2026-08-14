@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -79,9 +80,10 @@ public class MovementAnalysisService {
 
         // LinkedHashMap keyed by groupId (not a List) so the FAC-derecognition
         // composition pass below can look up / replace an existing entry by
-        // group id while preserving the view's insertion order for everything
-        // else. Newly-appended synthetic derecognition-only entries land at
-        // the end, after all view rows.
+        // group id. Insertion order doesn't matter here — the final list is
+        // re-sorted by (portfolio_code, cohort_year, onerousness) below (M2)
+        // before being returned, so the view's per-group ordering guarantee
+        // holds for synthetic derecognition-only entries too.
         Map<UUID, MovementAnalysis.GroupMovementEntry> byGroup = new LinkedHashMap<>(rows.size());
 
         // LRC totals
@@ -197,6 +199,21 @@ public class MovementAnalysisService {
 
             if (existing != null) {
                 BigDecimal releasedLrcClosing = existing.lrcClosing();
+
+                // M1 (Task 6b review): the merge below hardcodes lrcClosing = 0,
+                // which is only accounting-consistent when released ==
+                // existing.lrcClosing() — true today because
+                // FacDerecognitionListener releases the group's latest
+                // paa_lrc.closing_balance (= this period's view lrcClosing).
+                // Observability only — zero behavioural change; a mismatch
+                // still merges the same way, but now leaves a trail to
+                // investigate rather than silently producing a §103 row that
+                // doesn't tie to the GL release amount.
+                if (released.compareTo(releasedLrcClosing) != 0) {
+                    log.warn("FAC derecognition release {} != latest LRC closing {} for group {} — "
+                            + "§103 merge may be inconsistent", released, releasedLrcClosing, groupId);
+                }
+
                 byGroup.put(groupId, new MovementAnalysis.GroupMovementEntry(
                     existing.groupId(), existing.portfolioCode(), existing.portfolioName(),
                     existing.cohortYear(), existing.onerousness(), existing.groupStatus(),
@@ -244,6 +261,20 @@ public class MovementAnalysisService {
             scale(lrcOpening), scale(lrcClosing),
             scale(licOpening), scale(licClosing));
 
+        // M2 (Task 6b review): the view already returns its rows ordered by
+        // (portfolio_code, cohort_year, onerousness), but synthetic
+        // derecognition-only entries are appended after the loop above in
+        // their own (also portfolio_code-ordered) aggregate-query order — so
+        // the raw byGroup.values() sequence is two independently-sorted
+        // blocks, not one. Re-sort the WHOLE list by the same key the view
+        // uses so the §103 per-group ordering guarantee holds regardless of
+        // whether a group's only activity this period was a derecognition.
+        List<MovementAnalysis.GroupMovementEntry> sortedByGroup = new ArrayList<>(byGroup.values());
+        sortedByGroup.sort(Comparator
+            .comparing(MovementAnalysis.GroupMovementEntry::portfolioCode)
+            .thenComparing(MovementAnalysis.GroupMovementEntry::cohortYear)
+            .thenComparing(MovementAnalysis.GroupMovementEntry::onerousness));
+
         return new MovementAnalysis(
             period.getId(),
             period.getStartDate(),
@@ -260,7 +291,7 @@ public class MovementAnalysisService {
                 scale(discountUnwind), scale(licClosing)),
             scale(totalOpening),
             scale(totalClosing),
-            new ArrayList<>(byGroup.values()));
+            sortedByGroup);
     }
 
     /**
@@ -280,6 +311,22 @@ public class MovementAnalysisService {
      * <p>{@code business_date} is filtered inclusively within the period's
      * {@code [start, end]} — matching {@code JournalEntryRepository}'s
      * {@code businessDate >= / <=} range convention.
+     *
+     * <h2>Reversal exclusion (M3, Task 6b review)</h2>
+     * <p>This aggregate is a <strong>magnitude</strong> sum ({@code
+     * SUM(debit + credit)}), unlike {@code Ifrs9MovementAnalysisService}'s
+     * netting {@code SUM(credit − debit)} — a magnitude sum does not
+     * self-cancel a reversal. {@code JournalEntryService.reverse} (D2=A)
+     * flips the original JE to {@code REVERSED} (both rows remain in the
+     * GL) and posts a NEW JE with {@code reversalOf} set and {@code
+     * sourceEventType = REVERSAL} — never {@code FAC_DERECOGNITION} — so the
+     * reversal row itself is already excluded by the {@code
+     * source_event_type} filter above. The REVERSED original, however, IS
+     * still {@code FAC_DERECOGNITION} and would otherwise keep contributing
+     * its released amount forever. {@code AND je.status = 'POSTED'} excludes
+     * it; {@code AND je.reversal_of IS NULL} is a defensive second guard in
+     * case a future write path ever posts a reversal under the same event
+     * type. Net effect: a reversed derecognition contributes zero.
      */
     private List<Map<String, Object>> queryDerecognitionReleases(LocalDate periodStart, LocalDate periodEnd) {
         return jdbcTemplate.queryForList(
@@ -299,6 +346,8 @@ public class MovementAnalysisService {
             "JOIN portfolio p ON p.id = g.portfolio_id " +
             "WHERE je.source_module = ? " +
             "  AND je.source_event_type = ? " +
+            "  AND je.status = 'POSTED' " +
+            "  AND je.reversal_of IS NULL " +
             "  AND coa.code IN (?, ?) " +
             "  AND je.business_date >= ? AND je.business_date <= ? " +
             "  AND l.deleted_at IS NULL " +
