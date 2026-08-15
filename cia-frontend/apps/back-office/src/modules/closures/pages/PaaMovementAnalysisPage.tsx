@@ -11,6 +11,8 @@ import {
   validatedGet,
   FiscalYearDtoSchema, FiscalPeriodDtoSchema,
   MovementAnalysisDtoSchema,
+  CONTRACT_NATURE_LABELS,
+  CONTRACT_NATURE_VARIANTS,
   type FiscalYearDto, type FiscalPeriodDto,
   type MovementAnalysisDto,
   type LrcMovementTotalsDto,
@@ -28,17 +30,10 @@ function formatPeriodLabel(p: FiscalPeriodDto) {
 
 // contractNature arrives as the raw enum name string (DIRECT / FAC_INWARD /
 // FAC_OUTWARD) — same portfolio dimension surfaced on ContractGroupsPage.
-const NATURE_LABEL: Record<string, string> = {
-  DIRECT:      'Direct',
-  FAC_INWARD:  'FAC Inward',
-  FAC_OUTWARD: 'FAC Outward',
-};
-
-const NATURE_VARIANT: Record<string, 'outline' | 'default' | 'draft'> = {
-  DIRECT:      'outline',
-  FAC_INWARD:  'default',
-  FAC_OUTWARD: 'draft',
-};
+// Labels + badge variants are the shared CONTRACT_NATURE_LABELS /
+// CONTRACT_NATURE_VARIANTS from @cia/api-client (one source of truth, no
+// independent Record<ContractNature, ...> copies to drift out of sync — see
+// FAC / IFRS-17 PAA workstream Task 7 review, M3).
 
 // LRC row keys + labels, in §103(a) presentation order.
 const LRC_ROWS: { key: keyof LrcMovementTotalsDto; label: string; sign?: '+' | '−' }[] = [
@@ -216,8 +211,8 @@ export default function PaaMovementAnalysisPage() {
                       </td>
                       <td className="py-1.5 px-2">
                         {g.contractNature ? (
-                          <Badge variant={NATURE_VARIANT[g.contractNature] ?? 'outline'} className="text-[10px]">
-                            {NATURE_LABEL[g.contractNature] ?? g.contractNature}
+                          <Badge variant={CONTRACT_NATURE_VARIANTS[g.contractNature as keyof typeof CONTRACT_NATURE_VARIANTS] ?? 'outline'} className="text-[10px]">
+                            {CONTRACT_NATURE_LABELS[g.contractNature as keyof typeof CONTRACT_NATURE_LABELS] ?? g.contractNature}
                           </Badge>
                         ) : (
                           <span className="text-muted-foreground">—</span>

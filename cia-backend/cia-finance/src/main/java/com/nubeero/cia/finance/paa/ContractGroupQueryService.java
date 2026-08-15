@@ -30,9 +30,10 @@ public class ContractGroupQueryService {
         UUID portfolioId,
         Integer cohortYear,
         Onerousness onerousness,
-        GroupStatus status
+        GroupStatus status,
+        ContractNature contractNature
     ) {
-        return groupRepository.search(portfolioId, cohortYear, onerousness, status).stream()
+        return groupRepository.search(portfolioId, cohortYear, onerousness, status, contractNature).stream()
             .map(this::toSummary)
             .toList();
     }

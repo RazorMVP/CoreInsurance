@@ -121,6 +121,24 @@ export type NaicomSubmissionState    = z.infer<typeof NaicomSubmissionStateSchem
 export type NaicomSubmissionType     = z.infer<typeof NaicomSubmissionTypeSchema>;
 export type ArtifactFormat           = z.infer<typeof ArtifactFormatSchema>;
 
+// Shared display labels + badge variants for ContractNature — colocated with
+// the enum/schema so ContractGroupsPage and PaaMovementAnalysisPage (the two
+// consumers) read one strongly-typed source instead of maintaining
+// independent inline Record<ContractNature, ...> copies that can drift
+// (found in FAC / IFRS-17 PAA workstream Task 7 review, M3: both copies had
+// already drifted to Record<string, ...> on one of the two pages).
+export const CONTRACT_NATURE_LABELS: Record<ContractNature, string> = {
+  DIRECT:      'Direct',
+  FAC_INWARD:  'FAC Inward',
+  FAC_OUTWARD: 'FAC Outward',
+};
+
+export const CONTRACT_NATURE_VARIANTS: Record<ContractNature, 'outline' | 'default' | 'draft'> = {
+  DIRECT:      'outline',
+  FAC_INWARD:  'default',
+  FAC_OUTWARD: 'draft',
+};
+
 // ── Journal Entries ───────────────────────────────────────────────────────
 
 export const JournalEntrySummaryDtoSchema = z.object({

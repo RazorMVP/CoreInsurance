@@ -13,6 +13,8 @@ import {
   validatedGet,
   ContractGroupSummaryDtoSchema,
   PortfolioSummaryDtoSchema,
+  CONTRACT_NATURE_LABELS,
+  CONTRACT_NATURE_VARIANTS,
   type ContractGroupSummaryDto,
   type PortfolioSummaryDto,
   type Onerousness,
@@ -38,18 +40,6 @@ const STATUS_VARIANT: Record<GroupStatus, 'active' | 'rejected'> = {
   CLOSED: 'rejected',
 };
 
-const NATURE_LABEL: Record<ContractNature, string> = {
-  DIRECT:      'Direct',
-  FAC_INWARD:  'FAC Inward',
-  FAC_OUTWARD: 'FAC Outward',
-};
-
-const NATURE_VARIANT: Record<ContractNature, 'outline' | 'default' | 'draft'> = {
-  DIRECT:      'outline',
-  FAC_INWARD:  'default',
-  FAC_OUTWARD: 'draft',
-};
-
 type OnerousnessFilter = Onerousness | 'ALL';
 type StatusFilter     = GroupStatus | 'ALL';
 type NatureFilter     = ContractNature | 'ALL';
@@ -69,15 +59,17 @@ export default function ContractGroupsPage() {
   });
   const portfolios = portfoliosQuery.data ?? [];
 
-  // Groups list, scoped by filters
+  // Groups list, scoped by filters — all five (including Nature) round-trip
+  // to the server as query params, mirroring ContractGroupController.listGroups.
   const queryString = useMemo(() => {
     const p = new URLSearchParams();
     if (portfolioId !== 'ALL') p.set('portfolioId', portfolioId);
     if (cohortYear.trim())     p.set('cohortYear', cohortYear.trim());
     if (onerousness !== 'ALL') p.set('onerousness', onerousness);
     if (status !== 'ALL')      p.set('status', status);
+    if (nature !== 'ALL')      p.set('contractNature', nature);
     return p.toString();
-  }, [portfolioId, cohortYear, onerousness, status]);
+  }, [portfolioId, cohortYear, onerousness, status, nature]);
 
   const groupsQuery = useQuery<ContractGroupSummaryDto[]>({
     queryKey: ['closures', 'contract-groups', queryString],
@@ -88,16 +80,8 @@ export default function ContractGroupsPage() {
   });
   const groups = groupsQuery.data ?? [];
 
-  // Nature has no backend filter param (contractNature is a portfolio
-  // dimension, not indexed for server-side search yet) — filter client-side
-  // over the already-fetched page.
-  const filteredGroups = useMemo(
-    () => (nature === 'ALL' ? groups : groups.filter((g) => g.contractNature === nature)),
-    [groups, nature],
-  );
-
   const counts = useMemo(() => {
-    return filteredGroups.reduce(
+    return groups.reduce(
       (acc, g) => {
         acc.total += 1;
         if (g.onerousness === 'ONEROUS') acc.onerous += 1;
@@ -106,7 +90,7 @@ export default function ContractGroupsPage() {
       },
       { total: 0, onerous: 0, open: 0 },
     );
-  }, [filteredGroups]);
+  }, [groups]);
 
   function resetFilters() {
     setPortfolioId('ALL');
@@ -199,7 +183,7 @@ export default function ContractGroupsPage() {
           <div className="rounded-md border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive">
             Failed to load contract groups.
           </div>
-        ) : filteredGroups.length === 0 ? (
+        ) : groups.length === 0 ? (
           <div className="rounded-md border bg-muted/40 px-4 py-12 text-center text-sm text-muted-foreground">
             {portfolios.length === 0
               ? 'No portfolios exist yet. Portfolios + contract groups are auto-created by Slice 2.2 on policy approval (direct business) and FAC accept/cede (facultative reinsurance) — seed a policy or FAC transaction to populate this view.'
@@ -219,15 +203,15 @@ export default function ContractGroupsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredGroups.map((g) => (
+              {groups.map((g) => (
                 <tr key={g.id} className="border-b last:border-0 hover:bg-secondary/40">
                   <td className="py-2 px-2">
                     <div className="font-mono text-xs">{g.portfolioCode}</div>
                     <div className="text-xs text-muted-foreground">{g.portfolioName}</div>
                   </td>
                   <td className="py-2 px-2">
-                    <Badge variant={NATURE_VARIANT[g.contractNature]}>
-                      {NATURE_LABEL[g.contractNature]}
+                    <Badge variant={CONTRACT_NATURE_VARIANTS[g.contractNature]}>
+                      {CONTRACT_NATURE_LABELS[g.contractNature]}
                     </Badge>
                   </td>
                   <td className="py-2 px-2 text-right font-mono">{g.cohortYear}</td>

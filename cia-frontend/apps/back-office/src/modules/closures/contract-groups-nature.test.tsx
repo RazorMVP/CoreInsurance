@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, within, cleanup } from '@testing-library/react';
+import { render, screen, within, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { z } from 'zod';
@@ -88,10 +88,17 @@ const groups: ContractGroupSummaryDto[] = [
   },
 ];
 
+// Simulates the server-side contractNature filter (M1 fix) so the round trip
+// through ContractGroupsPage's queryString/queryKey is exercised end to end.
 // allow-mock: Vitest fixture — controls the mocked validatedGet response per URL
 const mockValidatedGet = vi.fn((url: string) => {
-  if (url.startsWith('/api/v1/finance/paa/contract-groups')) return Promise.resolve(groups);
   if (url.startsWith('/api/v1/finance/paa/portfolios')) return Promise.resolve([]);
+  if (url.startsWith('/api/v1/finance/paa/contract-groups')) {
+    const params = new URLSearchParams(url.split('?')[1] ?? '');
+    const contractNature = params.get('contractNature');
+    const data = contractNature ? groups.filter((g) => g.contractNature === contractNature) : groups;
+    return Promise.resolve(data);
+  }
   return Promise.resolve([]);
 });
 
@@ -100,6 +107,18 @@ vi.mock('@cia/api-client', () => ({
   validatedGet:                  (url: string) => mockValidatedGet(url),
   ContractGroupSummaryDtoSchema: z.any(),
   PortfolioSummaryDtoSchema:     z.any(),
+  // Shared label + variant maps ContractGroupsPage now reads instead of
+  // inline Records — kept in sync with @cia/api-client's real values (M3 fix).
+  CONTRACT_NATURE_LABELS: {
+    DIRECT:      'Direct',
+    FAC_INWARD:  'FAC Inward',
+    FAC_OUTWARD: 'FAC Outward',
+  },
+  CONTRACT_NATURE_VARIANTS: {
+    DIRECT:      'outline',
+    FAC_INWARD:  'default',
+    FAC_OUTWARD: 'draft',
+  },
 }));
 
 function wrapper({ children }: { children: React.ReactNode }) {
@@ -110,12 +129,9 @@ function wrapper({ children }: { children: React.ReactNode }) {
 describe('ContractGroupsPage — contract_nature column + filter', () => {
   beforeEach(() => {
     cleanup();
+    // clearAllMocks() resets call history only — it does not touch the
+    // parameterised implementation the mock was created with above.
     vi.clearAllMocks();
-    mockValidatedGet.mockImplementation((url: string) => {
-      if (url.startsWith('/api/v1/finance/paa/contract-groups')) return Promise.resolve(groups);
-      if (url.startsWith('/api/v1/finance/paa/portfolios')) return Promise.resolve([]);
-      return Promise.resolve([]);
-    });
   });
 
   it('renders a Nature column with all three contract-nature values', async () => {
@@ -130,18 +146,39 @@ describe('ContractGroupsPage — contract_nature column + filter', () => {
     expect(within(table).getAllByRole('row')).toHaveLength(4); // header + 3 groups
   });
 
-  it('narrows to one row when filtered by FAC_OUTWARD', async () => {
+  it('requests contractNature=FAC_OUTWARD from the server and narrows to one row', async () => {
     const user = userEvent.setup();
     render(React.createElement(ContractGroupsPage), { wrapper });
 
-    const table = await screen.findByRole('table');
-    expect(within(table).getAllByRole('row')).toHaveLength(4);
+    await screen.findByRole('table');
+    expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(4);
+
+    // Sanity: Nature is NOT sent on the initial, unfiltered fetch.
+    expect(mockValidatedGet).toHaveBeenCalledWith(
+      expect.not.stringContaining('contractNature'),
+    );
 
     const natureLabel = screen.getByText('Nature', { selector: 'label' });
     const natureSelect = natureLabel.nextElementSibling as HTMLSelectElement;
     await user.selectOptions(natureSelect, 'FAC_OUTWARD');
 
-    expect(within(table).getAllByRole('row')).toHaveLength(2); // header + 1 group
+    // Server-side: the Select drives a new fetch with contractNature in the
+    // query string (part of the React Query queryKey, exactly like the
+    // other four filters) — not an in-browser row filter. The new queryKey
+    // has no cached data, so the page swaps to its loading Skeleton and
+    // remounts a fresh <table> once the (mocked) request resolves — re-query
+    // screen.getByRole('table') rather than reusing the earlier handle,
+    // which goes stale/detached across that remount.
+    await waitFor(() => {
+      expect(mockValidatedGet).toHaveBeenCalledWith(
+        expect.stringContaining('contractNature=FAC_OUTWARD'),
+      );
+    });
+
+    await waitFor(() => {
+      expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(2); // header + 1 group
+    });
+    const table = screen.getByRole('table');
     expect(within(table).getByText('FAC Outward')).toBeInTheDocument();
     expect(within(table).queryByText('Direct')).not.toBeInTheDocument();
     expect(within(table).queryByText('FAC Inward')).not.toBeInTheDocument();

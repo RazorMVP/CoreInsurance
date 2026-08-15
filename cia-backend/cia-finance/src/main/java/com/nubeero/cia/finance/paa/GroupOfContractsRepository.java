@@ -33,22 +33,28 @@ public interface GroupOfContractsRepository extends JpaRepository<GroupOfContrac
      * onerousness ASC) — most recent cohort first, with onerous groups
      * appearing last within a (portfolio, cohort) pair.
      *
+     * <p>{@code contractNature} is the portfolio's {@link ContractNature}
+     * dimension (DIRECT / FAC_INWARD / FAC_OUTWARD) — FAC / IFRS-17 PAA
+     * workstream Task 7 M1, mirroring the other four predicates exactly.
+     *
      * @since Module 12 Phase 5 — slice F5.11
      */
     @Query("""
         SELECT g FROM GroupOfContracts g
         JOIN g.portfolio p
         WHERE g.deletedAt IS NULL
-          AND (:portfolioId IS NULL OR p.id = :portfolioId)
-          AND (:cohortYear  IS NULL OR g.cohortYear = :cohortYear)
-          AND (:onerousness IS NULL OR g.onerousness = :onerousness)
-          AND (:status      IS NULL OR g.status = :status)
+          AND (:portfolioId    IS NULL OR p.id = :portfolioId)
+          AND (:cohortYear     IS NULL OR g.cohortYear = :cohortYear)
+          AND (:onerousness    IS NULL OR g.onerousness = :onerousness)
+          AND (:status         IS NULL OR g.status = :status)
+          AND (:contractNature IS NULL OR p.contractNature = :contractNature)
         ORDER BY g.cohortYear DESC, p.code ASC, g.onerousness ASC
         """)
     List<GroupOfContracts> search(
-        @Param("portfolioId") UUID portfolioId,
-        @Param("cohortYear")  Integer cohortYear,
-        @Param("onerousness") Onerousness onerousness,
-        @Param("status")      GroupStatus status
+        @Param("portfolioId")    UUID portfolioId,
+        @Param("cohortYear")     Integer cohortYear,
+        @Param("onerousness")    Onerousness onerousness,
+        @Param("status")         GroupStatus status,
+        @Param("contractNature") ContractNature contractNature
     );
 }
