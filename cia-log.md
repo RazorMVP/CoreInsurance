@@ -66,6 +66,20 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-08-17 — `fac-ifrs17-paa-workstream` (P2): Task 7 fix round landed — M1/M2/M3 all closed (no deferrals); scoped re-review in flight (checkpoint)
+
+Execution continuing on `feat/fac-ifrs17-paa-workstream` (not yet merged; full session entry + backlog reconciliation replace all checkpoints on ship).
+
+- **Task 7 fix round complete** (`96c5aed3`, one fix commit built then twice amended in place as M3's scope grew — history carries a single clean fix commit). All three review Minors closed **in the same round with no deferrals** per the session's strict no-defer policy — this **supersedes the 2026-08-14 note** that M3 was "left un-extracted per rule-of-three":
+  - **M1 — Nature filter is now server-side.** `contractNature` threaded as a real optional query param through `ContractGroupController.listGroups` (`@RequestParam(required=false) ContractNature`) → `ContractGroupQueryService.listGroups` → `GroupOfContractsRepository` (null-guarded JPQL predicate, same idiom as the other four filters); `ContractGroupsPage` now sends it in the React Query `queryString`/`queryKey` and the client-side `filteredGroups` useMemo is removed (the Select drives a real server refetch); the Vitest is rewritten to assert `validatedGet` is called with `contractNature=` in the URL; OpenAPI snapshot regenerated to capture the new query param.
+  - **M2 — backend `@Tag` copy** corrected to name both policy-approval (direct) and FAC accept/cede (inward + outward) as group-creation triggers, matching `ContractGroupingService`'s listeners (the same inaccuracy already fixed on the FE copy).
+  - **M3 — both duplicated nature maps extracted.** `CONTRACT_NATURE_LABELS` **and** `CONTRACT_NATURE_VARIANTS` (badge variant) hoisted to single strongly-typed exports colocated with the `ContractNature` enum in `@cia/api-client`'s `finance-closures.ts`; both inline copies — which had drifted in type (`Record<ContractNature,…>` vs `Record<string,…>`) — deleted from both `ContractGroupsPage` and `PaaMovementAnalysisPage`; the test's `@cia/api-client` mock extended to expose both. (Controller-caught during verification: the first extraction closed only the label map while the variant map stayed duplicated; sent back to close the second half — M3 is now fully closed, not half.)
+  - Verification on the final commit: `InternalApiSnapshotIT` 1/1 (one transient Testcontainers/Docker `Session setup failed` flake, green on immediate retry — no code cause, backend Java untouched in the M3 round), back-office Vitest 41/41, `tsc --noEmit` + `check-api-wiring.sh` + `check-dto-drift.mjs` all clean.
+- **Remaining on this branch:** Task 7 scoped re-review (in flight), then the final whole-branch review + finishing-a-development-branch — after which the FAC↔IFRS-17 PAA workstream (Slices 1–6) is complete on the branch. The systemic fixed-source CLOSURES-report bug stays a **separate P1 PR** (backlog `closures-fixed-source-report-column-misalignment`), off this branch.
+- No backlog-table change this checkpoint (`fac-ifrs17-paa-workstream` stays open until the workstream ships).
+
+---
+
 ## 2026-08-14 — `fac-ifrs17-paa-workstream` (P2): Task 6b landed — FAC-derecognition surfaced in §103 movement analysis (checkpoint)
 
 Execution continuing on `feat/fac-ifrs17-paa-workstream` (not yet merged; full session entry + backlog reconciliation replace all checkpoints on ship).
