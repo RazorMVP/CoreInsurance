@@ -1,239 +1,2077 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "CIA Partner API",
-    "description": "Open API for Insurtech connectivity — aggregators, digital brokers, and embedded insurance providers.",
-    "version": "1.0.0",
+    "title": "CIA Partner Open API",
+    "description": "REST API for Insurtech partners to access insurance products and services",
     "contact": {
-      "name": "CIA Partner Support",
-      "email": "partners@cia.app"
-    }
+      "name": "CIA Platform Team",
+      "email": "platform@nubeero.com"
+    },
+    "license": {
+      "name": "Proprietary"
+    },
+    "version": "v1"
   },
   "servers": [
-    { "url": "{{baseUrl}}/partner/v1", "description": "Partner API base" }
-  ],
-  "security": [
-    { "bearerAuth": [] }
-  ],
-  "components": {
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT"
-      }
-    },
-    "schemas": {
-      "ApiResponse": {
-        "type": "object",
-        "properties": {
-          "data": {},
-          "meta": { "type": "object" },
-          "errors": { "type": "array", "items": { "type": "object" } }
-        }
-      }
+    {
+      "url": "http://localhost",
+      "description": "Generated server url"
     }
-  },
+  ],
+  "tags": [
+    {
+      "name": "Policies",
+      "description": "Policy issuance and retrieval"
+    },
+    {
+      "name": "Products",
+      "description": "Insurance products available to Insurtech partners"
+    },
+    {
+      "name": "Webhooks",
+      "description": "Webhook endpoint registration and management"
+    },
+    {
+      "name": "Quotes",
+      "description": "Generate and retrieve insurance quotes"
+    },
+    {
+      "name": "Claims",
+      "description": "Claim submission and status tracking"
+    },
+    {
+      "name": "Customers",
+      "description": "Customer registration and KYC status"
+    }
+  ],
   "paths": {
-    "/products": {
+    "/partner/v1/webhooks": {
       "get": {
-        "summary": "List products",
-        "operationId": "listProducts",
-        "tags": ["Products"],
-        "security": [{ "bearerAuth": [] }],
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "List registered webhooks",
+        "description": "Returns all webhook registrations for the authenticated partner app",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Zero-based page index (0..N)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "The size of the page to be returned",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
         "responses": {
-          "200": { "description": "List of active products" },
-          "401": { "description": "Unauthorized" }
-        }
-      }
-    },
-    "/products/{id}": {
-      "get": {
-        "summary": "Get product",
-        "operationId": "getProduct",
-        "tags": ["Products"],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
-        "responses": {
-          "200": { "description": "Product details" },
-          "404": { "description": "Not found" }
-        }
-      }
-    },
-    "/products/{id}/classes": {
-      "get": {
-        "summary": "List classes of business for a product",
-        "operationId": "listProductClasses",
-        "tags": ["Products"],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
-        "responses": {
-          "200": { "description": "Classes of business" }
-        }
-      }
-    },
-    "/quotes": {
+          "200": {
+            "description": "Webhooks listed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerWebhookResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer-key": []
+          }
+        ]
+      },
       "post": {
-        "summary": "Create quote",
-        "operationId": "createQuote",
-        "tags": ["Quotation"],
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Register a webhook endpoint",
+        "description": "Subscribe to one or more event types. All deliveries are HMAC-SHA256 signed via the X-CIA-Signature header. The secret is never returned after this call.",
+        "operationId": "register",
         "requestBody": {
-          "required": true,
-          "content": { "application/json": { "schema": { "type": "object" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterWebhookRequest"
+              }
+            }
+          },
+          "required": true
         },
         "responses": {
-          "201": { "description": "Quote created" },
-          "400": { "description": "Validation error" }
-        }
+          "201": {
+            "description": "Webhook registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerWebhookResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error \u2014 invalid URL, secret too short, or unknown event type"
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer-key": []
+          }
+        ]
       }
     },
-    "/quotes/{id}": {
-      "get": {
-        "summary": "Get quote",
-        "operationId": "getQuote",
-        "tags": ["Quotation"],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
-        "responses": {
-          "200": { "description": "Quote details" },
-          "404": { "description": "Not found" }
-        }
-      }
-    },
-    "/customers/individual": {
+    "/partner/v1/quotes": {
       "post": {
-        "summary": "Register individual customer",
-        "operationId": "registerIndividualCustomer",
-        "tags": ["Customers"],
+        "tags": [
+          "Quotes"
+        ],
+        "summary": "Create a quote",
+        "description": "Generates a premium quote for one or more risks. Returns immediately with calculated premium. The quote must be approved internally before a policy can be bound.",
+        "operationId": "create",
         "requestBody": {
-          "required": true,
-          "content": { "application/json": { "schema": { "type": "object" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuoteRequest"
+              }
+            }
+          },
+          "required": true
         },
         "responses": {
-          "201": { "description": "Customer registered" }
-        }
+          "201": {
+            "description": "Quote created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerQuoteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error \u2014 missing or invalid fields"
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer-key": []
+          }
+        ]
       }
     },
-    "/customers/corporate": {
+    "/partner/v1/policies": {
       "post": {
-        "summary": "Register corporate customer",
-        "operationId": "registerCorporateCustomer",
-        "tags": ["Customers"],
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Bind a policy from an approved quote",
+        "description": "Converts an APPROVED quote into an active policy and triggers an async NAICOM upload. The naicomUid field will read PENDING until the upload is confirmed.",
+        "operationId": "bindFromQuote",
+        "parameters": [
+          {
+            "name": "quoteId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Policy issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerPolicyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or quote not in APPROVED state"
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "404": {
+            "description": "Quote not found"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer-key": []
+          }
+        ]
+      }
+    },
+    "/partner/v1/policies/{policyId}/claims": {
+      "post": {
+        "tags": [
+          "Claims"
+        ],
+        "summary": "Submit a claim notification",
+        "description": "Registers a new claim against the specified policy. The claim moves to REGISTERED status immediately; processing is handled internally.",
+        "operationId": "register_1",
+        "parameters": [
+          {
+            "name": "policyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "requestBody": {
-          "required": true,
-          "content": { "application/json": { "schema": { "type": "object" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterClaimRequest"
+              }
+            }
+          },
+          "required": true
         },
         "responses": {
-          "201": { "description": "Customer registered" }
-        }
+          "201": {
+            "description": "Claim registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerClaimResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error \u2014 missing or invalid fields"
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "404": {
+            "description": "Policy not found"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer-key": []
+          }
+        ]
       }
     },
-    "/customers/{id}": {
-      "get": {
-        "summary": "Get customer",
-        "operationId": "getCustomer",
-        "tags": ["Customers"],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
-        "responses": {
-          "200": { "description": "Customer details" },
-          "404": { "description": "Not found" }
-        }
-      }
-    },
-    "/policies": {
+    "/partner/v1/customers/individual": {
       "post": {
-        "summary": "Bind policy",
-        "operationId": "bindPolicy",
-        "tags": ["Policies"],
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Register an individual customer",
+        "description": "Creates a customer record and triggers asynchronous KYC verification. Poll GET /customers/{id} to check kycStatus until it is VERIFIED or FAILED.",
+        "operationId": "createIndividual",
         "requestBody": {
-          "required": true,
-          "content": { "application/json": { "schema": { "type": "object" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndividualCustomerRequest"
+              }
+            }
+          },
+          "required": true
         },
         "responses": {
-          "201": { "description": "Policy bound" }
-        }
+          "201": {
+            "description": "Customer registered \u2014 KYC verification initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerCustomerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error \u2014 missing or invalid fields"
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer-key": []
+          }
+        ]
       }
     },
-    "/policies/{id}": {
-      "get": {
-        "summary": "Get policy",
-        "operationId": "getPolicy",
-        "tags": ["Policies"],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+    "/partner/v1/customers/corporate": {
+      "post": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Register a corporate customer",
+        "description": "Creates a corporate customer and triggers asynchronous KYC verification against the CAC RC Number. At least two director IDs are required for KYC.",
+        "operationId": "createCorporate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorporateCustomerRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
-          "200": { "description": "Policy details" },
-          "404": { "description": "Not found" }
-        }
+          "201": {
+            "description": "Corporate customer registered \u2014 KYC verification initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerCustomerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error \u2014 missing or invalid fields"
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer-key": []
+          }
+        ]
       }
     },
-    "/policies/{id}/document": {
+    "/partner/v1/quotes/{id}": {
       "get": {
-        "summary": "Download policy certificate (PDF)",
-        "operationId": "downloadPolicyDocument",
-        "tags": ["Policies"],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "tags": [
+          "Quotes"
+        ],
+        "summary": "Get quote details",
+        "description": "Returns the quote with premium breakdown and current approval status",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quote found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerQuoteResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "404": {
+            "description": "Quote not found"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer-key": []
+          }
+        ]
+      }
+    },
+    "/partner/v1/products": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "List active products",
+        "description": "Returns all active insurance products for the authenticated tenant",
+        "operationId": "list_1",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Zero-based page index (0..N)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "The size of the page to be returned",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Products retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerProductResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer-key": []
+          }
+        ]
+      }
+    },
+    "/partner/v1/products/{id}": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Get product details",
+        "description": "Returns full details for a single product including rate and minimum premium",
+        "operationId": "get_1",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerProductResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "404": {
+            "description": "Product not found"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer-key": []
+          }
+        ]
+      }
+    },
+    "/partner/v1/products/{id}/classes": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "List classes of business under a product",
+        "description": "Returns the class(es) of business associated with the product \u2014 used to populate quote requests",
+        "operationId": "listClasses",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Classes retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerClassOfBusinessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "404": {
+            "description": "Product not found"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer-key": []
+          }
+        ]
+      }
+    },
+    "/partner/v1/policies/{id}": {
+      "get": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Get policy details and status",
+        "operationId": "get_2",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Policy found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerPolicyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "404": {
+            "description": "Policy not found"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer-key": []
+          }
+        ]
+      }
+    },
+    "/partner/v1/policies/{id}/document": {
+      "get": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Download the policy certificate PDF",
+        "description": "Streams the approved policy certificate as a PDF binary. Returns 404 if the document has not yet been generated (policy not yet approved).",
+        "operationId": "downloadDocument",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "PDF document",
-            "content": { "application/pdf": { "schema": { "type": "string", "format": "binary" } } }
+            "content": {
+              "application/pdf": {}
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "404": {
+            "description": "Policy not found or document not yet generated"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer-key": []
+          }
+        ]
+      }
+    },
+    "/partner/v1/customers/{id}": {
+      "get": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Get customer details and KYC status",
+        "description": "Returns customer profile and current KYC status. Use to poll after registration.",
+        "operationId": "get_3",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerCustomerResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "404": {
+            "description": "Customer not found"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer-key": []
+          }
+        ]
+      }
+    },
+    "/partner/v1/claims/{id}": {
+      "get": {
+        "tags": [
+          "Claims"
+        ],
+        "summary": "Get claim status and details",
+        "description": "Returns the current state of a claim including reserve, approved amount, and settlement timestamp",
+        "operationId": "get_4",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Claim found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerClaimResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "404": {
+            "description": "Claim not found"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer-key": []
+          }
+        ]
+      }
+    },
+    "/partner/v1/webhooks/{id}": {
+      "delete": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Remove a webhook registration",
+        "description": "Soft-deletes the registration; pending deliveries in-flight may still complete",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Webhook removed"
+          },
+          "401": {
+            "description": "Unauthorized \u2014 invalid or expired token"
+          },
+          "403": {
+            "description": "Forbidden \u2014 insufficient scope"
+          },
+          "404": {
+            "description": "Webhook registration not found"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearer-key": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "RegisterWebhookRequest": {
+        "type": "object",
+        "properties": {
+          "targetUrl": {
+            "type": "string",
+            "minLength": 1
+          },
+          "secret": {
+            "type": "string",
+            "maxLength": 2147483647,
+            "minLength": 16
+          },
+          "eventTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "eventTypes",
+          "secret",
+          "targetUrl"
+        ]
+      },
+      "PartnerWebhookResponse": {
+        "type": "object",
+        "description": "Registered webhook endpoint details. The signing secret is never returned after creation.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique webhook registration ID",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "targetUrl": {
+            "type": "string",
+            "description": "URL that receives webhook POST requests",
+            "example": "https://your-app.com/webhooks/cia"
+          },
+          "eventTypes": {
+            "type": "array",
+            "description": "Event types this webhook is subscribed to",
+            "example": [
+              "policy.bound",
+              "claim.approved",
+              "claim.settled"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "active": {
+            "type": "boolean",
+            "description": "Whether this webhook is actively receiving deliveries",
+            "example": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the webhook was registered",
+            "example": "2026-04-20T12:00:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of the last update",
+            "example": "2026-04-20T12:00:00Z"
+          }
+        }
+      },
+      "AdjustmentEntryRequest": {
+        "type": "object",
+        "properties": {
+          "typeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "PERCENT",
+              "FLAT"
+            ]
+          },
+          "value": {
+            "type": "number",
+            "minimum": 0.0
+          }
+        },
+        "required": [
+          "format",
+          "typeId",
+          "value"
+        ]
+      },
+      "QuoteCoinsuranceParticipantRequest": {
+        "type": "object",
+        "properties": {
+          "insuranceCompanyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sharePercentage": {
+            "type": "number",
+            "maximum": 99.99,
+            "minimum": 0.01
+          }
+        },
+        "required": [
+          "insuranceCompanyId",
+          "sharePercentage"
+        ]
+      },
+      "QuoteRequest": {
+        "type": "object",
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "brokerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "agentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "businessType": {
+            "type": "string",
+            "enum": [
+              "DIRECT",
+              "DIRECT_WITH_COINSURANCE",
+              "INWARD_COINSURANCE",
+              "INWARD_FACULTATIVE"
+            ]
+          },
+          "policyStartDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "policyEndDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "risks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteRiskRequest"
+            },
+            "minItems": 1
+          },
+          "quoteLoadings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentEntryRequest"
+            }
+          },
+          "quoteDiscounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentEntryRequest"
+            }
+          },
+          "selectedClauseIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "coinsuranceParticipants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteCoinsuranceParticipantRequest"
+            }
+          }
+        },
+        "required": [
+          "businessType",
+          "customerId",
+          "policyEndDate",
+          "policyStartDate",
+          "productId",
+          "risks"
+        ]
+      },
+      "QuoteRiskRequest": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sumInsured": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "rate": {
+            "type": "number",
+            "minimum": 0.0
+          },
+          "sectionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "riskDetails": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "loadings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentEntryRequest"
+            }
+          },
+          "discounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentEntryRequest"
+            }
+          }
+        },
+        "required": [
+          "description",
+          "rate",
+          "sumInsured"
+        ]
+      },
+      "PartnerQuoteResponse": {
+        "type": "object",
+        "description": "Insurance quote returned to Insurtech partners",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique quote identifier",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "quoteNumber": {
+            "type": "string",
+            "description": "Human-readable quote reference number",
+            "example": "QUO-2026-00010"
+          },
+          "status": {
+            "type": "string",
+            "description": "Current status of the quote",
+            "enum": [
+              "DRAFT",
+              "PENDING_APPROVAL",
+              "APPROVED",
+              "REJECTED",
+              "EXPIRED",
+              "CONVERTED"
+            ],
+            "example": "PENDING_APPROVAL"
+          },
+          "customerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Customer the quote is for",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "customerName": {
+            "type": "string",
+            "description": "Customer name",
+            "example": "Chukwuemeka Obi"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Insurance product ID",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "productName": {
+            "type": "string",
+            "description": "Insurance product name",
+            "example": "Comprehensive Motor"
+          },
+          "productCode": {
+            "type": "string",
+            "description": "Product code",
+            "example": "CMV"
+          },
+          "classOfBusinessId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Class of business ID",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "classOfBusinessName": {
+            "type": "string",
+            "description": "Class of business name",
+            "example": "Motor"
+          },
+          "businessType": {
+            "type": "string",
+            "description": "Business type for this quote",
+            "enum": [
+              "DIRECT",
+              "DIRECT_WITH_COINSURANCE",
+              "INWARD_COINSURANCE",
+              "INWARD_FACULTATIVE"
+            ],
+            "example": "DIRECT"
+          },
+          "policyStartDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Proposed policy start date",
+            "example": "2026-05-01"
+          },
+          "policyEndDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Proposed policy end date",
+            "example": "2027-04-30"
+          },
+          "totalSumInsured": {
+            "type": "number",
+            "description": "Total sum insured across all risks (NGN)",
+            "example": 5000000.0
+          },
+          "totalGrossPremium": {
+            "type": "number",
+            "description": "Sum of gross premiums across all risks before adjustments (NGN)",
+            "example": 250000.0
+          },
+          "totalNetPremium": {
+            "type": "number",
+            "description": "Final net premium payable after all per-item and quote-level loadings/discounts (NGN)",
+            "example": 237500.0
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the quote approval was confirmed",
+            "example": "2026-04-20T14:23:00Z"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when this quote expires",
+            "example": "2026-05-20T23:59:59Z"
+          },
+          "rejectionReason": {
+            "type": "string",
+            "description": "Reason for rejection if status is REJECTED",
+            "example": "Risk exceeds underwriting appetite"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Record creation timestamp",
+            "example": "2026-04-18T09:00:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Record last-updated timestamp",
+            "example": "2026-04-20T14:23:00Z"
+          }
+        }
+      },
+      "PartnerPolicyResponse": {
+        "type": "object",
+        "description": "Policy record returned to Insurtech partners",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique policy identifier",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "policyNumber": {
+            "type": "string",
+            "description": "Human-readable policy number",
+            "example": "POL-2026-00001"
+          },
+          "status": {
+            "type": "string",
+            "description": "Current lifecycle status of the policy",
+            "enum": [
+              "DRAFT",
+              "PENDING_APPROVAL",
+              "ACTIVE",
+              "REJECTED",
+              "CANCELLED",
+              "LAPSED",
+              "EXPIRED",
+              "REINSTATED"
+            ],
+            "example": "ACTIVE"
+          },
+          "quoteId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Source quote ID if bound from a quote",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "quoteNumber": {
+            "type": "string",
+            "description": "Source quote number",
+            "example": "QUO-2026-00010"
+          },
+          "customerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Policyholder customer ID",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "customerName": {
+            "type": "string",
+            "description": "Policyholder name",
+            "example": "Chukwuemeka Obi"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Insurance product ID",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "productName": {
+            "type": "string",
+            "description": "Insurance product name",
+            "example": "Comprehensive Motor"
+          },
+          "productCode": {
+            "type": "string",
+            "description": "Product code",
+            "example": "CMV"
+          },
+          "classOfBusinessId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Class of business ID",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "classOfBusinessName": {
+            "type": "string",
+            "description": "Class of business name",
+            "example": "Motor"
+          },
+          "brokerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Broker ID if placed through a broker",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "brokerName": {
+            "type": "string",
+            "description": "Broker name",
+            "example": "Leadway Insurance Brokers"
+          },
+          "businessType": {
+            "type": "string",
+            "description": "Policy business type",
+            "enum": [
+              "DIRECT",
+              "DIRECT_WITH_COINSURANCE",
+              "INWARD_COINSURANCE",
+              "INWARD_FACULTATIVE"
+            ],
+            "example": "DIRECT"
+          },
+          "policyStartDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Policy commencement date",
+            "example": "2026-05-01"
+          },
+          "policyEndDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Policy expiry date",
+            "example": "2027-04-30"
+          },
+          "totalSumInsured": {
+            "type": "number",
+            "description": "Total sum insured across all risks (NGN)",
+            "example": 5000000.0
+          },
+          "totalPremium": {
+            "type": "number",
+            "description": "Gross premium before discount (NGN)",
+            "example": 250000.0
+          },
+          "discount": {
+            "type": "number",
+            "description": "Discount amount (NGN)",
+            "example": 12500.0
+          },
+          "netPremium": {
+            "type": "number",
+            "description": "Net premium payable after discount (NGN)",
+            "example": 237500.0
+          },
+          "rejectionReason": {
+            "type": "string",
+            "description": "Reason for rejection if status is REJECTED",
+            "example": "Sum insured exceeds underwriting limit"
+          },
+          "cancellationReason": {
+            "type": "string",
+            "description": "Reason for cancellation if status is CANCELLED",
+            "example": "Customer requested cancellation"
+          },
+          "naicomUid": {
+            "type": "string",
+            "description": "NAICOM unique identifier; PENDING until the upload is confirmed",
+            "example": "NAICOM-2026-9876543"
+          },
+          "naicomUploadedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of successful NAICOM upload",
+            "example": "2026-04-20T15:00:00Z"
+          },
+          "niidRef": {
+            "type": "string",
+            "description": "NIID reference number (motor/marine only)",
+            "example": "NIID-2026-12345"
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of approval",
+            "example": "2026-04-20T14:23:00Z"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Record creation timestamp",
+            "example": "2026-04-18T09:00:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Record last-updated timestamp",
+            "example": "2026-04-20T14:23:00Z"
+          }
+        }
+      },
+      "RegisterClaimRequest": {
+        "type": "object",
+        "properties": {
+          "policyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "incidentDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "reportedDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "lossLocation": {
+            "type": "string"
+          },
+          "natureOfLoss": {
+            "type": "string"
+          },
+          "causeOfLoss": {
+            "type": "string"
+          },
+          "contactName": {
+            "type": "string"
+          },
+          "contactPhone": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "estimatedLoss": {
+            "type": "number"
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "incidentDate",
+          "policyId",
+          "reportedDate"
+        ]
+      },
+      "PartnerClaimResponse": {
+        "type": "object",
+        "description": "Claim details returned to Insurtech partners",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique claim identifier",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "claimNumber": {
+            "type": "string",
+            "description": "Human-readable claim reference",
+            "example": "CLM-2026-00042"
+          },
+          "status": {
+            "type": "string",
+            "description": "Current claim lifecycle status",
+            "enum": [
+              "REGISTERED",
+              "UNDER_INVESTIGATION",
+              "RESERVED",
+              "PENDING_APPROVAL",
+              "APPROVED",
+              "SETTLED",
+              "REJECTED",
+              "WITHDRAWN"
+            ],
+            "example": "REGISTERED"
+          },
+          "policyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Policy the claim is raised against",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "policyNumber": {
+            "type": "string",
+            "description": "Policy number",
+            "example": "POL-2026-00001"
+          },
+          "customerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Policyholder customer ID",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "customerName": {
+            "type": "string",
+            "description": "Policyholder name",
+            "example": "Chukwuemeka Obi"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Product ID associated with the claim",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "productName": {
+            "type": "string",
+            "description": "Product name",
+            "example": "Comprehensive Motor"
+          },
+          "classOfBusinessId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Class of business ID",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "classOfBusinessName": {
+            "type": "string",
+            "description": "Class of business name",
+            "example": "Motor"
+          },
+          "incidentDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Date the incident occurred",
+            "example": "2026-04-01"
+          },
+          "reportedDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Date the claim was reported",
+            "example": "2026-04-03"
+          },
+          "lossLocation": {
+            "type": "string",
+            "description": "Location of the loss event",
+            "example": "Lagos-Ibadan Expressway, Km 45"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the incident",
+            "example": "Collision with another vehicle at Lagos-Ibadan expressway"
+          },
+          "estimatedLoss": {
+            "type": "number",
+            "description": "Claimant's estimated loss amount (NGN)",
+            "example": 800000.0
+          },
+          "reserveAmount": {
+            "type": "number",
+            "description": "Claim reserve set by the insurer (NGN)",
+            "example": 750000.0
+          },
+          "approvedAmount": {
+            "type": "number",
+            "description": "Amount approved for settlement (NGN); null if not yet approved",
+            "example": 700000.0
+          },
+          "currencyCode": {
+            "type": "string",
+            "description": "Currency code (ISO 4217)",
+            "example": "NGN"
+          },
+          "rejectionReason": {
+            "type": "string",
+            "description": "Reason for rejection if status is REJECTED",
+            "example": "Incident occurred outside policy coverage period"
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when claim was approved",
+            "example": "2026-04-10T14:23:00Z"
+          },
+          "settledAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when claim was settled (payment executed)",
+            "example": "2026-04-15T09:00:00Z"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the claim record was created",
+            "example": "2026-04-03T08:15:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of the last update",
+            "example": "2026-04-10T14:23:00Z"
+          }
+        }
+      },
+      "IndividualCustomerRequest": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "otherNames": {
+            "type": "string"
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "format": "date"
+          },
+          "gender": {
+            "type": "string"
+          },
+          "maritalStatus": {
+            "type": "string"
+          },
+          "idType": {
+            "type": "string",
+            "enum": [
+              "NIN",
+              "VOTERS_CARD",
+              "DRIVERS_LICENSE",
+              "PASSPORT"
+            ]
+          },
+          "idNumber": {
+            "type": "string",
+            "minLength": 1
+          },
+          "idExpiryDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 1
+          },
+          "alternatePhone": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string",
+            "minLength": 1
+          },
+          "relationshipManagerId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "country",
+          "dateOfBirth",
+          "firstName",
+          "idNumber",
+          "idType",
+          "lastName",
+          "phone"
+        ]
+      },
+      "PartnerCustomerResponse": {
+        "type": "object",
+        "description": "Customer record returned to Insurtech partners",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique customer identifier",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "customerType": {
+            "type": "string",
+            "description": "Customer type: INDIVIDUAL or CORPORATE",
+            "enum": [
+              "INDIVIDUAL",
+              "CORPORATE"
+            ],
+            "example": "INDIVIDUAL"
+          },
+          "customerStatus": {
+            "type": "string",
+            "description": "Customer account status",
+            "enum": [
+              "ACTIVE",
+              "INACTIVE",
+              "BLACKLISTED"
+            ],
+            "example": "ACTIVE"
+          },
+          "kycStatus": {
+            "type": "string",
+            "description": "KYC verification status",
+            "enum": [
+              "PENDING",
+              "IN_PROGRESS",
+              "PASSED",
+              "FAILED",
+              "EXPIRED"
+            ],
+            "example": "VERIFIED"
+          },
+          "kycFailureReason": {
+            "type": "string",
+            "description": "Reason KYC verification failed, if applicable",
+            "example": "Name mismatch against NIN database"
+          },
+          "kycVerifiedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when KYC was successfully verified",
+            "example": "2026-04-18T10:30:00Z"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "First name (individual customers)",
+            "example": "Chukwuemeka"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "Last name (individual customers)",
+            "example": "Obi"
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "format": "date",
+            "description": "Date of birth (individual customers)",
+            "example": "1985-03-15"
+          },
+          "gender": {
+            "type": "string",
+            "description": "Gender (individual customers)",
+            "example": "MALE"
+          },
+          "companyName": {
+            "type": "string",
+            "description": "Registered company name (corporate customers)",
+            "example": "Obi Enterprises Limited"
+          },
+          "rcNumber": {
+            "type": "string",
+            "description": "CAC Registration Number (corporate customers)",
+            "example": "RC-123456"
+          },
+          "incorporationDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Date of CAC incorporation (corporate customers)",
+            "example": "2010-06-01"
+          },
+          "email": {
+            "type": "string",
+            "description": "Contact email address",
+            "example": "chukwuemeka@obienterprises.ng"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Primary phone number",
+            "example": "+2348012345678"
+          },
+          "address": {
+            "type": "string",
+            "description": "Street address",
+            "example": "12 Broad Street"
+          },
+          "city": {
+            "type": "string",
+            "description": "City",
+            "example": "Lagos"
+          },
+          "state": {
+            "type": "string",
+            "description": "State",
+            "example": "Lagos State"
+          },
+          "country": {
+            "type": "string",
+            "description": "Country",
+            "example": "Nigeria"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Record creation timestamp",
+            "example": "2026-04-17T08:00:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Record last-updated timestamp",
+            "example": "2026-04-18T10:30:00Z"
+          }
+        }
+      },
+      "CorporateCustomerRequest": {
+        "type": "object",
+        "properties": {
+          "companyName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rcNumber": {
+            "type": "string",
+            "minLength": 1
+          },
+          "cacIssuedDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "incorporationDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "industry": {
+            "type": "string"
+          },
+          "contactPerson": {
+            "type": "string",
+            "minLength": 1
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 1
+          },
+          "alternatePhone": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string",
+            "minLength": 1
+          },
+          "directors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomerDirectorRequest"
+            },
+            "minItems": 1
+          },
+          "relationshipManagerId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "companyName",
+          "contactPerson",
+          "country",
+          "directors",
+          "phone",
+          "rcNumber"
+        ]
+      },
+      "CustomerDirectorRequest": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "format": "date"
+          },
+          "idType": {
+            "type": "string",
+            "enum": [
+              "NIN",
+              "VOTERS_CARD",
+              "DRIVERS_LICENSE",
+              "PASSPORT"
+            ]
+          },
+          "idNumber": {
+            "type": "string"
+          },
+          "idExpiryDate": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": [
+          "firstName",
+          "lastName"
+        ]
+      },
+      "PartnerProductResponse": {
+        "type": "object",
+        "description": "Insurance product available through the partner API",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique product identifier",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "name": {
+            "type": "string",
+            "description": "Product display name",
+            "example": "Comprehensive Motor Vehicle Insurance"
+          },
+          "code": {
+            "type": "string",
+            "description": "Short product code used in policy numbers and references",
+            "example": "CMV"
+          },
+          "classOfBusinessId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Class of business ID this product belongs to",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "classOfBusinessName": {
+            "type": "string",
+            "description": "Class of business name",
+            "example": "Motor"
+          },
+          "type": {
+            "type": "string",
+            "description": "Product type: SINGLE_RISK or MULTI_RISK",
+            "enum": [
+              "SINGLE_RISK",
+              "MULTI_RISK"
+            ],
+            "example": "SINGLE_RISK"
+          },
+          "rate": {
+            "type": "number",
+            "description": "Annual premium rate as a decimal fraction of sum insured",
+            "example": 0.05
+          },
+          "minPremium": {
+            "type": "number",
+            "description": "Minimum premium enforced regardless of calculated premium (NGN)",
+            "example": 10000.0
+          },
+          "active": {
+            "type": "boolean",
+            "description": "Whether this product is currently available for new quotes",
+            "example": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the product was created",
+            "example": "2025-12-01T00:00:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of the last product update",
+            "example": "2026-01-15T09:00:00Z"
+          }
+        }
+      },
+      "PartnerClassOfBusinessResponse": {
+        "type": "object",
+        "description": "Class of business (line of insurance) available under a product",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique class of business identifier",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "name": {
+            "type": "string",
+            "description": "Class of business name",
+            "example": "Motor"
+          },
+          "code": {
+            "type": "string",
+            "description": "Short code used in references and certificates",
+            "example": "MOT"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the class of business",
+            "example": "Covers private and commercial motor vehicles"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Record creation timestamp",
+            "example": "2025-12-01T00:00:00Z"
           }
         }
       }
     },
-    "/policies/{id}/claims": {
-      "post": {
-        "summary": "Submit claim notification",
-        "operationId": "submitClaim",
-        "tags": ["Claims"],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
-        "requestBody": {
-          "required": true,
-          "content": { "application/json": { "schema": { "type": "object" } } }
-        },
-        "responses": {
-          "201": { "description": "Claim registered" }
-        }
-      }
-    },
-    "/claims/{id}": {
-      "get": {
-        "summary": "Get claim status",
-        "operationId": "getClaim",
-        "tags": ["Claims"],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
-        "responses": {
-          "200": { "description": "Claim details" },
-          "404": { "description": "Not found" }
-        }
-      }
-    },
-    "/webhooks": {
-      "post": {
-        "summary": "Register webhook",
-        "operationId": "registerWebhook",
-        "tags": ["Webhooks"],
-        "requestBody": {
-          "required": true,
-          "content": { "application/json": { "schema": { "type": "object" } } }
-        },
-        "responses": {
-          "201": { "description": "Webhook registered" }
-        }
+    "securitySchemes": {
+      "bearer-key": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
       },
-      "get": {
-        "summary": "List webhooks",
-        "operationId": "listWebhooks",
-        "tags": ["Webhooks"],
-        "responses": {
-          "200": { "description": "Registered webhooks" }
-        }
-      }
-    },
-    "/webhooks/{id}": {
-      "delete": {
-        "summary": "Delete webhook",
-        "operationId": "deleteWebhook",
-        "tags": ["Webhooks"],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
-        "responses": {
-          "204": { "description": "Deleted" }
+      "oauth2-client-credentials": {
+        "type": "oauth2",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "http://localhost:8280/realms/cia/protocol/openid-connect/token"
+          }
         }
       }
     }
