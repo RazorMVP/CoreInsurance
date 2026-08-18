@@ -37,7 +37,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/finance/paa")
 @Tag(name = "PAA — Contract Groups",
-     description = "IFRS 17 §16-22 contract groups + portfolios. Read-only — writes are event-driven via Slice 2.2's ContractGroupingService (PolicyApprovedEvent listener). The (portfolio, cohort_year, onerousness) triple is permanent per §22.")
+     description = "IFRS 17 §16-22 contract groups + portfolios. Read-only — writes are event-driven via Slice 2.2's ContractGroupingService, triggered by policy approval (direct business) and FAC accept/cede (facultative reinsurance, inward + outward). The (portfolio, cohort_year, onerousness) triple is permanent per §22.")
 @SecurityRequirement(name = "bearer-jwt")
 @RequiredArgsConstructor
 public class ContractGroupController {
@@ -47,7 +47,7 @@ public class ContractGroupController {
     @GetMapping("/contract-groups")
     @PreAuthorize("hasRole('FINANCE_VIEW')")
     @Operation(summary = "List contract groups",
-               description = "All four filters are optional. Default ordering: cohort year DESC, portfolio code ASC, onerousness ASC (most recent cohort first; onerous groups at the bottom of each (portfolio, cohort) pair).")
+               description = "All five filters are optional. Default ordering: cohort year DESC, portfolio code ASC, onerousness ASC (most recent cohort first; onerous groups at the bottom of each (portfolio, cohort) pair).")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Contract groups",
             content = @Content(schema = @Schema(implementation = ContractGroupSummaryResponse.class))),
@@ -58,9 +58,10 @@ public class ContractGroupController {
         @RequestParam(required = false) UUID portfolioId,
         @RequestParam(required = false) Integer cohortYear,
         @RequestParam(required = false) Onerousness onerousness,
-        @RequestParam(required = false) GroupStatus status
+        @RequestParam(required = false) GroupStatus status,
+        @RequestParam(required = false) ContractNature contractNature
     ) {
-        return ApiResponse.success(service.listGroups(portfolioId, cohortYear, onerousness, status));
+        return ApiResponse.success(service.listGroups(portfolioId, cohortYear, onerousness, status, contractNature));
     }
 
     @GetMapping("/portfolios")

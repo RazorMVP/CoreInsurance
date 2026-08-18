@@ -39,13 +39,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * End-to-end Testcontainers IT for {@link LrcEngine} — Slice 2.3.
  *
  * <p>Each test seeds the necessary fixtures (fiscal year + month, COB,
- * portfolio, group, policy, policy_group_assignment) via JdbcTemplate,
+ * portfolio, group, policy, contract_group_assignment) via JdbcTemplate,
  * invokes {@link LrcEngine#recognise(UUID)}, and verifies the resulting
  * {@code paa_lrc} row + journal entry shape.
  *
- * <p>Schema target = 37: V36 (PAA tables) + V37 (policy_group_assignment).
- * Tests can therefore rely on uq_paa_lrc_group_period, FKs to fiscal_period,
- * and the V31/V32 JE gateway + COA seed.
+ * <p>Schema target = 77: V36 (PAA tables) + V77 (contract_group_assignment,
+ * the polymorphic table generalised from V37's policy-only
+ * policy_group_assignment). Tests can therefore rely on
+ * uq_paa_lrc_group_period, FKs to fiscal_period, and the V31/V32 JE gateway
+ * + COA seed.
  */
 @Testcontainers
 @DataJpaTest
@@ -74,7 +76,7 @@ class LrcEngineIT {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.target", () -> "49");
+        registry.add("spring.flyway.target", () -> "77");
         registry.add("spring.jpa.properties.hibernate.multiTenancy", () -> "NONE");
     }
 
@@ -333,8 +335,8 @@ class LrcEngineIT {
             UUID.randomUUID(), "Test COB", "COB-LRC",
             startDate, endDate, new BigDecimal(netPremium), "NGN", "APPROVED", "test");
         jdbcTemplate.update(
-            "INSERT INTO policy_group_assignment (id, policy_id, group_id, assigned_at, created_by) " +
-            "VALUES (?, ?, ?, now(), ?)",
+            "INSERT INTO contract_group_assignment (id, contract_type, contract_id, group_id, assigned_at, created_by) " +
+            "VALUES (?, 'POLICY', ?, ?, now(), ?)",
             UUID.randomUUID(), policyId, groupId, "test");
     }
 

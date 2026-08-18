@@ -41,10 +41,11 @@ import java.util.UUID;
  *
  * <p>Rule resolution (D2=A): five of the six events look up a
  * {@link PostingRule} from {@code posting_rule} (seeded by V33). The sixth,
- * {@link FacPremiumCededEvent}, is compound (3 lines) and the
- * {@code posting_rule} shape (1 Dr + 1 Cr per row) can't express it — the
- * listener builds the JE inline using hardcoded COA codes documented in
- * the method.
+ * {@link FacPremiumCededEvent}, bypasses the table — even though it is now
+ * (FAC / IFRS-17 PAA workstream Task 4) a plain 2-line Dr/Cr shape, the
+ * listener still builds the JE inline using hardcoded COA codes so the §65
+ * commission-netting the posting encodes stays directly diffable in review
+ * rather than living in a seeded data row.
  *
  * <p>Idempotency triple (D4=A): every JE this service emits uses
  * {@code (business-module-name, EVENT_CONSTANT, entity.id.toString())} so
@@ -93,16 +94,29 @@ public class SubledgerPostingService {
     static final String EVENT_POLICY_COMMISSION_RM = "POLICY_COMMISSION_RM";
     static final String SOURCE_RM = "RELATIONSHIP_MANAGER";
 
-    // ── Hardcoded COA codes for the compound FAC 3-line posting ──────────────
-    private static final String COA_RI_PREMIUM_EXPENSE = "5210";   // Outward reinsurance premium
-    private static final String COA_RI_COMMISSION_INCOME = "4300"; // Reinsurance income (ceded)
-    private static final String COA_RI_PREMIUM_PAYABLE = "2310";   // RI premium payable (outward)
+    // ── Hardcoded COA codes for the outward FAC confirm posting ──────────────
+    // FAC / IFRS-17 PAA workstream Task 4 — §65 commission-netting: the
+    // credit leg moved from a 3-line gross/commission/net split (Dr 5210
+    // gross / Cr 4300 commission / Cr 2310 net) to a 2-line NET posting.
+    // Commission is netted into the reinsurance-held asset instead of being
+    // booked as separate income (4300 is no longer credited here — it also
+    // retires the 4300-non-postable-parent bug). 5210 (Outward reinsurance
+    // premium expense) now receives only LrcEngine's periodic amortisation —
+    // see LrcEngine.COA_RI_PREMIUM_EXPENSE.
+    private static final String COA_REINSURANCE_HELD_LRC_ASSET = "1410"; // Reinsurance - LRC asset (V32 seed, ifrs17_role=LRC_REINSURANCE)
+    private static final String COA_RI_PREMIUM_PAYABLE = "2310";         // RI premium payable (outward)
 
     // ── Hardcoded COA codes for the compound inward FAC 3-line posting ───────
     // (V75 — 4330/5240 net new; 1330 pre-existed from V32 R1=A scope decision.)
     private static final String COA_INWARD_PREMIUM_RECEIVABLE = "1330"; // Premium receivable - Coinsurer (inward)
     private static final String COA_INWARD_COMMISSION_EXPENSE  = "5240"; // Inward reinsurance commission expense
-    private static final String COA_INWARD_PREMIUM_INCOME      = "4330"; // Inward reinsurance premium income
+    // FAC / IFRS-17 PAA workstream Task 3 — the credit leg moved from 4330
+    // (immediate income) to 2210 (LRC liability, V32 seed, ifrs17_role=LRC_BEL):
+    // accept now SETS UP the liability at the full gross premium instead of
+    // booking income immediately. 4330 (Inward reinsurance premium income,
+    // V75 seed) is credited only by LrcEngine's periodic release from here on
+    // — see LrcEngine.COA_INWARD_PREMIUM_INCOME.
+    private static final String COA_INWARD_LRC = "2210"; // Inward reinsurance LRC (was COA_INWARD_PREMIUM_INCOME = "4330")
 
     private final JournalEntryService journalEntryService;
     private final PostingRuleService postingRuleService;
@@ -316,21 +330,30 @@ public class SubledgerPostingService {
     }
 
     /**
-     * 6. FAC premium ceded → compound 3-line posting (hardcoded).
+     * 6. FAC premium ceded → §65-netted 2-line posting (hardcoded).
      *
      * <p>{@code posting_rule} (1 Dr + 1 Cr per row, UNIQUE on
-     * {@code source_event_type}) cannot express three legs, so this method
-     * bypasses the table and builds the request inline. The accounts and
-     * signs are explicit so review can diff the contract directly.
+     * {@code source_event_type}) is a plain 2-line shape, but this method
+     * stays inline (rather than moving to a seeded rule) to keep the
+     * account identities — and the §65 netting they encode — explicit and
+     * directly diffable in review.
      *
      * <pre>
-     *   Dr 5210 Outward RI premium expense       = premiumCeded
-     *   Cr 4300 RI commission income             = commissionAmount
+     *   Dr 1410 Reinsurance - LRC asset (NET)    = netPremiumCeded
      *   Cr 2310 RI premium payable (outward)     = netPremiumCeded
      * </pre>
      *
-     * <p>Invariant: {@code premiumCeded == commissionAmount + netPremiumCeded}.
-     * {@link JournalEntryService#post} re-checks this at the GL boundary.
+     * <p><strong>FAC / IFRS-17 PAA workstream Task 4 — §65 commission
+     * netting:</strong> confirm sets up the reinsurance-held asset at the
+     * NET ceded premium instead of booking the gross premium as an expense
+     * with commission recognised as separate income (the pre-Task-4 shape
+     * was a 3-line {@code Dr 5210 gross / Cr 4300 commission / Cr 2310 net}).
+     * Commission is netted into the asset — it is never posted to a
+     * standalone commission-income account. {@link
+     * com.nubeero.cia.finance.paa.LrcEngine} amortises the NET asset to
+     * expense (Dr 5210 / Cr 1410) straight-line over the FAC's cover period
+     * each fiscal period-close — the sign-flip mirror of {@link
+     * #replayFacPremiumAccepted}'s inward LRC liability release.
      */
     public void replayFacPremiumCeded(FacPremiumCededEvent event) {
         replayFacPremiumCeded(event, today());
@@ -341,8 +364,8 @@ public class SubledgerPostingService {
      * (typically {@code ri_fac_covers.approved_at::date}).
      */
     public void replayFacPremiumCeded(FacPremiumCededEvent event, LocalDate businessDate) {
-        if (zeroOrNull(event.premiumCeded())) {
-            log.debug("Skipping JE for FacPremiumCeded {} — premium ceded is zero", event.facReference());
+        if (zeroOrNull(event.netPremiumCeded())) {
+            log.debug("Skipping JE for FacPremiumCeded {} — net premium ceded is zero", event.facReference());
             return;
         }
         String narrative = String.format(
@@ -358,9 +381,8 @@ public class SubledgerPostingService {
             event.facCoverId().toString(),
             narrative,
             List.of(
-                line(COA_RI_PREMIUM_EXPENSE,    event.premiumCeded(),    BigDecimal.ZERO,         event.currencyCode(), classOfBusinessId),
-                line(COA_RI_COMMISSION_INCOME,  BigDecimal.ZERO,         event.commissionAmount(), event.currencyCode(), classOfBusinessId),
-                line(COA_RI_PREMIUM_PAYABLE,    BigDecimal.ZERO,         event.netPremiumCeded(),  event.currencyCode(), classOfBusinessId)));
+                line(COA_REINSURANCE_HELD_LRC_ASSET, event.netPremiumCeded(), BigDecimal.ZERO,        event.currencyCode(), classOfBusinessId),
+                line(COA_RI_PREMIUM_PAYABLE,          BigDecimal.ZERO,        event.netPremiumCeded(), event.currencyCode(), classOfBusinessId)));
         journalEntryService.post(request);
     }
 
@@ -371,13 +393,17 @@ public class SubledgerPostingService {
      * <pre>
      *   Dr 1330 Premium receivable - Coinsurer (inward) = netPremium
      *   Dr 5240 Inward reinsurance commission expense    = commissionAmount
-     *   Cr 4330 Inward reinsurance premium income        = grossPremium
+     *   Cr 2210 Inward reinsurance LRC                   = grossPremium
      * </pre>
      *
      * <p>Invariant: {@code grossPremium == commissionAmount + netPremium}.
      * {@link JournalEntryService#post} re-checks this at the GL boundary.
-     * Simple income posting (not IFRS-17 PAA — backlog
-     * fac-ifrs17-paa-workstream).
+     * <strong>IFRS-17 PAA LRC posting (FAC / IFRS-17 PAA workstream Task 3):</strong>
+     * accept sets up the LRC liability at the full gross premium instead of
+     * booking income immediately (the pre-Task-3 shape credited 4330 here).
+     * {@link com.nubeero.cia.finance.paa.LrcEngine} releases the earned
+     * portion to 4330 (Inward reinsurance premium income) straight-line over
+     * the FAC's cover period each fiscal period-close.
      *
      * <p><strong>Idempotency reference:</strong> only {@code create} followed
      * by a same-day {@code extend}, or two same-day {@code extend}s, publish
@@ -420,7 +446,7 @@ public class SubledgerPostingService {
         // facultative case and the default FE form state — would otherwise post
         // a Dr 5240 = 0.00 line, be rejected (422), and roll back the whole
         // accept. With zero commission net == gross, so the 2-line
-        // Dr 1330 (net) / Cr 4330 (gross) balances on its own. Same guard covers
+        // Dr 1330 (net) / Cr 2210 (gross) balances on its own. Same guard covers
         // an extend whose pro-rata delta commission rounds to 0.00 while delta
         // gross > 0. (The outward replayFacPremiumCeded shares this latent shape
         // — backlog fac-zero-commission-je-line.)
@@ -429,7 +455,7 @@ public class SubledgerPostingService {
         if (event.commissionAmount() != null && event.commissionAmount().signum() > 0) {
             lines.add(line(COA_INWARD_COMMISSION_EXPENSE, event.commissionAmount(), BigDecimal.ZERO, event.currencyCode(), event.classOfBusinessId()));
         }
-        lines.add(line(COA_INWARD_PREMIUM_INCOME, BigDecimal.ZERO, event.grossPremium(), event.currencyCode(), event.classOfBusinessId()));
+        lines.add(line(COA_INWARD_LRC, BigDecimal.ZERO, event.grossPremium(), event.currencyCode(), event.classOfBusinessId()));
 
         PostJournalEntryRequest request = new PostJournalEntryRequest(
             businessDate,

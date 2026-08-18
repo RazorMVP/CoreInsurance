@@ -61,6 +61,12 @@ export const JournalEntryStatusSchema = z.enum(['DRAFT', 'POSTED', 'REVERSED']);
 export const OnerousnessSchema = z.enum(['NOT_ONEROUS', 'NO_SIGNIFICANT_POSSIBILITY', 'ONEROUS']);
 export const GroupStatusSchema = z.enum(['OPEN', 'CLOSED']);
 
+// Portfolio contract-nature dimension (V76, FAC / IFRS-17 PAA workstream Task 7)
+// — distinguishes direct-policy portfolios from facultative reinsurance
+// accepted (inward) / ceded (outward). Distinct from the ContractType
+// entity discriminator (a direct policy is POLICY inside a DIRECT portfolio).
+export const ContractNatureSchema = z.enum(['DIRECT', 'FAC_INWARD', 'FAC_OUTWARD']);
+
 // IFRS 9 holdings (Slice 3.2)
 export const AssetTypeSchema = z.enum(['DEBT', 'EQUITY', 'MONEY_MARKET', 'DERIVATIVE']);
 export const InvestmentClassificationSchema = z.enum([
@@ -105,6 +111,7 @@ export type Ifrs9Role                = z.infer<typeof Ifrs9RoleSchema>;
 export type JournalEntryStatus       = z.infer<typeof JournalEntryStatusSchema>;
 export type Onerousness              = z.infer<typeof OnerousnessSchema>;
 export type GroupStatus              = z.infer<typeof GroupStatusSchema>;
+export type ContractNature           = z.infer<typeof ContractNatureSchema>;
 export type AssetType                = z.infer<typeof AssetTypeSchema>;
 export type InvestmentClassification = z.infer<typeof InvestmentClassificationSchema>;
 export type HoldingStatus            = z.infer<typeof HoldingStatusSchema>;
@@ -113,6 +120,24 @@ export type BackfillResultStatus     = z.infer<typeof BackfillResultStatusSchema
 export type NaicomSubmissionState    = z.infer<typeof NaicomSubmissionStateSchema>;
 export type NaicomSubmissionType     = z.infer<typeof NaicomSubmissionTypeSchema>;
 export type ArtifactFormat           = z.infer<typeof ArtifactFormatSchema>;
+
+// Shared display labels + badge variants for ContractNature — colocated with
+// the enum/schema so ContractGroupsPage and PaaMovementAnalysisPage (the two
+// consumers) read one strongly-typed source instead of maintaining
+// independent inline Record<ContractNature, ...> copies that can drift
+// (found in FAC / IFRS-17 PAA workstream Task 7 review, M3: both copies had
+// already drifted to Record<string, ...> on one of the two pages).
+export const CONTRACT_NATURE_LABELS: Record<ContractNature, string> = {
+  DIRECT:      'Direct',
+  FAC_INWARD:  'FAC Inward',
+  FAC_OUTWARD: 'FAC Outward',
+};
+
+export const CONTRACT_NATURE_VARIANTS: Record<ContractNature, 'outline' | 'default' | 'draft'> = {
+  DIRECT:      'outline',
+  FAC_INWARD:  'default',
+  FAC_OUTWARD: 'draft',
+};
 
 // ── Journal Entries ───────────────────────────────────────────────────────
 
@@ -480,6 +505,7 @@ export const ContractGroupSummaryDtoSchema = z.object({
   portfolioId:    z.string(),
   portfolioCode:  z.string(),
   portfolioName:  z.string(),
+  contractNature: ContractNatureSchema,
   cohortYear:     z.number(),
   onerousness:    OnerousnessSchema,
   status:         GroupStatusSchema,
@@ -556,6 +582,7 @@ export const GroupMovementEntrySchema = z.object({
   totalOpening:              z.number(),
   totalClosing:              z.number(),
   currencyCode:              z.string().nullable().optional(),
+  contractNature:            z.string().nullable().optional(),
 });
 export type GroupMovementEntryDto = z.infer<typeof GroupMovementEntrySchema>;
 

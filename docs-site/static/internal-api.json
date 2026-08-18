@@ -97,6 +97,10 @@
       "description": "IFRS 17 \u00a7103 disclosure relay (Slice 2.8). Reads from V38 paa_movement_analysis SQL view \u2014 LRC totals, LIC totals, per-(portfolio \u00d7 cohort \u00d7 onerousness) breakdown. Read-only; consumed by Phase 4 Ifrs17DisclosureEngine."
     },
     {
+      "name": "PAA \u2014 Contract Groups",
+      "description": "IFRS 17 \u00a716-22 contract groups + portfolios. Read-only \u2014 writes are event-driven via Slice 2.2's ContractGroupingService, triggered by policy approval (direct business) and FAC accept/cede (facultative reinsurance, inward + outward). The (portfolio, cohort_year, onerousness) triple is permanent per \u00a722."
+    },
+    {
       "name": "Bulk PDF Download (Module 8)",
       "description": "Single-request multi-PDF download. POSTs a list of {type, id} items; backend resolves each, streams a ZIP, returns application/zip. 50-item cap per request."
     },
@@ -323,10 +327,6 @@
     {
       "name": "Debit Notes (Module 8)",
       "description": "Receivables-side documents. Generated automatically when a policy or endorsement is approved (SubledgerPostingService listens for PolicyApproved / EndorsementApproved events). State machine: ISSUED \u2192 PARTIALLY_PAID \u2192 SETTLED \u2192 CANCELLED / VOID."
-    },
-    {
-      "name": "PAA \u2014 Contract Groups",
-      "description": "IFRS 17 \u00a716-22 contract groups + portfolios. Read-only \u2014 writes are event-driven via Slice 2.2's ContractGroupingService (PolicyApprovedEvent listener). The (portfolio, cohort_year, onerousness) triple is permanent per \u00a722."
     },
     {
       "name": "Document Templates",
@@ -18648,7 +18648,7 @@
           "PAA \u2014 Contract Groups"
         ],
         "summary": "List contract groups",
-        "description": "All four filters are optional. Default ordering: cohort year DESC, portfolio code ASC, onerousness ASC (most recent cohort first; onerous groups at the bottom of each (portfolio, cohort) pair).",
+        "description": "All five filters are optional. Default ordering: cohort year DESC, portfolio code ASC, onerousness ASC (most recent cohort first; onerous groups at the bottom of each (portfolio, cohort) pair).",
         "operationId": "listGroups",
         "parameters": [
           {
@@ -18691,6 +18691,19 @@
               "enum": [
                 "OPEN",
                 "CLOSED"
+              ]
+            }
+          },
+          {
+            "name": "contractNature",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DIRECT",
+                "FAC_INWARD",
+                "FAC_OUTWARD"
               ]
             }
           }
@@ -31047,6 +31060,9 @@
           },
           "currencyCode": {
             "type": "string"
+          },
+          "contractNature": {
+            "type": "string"
           }
         }
       },
@@ -31165,6 +31181,14 @@
           },
           "portfolioName": {
             "type": "string"
+          },
+          "contractNature": {
+            "type": "string",
+            "enum": [
+              "DIRECT",
+              "FAC_INWARD",
+              "FAC_OUTWARD"
+            ]
           },
           "cohortYear": {
             "type": "integer",

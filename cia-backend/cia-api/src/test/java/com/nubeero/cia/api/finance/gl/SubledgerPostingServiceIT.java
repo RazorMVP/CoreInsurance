@@ -297,7 +297,7 @@ class SubledgerPostingServiceIT {
     // ── FacPremiumCeded ──────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("FacPremiumCeded → 3-line JE: Dr 5210, Cr 4300, Cr 2310 (sum invariant holds)")
+    @DisplayName("FacPremiumCeded → §65-netted 2-line JE: Dr 1410 (net), Cr 2310 (net); no 4300")
     void facPremiumCeded() {
         UUID facCoverId = UUID.randomUUID();
         service.onFacPremiumCeded(new FacPremiumCededEvent(
@@ -313,11 +313,21 @@ class SubledgerPostingServiceIT {
         Long lineCount = jdbcTemplate.queryForObject(
             "SELECT COUNT(*) FROM journal_entry_line WHERE journal_entry_id = ?",
             Long.class, je.get("id"));
-        assertThat(lineCount).isEqualTo(3L);
+        assertThat(lineCount).isEqualTo(2L);
 
-        assertLine((UUID) je.get("id"), "5210", "100000.00", "0.00");
-        assertLine((UUID) je.get("id"), "4300", "0.00", "20000.00");
+        // §65 commission-netting (FAC / IFRS-17 PAA workstream Task 4): the
+        // reinsurance-held asset is set up at the NET ceded premium; the
+        // reinsurer is paid net. Commission is netted into the asset, never
+        // posted to a standalone commission-income account.
+        assertLine((UUID) je.get("id"), "1410", "80000.00", "0.00");
         assertLine((UUID) je.get("id"), "2310", "0.00", "80000.00");
+
+        Long commissionLineCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM journal_entry_line l " +
+            "JOIN chart_of_account a ON a.id = l.account_id " +
+            "WHERE l.journal_entry_id = ? AND a.code = '4300'",
+            Long.class, je.get("id"));
+        assertThat(commissionLineCount).as("commission is netted into 1410, never posted to 4300").isZero();
 
         // Balance invariant — the GL service enforces it, but verify here for clarity.
         BigDecimal net = jdbcTemplate.queryForObject(

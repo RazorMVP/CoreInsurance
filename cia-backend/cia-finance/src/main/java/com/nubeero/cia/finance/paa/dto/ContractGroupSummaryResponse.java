@@ -1,5 +1,6 @@
 package com.nubeero.cia.finance.paa.dto;
 
+import com.nubeero.cia.finance.paa.ContractNature;
 import com.nubeero.cia.finance.paa.GroupStatus;
 import com.nubeero.cia.finance.paa.Onerousness;
 
@@ -15,6 +16,10 @@ import java.util.UUID;
  * is the only writer of {@code group_of_contracts}; this DTO is read-only
  * and never round-trips back to the server.
  *
+ * <p>{@code contractNature} is the portfolio's {@link ContractNature}
+ * dimension (DIRECT / FAC_INWARD / FAC_OUTWARD) — surfaced for the closures
+ * UI's Nature column/filter (FAC / IFRS-17 PAA workstream Task 7).
+ *
  * <p>Module 12 Phase 2 / Phase 5 frontend slice F5.11.
  */
 public record ContractGroupSummaryResponse(
@@ -22,6 +27,7 @@ public record ContractGroupSummaryResponse(
     UUID portfolioId,
     String portfolioCode,
     String portfolioName,
+    ContractNature contractNature,
     Integer cohortYear,
     Onerousness onerousness,
     GroupStatus status,

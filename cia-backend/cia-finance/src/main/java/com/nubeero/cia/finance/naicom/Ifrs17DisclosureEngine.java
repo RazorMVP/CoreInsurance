@@ -60,6 +60,7 @@ import java.util.UUID;
  *     {
  *       "groupId", "portfolioCode", "portfolioName",
  *       "cohortYear", "onerousness", "groupStatus", "currencyCode",
+ *       "contractNature",
  *       "lrc": { all LRC fields per group },
  *       "lic": { all LIC fields per group },
  *       "totalOpening", "totalClosing"
@@ -168,6 +169,7 @@ public class Ifrs17DisclosureEngine implements NaicomSubmissionEngine {
             row.put("onerousness", g.onerousness());
             row.put("groupStatus", g.groupStatus());
             row.put("currencyCode", g.currencyCode());
+            row.put("contractNature", g.contractNature());
             row.put("lrc", groupLrc);
             row.put("lic", groupLic);
             row.put("totalOpening", g.totalOpening());

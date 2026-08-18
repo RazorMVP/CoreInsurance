@@ -32,6 +32,9 @@ import java.util.UUID;
  *       (Slice 2.6) → closing</li>
  *   <li>Acquisition costs deferred/amortised, IBNR, RA: all zero in v1
  *       (DB columns ready for Slice 2.7b's actuarial extensions)</li>
+ *   <li>Contract nature (FAC / IFRS-17 PAA workstream Task 6): DIRECT /
+ *       FAC_INWARD / FAC_OUTWARD, sourced from {@code portfolio.contract_nature}
+ *       via the V78-recreated {@code paa_movement_analysis} view</li>
  * </ul>
  */
 public record MovementAnalysis(
@@ -110,6 +113,11 @@ public record MovementAnalysis(
         // Combined
         BigDecimal totalOpening,
         BigDecimal totalClosing,
-        String currencyCode
+        String currencyCode,
+
+        // Contract nature (V76/V78) — DIRECT / FAC_INWARD / FAC_OUTWARD.
+        // Distinguishes direct-policy groups from facultative reinsurance
+        // (inward/outward) groups in the §103 disclosure.
+        String contractNature
     ) {}
 }

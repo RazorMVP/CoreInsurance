@@ -99,18 +99,23 @@ public class ReportQueryBuilder {
             "WHERE lrc.deleted_at IS NULL"),
 
         // Contract Groups listing — §22 portfolios × cohort_year × onerousness.
+        // contract_nature (V76/V78, FAC / IFRS-17 PAA workstream Task 6) appended
+        // last — existing SYSTEM report field lists are shorter than the column
+        // count, so applyComputedFields()'s positional mapping ignores it unless
+        // a report explicitly declares the "contract_nature" field key.
         Map.entry(DataSource.PAA_GROUPS,
             "SELECT g.id, p.code AS portfolio_code, p.name AS portfolio_name, " +
             "cob.name AS class_of_business, " +
-            "g.cohort_year, g.onerousness, g.status AS group_status, g.created_at " +
+            "g.cohort_year, g.onerousness, g.status AS group_status, g.created_at, " +
+            "p.contract_nature " +
             "FROM group_of_contracts g " +
             "JOIN portfolio p ON p.id = g.portfolio_id AND p.deleted_at IS NULL " +
             "LEFT JOIN classes_of_business cob ON cob.id = p.class_of_business_id " +
             "WHERE g.deleted_at IS NULL"),
 
-        // IFRS 17 §103 movement analysis (V38 view — already shaped for disclosure).
-        // The view filters out (group, period) pairs with no LRC/LIC activity, so
-        // empty cohorts don't appear here.
+        // IFRS 17 §103 movement analysis (V38 view — already shaped for disclosure;
+        // V78 appends contract_nature). The view filters out (group, period) pairs
+        // with no LRC/LIC activity, so empty cohorts don't appear here.
         Map.entry(DataSource.IFRS17_MOVEMENT,
             "SELECT pma.period_id, pma.period_start, pma.period_end, " +
             "pma.portfolio_code, pma.portfolio_name, " +
@@ -121,7 +126,8 @@ public class ReportQueryBuilder {
             "pma.lic_opening, pma.claims_incurred, pma.claims_paid, " +
             "pma.case_reserve_change, pma.ibnr_estimate, pma.ibnr_change, " +
             "pma.risk_adjustment, pma.risk_adjustment_change, pma.discount_unwind, pma.lic_closing, " +
-            "pma.total_opening, pma.total_closing, pma.currency_code " +
+            "pma.total_opening, pma.total_closing, pma.currency_code, " +
+            "pma.contract_nature " +
             "FROM paa_movement_analysis pma WHERE 1=1"),
 
         // IFRS 9 holdings register — current state from investment_holding.
@@ -360,6 +366,17 @@ public class ReportQueryBuilder {
                     case "source_module" -> {
                         if (ds == DataSource.GENERAL_LEDGER) {
                             sql.append(" AND je.source_module = ?").append(paramIdx++);
+                            params.add(value);
+                        }
+                    }
+                    case "contract_nature" -> {
+                        // DIRECT / FAC_INWARD / FAC_OUTWARD — FAC / IFRS-17 PAA
+                        // workstream Task 6. Mirrors the statusCol/cobFilterCol
+                        // dispatch pattern above.
+                        String col = contractNatureCol(ds);
+                        if (col != null) {
+                            sql.append(" AND ").append(col)
+                               .append(" = ?").append(paramIdx++);
                             params.add(value);
                         }
                     }
@@ -665,6 +682,20 @@ public class ReportQueryBuilder {
         }
         if (selects.isEmpty()) selects.add("1");  // degenerate guard: report with no raw fields
         return "SELECT " + String.join(", ", selects) + " " + SOURCE_FROM.get(ds);
+    }
+
+    /**
+     * Column the contract_nature filter targets, or null if the source has none.
+     * FAC / IFRS-17 PAA workstream Task 6 — DIRECT / FAC_INWARD / FAC_OUTWARD,
+     * available on the two sources that surface {@code portfolio.contract_nature}
+     * (directly, or via the V78-recreated {@code paa_movement_analysis} view).
+     */
+    private String contractNatureCol(DataSource ds) {
+        return switch (ds) {
+            case PAA_GROUPS      -> "p.contract_nature";
+            case IFRS17_MOVEMENT -> "pma.contract_nature";
+            default              -> null;
+        };
     }
 
     /** Whitelist-based column name sanitizer — prevents SQL injection in ORDER BY. */

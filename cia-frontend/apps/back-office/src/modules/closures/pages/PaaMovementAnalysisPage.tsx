@@ -11,6 +11,8 @@ import {
   validatedGet,
   FiscalYearDtoSchema, FiscalPeriodDtoSchema,
   MovementAnalysisDtoSchema,
+  CONTRACT_NATURE_LABELS,
+  CONTRACT_NATURE_VARIANTS,
   type FiscalYearDto, type FiscalPeriodDto,
   type MovementAnalysisDto,
   type LrcMovementTotalsDto,
@@ -25,6 +27,13 @@ function formatNGN(amount: number) {
 function formatPeriodLabel(p: FiscalPeriodDto) {
   return new Date(p.startDate).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 }
+
+// contractNature arrives as the raw enum name string (DIRECT / FAC_INWARD /
+// FAC_OUTWARD) — same portfolio dimension surfaced on ContractGroupsPage.
+// Labels + badge variants are the shared CONTRACT_NATURE_LABELS /
+// CONTRACT_NATURE_VARIANTS from @cia/api-client (one source of truth, no
+// independent Record<ContractNature, ...> copies to drift out of sync — see
+// FAC / IFRS-17 PAA workstream Task 7 review, M3).
 
 // LRC row keys + labels, in §103(a) presentation order.
 const LRC_ROWS: { key: keyof LrcMovementTotalsDto; label: string; sign?: '+' | '−' }[] = [
@@ -182,6 +191,7 @@ export default function PaaMovementAnalysisPage() {
                   <tr>
                     <th className="text-left py-2 px-2">Group</th>
                     <th className="text-left py-2 px-2">Portfolio</th>
+                    <th className="text-left py-2 px-2">Nature</th>
                     <th className="text-right py-2 px-2">Cohort</th>
                     <th className="text-left py-2 px-2">Onerous?</th>
                     <th className="text-right py-2 px-2">LRC opening</th>
@@ -198,6 +208,15 @@ export default function PaaMovementAnalysisPage() {
                       <td className="py-1.5 px-2">
                         <div>{g.portfolioName ?? '—'}</div>
                         <div className="font-mono text-[10px] text-muted-foreground">{g.portfolioCode ?? '—'}</div>
+                      </td>
+                      <td className="py-1.5 px-2">
+                        {g.contractNature ? (
+                          <Badge variant={CONTRACT_NATURE_VARIANTS[g.contractNature as keyof typeof CONTRACT_NATURE_VARIANTS] ?? 'outline'} className="text-[10px]">
+                            {CONTRACT_NATURE_LABELS[g.contractNature as keyof typeof CONTRACT_NATURE_LABELS] ?? g.contractNature}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td className="py-1.5 px-2 text-right font-mono">{g.cohortYear ?? '—'}</td>
                       <td className="py-1.5 px-2">

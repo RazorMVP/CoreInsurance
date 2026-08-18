@@ -287,13 +287,12 @@ class SubledgerPostingServiceTest {
         verify(journalEntryRepository, never()).save(any(JournalEntry.class));
     }
 
-    // ── FacPremiumCeded — compound 3-line ────────────────────────────────────
+    // ── FacPremiumCeded — §65-netted 2-line ──────────────────────────────────
 
     @Test
-    @DisplayName("onFacPremiumCeded posts 3 lines: Dr 5210, Cr 4300, Cr 2310 (no posting_rule lookup)")
+    @DisplayName("onFacPremiumCeded posts 2 lines: Dr 1410 (net), Cr 2310 (net) — §65 commission-netting, no posting_rule lookup")
     void onFacPremiumCeded_HappyPath() {
-        stubAccount("5210", "Outward RI premium", AccountType.EXPENSE);
-        stubAccount("4300", "RI commission income", AccountType.INCOME);
+        stubAccount("1410", "Reinsurance - LRC asset", AccountType.ASSET);
         stubAccount("2310", "RI premium payable", AccountType.LIABILITY);
         stubMonthPeriodCovering(TODAY);
         stubIdempotencyClear();
@@ -311,15 +310,14 @@ class SubledgerPostingServiceTest {
         assertThat(saved.getSourceEventType()).isEqualTo(SubledgerPostingService.EVENT_FAC_PREMIUM_CEDED);
         assertThat(saved.getSourceReference()).isEqualTo(facCoverId.toString());
         assertThat(saved.getNarrative()).isEqualTo("Outward FAC FAC-001 ceded to Munich Re");
-        assertThat(saved.getLines()).hasSize(3);
-        assertThat(saved.getLines().get(0).getAccount().getCode()).isEqualTo("5210");
-        assertThat(saved.getLines().get(0).getDebitAmount()).isEqualByComparingTo("100000.00");
-        assertThat(saved.getLines().get(1).getAccount().getCode()).isEqualTo("4300");
-        assertThat(saved.getLines().get(1).getCreditAmount()).isEqualByComparingTo("20000.00");
-        assertThat(saved.getLines().get(2).getAccount().getCode()).isEqualTo("2310");
-        assertThat(saved.getLines().get(2).getCreditAmount()).isEqualByComparingTo("80000.00");
+        assertThat(saved.getLines()).hasSize(2);
+        assertThat(saved.getLines().get(0).getAccount().getCode()).isEqualTo("1410");
+        assertThat(saved.getLines().get(0).getDebitAmount()).isEqualByComparingTo("80000.00");
+        assertThat(saved.getLines().get(1).getAccount().getCode()).isEqualTo("2310");
+        assertThat(saved.getLines().get(1).getCreditAmount()).isEqualByComparingTo("80000.00");
         // Invariant: Σ debits == Σ credits (JournalEntryService.post enforces this)
-        // Dr 100000 == Cr 20000 + Cr 80000 ✓
+        // Dr 80000 (net) == Cr 80000 (net) ✓ — commission (20000) is netted into the
+        // asset, never posted to a standalone commission-income account.
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

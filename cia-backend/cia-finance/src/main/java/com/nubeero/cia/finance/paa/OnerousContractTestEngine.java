@@ -25,7 +25,10 @@ import java.util.UUID;
  * Module 12 Phase 2 Slice 2.7.
  *
  * <p>Runs each period after LRC + LIC + DiscountUnwind. For every group
- * with a paa_lrc row in the period, the engine:
+ * with a paa_lrc row in the period <strong>whose portfolio is not
+ * {@code FAC_OUTWARD}</strong> (FAC / IFRS-17 PAA workstream Task 4 —
+ * reinsurance held has no onerous test; §66A loss-recovery is out of scope
+ * for this plan), the engine:
  * <ol>
  *   <li>aggregates cumulative earned premium (paa_lrc.premium_earned) and
  *       cumulative incurred claims (paa_lic.claims_incurred) across every
@@ -119,6 +122,16 @@ public class OnerousContractTestEngine {
 
         for (PaaLrc lrc : lrcRows) {
             UUID groupId = lrc.getGroup().getId();
+
+            // FAC / IFRS-17 PAA workstream Task 4 — reinsurance held (outward
+            // FAC) has no onerous test under IFRS 17: §66A loss-recovery on
+            // ceded contracts is out of scope for this plan. Skip these
+            // groups entirely so no loss-component JE is ever posted for a
+            // reinsurance-held asset.
+            if (lrc.getGroup().getPortfolio().getContractNature() == ContractNature.FAC_OUTWARD) {
+                log.debug("Skipping onerous test for group {} — FAC_OUTWARD (reinsurance held) is exempt", groupId);
+                continue;
+            }
 
             Cumulative cum = aggregateCumulative(groupId, period.getEndDate());
             BigDecimal newLc = scale(targetLossComponent(cum.earned, cum.incurred));

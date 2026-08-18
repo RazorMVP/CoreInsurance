@@ -13,10 +13,13 @@ import {
   validatedGet,
   ContractGroupSummaryDtoSchema,
   PortfolioSummaryDtoSchema,
+  CONTRACT_NATURE_LABELS,
+  CONTRACT_NATURE_VARIANTS,
   type ContractGroupSummaryDto,
   type PortfolioSummaryDto,
   type Onerousness,
   type GroupStatus,
+  type ContractNature,
 } from '@cia/api-client';
 import { formatDate } from '@/lib/format';
 
@@ -39,6 +42,7 @@ const STATUS_VARIANT: Record<GroupStatus, 'active' | 'rejected'> = {
 
 type OnerousnessFilter = Onerousness | 'ALL';
 type StatusFilter     = GroupStatus | 'ALL';
+type NatureFilter     = ContractNature | 'ALL';
 
 
 export default function ContractGroupsPage() {
@@ -46,6 +50,7 @@ export default function ContractGroupsPage() {
   const [cohortYear,  setCohortYear]  = useState<string>('');
   const [onerousness, setOnerousness] = useState<OnerousnessFilter>('ALL');
   const [status,      setStatus]      = useState<StatusFilter>('ALL');
+  const [nature,      setNature]      = useState<NatureFilter>('ALL');
 
   // Portfolios for the filter dropdown
   const portfoliosQuery = useQuery<PortfolioSummaryDto[]>({
@@ -54,15 +59,17 @@ export default function ContractGroupsPage() {
   });
   const portfolios = portfoliosQuery.data ?? [];
 
-  // Groups list, scoped by filters
+  // Groups list, scoped by filters — all five (including Nature) round-trip
+  // to the server as query params, mirroring ContractGroupController.listGroups.
   const queryString = useMemo(() => {
     const p = new URLSearchParams();
     if (portfolioId !== 'ALL') p.set('portfolioId', portfolioId);
     if (cohortYear.trim())     p.set('cohortYear', cohortYear.trim());
     if (onerousness !== 'ALL') p.set('onerousness', onerousness);
     if (status !== 'ALL')      p.set('status', status);
+    if (nature !== 'ALL')      p.set('contractNature', nature);
     return p.toString();
-  }, [portfolioId, cohortYear, onerousness, status]);
+  }, [portfolioId, cohortYear, onerousness, status, nature]);
 
   const groupsQuery = useQuery<ContractGroupSummaryDto[]>({
     queryKey: ['closures', 'contract-groups', queryString],
@@ -90,13 +97,14 @@ export default function ContractGroupsPage() {
     setCohortYear('');
     setOnerousness('ALL');
     setStatus('ALL');
+    setNature('ALL');
   }
 
   return (
     <div className="p-6 space-y-5">
       <PageHeader
         title="Contract Groups"
-        description="IFRS 17 §16-22 groups of contracts. Each row is a (portfolio × cohort year × onerousness) triple — assignment is permanent per §22. Groups are created event-driven by Slice 2.2's ContractGroupingService on every PolicyApprovedEvent; this page is read-only."
+        description="IFRS 17 §16-22 groups of contracts. Each row is a (portfolio × cohort year × onerousness) triple — assignment is permanent per §22. Groups are created event-driven by Slice 2.2's ContractGroupingService on policy approval (direct business) and FAC accept/cede (facultative reinsurance); this page is read-only."
       />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -105,7 +113,7 @@ export default function ContractGroupsPage() {
         <StatCard label="Open cohorts"      value={counts.open.toLocaleString()} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <div className="space-y-1">
           <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Portfolio</label>
           <Select value={portfolioId} onValueChange={(v) => setPortfolioId(v as string | 'ALL')}>
@@ -126,6 +134,18 @@ export default function ContractGroupsPage() {
             value={cohortYear}
             onChange={(e) => setCohortYear(e.target.value)}
           />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Nature</label>
+          <Select value={nature} onValueChange={(v) => setNature(v as NatureFilter)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All</SelectItem>
+              <SelectItem value="DIRECT">Direct</SelectItem>
+              <SelectItem value="FAC_INWARD">FAC Inward</SelectItem>
+              <SelectItem value="FAC_OUTWARD">FAC Outward</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Onerousness</label>
@@ -166,7 +186,7 @@ export default function ContractGroupsPage() {
         ) : groups.length === 0 ? (
           <div className="rounded-md border bg-muted/40 px-4 py-12 text-center text-sm text-muted-foreground">
             {portfolios.length === 0
-              ? 'No portfolios exist yet. Portfolios + contract groups are auto-created by Slice 2.2 on the first PolicyApprovedEvent — seed a policy to populate this view.'
+              ? 'No portfolios exist yet. Portfolios + contract groups are auto-created by Slice 2.2 on policy approval (direct business) and FAC accept/cede (facultative reinsurance) — seed a policy or FAC transaction to populate this view.'
               : 'No contract groups match the current filters.'}
           </div>
         ) : (
@@ -174,6 +194,7 @@ export default function ContractGroupsPage() {
             <thead className="text-xs text-muted-foreground border-b">
               <tr>
                 <th className="text-left font-medium py-2 px-2">Portfolio</th>
+                <th className="text-left font-medium py-2 px-2">Nature</th>
                 <th className="text-right font-medium py-2 px-2">Cohort year</th>
                 <th className="text-left font-medium py-2 px-2">Onerousness (§16)</th>
                 <th className="text-left font-medium py-2 px-2">Status</th>
@@ -187,6 +208,11 @@ export default function ContractGroupsPage() {
                   <td className="py-2 px-2">
                     <div className="font-mono text-xs">{g.portfolioCode}</div>
                     <div className="text-xs text-muted-foreground">{g.portfolioName}</div>
+                  </td>
+                  <td className="py-2 px-2">
+                    <Badge variant={CONTRACT_NATURE_VARIANTS[g.contractNature]}>
+                      {CONTRACT_NATURE_LABELS[g.contractNature]}
+                    </Badge>
                   </td>
                   <td className="py-2 px-2 text-right font-mono">{g.cohortYear}</td>
                   <td className="py-2 px-2">
