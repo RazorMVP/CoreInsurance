@@ -66,6 +66,21 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-08-18 — `fac-ifrs17-paa-workstream` (P2): final whole-branch review = With fixes; final-review fix round in flight (checkpoint)
+
+Execution continuing on `feat/fac-ifrs17-paa-workstream` (not yet merged; full session entry + backlog reconciliation replace all checkpoints on ship).
+
+- **Final whole-branch review complete** (most-capable model, over `d2853e51..2548addb` = 28 commits, +6196/−440). First reviewer died on a transient "connection closed mid-response" API error mid-review; re-dispatched fresh (economical module-by-module + write-to-file) → completed. **Verdict: With fixes.** Report at `.superpowers/sdd/2026-08-08-fac-ifrs17-paa-lrc/final-review-report.md`.
+  - **Verified CLEAN:** GL double-entry balance + all FAC codes postable leaves (old non-postable-parent `4300` credit retired); `LrcEngine` sole-writer invariant + `recognise()` idempotency untouched; §103 reversal-safety (`status='POSTED' AND reversal_of IS NULL` + leg-selective magnitude sum); migrations data-safe (V78 verbatim V38 + 1 appended column; V77 backfill preserves PK/audit/uniqueness; direct path byte-identical); multi-tenancy (per-connection `search_path`, tenant-local ids, no cross-schema joins); onerous-test guard excludes FAC_OUTWARD; frontend Task 7; reconciliation fixtures arithmetically consistent.
+  - **CRITICAL** — `FacDerecognitionListener` releases the **group's aggregate** `paa_lrc.closing_balance` on a single contract's cancellation; because grouping pools all same-(class, nature, cover-start-year) FAC into one group, multi-contract groups are the default → over-releases survivors' LRC + double-earns them next period (drives 2210 negative), silently. Fix = per-contract release (spec §133).
+  - **IMPORTANT** — inward `renew()` marks the source `RENEWED` and fires no derecognition, but `LrcEngine.loadFacInwardPricing` earns only `status='ACTIVE'` → strands the source's unearned LRC. Fix = the in-force filter excludes only CANCELLED (RENEWED/EXPIRED earn out naturally).
+  - **MINOR ×3** — V77 relaxed V37's NOT NULL/DEFAULT guardrails (restore via new V79); outward `FacCoverService.cancel` lacks the already-CANCELLED guard the inward path has; the §103 M1 consistency warning was defeated by the Critical (becomes meaningful again once per-contract release lands).
+- **Final-review fix round dispatched** (most-capable model; brief `final-review-fix-brief.md`) closing all five findings under the strict no-defer policy — the Critical's "ship-v1 + guard + backlog" alternative is explicitly OFF the table (real per-contract fix required); DIRECT path stays byte-identical; IT invariants (per-contract release; survivor 2210 preserved & never negative; each contract lifetime income == its premium) are the correctness oracle. **Ops note:** the first fix-agent dispatch was orphaned by a process exit and left nothing on disk (clean tree at `2548addb`); re-dispatched fresh with a commit-as-you-go instruction. SDD ledger (`.superpowers/sdd/.../progress.md`) remains the recovery source of truth.
+- **Remaining on this branch:** the fix round's scoped re-review, then the final whole-branch is re-confirmed clean → `finishing-a-development-branch`. Systemic fixed-source CLOSURES-report bug stays a **separate P1 PR** (backlog `closures-fixed-source-report-column-misalignment`), off this branch.
+- No backlog-table change this checkpoint (`fac-ifrs17-paa-workstream` stays open until the workstream ships).
+
+---
+
 ## 2026-08-17 — `fac-ifrs17-paa-workstream` (P2): Task 7 fix round landed — M1/M2/M3 all closed (no deferrals); scoped re-review in flight (checkpoint)
 
 Execution continuing on `feat/fac-ifrs17-paa-workstream` (not yet merged; full session entry + backlog reconciliation replace all checkpoints on ship).
