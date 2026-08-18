@@ -50,12 +50,16 @@ import java.util.UUID;
  * (inward premium income) / debits {@code 5210} (outward RI expense) —
  * the SAME income/expense accounts periodic LRC recognition uses. A
  * derecognition is therefore modelled as accelerated premium
- * earning/amortisation, not a new movement category: the released amount
- * becomes {@code lrcOpening == premiumEarned}, with {@code lrcClosing}
- * zeroed. A group already present in {@code byGroup} for the period (LRC
- * engine recognised, then the group's contract was cancelled in the SAME
- * period) has the release folded into its existing {@code premiumEarned}
- * and its {@code lrcClosing} zeroed, rather than emitting a duplicate row.
+ * earning/amortisation, not a new movement category. For a
+ * derecognition-only group (no view row this period) a synthetic entry is
+ * appended with the released amount as {@code lrcOpening == premiumEarned}
+ * and {@code lrcClosing} zeroed. A group already present in {@code byGroup}
+ * for the period (LRC engine recognised, then a contract in the group was
+ * cancelled in the SAME period) has the release folded into its existing
+ * {@code premiumEarned} and its {@code lrcClosing} REDUCED by exactly the
+ * released amount (final-review per-contract fix — the cancelled contract's
+ * portion is removed while any surviving contract's closing is preserved),
+ * rather than emitting a duplicate row.
  */
 @Service
 @Slf4j
@@ -198,38 +202,42 @@ public class MovementAnalysisService {
             MovementAnalysis.GroupMovementEntry existing = byGroup.get(groupId);
 
             if (existing != null) {
-                BigDecimal releasedLrcClosing = existing.lrcClosing();
+                BigDecimal groupLrcClosing = existing.lrcClosing();
 
-                // M1 (Task 6b review): the merge below hardcodes lrcClosing = 0,
-                // which is only accounting-consistent when released ==
-                // existing.lrcClosing() — true today because
-                // FacDerecognitionListener releases the group's latest
-                // paa_lrc.closing_balance (= this period's view lrcClosing).
-                // Observability only — zero behavioural change; a mismatch
-                // still merges the same way, but now leaves a trail to
-                // investigate rather than silently producing a §103 row that
-                // doesn't tie to the GL release amount.
-                if (released.compareTo(releasedLrcClosing) != 0) {
-                    log.warn("FAC derecognition release {} != latest LRC closing {} for group {} — "
-                            + "§103 merge may be inconsistent", released, releasedLrcClosing, groupId);
+                // M1 (final-review): the derecognition released ONE contract's
+                // remaining carrying (per-contract release — FacDerecognition
+                // listener no longer releases the group aggregate), so for a
+                // multi-contract group with a survivor, released is legitimately
+                // LESS than the group's LRC closing — the surviving contract's
+                // portion must remain. The merge therefore REDUCES lrcClosing by
+                // exactly `released` (clamped >= 0) rather than zeroing the whole
+                // group. released > groupLrcClosing is the genuine inconsistency
+                // to flag: you cannot release more than the group holds
+                // (over-release would drive the disclosed closing negative).
+                BigDecimal closingReduction = released.min(groupLrcClosing).max(BigDecimal.ZERO);
+                if (released.compareTo(groupLrcClosing) > 0) {
+                    log.warn("FAC derecognition release {} exceeds group LRC closing {} for group {} — "
+                            + "§103 merge would drive the disclosed closing negative; clamping to the "
+                            + "group closing", released, groupLrcClosing, groupId);
                 }
+                BigDecimal newLrcClosing = groupLrcClosing.subtract(closingReduction);
 
                 byGroup.put(groupId, new MovementAnalysis.GroupMovementEntry(
                     existing.groupId(), existing.portfolioCode(), existing.portfolioName(),
                     existing.cohortYear(), existing.onerousness(), existing.groupStatus(),
                     existing.lrcOpening(), existing.premiumReceived(), existing.premiumEarned().add(released),
                     existing.acquisitionCostsDeferred(), existing.acquisitionCostsAmortised(),
-                    existing.lossComponent(), existing.lossComponentChange(), BigDecimal.ZERO,
+                    existing.lossComponent(), existing.lossComponentChange(), newLrcClosing,
                     existing.licOpening(), existing.claimsIncurred(), existing.claimsPaid(),
                     existing.caseReserveChange(), existing.ibnrEstimate(), existing.ibnrChange(),
                     existing.riskAdjustment(), existing.riskAdjustmentChange(),
                     existing.discountUnwind(), existing.licClosing(),
-                    existing.totalOpening(), existing.totalClosing().subtract(releasedLrcClosing),
+                    existing.totalOpening(), existing.totalClosing().subtract(closingReduction),
                     existing.currencyCode(), existing.contractNature()));
 
                 premiumEarned = premiumEarned.add(released);
-                lrcClosing = lrcClosing.subtract(releasedLrcClosing);
-                totalClosing = totalClosing.subtract(releasedLrcClosing);
+                lrcClosing = lrcClosing.subtract(closingReduction);
+                totalClosing = totalClosing.subtract(closingReduction);
             } else {
                 byGroup.put(groupId, new MovementAnalysis.GroupMovementEntry(
                     groupId,

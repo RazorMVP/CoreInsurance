@@ -30,6 +30,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -248,7 +250,109 @@ class InwardFacLrcIT {
         assertThat(jeCount).as("no JE posted for a FAC_OUTWARD group this task").isZero();
     }
 
+    // ── 4. IMPORTANT (final-review) — a RENEWED inward source keeps earning to
+    //      its own cover_to (no strand). renew() marks the source RENEWED and
+    //      fires NO derecognition event; the in-force filter must therefore NOT
+    //      over-exclude RENEWED (only CANCELLED has a compensating release) ────
+    @Test
+    @DisplayName("inward source flipped to RENEWED mid-term keeps earning to its cover_to — "
+        + "no stranded 2210 liability; its lifetime recognised income (4330) == its gross premium")
+    void renewedSourceKeepsEarningToCoverTo_noStrand() {
+        // 2025 (fully past, non-leap): gross 3650 → 10.00/day so slices are exact.
+        List<UUID> months = seedYear2025Periods();
+        UUID groupId = seedFacInwardGroup("FIN-IT-RENEW", 2025, "NOT_ONEROUS");
+        UUID sourceId = UUID.randomUUID();
+        seedFacInwardWithId(groupId, sourceId, "FAC-IN-RENEW-SRC",
+            LocalDate.of(2025, 1, 1), LocalDate.of(2025, 12, 31), "3650.00", "3650.00", "0.00");
+        entityManager.flush();
+
+        // Jan close while the source is still ACTIVE.
+        LrcRecognitionResult jan = engine.recognise(months.get(0));
+        entityManager.flush();
+        assertThat(jan.totalPremiumEarned()).as("Jan slice = 10 × 31").isEqualByComparingTo("310.00");
+
+        // Simulate RiFacInwardService.renew(): the SOURCE's status flips to
+        // RENEWED (its contract_group_assignment is left intact — renew() never
+        // touches it), and NO FacDerecognisedEvent is published for the source.
+        jdbcTemplate.update("UPDATE ri_fac_inwards SET status = 'RENEWED' WHERE id = ?", sourceId);
+        entityManager.flush();
+
+        // Feb close: the RENEWED source MUST still earn (before the fix, the
+        // status = 'ACTIVE' allowlist returned no pricing → 0 earned → strand).
+        LrcRecognitionResult feb = engine.recognise(months.get(1));
+        entityManager.flush();
+        assertThat(feb.totalPremiumEarned())
+            .as("RENEWED source still earns its Feb slice (10 × 28) — no strand")
+            .isEqualByComparingTo("280.00");
+
+        // Earn out the remaining months.
+        for (int i = 2; i < 12; i++) {
+            engine.recognise(months.get(i));
+            entityManager.flush();
+        }
+
+        // Lifetime recognised income (Cr 4330 across every recognise JE) == gross:
+        // the RENEWED source earned its whole premium, nothing stranded on 2210.
+        BigDecimal income4330 = jdbcTemplate.queryForObject(
+            "SELECT COALESCE(SUM(l.credit_amount),0) - COALESCE(SUM(l.debit_amount),0) "
+                + "FROM journal_entry_line l JOIN chart_of_account a ON a.id = l.account_id "
+                + "WHERE a.code = '4330'", BigDecimal.class);
+        assertThat(income4330)
+            .as("RENEWED source's lifetime recognised income == its gross premium (no strand)")
+            .isEqualByComparingTo("3650.00");
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Seeds a fully-past 2025 fiscal year with 12 MONTH periods (Jan…Dec) and
+     * returns their ids in month order — 2025 is non-leap (365 days) and every
+     * period end precedes "today", honouring V31's {@code business_date <=
+     * posting_date} CHECK on the recognise() JEs.
+     */
+    private List<UUID> seedYear2025Periods() {
+        UUID fyId = UUID.randomUUID();
+        jdbcTemplate.update(
+            "INSERT INTO fiscal_year (id, name, start_date, end_date, status, created_by) "
+                + "VALUES (?, ?, ?, ?, ?, ?)",
+            fyId, "FY-FACLRC-2025", LocalDate.of(2025, 1, 1), LocalDate.of(2025, 12, 31),
+            "ACTIVE", "test");
+        int[] lastDay = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        List<UUID> ids = new ArrayList<>(12);
+        for (int m = 1; m <= 12; m++) {
+            UUID pid = UUID.randomUUID();
+            jdbcTemplate.update(
+                "INSERT INTO fiscal_period (id, fiscal_year_id, period_type, start_date, end_date, status, created_by) "
+                    + "VALUES (?, ?, 'MONTH', ?, ?, 'OPEN', 'test')",
+                pid, fyId, LocalDate.of(2025, m, 1), LocalDate.of(2025, m, lastDay[m - 1]));
+            ids.add(pid);
+        }
+        return ids;
+    }
+
+    /** Same as {@link #seedFacInwardAssignment} but takes the ri_fac_inwards id so the test can flip its status. */
+    private void seedFacInwardWithId(UUID groupId, UUID facInwardId, String facReference,
+                                      LocalDate coverFrom, LocalDate coverTo,
+                                      String grossPremium, String netPremium, String commissionAmount) {
+        jdbcTemplate.update(
+            "INSERT INTO ri_fac_inwards (id, fac_inward_reference, ceding_company_id, ceding_company_name, " +
+            "class_of_business_id, class_of_business_name, status, " +
+            "sum_insured, our_share_pct, accepted_sum_insured, premium_rate, " +
+            "gross_premium, commission_rate, commission_amount, net_premium, " +
+            "currency_code, cover_from, cover_to, created_by) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            facInwardId, facReference, UUID.randomUUID(), "Test Ceding Co",
+            UUID.randomUUID(), "Test COB", "ACTIVE",
+            new BigDecimal("10000000.00"), new BigDecimal("0.5000"), new BigDecimal("5000000.00"),
+            new BigDecimal("0.024000"),
+            new BigDecimal(grossPremium), new BigDecimal("0.2000"), new BigDecimal(commissionAmount),
+            new BigDecimal(netPremium),
+            "NGN", coverFrom, coverTo, "test");
+        jdbcTemplate.update(
+            "INSERT INTO contract_group_assignment (id, contract_type, contract_id, group_id, assigned_at, created_by) " +
+            "VALUES (?, 'FAC_INWARD', ?, ?, now(), ?)",
+            UUID.randomUUID(), facInwardId, groupId, "test");
+    }
 
     private UUID seedDirectGroup(String portfolioCode, int cohortYear, String onerousness) {
         UUID portfolioId = UUID.randomUUID();

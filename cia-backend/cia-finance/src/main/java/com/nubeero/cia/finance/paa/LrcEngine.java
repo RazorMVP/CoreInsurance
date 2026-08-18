@@ -414,19 +414,24 @@ public class LrcEngine {
      * this engine must amortise to expense over the cover period).
      *
      * <p><strong>In-force filter (FAC / IFRS-17 PAA workstream Task 5, fix
-     * round 2 - C2).</strong> {@link #loadFacInwardPricing} / {@link
-     * #loadFacOutwardPricing} filter on the contract's in-force status
-     * ({@code ACTIVE} / {@code CONFIRMED}) in addition to {@code deleted_at
-     * IS NULL}. This engine is stateless and re-derives every group's
-     * earning from scratch on every {@link #recognise} call - without this
-     * filter, a CANCELLED contract (whose remaining balance {@code
-     * FacDerecognitionListener} already released via a one-time GL JE) would
-     * keep being "found" and re-earned every subsequent period, silently
-     * double-booking against the account the derecognition JE already
-     * zeroed out. Excluding the row from the denominator computation
-     * (rather than shrinking {@code cover_to}, which would rebase the
-     * original-window day-count denominator and retroactively corrupt
-     * already-posted prior periods) is the safe way to stop future earning.
+     * round 2 - C2; refined at final review).</strong> {@link
+     * #loadFacInwardPricing} excludes only {@code CANCELLED} (so {@code
+     * RENEWED}/{@code EXPIRED} covers earn out to their own {@code cover_to} —
+     * see that method's javadoc for the renewal-strand fix); {@link
+     * #loadFacOutwardPricing} filters on the in-force {@code CONFIRMED} status
+     * (the outward set is PENDING/CONFIRMED/CANCELLED, with no renew path, so
+     * the positive {@code CONFIRMED} allowlist is exactly right). Both also
+     * require {@code deleted_at IS NULL}. This engine is stateless and
+     * re-derives every group's earning from scratch on every {@link
+     * #recognise} call - the filter's only job is to stop a CANCELLED contract
+     * (whose remaining balance {@code FacDerecognitionListener} already
+     * released via a one-time GL JE) from being "found" and re-earned every
+     * subsequent period, which would silently double-book against the account
+     * the derecognition JE already reduced. Excluding the row from the
+     * denominator computation (rather than shrinking {@code cover_to}, which
+     * would rebase the original-window day-count denominator and retroactively
+     * corrupt already-posted prior periods) is the safe way to stop future
+     * earning.
      */
     PolicyPricing loadPricing(ContractType type, UUID contractId) {
         return switch (type) {
@@ -456,15 +461,29 @@ public class LrcEngine {
      * context (same loose-coupling seam {@code ContractGroupingService}
      * already established for {@code ri_fac_inwards.cover_from}).
      *
-     * <p>{@code status = 'ACTIVE'} (Task 5 fix round 2) — a CANCELLED inward
-     * cover returns no pricing, so {@link #computeRollForward} skips it (logs
-     * and continues) and it earns zero in every future period. Matches
-     * {@code RiFacInwardStatus.ACTIVE}, the only in-force inward status.
+     * <p><strong>Excludes only {@code CANCELLED}</strong> (final-review fix —
+     * inward-renewal strand). {@code RiFacInwardStatus} is
+     * {@code ACTIVE / RENEWED / EXPIRED / CANCELLED}; every value except
+     * {@code CANCELLED} represents a cover that provided coverage over some
+     * window, so all of them must keep earning until their own {@code
+     * cover_to}. A positive {@code status = 'ACTIVE'} allowlist over-excluded
+     * {@code RENEWED} (set by {@code RiFacInwardService.renew}, frequently
+     * <em>before</em> the source's {@code cover_to}) — which fires <em>no</em>
+     * {@code FacDerecognisedEvent}, so the source stopped earning with no
+     * compensating GL release, stranding its unearned {@code 2210} liability
+     * and under-recognising {@code 4330} forever. {@code CANCELLED} is the
+     * <em>only</em> non-earning terminal state, and its remaining balance is
+     * already released by {@code FacDerecognitionListener}'s one-time GL JE —
+     * so it is the only status excluded here. The day-count math self-limits a
+     * past-{@code cover_to} contract (RENEWED or EXPIRED) to zero future
+     * earning, so this also closes the at-expiry timing gap with no extra
+     * bookkeeping. {@code status <> 'CANCELLED'} is NULL-safe (a NULL status
+     * yields NULL, i.e. excluded).
      */
     private PolicyPricing loadFacInwardPricing(UUID facInwardId) {
         List<PolicyPricing> rows = jdbcTemplate.query(
             "SELECT cover_from, cover_to, gross_premium, currency_code " +
-            "FROM ri_fac_inwards WHERE id = ? AND status = 'ACTIVE' AND deleted_at IS NULL",
+            "FROM ri_fac_inwards WHERE id = ? AND status <> 'CANCELLED' AND deleted_at IS NULL",
             (rs, rowNum) -> new PolicyPricing(
                 rs.getDate("cover_from").toLocalDate(),
                 rs.getDate("cover_to").toLocalDate(),

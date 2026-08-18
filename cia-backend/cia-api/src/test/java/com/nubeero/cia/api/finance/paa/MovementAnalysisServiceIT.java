@@ -704,6 +704,52 @@ class MovementAnalysisServiceIT {
             .isEqualByComparingTo("0.00");
     }
 
+    // ── 15. Final-review (Minor 3 + Critical downstream): recognise-then-cancel
+    //      ONE contract of a MULTI-CONTRACT group in the SAME period merges the
+    //      per-contract release WITHOUT zeroing the surviving contract's closing ─
+    @Test
+    @DisplayName("multi-contract group, recognise-then-cancel A in the SAME period: the §103 merge "
+        + "folds only A's release into premiumEarned and REDUCES lrcClosing to B's remaining "
+        + "(survivor preserved), not zero")
+    void multiContractRecogniseThenCancelSamePeriod_survivorClosingPreserved() {
+        // Clean daily rates: A 3650 (10/day), B 7300 (20/day) over the full 2026 year.
+        UUID groupId = seedFacInwardGroup("FIN-DERC-MULTI", 2026);
+        UUID aId = UUID.randomUUID();
+        UUID bId = UUID.randomUUID();
+        seedFacInwardAssignmentWithId(groupId, aId, "FAC-IN-DERC-MULTI-A",
+            LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31), "3650.00", "3650.00", "0.00");
+        seedFacInwardAssignmentWithId(groupId, bId, "FAC-IN-DERC-MULTI-B",
+            LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31), "7300.00", "7300.00", "0.00");
+        entityManager.flush();
+
+        lrcEngine.recognise(janPeriodId);
+        entityManager.flush();
+
+        // Jan slice = A(310) + B(620) = 930; A remaining = 3340 (released); B remaining = 6680.
+        BigDecimal groupJanSlice = new BigDecimal("930.00");
+        BigDecimal releasedA = new BigDecimal("3340.00");
+        BigDecimal bRemaining = new BigDecimal("6680.00");
+
+        // Cancel A effective WITHIN January (same period as the recognise) → merge branch.
+        jdbcTemplate.update("UPDATE ri_fac_inwards SET status = 'CANCELLED' WHERE id = ?", aId);
+        publisher.publishEvent(new FacDerecognisedEvent(
+            FacDerecognisedEvent.ContractType.FAC_INWARD, aId, LocalDate.of(2026, 1, 20)));
+        entityManager.flush();
+
+        MovementAnalysis ma = service.compute(janPeriodId);
+
+        var entry = ma.byGroup().stream().filter(g -> g.groupId().equals(groupId)).findFirst().orElseThrow();
+        assertThat(entry.premiumEarned())
+            .as("period slice (A+B) + only A's release folded in")
+            .isEqualByComparingTo(groupJanSlice.add(releasedA)); // 930 + 3340 = 4270
+        assertThat(entry.lrcClosing())
+            .as("survivor B's closing preserved — NOT zeroed (the pre-fix bug)")
+            .isEqualByComparingTo(bRemaining);
+        assertThat(ma.lrcTotals().closing())
+            .as("LRC totals closing == B's remaining, not zero")
+            .isEqualByComparingTo(bRemaining);
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static Timestamp ts(int y, int m, int d, int hour, int min) {

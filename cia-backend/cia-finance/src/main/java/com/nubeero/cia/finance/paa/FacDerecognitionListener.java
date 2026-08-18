@@ -48,27 +48,43 @@ import java.util.UUID;
  * paa_lrc}-level disclosure of this movement (so the roll-forward view
  * reflects it) is Task 6's job (V78 movement-view rebuild), not this one's.
  *
- * <h2>Remaining-balance computation</h2>
- * <p>Two branches, both keyed off the cancelled contract's <em>group</em>
- * (Task 2's grouping keys purely off portfolio/cohort/onerousness — a
- * multi-contract group is possible; releasing the whole group's balance on
- * one contract's cancellation is a known v1-scope simplification, exact for
- * today's only production shape: single-contract groups):
- * <ol>
- *   <li><strong>Group has {@code paa_lrc} history</strong> — release the
- *       group's latest closing balance ({@link
- *       PaaLrcRepository#findFirstByGroupIdAndDeletedAtIsNullOrderByPeriodEndDateDesc}).</li>
- *   <li><strong>Group has no {@code paa_lrc} history yet</strong> (cancelled
- *       before any {@code recognise()} ever ran for it) — the accept-time
- *       posting ({@code SubledgerPostingService.replayFacPremiumAccepted} /
- *       {@code replayFacPremiumCeded}) already set up the FULL LRC-basis
- *       premium as a standing balance ({@code 2210} gross for inward,
- *       {@code 1410} net for outward) that would otherwise linger forever.
- *       Release it via a small <em>status-agnostic</em> direct read
- *       ({@link #readFullPremiumStatusAgnostic}) — the contract is already
- *       CANCELLED at this point, so {@link LrcEngine#loadPricing}'s
- *       in-force filter would (correctly) return nothing.</li>
- * </ol>
+ * <h2>Remaining-balance computation — per-contract (final-review Critical fix)</h2>
+ * <p>Releases ONLY the cancelled contract's own remaining carrying balance,
+ * never the group aggregate. Task 2's grouping keys purely off
+ * portfolio/cohort/onerousness (onerousness always {@code NOT_ONEROUS} in
+ * v1), so every same-(class, nature, cover-start-year) FAC contract pools
+ * into ONE group — multi-contract groups are the default for facultative
+ * business. An earlier version released the group's aggregate {@code
+ * paa_lrc.closing_balance}; on a single contract's cancellation that
+ * over-released the surviving contracts' unearned balance to income and then
+ * double-earned them next period (the in-force filter keeps earning the
+ * survivors), driving {@code 2210}/{@code 1410} negative — silently, in GL
+ * balances.
+ *
+ * <p>The remaining balance is computed per-contract as {@code premium −
+ * Σ(this contract's earned slice across every period the group has a
+ * paa_lrc row for)}:
+ * <ul>
+ *   <li>The contract's own {@code (cover_from, cover_to, premium, currency)}
+ *       come from a <em>status-agnostic</em> direct read ({@link
+ *       #readPricingStatusAgnostic}) — the contract is already CANCELLED by
+ *       the time this fires, so {@link LrcEngine#loadPricing}'s in-force
+ *       filter would (correctly) return nothing. Basis matches {@link
+ *       LrcEngine#loadPricing}: gross for inward, net for outward (§65).</li>
+ *   <li>The already-recognised amount is summed from the contract's OWN dates
+ *       via {@link LrcEngine#earnedAmount} over each period the group was
+ *       recognised in ({@link #sumEarnedOverRecognisedPeriods}) — the exact
+ *       per-period slice the periodic engine posted for this contract, so
+ *       {@code premium − Σ earned} equals its precise GL carrying.</li>
+ *   <li><strong>No {@code paa_lrc} history</strong> (cancelled before any
+ *       {@code recognise()} ever ran) collapses to the special case where the
+ *       sum is zero → release the FULL LRC-basis premium (the accept-time
+ *       standing balance that {@code SubledgerPostingService
+ *       .replayFacPremiumAccepted}/{@code replayFacPremiumCeded} set up and
+ *       that would otherwise linger forever) — preserving the prior
+ *       no-history behaviour exactly.</li>
+ * </ul>
+ * <p>The release is clamped {@code >= 0}.
  *
  * <h2>Posting shape (reused from {@link LrcEngine})</h2>
  * <p>{@link LrcEngine#accountsFor} resolves the same {@code (debitAccount,
@@ -104,7 +120,6 @@ public class FacDerecognitionListener {
     static final String EVENT_FAC_DERECOGNITION = "FAC_DERECOGNITION";
 
     private final ContractGroupAssignmentRepository assignmentRepository;
-    private final PaaLrcRepository lrcRepository;
     private final JournalEntryRepository journalEntryRepository;
     private final JournalEntryService journalEntryService;
     private final JdbcTemplate jdbcTemplate;
@@ -132,29 +147,29 @@ public class FacDerecognitionListener {
             return;
         }
 
-        BigDecimal remaining;
-        String currency;
-
-        Optional<PaaLrc> latest =
-            lrcRepository.findFirstByGroupIdAndDeletedAtIsNullOrderByPeriodEndDateDesc(group.getId());
-        if (latest.isPresent()) {
-            PaaLrc lastRow = latest.get();
-            remaining = lastRow.getClosingBalance().setScale(LrcEngine.MONEY_SCALE, RoundingMode.HALF_UP);
-            currency = lastRow.getCurrencyCode();
-        } else {
-            FullPremium full = readFullPremiumStatusAgnostic(financeType, event.contractId());
-            if (full == null || full.amount() == null) {
-                log.info("Group {} has no paa_lrc history and no premium found for contract {} {} — "
-                        + "nothing to derecognise", group.getId(), event.contractType(), event.contractId());
-                return;
-            }
-            remaining = full.amount().setScale(LrcEngine.MONEY_SCALE, RoundingMode.HALF_UP);
-            currency = full.currencyCode();
+        // Per-contract remaining carrying (final-review Critical fix). Release
+        // ONLY the cancelled contract's own remaining balance, never the group
+        // aggregate — see the class javadoc for why the group aggregate
+        // over-releases surviving contracts in a multi-contract group.
+        LrcEngine.PolicyPricing pricing = readPricingStatusAgnostic(financeType, event.contractId());
+        if (pricing == null || pricing.premiumAmount() == null) {
+            log.info("No premium found for contract {} {} — nothing to derecognise",
+                event.contractType(), event.contractId());
+            return;
         }
+        String currency = pricing.currencyCode();
 
+        // gross − Σ(this contract's own earned slice over every recognised
+        // period) == the contract's exact GL carrying. No paa_lrc history ⇒
+        // sum is zero ⇒ full premium released (the no-history special case).
+        BigDecimal earnedToDate = sumEarnedOverRecognisedPeriods(group.getId(), pricing);
+        BigDecimal remaining = pricing.premiumAmount()
+            .subtract(earnedToDate)
+            .setScale(LrcEngine.MONEY_SCALE, RoundingMode.HALF_UP);
         if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
-            log.info("Group {} has no remaining LRC/asset balance to derecognise (contract {} {})",
-                group.getId(), event.contractType(), event.contractId());
+            log.info("Contract {} {} has no remaining LRC/asset balance to derecognise "
+                    + "(premium {} already fully recognised)",
+                event.contractType(), event.contractId(), pricing.premiumAmount());
             return;
         }
 
@@ -181,27 +196,61 @@ public class FacDerecognitionListener {
     }
 
     /**
-     * Status-agnostic full-premium read for the "cancelled before any
-     * recognise() ever ran" branch — deliberately does NOT filter on
-     * status (the contract is already CANCELLED by the time this fires, so
+     * Status-agnostic per-contract pricing read — deliberately does NOT filter
+     * on status (the contract is already CANCELLED by the time this fires, so
      * {@link LrcEngine#loadPricing}'s in-force filter would return nothing).
-     * Gross for inward (the accept-time LRC basis), net for outward (§65
-     * commission-netting basis) — matches {@link LrcEngine#loadPricing}'s
+     * Returns the contract's own {@code (cover_from, cover_to, premium,
+     * currency)} as an {@link LrcEngine.PolicyPricing} carrier — the LRC basis
+     * is gross for inward (the accept-time liability basis), net for outward
+     * (§65 commission-netting), matching {@link LrcEngine#loadPricing}'s
      * per-nature basis exactly.
      */
-    private FullPremium readFullPremiumStatusAgnostic(ContractType type, UUID contractId) {
+    private LrcEngine.PolicyPricing readPricingStatusAgnostic(ContractType type, UUID contractId) {
         String sql = switch (type) {
-            case FAC_INWARD -> "SELECT gross_premium, currency_code FROM ri_fac_inwards "
-                + "WHERE id = ? AND deleted_at IS NULL";
-            case FAC_OUTWARD -> "SELECT net_premium, currency_code FROM ri_fac_covers "
-                + "WHERE id = ? AND deleted_at IS NULL";
+            case FAC_INWARD -> "SELECT cover_from, cover_to, gross_premium, currency_code "
+                + "FROM ri_fac_inwards WHERE id = ? AND deleted_at IS NULL";
+            case FAC_OUTWARD -> "SELECT cover_from, cover_to, net_premium, currency_code "
+                + "FROM ri_fac_covers WHERE id = ? AND deleted_at IS NULL";
             case POLICY -> throw new IllegalStateException(
                 "FacDerecognitionListener never handles ContractType.POLICY");
         };
-        List<FullPremium> rows = jdbcTemplate.query(sql,
-            (rs, rowNum) -> new FullPremium(rs.getBigDecimal(1), rs.getString(2)),
+        List<LrcEngine.PolicyPricing> rows = jdbcTemplate.query(sql,
+            (rs, rowNum) -> new LrcEngine.PolicyPricing(
+                rs.getDate(1).toLocalDate(),
+                rs.getDate(2).toLocalDate(),
+                rs.getBigDecimal(3),
+                rs.getString(4)),
             contractId);
         return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    /**
+     * Sums this contract's OWN earned slice across every period the group was
+     * recognised in — i.e. every period with a {@code paa_lrc} row for the
+     * group. This contract's contribution to each of those periods' group JE
+     * was exactly {@link LrcEngine#earnedAmount}(pricing, period.start,
+     * period.end), so the sum is the total already recognised into income for
+     * this contract by prior {@code recognise()} closes. Reading the periods
+     * from {@code paa_lrc} (not from an assumed contiguous range) means the
+     * sum exactly mirrors the GL postings regardless of which periods were
+     * closed. A group with no {@code paa_lrc} rows yields zero (nothing
+     * earned yet) — the no-history case, where the full premium is released.
+     */
+    private BigDecimal sumEarnedOverRecognisedPeriods(UUID groupId, LrcEngine.PolicyPricing pricing) {
+        List<PeriodBounds> periods = jdbcTemplate.query(
+            "SELECT fp.start_date, fp.end_date "
+                + "FROM paa_lrc pl JOIN fiscal_period fp ON fp.id = pl.period_id "
+                + "WHERE pl.group_id = ? AND pl.deleted_at IS NULL",
+            (rs, rowNum) -> new PeriodBounds(
+                rs.getDate("start_date").toLocalDate(),
+                rs.getDate("end_date").toLocalDate()),
+            groupId);
+
+        BigDecimal total = BigDecimal.ZERO;
+        for (PeriodBounds p : periods) {
+            total = total.add(LrcEngine.earnedAmount(pricing, p.start(), p.end()));
+        }
+        return total;
     }
 
     private static ContractType toFinanceType(FacDerecognisedEvent.ContractType eventType) {
@@ -211,5 +260,5 @@ public class FacDerecognitionListener {
         };
     }
 
-    private record FullPremium(BigDecimal amount, String currencyCode) {}
+    private record PeriodBounds(java.time.LocalDate start, java.time.LocalDate end) {}
 }

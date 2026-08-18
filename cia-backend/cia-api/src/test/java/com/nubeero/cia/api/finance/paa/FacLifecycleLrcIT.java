@@ -1,6 +1,8 @@
 package com.nubeero.cia.api.finance.paa;
 
 import com.nubeero.cia.common.event.FacDerecognisedEvent;
+import com.nubeero.cia.finance.dto.JournalEntryLineRequest;
+import com.nubeero.cia.finance.dto.PostJournalEntryRequest;
 import com.nubeero.cia.finance.gl.ChartOfAccountService;
 import com.nubeero.cia.finance.gl.FiscalPeriodResolver;
 import com.nubeero.cia.finance.gl.JournalEntryService;
@@ -32,6 +34,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -104,17 +107,19 @@ class FacLifecycleLrcIT {
     }
 
     @Autowired private LrcEngine engine;
+    @Autowired private JournalEntryService journalEntryService;
     @Autowired private ApplicationEventPublisher publisher;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private EntityManager entityManager;
 
+    private UUID fiscalYearId;
     private UUID janPeriodId;
     private UUID febPeriodId;
     private UUID marchPeriodId;
 
     @BeforeEach
     void seedFiscalYearAndPeriods() {
-        UUID fiscalYearId = UUID.randomUUID();
+        fiscalYearId = UUID.randomUUID();
         janPeriodId = UUID.randomUUID();
         febPeriodId = UUID.randomUUID();
         marchPeriodId = UUID.randomUUID();
@@ -413,7 +418,251 @@ class FacLifecycleLrcIT {
         assertThat(lrcCount).isZero();
     }
 
+    // ── 7. CRITICAL (final-review) — per-contract derecognition in a MULTI-CONTRACT
+    //      group: cancelling A releases only A's own remaining, never the group
+    //      (A+B) aggregate; B keeps earning; 2210 never goes negative; and each
+    //      contract's lifetime recognised income == its own gross EXACTLY ──────
+    //
+    // Uses a fully-past 2025 fiscal year so every recognise() JE's business_date
+    // (period end) stays <= posting_date (today) — the V31 ck_journal_entry_dates
+    // invariant — while still exercising a full-year run to expiry.
+    @Test
+    @DisplayName("inward multi-contract group: cancel A releases only A's remaining (not A+B); "
+        + "survivor B keeps earning; account 2210 stays == B's remaining and never negative; "
+        + "each contract's lifetime income == its own gross exactly")
+    void inwardMultiContractGroup_cancelOne_releasesOnlyThatContract_noOverRelease() {
+        // Clean daily rates so every slice is exact (no rounding drift):
+        // A 3650/365 = 10.00/day, B 7300/365 = 20.00/day over the full 2025 year.
+        List<UUID> months = seedYear2025Periods();
+        UUID groupId = seedFacInwardGroup("FIN-LC-MULTI");
+        UUID aId = UUID.randomUUID();
+        UUID bId = UUID.randomUUID();
+        seedFacInwardAssignment(groupId, aId, "FAC-IN-MULTI-A",
+            LocalDate.of(2025, 1, 1), LocalDate.of(2025, 12, 31), "3650.00", "3650.00", "0.00");
+        seedFacInwardAssignment(groupId, bId, "FAC-IN-MULTI-B",
+            LocalDate.of(2025, 1, 1), LocalDate.of(2025, 12, 31), "7300.00", "7300.00", "0.00");
+        entityManager.flush();
+
+        // Accept-time liability: Cr 2210 gross for each (mirrors
+        // SubledgerPostingService.replayFacPremiumAccepted's Cr 2210 = gross).
+        postInwardAccept(aId, "3650.00");
+        postInwardAccept(bId, "7300.00");
+        entityManager.flush();
+
+        // Jan close: group earns A(310) + B(620) = 930; 2210 = 10950 − 930 = 10020.
+        engine.recognise(months.get(0));
+        entityManager.flush();
+        assertThat(creditMinusDebit("2210"))
+            .as("after Jan: 2210 == A_remaining(3340) + B_remaining(6680)")
+            .isEqualByComparingTo("10020.00");
+
+        BigDecimal aRemaining = new BigDecimal("3340.00"); // 3650 − 10×31
+        BigDecimal bRemaining = new BigDecimal("6680.00"); // 7300 − 20×31
+
+        // Cancel A mid-Feb.
+        jdbcTemplate.update("UPDATE ri_fac_inwards SET status = 'CANCELLED' WHERE id = ?", aId);
+        publisher.publishEvent(new FacDerecognisedEvent(
+            FacDerecognisedEvent.ContractType.FAC_INWARD, aId, LocalDate.of(2025, 2, 15)));
+        entityManager.flush();
+
+        // (1) The derecognition JE releases EXACTLY A's own remaining — NOT the
+        //     group (A+B) aggregate of 10020.
+        UUID jeId = (UUID) jdbcTemplate.queryForMap(
+            "SELECT id FROM journal_entry WHERE source_module = 'paa' "
+                + "AND source_event_type = 'FAC_DERECOGNITION' AND source_reference = ?",
+            "FAC_INWARD:" + aId).get("id");
+        assertLine(jeId, "2210", aRemaining, BigDecimal.ZERO);
+        assertLine(jeId, "4330", BigDecimal.ZERO, aRemaining);
+        BigDecimal releasedByJe = jdbcTemplate.queryForObject(
+            "SELECT COALESCE(SUM(l.debit_amount),0) FROM journal_entry_line l "
+                + "JOIN chart_of_account a ON a.id = l.account_id "
+                + "WHERE l.journal_entry_id = ? AND a.code = '2210'", BigDecimal.class, jeId);
+        assertThat(releasedByJe).as("released == A's remaining, not the A+B group aggregate")
+            .isEqualByComparingTo(aRemaining);
+        assertThat(releasedByJe).as("must NOT release the whole group's LRC closing")
+            .isNotEqualByComparingTo("10020.00");
+
+        // (2) Account 2210 after cancellation == B's remaining, strictly > 0.
+        assertThat(creditMinusDebit("2210"))
+            .as("after cancel A: 2210 == B's remaining, survivor preserved")
+            .isEqualByComparingTo(bRemaining);
+        assertThat(creditMinusDebit("2210")).isGreaterThan(BigDecimal.ZERO);
+
+        // (3) Next period recognise() earns B's next slice; 2210 never negative.
+        engine.recognise(months.get(1));
+        entityManager.flush();
+        // B Feb slice = 20 × 28 = 560; 2210 = 6680 − 560 = 6120.
+        assertThat(creditMinusDebit("2210")).isEqualByComparingTo("6120.00");
+        assertThat(creditMinusDebit("2210")).as("2210 never negative").isGreaterThanOrEqualTo(BigDecimal.ZERO);
+
+        // Close the rest of the year — B earns out fully; A stays cancelled.
+        for (int i = 2; i < 12; i++) {
+            engine.recognise(months.get(i));
+            entityManager.flush();
+            assertThat(creditMinusDebit("2210"))
+                .as("2210 never dips below zero across the full year")
+                .isGreaterThanOrEqualTo(BigDecimal.ZERO);
+        }
+
+        // (4) Lifetime conservation:
+        //  • A: Jan periodic slice (310) + derecognition release (3340) == A.gross (3650) exactly.
+        BigDecimal aJanSlice = new BigDecimal("3650.00")
+            .multiply(BigDecimal.valueOf(31)).divide(BigDecimal.valueOf(365), 2, RoundingMode.HALF_UP);
+        assertThat(aJanSlice.add(aRemaining))
+            .as("A: Σ periodic earned + derecognition release == A.gross exactly")
+            .isEqualByComparingTo("3650.00");
+        //  • After the full year, 2210 is fully discharged (A released, B earned out) — no strand,
+        //    no negative excursion.
+        assertThat(creditMinusDebit("2210"))
+            .as("end of year: A released + B fully earned ⇒ 2210 == 0 (no strand)")
+            .isEqualByComparingTo("0.00");
+        //  • Total inward premium income (4330) == A.gross + B.gross exactly — no double-earn,
+        //    no under-recognition.
+        assertThat(creditMinusDebit("4330"))
+            .as("total 4330 income == A.gross + B.gross (no double-earn, no strand)")
+            .isEqualByComparingTo("10950.00");
+    }
+
+    // ── 8. CRITICAL symmetric (outward): net basis, Dr 5210 / Cr 1410 ─────────
+    @Test
+    @DisplayName("outward multi-contract group: cancel A releases only A's remaining net asset "
+        + "(not A+B); survivor B's 1410 asset preserved and never negative; lifetime nets to zero")
+    void outwardMultiContractGroup_cancelOne_releasesOnlyThatContract_noOverRelease() {
+        List<UUID> months = seedYear2025Periods();
+        UUID groupId = seedFacOutwardGroup("FOU-LC-MULTI");
+        UUID aId = UUID.randomUUID();
+        UUID bId = UUID.randomUUID();
+        // net basis: A 3650 (10/day), B 7300 (20/day).
+        seedFacOutwardAssignment(groupId, aId,
+            LocalDate.of(2025, 1, 1), LocalDate.of(2025, 12, 31), "3650.00");
+        seedFacOutwardAssignment(groupId, bId,
+            LocalDate.of(2025, 1, 1), LocalDate.of(2025, 12, 31), "7300.00");
+        entityManager.flush();
+
+        // Accept-time asset: Dr 1410 net for each (mirrors replayFacPremiumCeded's Dr 1410 = net).
+        postOutwardAccept(aId, "3650.00");
+        postOutwardAccept(bId, "7300.00");
+        entityManager.flush();
+
+        engine.recognise(months.get(0));
+        entityManager.flush();
+        // 1410 asset = 10950 − 930 = 10020.
+        assertThat(debitMinusCredit("1410"))
+            .as("after Jan: 1410 asset == A_remaining(3340) + B_remaining(6680)")
+            .isEqualByComparingTo("10020.00");
+
+        BigDecimal aRemaining = new BigDecimal("3340.00");
+        BigDecimal bRemaining = new BigDecimal("6680.00");
+
+        jdbcTemplate.update("UPDATE ri_fac_covers SET status = 'CANCELLED' WHERE id = ?", aId);
+        publisher.publishEvent(new FacDerecognisedEvent(
+            FacDerecognisedEvent.ContractType.FAC_OUTWARD, aId, LocalDate.of(2025, 2, 15)));
+        entityManager.flush();
+
+        UUID jeId = (UUID) jdbcTemplate.queryForMap(
+            "SELECT id FROM journal_entry WHERE source_module = 'paa' "
+                + "AND source_event_type = 'FAC_DERECOGNITION' AND source_reference = ?",
+            "FAC_OUTWARD:" + aId).get("id");
+        assertLine(jeId, "5210", aRemaining, BigDecimal.ZERO);
+        assertLine(jeId, "1410", BigDecimal.ZERO, aRemaining);
+        BigDecimal releasedByJe = jdbcTemplate.queryForObject(
+            "SELECT COALESCE(SUM(l.credit_amount),0) FROM journal_entry_line l "
+                + "JOIN chart_of_account a ON a.id = l.account_id "
+                + "WHERE l.journal_entry_id = ? AND a.code = '1410'", BigDecimal.class, jeId);
+        assertThat(releasedByJe).as("released == A's remaining net asset, not A+B aggregate")
+            .isEqualByComparingTo(aRemaining);
+        assertThat(releasedByJe).isNotEqualByComparingTo("10020.00");
+
+        assertThat(debitMinusCredit("1410"))
+            .as("after cancel A: 1410 asset == B's remaining, survivor preserved")
+            .isEqualByComparingTo(bRemaining);
+        assertThat(debitMinusCredit("1410")).isGreaterThan(BigDecimal.ZERO);
+
+        engine.recognise(months.get(1));
+        entityManager.flush();
+        assertThat(debitMinusCredit("1410")).isEqualByComparingTo("6120.00");
+
+        for (int i = 2; i < 12; i++) {
+            engine.recognise(months.get(i));
+            entityManager.flush();
+            assertThat(debitMinusCredit("1410"))
+                .as("1410 asset never dips below zero across the full year")
+                .isGreaterThanOrEqualTo(BigDecimal.ZERO);
+        }
+
+        assertThat(debitMinusCredit("1410"))
+            .as("end of year: A released + B amortised out ⇒ 1410 == 0 (no strand)")
+            .isEqualByComparingTo("0.00");
+        assertThat(debitMinusCredit("5210"))
+            .as("total 5210 expense == A.net + B.net (no double-amortise, no strand)")
+            .isEqualByComparingTo("10950.00");
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Seeds a fully-past 2025 fiscal year with 12 MONTH periods (Jan…Dec) and
+     * returns their ids in month order. 2025 is non-leap (365 days), and every
+     * period end (≤ 2025-12-31) is before "today" so recognise()'s business
+     * date honours V31's {@code business_date <= posting_date} CHECK.
+     */
+    private List<UUID> seedYear2025Periods() {
+        UUID fyId = UUID.randomUUID();
+        jdbcTemplate.update(
+            "INSERT INTO fiscal_year (id, name, start_date, end_date, status, created_by) "
+                + "VALUES (?, ?, ?, ?, ?, ?)",
+            fyId, "FY-FACLIFECYCLE-2025", LocalDate.of(2025, 1, 1), LocalDate.of(2025, 12, 31),
+            "ACTIVE", "test");
+        int[] lastDay = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        List<UUID> ids = new java.util.ArrayList<>(12);
+        for (int m = 1; m <= 12; m++) {
+            UUID pid = UUID.randomUUID();
+            jdbcTemplate.update(
+                "INSERT INTO fiscal_period (id, fiscal_year_id, period_type, start_date, end_date, status, created_by) "
+                    + "VALUES (?, ?, 'MONTH', ?, ?, 'OPEN', 'test')",
+                pid, fyId, LocalDate.of(2025, m, 1), LocalDate.of(2025, m, lastDay[m - 1]));
+            ids.add(pid);
+        }
+        return ids;
+    }
+
+    /** Accept-time inward posting Cr 2210 gross / Dr 1330 gross (commission-free, so net == gross). */
+    private void postInwardAccept(UUID facInwardId, String gross) {
+        journalEntryService.post(new PostJournalEntryRequest(
+            LocalDate.of(2025, 1, 1), "test-accept", "FAC_ACCEPT", "accept:" + facInwardId,
+            "test inward accept",
+            List.of(
+                new JournalEntryLineRequest("1330", new BigDecimal(gross), BigDecimal.ZERO,
+                    "NGN", null, null, null, null, null),
+                new JournalEntryLineRequest("2210", BigDecimal.ZERO, new BigDecimal(gross),
+                    "NGN", null, null, null, null, null))));
+    }
+
+    /** Accept-time outward posting Dr 1410 net / Cr 2310 net. */
+    private void postOutwardAccept(UUID facCoverId, String net) {
+        journalEntryService.post(new PostJournalEntryRequest(
+            LocalDate.of(2025, 1, 1), "test-accept", "FAC_CEDE", "cede:" + facCoverId,
+            "test outward accept",
+            List.of(
+                new JournalEntryLineRequest("1410", new BigDecimal(net), BigDecimal.ZERO,
+                    "NGN", null, null, null, null, null),
+                new JournalEntryLineRequest("2310", BigDecimal.ZERO, new BigDecimal(net),
+                    "NGN", null, null, null, null, null))));
+    }
+
+    private BigDecimal creditMinusDebit(String accountCode) {
+        return jdbcTemplate.queryForObject(
+            "SELECT COALESCE(SUM(l.credit_amount),0) - COALESCE(SUM(l.debit_amount),0) "
+                + "FROM journal_entry_line l JOIN chart_of_account a ON a.id = l.account_id "
+                + "WHERE a.code = ?", BigDecimal.class, accountCode);
+    }
+
+    private BigDecimal debitMinusCredit(String accountCode) {
+        return jdbcTemplate.queryForObject(
+            "SELECT COALESCE(SUM(l.debit_amount),0) - COALESCE(SUM(l.credit_amount),0) "
+                + "FROM journal_entry_line l JOIN chart_of_account a ON a.id = l.account_id "
+                + "WHERE a.code = ?", BigDecimal.class, accountCode);
+    }
 
     private UUID seedFacInwardGroup(String portfolioCode) {
         UUID portfolioId = UUID.randomUUID();
@@ -472,7 +721,7 @@ class FacLifecycleLrcIT {
             "premium_ceded, commission_rate, commission_amount, net_premium, currency_code, " +
             "cover_from, cover_to, created_by) " +
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            facCoverId, "FOU-LC-001", UUID.randomUUID(), "POL-FOU-LC-001",
+            facCoverId, "FOU-" + facCoverId, UUID.randomUUID(), "POL-" + facCoverId,
             UUID.randomUUID(), "Munich Re", "CONFIRMED", new BigDecimal("500000.00"), new BigDecimal("2.500000"),
             new BigDecimal("1200.00"), new BigDecimal("0.166667"), new BigDecimal("200.00"),
             new BigDecimal(netPremium),
