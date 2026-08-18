@@ -11,10 +11,13 @@ import java.util.UUID;
  * <p>Fired by {@code RiFacInwardService.cancel} (inward) and
  * {@code FacCoverService.cancel} (outward) <em>after</em> the contract's
  * status row is persisted as {@code CANCELLED}. cia-finance's derecognition
- * listener releases the cancelled contract's group's remaining unearned LRC
- * liability (inward, {@code Dr 2210 / Cr 4330}) or unamortised
+ * listener releases the cancelled contract's <em>own</em> remaining unearned
+ * LRC liability (inward, {@code Dr 2210 / Cr 4330}) or unamortised
  * reinsurance-held asset (outward, {@code Dr 5210 / Cr 1410}) to
- * income/expense in the currently OPEN fiscal period.
+ * income/expense in the currently OPEN fiscal period — computed per-contract
+ * ({@code premium − its own earned slice over the group's recognised
+ * periods}), never the whole group's balance, so a multi-contract group's
+ * surviving contracts keep their LRC intact.
  *
  * <p>{@link ContractType} is a small, cia-common-local discriminator
  * (only the two FAC directions — this event is never fired for a direct
