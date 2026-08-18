@@ -64,7 +64,7 @@ cia-finance/
 
 The Module 12 back-office frontend lives at `cia-frontend/apps/back-office/src/modules/closures/` — 13 tabs mounting `PeriodLockListPage`, `ChartOfAccountsPage`, `PostingRulesPage`, `JournalEntryBrowserPage`, `TrialBalanceReportPage`, `BackfillAdminPage`, `PaaPeriodClosePage`, `PaaMovementAnalysisPage`, `ContractGroupsPage`, `HoldingsListPage`, `Ifrs9MeasurementPage`, `Ifrs9MovementAnalysisPage`, `NaicomSubmissionsPage`. All API calls go through `validatedGet` / `validatedPost` against zod schemas in `@cia/api-client/finance-closures.ts`.
 
-See [`period-end-closures-implementation-plan.md`](./period-end-closures-implementation-plan.md) for the per-slice shipping history (V31–V43 migrations, 274 cia-api failsafe ITs, 16 Phase 5 frontend slices F5.1–F5.16).
+See [`period-end-closures-implementation-plan.md`](./period-end-closures-implementation-plan.md) for the per-slice shipping history (V31–V43 migrations for Phases 1–5; later **V76–V79** for the `fac-ifrs17-paa-workstream` FAC↔IFRS-17 PAA extension — merged 2026-08-18, PR #65 — that brought inward + outward facultative reinsurance onto the Phase-2 LRC engine; **595** cia-api failsafe ITs after that extension; 16 Phase 5 frontend slices F5.1–F5.16).
 
 ## Dependency Rules
 
