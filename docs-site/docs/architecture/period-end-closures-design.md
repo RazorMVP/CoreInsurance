@@ -509,6 +509,8 @@ public class PaaMeasurementService {
 
 LRC measurement is the existing earned-premium calculation pulled into a formal service: for each in-force policy, pro-rate the gross premium minus deferred acquisition cost over the coverage period, then aggregate by contract group. The novelty is the **contract group classification** — every policy must be assigned to a portfolio (mapped from product), an annual cohort (from policy start year), and an onerousness bucket (from the most recent test result).
 
+> **Extended by `fac-ifrs17-paa-workstream` (V76–V79, merged 2026-08-18):** the LRC engine is now **nature-dispatched** and also earns **inward and outward facultative reinsurance** — not only direct policies. Grouping moved to the polymorphic `contract_group_assignment` (+ `portfolio.contract_nature`); inward FAC posts an LRC liability (`Cr 2210`→`Dr 2210/Cr 4330`), outward FAC a reinsurance-held asset (`Dr 5210/Cr 1410`) with §65 commission-netting; cancellation derecognises per-contract. The DIRECT path in this section is unchanged (byte-identical). Full design in the repo at `docs/superpowers/specs/2026-08-08-fac-ifrs17-paa-design.md`.
+
 Risk adjustment uses the confidence-level method: 75th percentile (Nigerian convention) on the distribution of fulfilment cash flows. The distribution is empirically estimated from historical claims development triangles per portfolio. For the initial build we'll start with a simple bootstrap; refinement is a future polish phase.
 
 ### 4.2 IFRS 9 classification + ECL

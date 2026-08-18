@@ -88,7 +88,7 @@ Phases 1–5 are complete. Slice 1.10 closed the original Phase 1 ↔ Phase 4 su
 | Slice | Scope |
 |---|---|
 | 2.1 | V36 PAA foundation — `portfolio`, `group_of_contracts`, `paa_lrc`, `paa_lic`, `paa_config`. 5 entities, 4 enums, 5 repos. FK promotion on `journal_entry_line.portfolio_id` and `.contract_group_id` from V31 placeholders. |
-| 2.2 | V37 `policy_group_assignment` — **full UNIQUE(policy_id)** for IFRS 17 §22 permanent grouping. `ContractGroupingService` event listener (`@EventListener(PolicyApprovedEvent)`); lazy portfolio creation by COB; group assignment at policy approval. |
+| 2.2 | V37 `policy_group_assignment` — **full UNIQUE(policy_id)** for IFRS 17 §22 permanent grouping. `ContractGroupingService` event listener (`@EventListener(PolicyApprovedEvent)`); lazy portfolio creation by COB; group assignment at policy approval. *(Later generalised to the polymorphic `contract_group_assignment` — `UNIQUE(contract_type, contract_id)` — by `fac-ifrs17-paa-workstream` V77, adding `onFacInwardAccepted`/`onFacPremiumCeded` listeners so inward + outward FAC ride the same PAA rails via `portfolio.contract_nature` V76.)* |
 | 2.3 | `LrcEngine` — straight-line daily premium recognition. Posts `Dr 2110 / Cr 4110` via the JE gateway. Stateless period computation; idempotent re-runs. |
 | 2.4 | `LicEngine` — claim roll-forward via SQL conditional-sum. v1 posts NO JE because the underlying GL is already correct via `SubledgerPostingService` (1.5). |
 | 2.5 | `PaaPeriodCloseService` orchestrator + IFRS 17 §83/§84 `InsuranceServiceResult`. **First production-code surface of the `entityManager.flush()` architectural rule** — service writes via JPA then reads via JdbcTemplate within the same `@Transactional` boundary; explicit flush required between writes and reads. |
@@ -98,7 +98,7 @@ Phases 1–5 are complete. Slice 1.10 closed the original Phase 1 ↔ Phase 4 su
 
 **Design decisions captured:**
 
-- **§22 permanence via FULL UNIQUE.** The plan suggested "per-policy contract-group assignment logic"; the schema enforces it. `policy_group_assignment.policy_id` has a full UNIQUE (not partial) — group reassignment is a §22 violation by design. Audit corrections must UPDATE in place.
+- **§22 permanence via FULL UNIQUE.** The plan suggested "per-policy contract-group assignment logic"; the schema enforces it. `policy_group_assignment.policy_id` has a full UNIQUE (not partial) — group reassignment is a §22 violation by design. Audit corrections must UPDATE in place. **(Superseded by `fac-ifrs17-paa-workstream` V77: the table is now the polymorphic `contract_group_assignment` with `UNIQUE(contract_type, contract_id)` — same §22 permanence, now covering FAC contracts as well as policies.)**
 - **Risk adjustment + IBNR deferred to v2** — the original watch-out flagged the need for actuarial review. Decision: ship the `paa_lic` columns (`ibnr_estimate`, `ibnr_change`, `risk_adjustment`, `risk_adjustment_change`) ready, but engines fill them with zero in v1. Slice 2.7b is the placeholder for actuarial-method swaps.
 - **Stateless period computation beats opening = previous-closing chaining.** Every Phase 2 engine computes target state from policy/claim data + period boundaries, never reads prior `paa_*` rows. Idempotency is natural; out-of-order processing is harmless; re-runs are bit-identical.
 - **`paa_lrc.closing_balance` is point-in-time, not arithmetic-derived.** Surprised by this during Slice 2.7 — closing IS NOT `opening + received − earned`; it's computed by a separate `closingAmount()` function. Roll-forward components are independent point-in-time snapshots, not arithmetic-related.
@@ -245,7 +245,7 @@ The original plan bundled "Investments UI" into this phase. That work was smalle
 - `FiscalYearService.close()` now cascades hard-close on every non-HARD child period via `PeriodLockService.hardClose` — closes the OpenAPI-doc promise the service had never delivered. Per-period delegation; idempotent on already-CLOSED FY. Existing CLOSED FYs with OPEN children stay inconsistent rather than being silently repaired (segregation-of-duties trade-off).
 - Deleted unused `FiscalPeriodResolver.resolveDayForBusinessDate` infrastructure — zero production callers, JEs anchor to MONTH per Slice 1.4 D1=A. `FiscalPeriodType.DAY` enum value retained for schema-level reservation (V31 CHECK constraint binds — "never edit existing migrations"). Surfaced two pre-existing `FiscalYearServiceIT` bugs in the same pass (missing `PeriodLockService` mock + missing `CiaCommonAutoConfiguration` `@Import` for `@EnableJpaAuditing`) which are also fixed.
 
-**Test coverage at phase-end:** 274 cia-api failsafe ITs (down from 275 with the lazy-DAY IT deletion), 0 failures, 0 errors, 1 intentional benchmark skip. `FiscalYearServiceIT` was failing all 12 tests since at least commit `b12c052`; now green at 11/11.
+**Test coverage at phase-end:** 274 cia-api failsafe ITs (down from 275 with the lazy-DAY IT deletion), 0 failures, 0 errors, 1 intentional benchmark skip. `FiscalYearServiceIT` was failing all 12 tests since at least commit `b12c052`; now green at 11/11. *(The reactor later grew to **595** failsafe ITs as subsequent workstreams landed — including the FAC↔IFRS-17 PAA extension, V76–V79.)*
 
 **Engineering decisions captured:**
 
