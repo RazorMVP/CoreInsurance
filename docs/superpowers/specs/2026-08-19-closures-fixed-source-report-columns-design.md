@@ -6,7 +6,7 @@
 
 ## Goal
 
-Make every **fixed-source** report render its data under the correct column labels. Today ~10 of the 12 CLOSURES SYSTEM reports (GENERAL_LEDGER ×3, IFRS17_MOVEMENT ×3, PAA_GROUPS ×1, IFRS9 ×3) render **column-shifted / garbled** data, and the other fixed sources (TRIAL_BALANCE, RM_COMMISSION, UNDERWRITING_PERFORMANCE, PAA_LRC, GL_PERIOD_LOCK, IFRS9_HOLDINGS/CARRYING) are correct today only by luck of column ordering. After this change, fixed-source column mapping is **name-based** and structurally guarded so the bug class cannot silently return.
+Make every **fixed-source** report render its data under the correct column labels. Today ~11 of the 12 CLOSURES SYSTEM reports (GENERAL_LEDGER ×3, GL_PERIOD_LOCK ×1, PAA_GROUPS ×1, IFRS17_MOVEMENT ×3, IFRS9_HOLDINGS ×1, IFRS9_CARRYING ×1, IFRS9_MOVEMENT ×1) render **column-shifted / garbled** data — every one of these SELECTs leads with an undeclared identity/date column (`je.id`, `pl.id`, `g.id`, `pma.period_id`, `h.id`, `cv.id`, `imv.period_id`) that shifts every declared field. The other fixed sources — **TRIAL_BALANCE, RM_COMMISSION, UNDERWRITING_PERFORMANCE** — are correct today only by luck of column ordering: their SELECTs happen to lead with declared columns. After this change, fixed-source column mapping is **name-based** and structurally guarded so the bug class cannot silently return.
 
 ## Root cause
 

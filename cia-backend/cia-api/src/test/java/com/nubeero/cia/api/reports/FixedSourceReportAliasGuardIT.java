@@ -12,9 +12,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -56,5 +58,41 @@ class FixedSourceReportAliasGuardIT extends FinanceWebItSupport {
             }
         }
         assertThat(problems).as("fixed-source field keys must all resolve to a SELECT alias").isEmpty();
+    }
+
+    /**
+     * {@code reprojectByAlias} builds a lowercased-label → value map per row; a fixed source
+     * whose SELECT emits two columns under the same lowercased alias would silently collapse
+     * to "last write wins", corrupting whichever declared field maps to the earlier of the two
+     * without any signal. No fixed source has a collision today — this pins that invariant so a
+     * future SELECT edit that introduces one fails loudly instead of rotting undetected.
+     */
+    @Test
+    void noFixedSourceHasADuplicateLowercasedColumnLabel() {
+        List<ReportDefinition> defs = reportDefinitionRepository.findAll().stream()
+                .filter(d -> d.getType() == ReportType.SYSTEM)
+                .filter(d -> !reportQueryBuilder.isBusinessSource(d.getDataSource()))
+                .toList();
+        assertThat(defs).as("15+ fixed-source SYSTEM reports").hasSizeGreaterThanOrEqualTo(15);
+
+        Map<DataSource, List<String>> labelCache = new HashMap<>();
+        for (ReportDefinition def : defs) {
+            labelCache.computeIfAbsent(def.getDataSource(), reportQueryBuilder::fixedSourceColumnLabels);
+        }
+
+        List<String> problems = new ArrayList<>();
+        for (Map.Entry<DataSource, List<String>> entry : labelCache.entrySet()) {
+            List<String> labels = entry.getValue();
+            if (labels.size() == new HashSet<>(labels).size()) continue;
+            Set<String> seen = new HashSet<>();
+            Set<String> duplicates = new HashSet<>();
+            for (String label : labels) {
+                if (!seen.add(label)) duplicates.add(label);
+            }
+            problems.add(entry.getKey() + " has duplicate lowercased SELECT column label(s) " + duplicates
+                    + " in " + labels);
+        }
+        assertThat(problems).as("no fixed source may emit two SELECT columns under the same lowercased alias")
+                .isEmpty();
     }
 }
