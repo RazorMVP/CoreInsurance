@@ -132,32 +132,9 @@ class FixedSourceReportValueIT extends FinanceWebItSupport {
 
     @Test
     void generalJournalListing_businessDateColumnHoldsDate_notUuid() {
-        // COA is V32-seeded in the test tenant; look up a real postable account id by code.
-        UUID accountId = jdbc.queryForObject(
-            "SELECT id FROM chart_of_account WHERE code = '1330'", UUID.class);
-
-        // journal_entry.period_id is a NOT NULL FK -> fiscal_period; seed a minimal
-        // fiscal_year + fiscal_period to satisfy it (schema has no default seed).
-        UUID fiscalYearId = UUID.randomUUID();
-        UUID periodId = UUID.randomUUID();
-        jdbc.update("INSERT INTO fiscal_year (id, name, start_date, end_date, status, created_by) " +
-            "VALUES (?, ?, DATE '2026-01-01', DATE '2026-12-31', 'ACTIVE', 'test')",
-            fiscalYearId, "FY-FSR-" + fiscalYearId);
-        jdbc.update("INSERT INTO fiscal_period " +
-            "(id, fiscal_year_id, period_type, start_date, end_date, status, created_by) " +
-            "VALUES (?, ?, 'MONTH', DATE '2026-03-01', DATE '2026-03-31', 'OPEN', 'test')",
-            periodId, fiscalYearId);
-
-        UUID jeId = UUID.randomUUID();
-        jdbc.update("INSERT INTO journal_entry " +
-            "(id, posting_date, business_date, period_id, source_module, source_event_type, " +
-            "source_reference, narrative, posted_by, status) " +
-            "VALUES (?, DATE '2026-03-15', DATE '2026-03-15', ?, 'policy', 'POLICY_APPROVED', 'POL-1', 'test', 'test', 'POSTED')",
-            jeId, periodId);
-        jdbc.update("INSERT INTO journal_entry_line " +
-            "(id, journal_entry_id, line_no, account_id, debit_amount, credit_amount) " +
-            "VALUES (?, ?, 1, ?, 1000.00, 0.00)",
-            UUID.randomUUID(), jeId, accountId);
+        UUID periodId = seedFiscalPeriod("GJL", LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31));
+        seedJournalEntry(periodId, "1330", LocalDate.of(2026, 3, 15),
+            "policy", "POLICY_APPROVED", "POL-1", new BigDecimal("1000.00"));
 
         List<Map<String, Object>> rows = run("General Journal Listing", WIDE);
 
