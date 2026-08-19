@@ -3,6 +3,8 @@ package com.nubeero.cia.reports.service;
 import com.nubeero.cia.reports.domain.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
+import jakarta.persistence.Tuple;
+import jakarta.persistence.TupleElement;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -417,14 +419,52 @@ public class ReportQueryBuilder {
                .append(" ").append(dir);
         }
 
-        Query query = entityManager.createNativeQuery(sql.toString());
+        Query query = isBusinessSource(ds)
+                ? entityManager.createNativeQuery(sql.toString())
+                : entityManager.createNativeQuery(sql.toString(), Tuple.class);
         for (int i = 0; i < params.size(); i++) {
             query.setParameter(i + 1, params.get(i));
         }
         query.setMaxResults(maxRows);
 
-        List<Object[]> rawRows = query.getResultList();
-        return applyComputedFields(rawRows, config);
+        if (isBusinessSource(ds)) {
+            // Business SELECT is emitted in declared-field order (buildBusinessSql) — positional is correct.
+            List<Object[]> rawRows = query.getResultList();
+            return applyComputedFields(rawRows, config);
+        }
+        // Fixed source: the hand-written BASE_QUERIES SELECT is NOT in declared-field order and
+        // leads with undeclared identity/date columns, so map each declared field key to its
+        // column by alias (case-insensitive), then feed the unchanged positional applyComputedFields.
+        List<Tuple> tuples = query.getResultList();
+        return applyComputedFields(reprojectByAlias(tuples, config), config);
+    }
+
+    /**
+     * Reproject fixed-source Tuple rows into declared-non-computed-field order by matching
+     * each field key to the SELECT column of the same (lowercased) alias — NULL if the source
+     * SELECT has no such alias (a mismatch the alias guard IT forbids). This makes the
+     * downstream positional applyComputedFields correct for fixed sources exactly as
+     * buildBusinessSql's declared-order SELECT makes it correct for business sources.
+     */
+    private List<Object[]> reprojectByAlias(List<Tuple> tuples, ReportConfig config) {
+        List<String> keys = config.getFields() == null ? List.of()
+                : config.getFields().stream()
+                        .filter(f -> !f.isComputed())
+                        .map(f -> f.getKey().toLowerCase(Locale.ROOT))
+                        .toList();
+        return tuples.stream().map(t -> {
+            Map<String, Object> byLabel = new HashMap<>();
+            for (TupleElement<?> el : t.getElements()) {
+                if (el.getAlias() != null) {
+                    byLabel.put(el.getAlias().toLowerCase(Locale.ROOT), t.get(el));
+                }
+            }
+            Object[] row = new Object[keys.size()];
+            for (int i = 0; i < keys.size(); i++) {
+                row[i] = byLabel.get(keys.get(i));
+            }
+            return row;
+        }).toList();
     }
 
     private List<Map<String, Object>> applyComputedFields(List<Object[]> rawRows,
