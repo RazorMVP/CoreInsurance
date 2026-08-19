@@ -68,6 +68,16 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-08-19 — Docs-sync PRs merged to `main`
+
+Administrative: the two post-FAC-ship documentation PRs landed on `main` today.
+
+- **PR #66** merged (`docs/fac-ifrs17-paa-sync`, merge `21a92a6c`): `CLAUDE.md` + the cia domain skill + `docs-site/` architecture docs synced to the merged FAC↔IFRS-17 PAA workstream (`contract_group_assignment` replaced `policy_group_assignment`, nature-dispatched `LrcEngine`, reactor IT count 274→595, migrations V76–V79); historical plan/design docs carry forward-pointers.
+- **PR #67** merged (`docs/partner-api-spec-sync`, merge `d5e7d394`): regenerated the stale Partner API OpenAPI + Postman snapshots from live code (full `/partner/v1/...` paths, real `$ref` response schemas) and added `PartnerApiSnapshotIT` — the drift guard the partner spec had been missing (mirrors `InternalApiSnapshotIT`). Backlog gained `partner-api-response-schema-annotations` (P3).
+- No open items from either. The FAC workstream (PR #65) + both doc syncs are all on `main`.
+
+---
+
 ## 2026-08-18 — Partner API OpenAPI + Postman sync + drift guard (`docs/partner-api-spec-sync`)
 
 Follow-up after the FAC ship: audited the API docs for currency. **Internal API** snapshot (`docs-site/static/internal-api.json`) was current (guarded by `InternalApiSnapshotIT`, regenerated in PR #65). **Partner API** artifacts were **stale** — `cia-partner-api/docs/openapi.json` + `postman.json` dated to the initial commit (4 months) and `docs-site/static/openapi.json` was 3 months old, all predating partner-controller changes (notably `bf2960a0` Page→array, which landed ~2h after the last regen); the committed specs even carried **empty `{}` response bodies** for list endpoints. Unlike the internal spec, the partner spec had **no drift guard** — hence the rot.
