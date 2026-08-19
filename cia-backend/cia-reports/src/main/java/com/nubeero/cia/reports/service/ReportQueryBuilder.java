@@ -627,8 +627,40 @@ public class ReportQueryBuilder {
      * fact is expressed, so the SELECT branch (buildBusinessSql vs BASE_QUERIES) and the
      * tail branch (buildBusinessGroupBy vs BASE_QUERY_TAILS) can never disagree.
      */
-    private boolean isBusinessSource(DataSource ds) {
+    public boolean isBusinessSource(DataSource ds) {
         return SOURCE_COLUMNS.containsKey(ds);
+    }
+
+    /**
+     * Lowercased column labels of a fixed source's SELECT (LIMIT 0, no rows). Empty for
+     * business sources. Backs {@code FixedSourceReportAliasGuardIT} — the structural check
+     * that every fixed-source SYSTEM report's declared non-computed field key resolves to a
+     * SELECT alias, closing the hole that let {@code reprojectByAlias} misalignment (a
+     * mismatch this same method would have caught) rot undetected since V44.
+     *
+     * <p>Appends the source's {@link #BASE_QUERY_TAILS} entry (GROUP BY) when present —
+     * required for the probe to be valid SQL for the 3 aggregate sources (TRIAL_BALANCE,
+     * RM_COMMISSION, UNDERWRITING_PERFORMANCE), whose SELECT mixes aggregates with
+     * non-aggregated columns and is only legal with its GROUP BY tail. A GROUP BY clause
+     * never changes the SELECT's column labels, so this doesn't affect what the guard checks.
+     */
+    public List<String> fixedSourceColumnLabels(DataSource ds) {
+        if (isBusinessSource(ds)) return List.of();
+        String base = BASE_QUERIES.get(ds);
+        String tail = BASE_QUERY_TAILS.get(ds);
+        String full = (tail == null || tail.isBlank()) ? base : base + " " + tail;
+        String probe = "SELECT * FROM (" + full + ") _cols LIMIT 0";
+        return entityManager.unwrap(org.hibernate.Session.class).doReturningWork(conn -> {
+            try (java.sql.PreparedStatement ps = conn.prepareStatement(probe);
+                 java.sql.ResultSet rs = ps.executeQuery()) {
+                java.sql.ResultSetMetaData md = rs.getMetaData();
+                List<String> labels = new ArrayList<>();
+                for (int i = 1; i <= md.getColumnCount(); i++) {
+                    labels.add(md.getColumnLabel(i).toLowerCase(Locale.ROOT));
+                }
+                return labels;
+            }
+        });
     }
 
     /** Aggregate mode: a business source whose report declares a non-blank groupBy. */
