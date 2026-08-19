@@ -1,11 +1,11 @@
 {
 	"info": {
-		"name": "CIA Partner API",
+		"name": "CIA Partner Open API",
 		"description": {
-		    "content": "Open API for Insurtech connectivity — aggregators, digital brokers, and embedded insurance providers.",
+		    "content": "REST API for Insurtech partners to access insurance products and services",
 		    "type": "text/markdown"
 		},
-		"version": "1.0.0",
+		"version": "v1",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -13,14 +13,20 @@
 	            "name": "Products",
 	            "item": [
 	                        {
-    "name": "/products",
-                "description": "",
+    "name": "/partner/v1/products",
+                "description": "Returns all active insurance products for the authenticated tenant",
                  "item": [
                             {
-                                "name": "List products",
+                                "name": "List active products",
                                 "request": {
                                     "method": "GET",
                                     "header": [
+                                        {
+                                            "key": "Accept",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
+                                        }
                                     ],
                                     "body": {
                                         "mode": "raw",
@@ -32,32 +38,58 @@
                                         }
                                     },
                                     "url": {
-                                        "raw": "{{baseUrl}}/products",
+                                        "raw": "{{baseUrl}}/partner/v1/products",
                                         "host": [
                                             "{{baseUrl}}"
                                         ],
                                         "path": [
+                                            "partner",
+                                            "v1",
                                             "products"
                                         ],
                                         "variable": [
                                         ],
                                         "query": [
+                                            {
+                                                "key": "page",
+                                                "value": "56",
+                                                "description": "Zero-based page index (0..N)",
+                                                "disabled": true
+                                            },
+                                            {
+                                                "key": "size",
+                                                "value": "56",
+                                                "description": "The size of the page to be returned",
+                                                "disabled": true
+                                            },
+                                            {
+                                                "key": "sort",
+                                                "value": "",
+                                                "description": "Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.",
+                                                "disabled": true
+                                            }
                                         ]
                                     },
-                                    "description": ""
+                                    "description": "Returns all active insurance products for the authenticated tenant"
                                 }
                             }
                             ]
                         },
 	                        {
-    "name": "/products/:id",
-                "description": "",
+    "name": "/partner/v1/products/:id",
+                "description": "Returns full details for a single product including rate and minimum premium",
                  "item": [
                             {
-                                "name": "Get product",
+                                "name": "Get product details",
                                 "request": {
                                     "method": "GET",
                                     "header": [
+                                        {
+                                            "key": "Accept",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
+                                        }
                                     ],
                                     "body": {
                                         "mode": "raw",
@@ -69,11 +101,13 @@
                                         }
                                     },
                                     "url": {
-                                        "raw": "{{baseUrl}}/products/:id",
+                                        "raw": "{{baseUrl}}/partner/v1/products/:id",
                                         "host": [
                                             "{{baseUrl}}"
                                         ],
                                         "path": [
+                                            "partner",
+                                            "v1",
                                             "products",
                                             ":id"
                                         ],
@@ -87,20 +121,26 @@
                                         "query": [
                                         ]
                                     },
-                                    "description": ""
+                                    "description": "Returns full details for a single product including rate and minimum premium"
                                 }
                             }
                             ]
                         },
 	                        {
-    "name": "/products/:id/classes",
-                "description": "",
+    "name": "/partner/v1/products/:id/classes",
+                "description": "Returns the class(es) of business associated with the product — used to populate quote requests",
                  "item": [
                             {
-                                "name": "List classes of business for a product",
+                                "name": "List classes of business under a product",
                                 "request": {
                                     "method": "GET",
                                     "header": [
+                                        {
+                                            "key": "Accept",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
+                                        }
                                     ],
                                     "body": {
                                         "mode": "raw",
@@ -112,11 +152,13 @@
                                         }
                                     },
                                     "url": {
-                                        "raw": "{{baseUrl}}/products/:id/classes",
+                                        "raw": "{{baseUrl}}/partner/v1/products/:id/classes",
                                         "host": [
                                             "{{baseUrl}}"
                                         ],
                                         "path": [
+                                            "partner",
+                                            "v1",
                                             "products",
                                             ":id",
                                             "classes"
@@ -131,7 +173,7 @@
                                         "query": [
                                         ]
                                     },
-                                    "description": ""
+                                    "description": "Returns the class(es) of business associated with the product — used to populate quote requests"
                                 }
                             }
                             ]
@@ -142,14 +184,20 @@
 	            "name": "Claims",
 	            "item": [
 	                        {
-    "name": "/claims/:id",
-                "description": "",
+    "name": "/partner/v1/claims/:id",
+                "description": "Returns the current state of a claim including reserve, approved amount, and settlement timestamp",
                  "item": [
                             {
-                                "name": "Get claim status",
+                                "name": "Get claim status and details",
                                 "request": {
                                     "method": "GET",
                                     "header": [
+                                        {
+                                            "key": "Accept",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
+                                        }
                                     ],
                                     "body": {
                                         "mode": "raw",
@@ -161,11 +209,13 @@
                                         }
                                     },
                                     "url": {
-                                        "raw": "{{baseUrl}}/claims/:id",
+                                        "raw": "{{baseUrl}}/partner/v1/claims/:id",
                                         "host": [
                                             "{{baseUrl}}"
                                         ],
                                         "path": [
+                                            "partner",
+                                            "v1",
                                             "claims",
                                             ":id"
                                         ],
@@ -179,17 +229,17 @@
                                         "query": [
                                         ]
                                     },
-                                    "description": ""
+                                    "description": "Returns the current state of a claim including reserve, approved amount, and settlement timestamp"
                                 }
                             }
                             ]
                         },
 	                        {
-    "name": "/policies/:id/claims",
-                "description": "",
+    "name": "/partner/v1/policies/:policyId/claims",
+                "description": "Registers a new claim against the specified policy. The claim moves to REGISTERED status immediately; processing is handled internally.",
                  "item": [
                             {
-                                "name": "Submit claim notification",
+                                "name": "Submit a claim notification",
                                 "request": {
                                     "method": "POST",
                                     "header": [
@@ -198,11 +248,17 @@
                                             "value": "application/json",
                                             "description": "",
                                             "disabled": false
+                                        },
+                                        {
+                                            "key": "Accept",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
                                         }
                                     ],
                                     "body": {
                                         "mode": "raw",
-                                        "raw": "",
+                                        "raw": "{\n \"policyId\": \"<string>\",\n \"incidentDate\": \"<date>\",\n \"reportedDate\": \"<date>\",\n \"lossLocation\": \"<string>\",\n \"natureOfLoss\": \"<string>\",\n \"causeOfLoss\": \"<string>\",\n \"contactName\": \"<string>\",\n \"contactPhone\": \"<string>\",\n \"description\": \"<string>\",\n \"estimatedLoss\": \"<number>\",\n \"notes\": \"<string>\"\n}",
                                         "options": {
                                             "raw": {
                                                 "language": "json"
@@ -210,18 +266,20 @@
                                         }
                                     },
                                     "url": {
-                                        "raw": "{{baseUrl}}/policies/:id/claims",
+                                        "raw": "{{baseUrl}}/partner/v1/policies/:policyId/claims",
                                         "host": [
                                             "{{baseUrl}}"
                                         ],
                                         "path": [
+                                            "partner",
+                                            "v1",
                                             "policies",
-                                            ":id",
+                                            ":policyId",
                                             "claims"
                                         ],
                                         "variable": [
                                             {
-                                                "key": "id",
+                                                "key": "policyId",
                                                 "value": "",
                                                 "description": ""
                                             }
@@ -229,7 +287,7 @@
                                         "query": [
                                         ]
                                     },
-                                    "description": ""
+                                    "description": "Registers a new claim against the specified policy. The claim moves to REGISTERED status immediately; processing is handled internally."
                                 }
                             }
                             ]
@@ -240,16 +298,16 @@
 	            "name": "Policies",
 	            "item": [
 	                        {
-    "name": "/policies",
-                "description": "",
+    "name": "/partner/v1/policies",
+                "description": "Converts an APPROVED quote into an active policy and triggers an async NAICOM upload. The naicomUid field will read PENDING until the upload is confirmed.",
                  "item": [
                             {
-                                "name": "Bind policy",
+                                "name": "Bind a policy from an approved quote",
                                 "request": {
                                     "method": "POST",
                                     "header": [
                                         {
-                                            "key": "Content-Type",
+                                            "key": "Accept",
                                             "value": "application/json",
                                             "description": "",
                                             "disabled": false
@@ -265,32 +323,46 @@
                                         }
                                     },
                                     "url": {
-                                        "raw": "{{baseUrl}}/policies",
+                                        "raw": "{{baseUrl}}/partner/v1/policies",
                                         "host": [
                                             "{{baseUrl}}"
                                         ],
                                         "path": [
+                                            "partner",
+                                            "v1",
                                             "policies"
                                         ],
                                         "variable": [
                                         ],
                                         "query": [
+                                            {
+                                                "key": "quoteId",
+                                                "value": "38400000-8cf0-11bd-b23e-10b96e4ef00d",
+                                                "description": "",
+                                                "disabled": false
+                                            }
                                         ]
                                     },
-                                    "description": ""
+                                    "description": "Converts an APPROVED quote into an active policy and triggers an async NAICOM upload. The naicomUid field will read PENDING until the upload is confirmed."
                                 }
                             }
                             ]
                         },
 	                        {
-    "name": "/policies/:id",
+    "name": "/partner/v1/policies/:id",
                 "description": "",
                  "item": [
                             {
-                                "name": "Get policy",
+                                "name": "Get policy details and status",
                                 "request": {
                                     "method": "GET",
                                     "header": [
+                                        {
+                                            "key": "Accept",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
+                                        }
                                     ],
                                     "body": {
                                         "mode": "raw",
@@ -302,11 +374,13 @@
                                         }
                                     },
                                     "url": {
-                                        "raw": "{{baseUrl}}/policies/:id",
+                                        "raw": "{{baseUrl}}/partner/v1/policies/:id",
                                         "host": [
                                             "{{baseUrl}}"
                                         ],
                                         "path": [
+                                            "partner",
+                                            "v1",
                                             "policies",
                                             ":id"
                                         ],
@@ -326,11 +400,11 @@
                             ]
                         },
 	                        {
-    "name": "/policies/:id/document",
-                "description": "",
+    "name": "/partner/v1/policies/:id/document",
+                "description": "Streams the approved policy certificate as a PDF binary. Returns 404 if the document has not yet been generated (policy not yet approved).",
                  "item": [
                             {
-                                "name": "Download policy certificate (PDF)",
+                                "name": "Download the policy certificate PDF",
                                 "request": {
                                     "method": "GET",
                                     "header": [
@@ -351,11 +425,13 @@
                                         }
                                     },
                                     "url": {
-                                        "raw": "{{baseUrl}}/policies/:id/document",
+                                        "raw": "{{baseUrl}}/partner/v1/policies/:id/document",
                                         "host": [
                                             "{{baseUrl}}"
                                         ],
                                         "path": [
+                                            "partner",
+                                            "v1",
                                             "policies",
                                             ":id",
                                             "document"
@@ -370,7 +446,7 @@
                                         "query": [
                                         ]
                                     },
-                                    "description": ""
+                                    "description": "Streams the approved policy certificate as a PDF binary. Returns 404 if the document has not yet been generated (policy not yet approved)."
                                 }
                             }
                             ]
@@ -381,14 +457,20 @@
 	            "name": "Customers",
 	            "item": [
 	                        {
-    "name": "/customers/:id",
-                "description": "",
+    "name": "/partner/v1/customers/:id",
+                "description": "Returns customer profile and current KYC status. Use to poll after registration.",
                  "item": [
                             {
-                                "name": "Get customer",
+                                "name": "Get customer details and KYC status",
                                 "request": {
                                     "method": "GET",
                                     "header": [
+                                        {
+                                            "key": "Accept",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
+                                        }
                                     ],
                                     "body": {
                                         "mode": "raw",
@@ -400,11 +482,13 @@
                                         }
                                     },
                                     "url": {
-                                        "raw": "{{baseUrl}}/customers/:id",
+                                        "raw": "{{baseUrl}}/partner/v1/customers/:id",
                                         "host": [
                                             "{{baseUrl}}"
                                         ],
                                         "path": [
+                                            "partner",
+                                            "v1",
                                             "customers",
                                             ":id"
                                         ],
@@ -418,17 +502,17 @@
                                         "query": [
                                         ]
                                     },
-                                    "description": ""
+                                    "description": "Returns customer profile and current KYC status. Use to poll after registration."
                                 }
                             }
                             ]
                         },
 	                        {
-    "name": "/customers/corporate",
-                "description": "",
+    "name": "/partner/v1/customers/corporate",
+                "description": "Creates a corporate customer and triggers asynchronous KYC verification against the CAC RC Number. At least two director IDs are required for KYC.",
                  "item": [
                             {
-                                "name": "Register corporate customer",
+                                "name": "Register a corporate customer",
                                 "request": {
                                     "method": "POST",
                                     "header": [
@@ -437,11 +521,17 @@
                                             "value": "application/json",
                                             "description": "",
                                             "disabled": false
+                                        },
+                                        {
+                                            "key": "Accept",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
                                         }
                                     ],
                                     "body": {
                                         "mode": "raw",
-                                        "raw": "",
+                                        "raw": "{\n \"companyName\": \"<string>\",\n \"rcNumber\": \"<string>\",\n \"cacIssuedDate\": \"<date>\",\n \"incorporationDate\": \"<date>\",\n \"industry\": \"<string>\",\n \"contactPerson\": \"<string>\",\n \"email\": \"<string>\",\n \"phone\": \"<string>\",\n \"alternatePhone\": \"<string>\",\n \"address\": \"<string>\",\n \"city\": \"<string>\",\n \"state\": \"<string>\",\n \"country\": \"<string>\",\n \"directors\": \"<string>\",\n \"relationshipManagerId\": \"<string>\"\n}",
                                         "options": {
                                             "raw": {
                                                 "language": "json"
@@ -449,11 +539,13 @@
                                         }
                                     },
                                     "url": {
-                                        "raw": "{{baseUrl}}/customers/corporate",
+                                        "raw": "{{baseUrl}}/partner/v1/customers/corporate",
                                         "host": [
                                             "{{baseUrl}}"
                                         ],
                                         "path": [
+                                            "partner",
+                                            "v1",
                                             "customers",
                                             "corporate"
                                         ],
@@ -462,17 +554,17 @@
                                         "query": [
                                         ]
                                     },
-                                    "description": ""
+                                    "description": "Creates a corporate customer and triggers asynchronous KYC verification against the CAC RC Number. At least two director IDs are required for KYC."
                                 }
                             }
                             ]
                         },
 	                        {
-    "name": "/customers/individual",
-                "description": "",
+    "name": "/partner/v1/customers/individual",
+                "description": "Creates a customer record and triggers asynchronous KYC verification. Poll GET /customers/{id} to check kycStatus until it is VERIFIED or FAILED.",
                  "item": [
                             {
-                                "name": "Register individual customer",
+                                "name": "Register an individual customer",
                                 "request": {
                                     "method": "POST",
                                     "header": [
@@ -481,11 +573,17 @@
                                             "value": "application/json",
                                             "description": "",
                                             "disabled": false
+                                        },
+                                        {
+                                            "key": "Accept",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
                                         }
                                     ],
                                     "body": {
                                         "mode": "raw",
-                                        "raw": "",
+                                        "raw": "{\n \"firstName\": \"<string>\",\n \"lastName\": \"<string>\",\n \"otherNames\": \"<string>\",\n \"dateOfBirth\": \"<date>\",\n \"gender\": \"<string>\",\n \"maritalStatus\": \"<string>\",\n \"idType\": \"<string>\",\n \"idNumber\": \"<string>\",\n \"idExpiryDate\": \"<date>\",\n \"email\": \"<string>\",\n \"phone\": \"<string>\",\n \"alternatePhone\": \"<string>\",\n \"address\": \"<string>\",\n \"city\": \"<string>\",\n \"state\": \"<string>\",\n \"country\": \"<string>\",\n \"relationshipManagerId\": \"<string>\"\n}",
                                         "options": {
                                             "raw": {
                                                 "language": "json"
@@ -493,11 +591,13 @@
                                         }
                                     },
                                     "url": {
-                                        "raw": "{{baseUrl}}/customers/individual",
+                                        "raw": "{{baseUrl}}/partner/v1/customers/individual",
                                         "host": [
                                             "{{baseUrl}}"
                                         ],
                                         "path": [
+                                            "partner",
+                                            "v1",
                                             "customers",
                                             "individual"
                                         ],
@@ -506,7 +606,7 @@
                                         "query": [
                                         ]
                                     },
-                                    "description": ""
+                                    "description": "Creates a customer record and triggers asynchronous KYC verification. Poll GET /customers/{id} to check kycStatus until it is VERIFIED or FAILED."
                                 }
                             }
                             ]
@@ -517,53 +617,16 @@
 	            "name": "Webhooks",
 	            "item": [
 	                        {
-    "name": "/webhooks",
-                "description": "",
+    "name": "/partner/v1/webhooks",
+                "description": "Returns all webhook registrations for the authenticated partner app",
                  "item": [
                             {
-                                "name": "List webhooks",
+                                "name": "List registered webhooks",
                                 "request": {
                                     "method": "GET",
                                     "header": [
-                                    ],
-                                    "body": {
-                                        "mode": "raw",
-                                        "raw": "",
-                                        "options": {
-                                            "raw": {
-                                                "language": "json"
-                                            }
-                                        }
-                                    },
-                                    "url": {
-                                        "raw": "{{baseUrl}}/webhooks",
-                                        "host": [
-                                            "{{baseUrl}}"
-                                        ],
-                                        "path": [
-                                            "webhooks"
-                                        ],
-                                        "variable": [
-                                        ],
-                                        "query": [
-                                        ]
-                                    },
-                                    "description": ""
-                                }
-                            }
-                            ]
-                        },
-	                        {
-    "name": "/webhooks",
-                "description": "",
-                 "item": [
-                            {
-                                "name": "Register webhook",
-                                "request": {
-                                    "method": "POST",
-                                    "header": [
                                         {
-                                            "key": "Content-Type",
+                                            "key": "Accept",
                                             "value": "application/json",
                                             "description": "",
                                             "disabled": false
@@ -579,11 +642,82 @@
                                         }
                                     },
                                     "url": {
-                                        "raw": "{{baseUrl}}/webhooks",
+                                        "raw": "{{baseUrl}}/partner/v1/webhooks",
                                         "host": [
                                             "{{baseUrl}}"
                                         ],
                                         "path": [
+                                            "partner",
+                                            "v1",
+                                            "webhooks"
+                                        ],
+                                        "variable": [
+                                        ],
+                                        "query": [
+                                            {
+                                                "key": "page",
+                                                "value": "56",
+                                                "description": "Zero-based page index (0..N)",
+                                                "disabled": true
+                                            },
+                                            {
+                                                "key": "size",
+                                                "value": "56",
+                                                "description": "The size of the page to be returned",
+                                                "disabled": true
+                                            },
+                                            {
+                                                "key": "sort",
+                                                "value": "",
+                                                "description": "Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.",
+                                                "disabled": true
+                                            }
+                                        ]
+                                    },
+                                    "description": "Returns all webhook registrations for the authenticated partner app"
+                                }
+                            }
+                            ]
+                        },
+	                        {
+    "name": "/partner/v1/webhooks",
+                "description": "Subscribe to one or more event types. All deliveries are HMAC-SHA256 signed via the X-CIA-Signature header. The secret is never returned after this call.",
+                 "item": [
+                            {
+                                "name": "Register a webhook endpoint",
+                                "request": {
+                                    "method": "POST",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
+                                        },
+                                        {
+                                            "key": "Accept",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
+                                        }
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "{\n \"targetUrl\": \"<string>\",\n \"secret\": \"<string>\",\n \"eventTypes\": \"<string>\"\n}",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/partner/v1/webhooks",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "partner",
+                                            "v1",
                                             "webhooks"
                                         ],
                                         "variable": [
@@ -591,17 +725,17 @@
                                         "query": [
                                         ]
                                     },
-                                    "description": ""
+                                    "description": "Subscribe to one or more event types. All deliveries are HMAC-SHA256 signed via the X-CIA-Signature header. The secret is never returned after this call."
                                 }
                             }
                             ]
                         },
 	                        {
-    "name": "/webhooks/:id",
-                "description": "",
+    "name": "/partner/v1/webhooks/:id",
+                "description": "Soft-deletes the registration; pending deliveries in-flight may still complete",
                  "item": [
                             {
-                                "name": "Delete webhook",
+                                "name": "Remove a webhook registration",
                                 "request": {
                                     "method": "DELETE",
                                     "header": [
@@ -616,11 +750,13 @@
                                         }
                                     },
                                     "url": {
-                                        "raw": "{{baseUrl}}/webhooks/:id",
+                                        "raw": "{{baseUrl}}/partner/v1/webhooks/:id",
                                         "host": [
                                             "{{baseUrl}}"
                                         ],
                                         "path": [
+                                            "partner",
+                                            "v1",
                                             "webhooks",
                                             ":id"
                                         ],
@@ -634,7 +770,7 @@
                                         "query": [
                                         ]
                                     },
-                                    "description": ""
+                                    "description": "Soft-deletes the registration; pending deliveries in-flight may still complete"
                                 }
                             }
                             ]
@@ -642,19 +778,70 @@
 	                    ]
 	        },
 	        {
-	            "name": "Quotation",
+	            "name": "Quotes",
 	            "item": [
 	                        {
-    "name": "/quotes",
-                "description": "",
+    "name": "/partner/v1/quotes",
+                "description": "Generates a premium quote for one or more risks. Returns immediately with calculated premium. The quote must be approved internally before a policy can be bound.",
                  "item": [
                             {
-                                "name": "Create quote",
+                                "name": "Create a quote",
                                 "request": {
                                     "method": "POST",
                                     "header": [
                                         {
                                             "key": "Content-Type",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
+                                        },
+                                        {
+                                            "key": "Accept",
+                                            "value": "application/json",
+                                            "description": "",
+                                            "disabled": false
+                                        }
+                                    ],
+                                    "body": {
+                                        "mode": "raw",
+                                        "raw": "{\n \"customerId\": \"<string>\",\n \"productId\": \"<string>\",\n \"brokerId\": \"<string>\",\n \"agentId\": \"<string>\",\n \"businessType\": \"<string>\",\n \"policyStartDate\": \"<date>\",\n \"policyEndDate\": \"<date>\",\n \"notes\": \"<string>\",\n \"risks\": \"<string>\",\n \"quoteLoadings\": \"<string>\",\n \"quoteDiscounts\": \"<string>\",\n \"selectedClauseIds\": \"<string>\",\n \"coinsuranceParticipants\": \"<string>\"\n}",
+                                        "options": {
+                                            "raw": {
+                                                "language": "json"
+                                            }
+                                        }
+                                    },
+                                    "url": {
+                                        "raw": "{{baseUrl}}/partner/v1/quotes",
+                                        "host": [
+                                            "{{baseUrl}}"
+                                        ],
+                                        "path": [
+                                            "partner",
+                                            "v1",
+                                            "quotes"
+                                        ],
+                                        "variable": [
+                                        ],
+                                        "query": [
+                                        ]
+                                    },
+                                    "description": "Generates a premium quote for one or more risks. Returns immediately with calculated premium. The quote must be approved internally before a policy can be bound."
+                                }
+                            }
+                            ]
+                        },
+	                        {
+    "name": "/partner/v1/quotes/:id",
+                "description": "Returns the quote with premium breakdown and current approval status",
+                 "item": [
+                            {
+                                "name": "Get quote details",
+                                "request": {
+                                    "method": "GET",
+                                    "header": [
+                                        {
+                                            "key": "Accept",
                                             "value": "application/json",
                                             "description": "",
                                             "disabled": false
@@ -670,48 +857,13 @@
                                         }
                                     },
                                     "url": {
-                                        "raw": "{{baseUrl}}/quotes",
+                                        "raw": "{{baseUrl}}/partner/v1/quotes/:id",
                                         "host": [
                                             "{{baseUrl}}"
                                         ],
                                         "path": [
-                                            "quotes"
-                                        ],
-                                        "variable": [
-                                        ],
-                                        "query": [
-                                        ]
-                                    },
-                                    "description": ""
-                                }
-                            }
-                            ]
-                        },
-	                        {
-    "name": "/quotes/:id",
-                "description": "",
-                 "item": [
-                            {
-                                "name": "Get quote",
-                                "request": {
-                                    "method": "GET",
-                                    "header": [
-                                    ],
-                                    "body": {
-                                        "mode": "raw",
-                                        "raw": "",
-                                        "options": {
-                                            "raw": {
-                                                "language": "json"
-                                            }
-                                        }
-                                    },
-                                    "url": {
-                                        "raw": "{{baseUrl}}/quotes/:id",
-                                        "host": [
-                                            "{{baseUrl}}"
-                                        ],
-                                        "path": [
+                                            "partner",
+                                            "v1",
                                             "quotes",
                                             ":id"
                                         ],
@@ -725,7 +877,7 @@
                                         "query": [
                                         ]
                                     },
-                                    "description": ""
+                                    "description": "Returns the quote with premium breakdown and current approval status"
                                 }
                             }
                             ]
@@ -737,7 +889,7 @@
 	"variable": [
 		{
 			"key": "baseUrl",
-			"value": "{{baseUrl}}/partner/v1",
+			"value": "http://localhost",
 			"type": "string"
         }
 	]
