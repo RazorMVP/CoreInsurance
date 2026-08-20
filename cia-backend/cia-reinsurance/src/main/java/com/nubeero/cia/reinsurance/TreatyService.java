@@ -12,6 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Service
@@ -51,6 +52,22 @@ public class TreatyService {
         if (treaty.getParticipants().stream().noneMatch(p -> p.getDeletedAt() == null)) {
             throw new BusinessRuleException("NO_PARTICIPANTS",
                     "A treaty must have at least one participant before activation");
+        }
+        // Quota-share participant shares are the CEDED percentage; the insurer's
+        // retention is the remainder (AllocationService.applyQuotaShare: retained =
+        // sumInsured − ceded). So the reinsurer shares must not exceed 100% — over
+        // 100% would cede more than the whole risk. (Not == 100: that would force
+        // zero retention.)
+        if (treaty.getTreatyType() == TreatyType.QUOTA_SHARE) {
+            BigDecimal totalShare = treaty.getParticipants().stream()
+                    .filter(p -> p.getDeletedAt() == null)
+                    .map(RiTreatyParticipant::getSharePercentage)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (totalShare.compareTo(BigDecimal.valueOf(100)) > 0) {
+                throw new BusinessRuleException("QS_SHARES_EXCEED_100",
+                        "Quota-share participant shares total " + totalShare.stripTrailingZeros().toPlainString()
+                                + "% — cannot exceed 100% (the remainder is the insurer's retention)");
+            }
         }
         treaty.setStatus(TreatyStatus.ACTIVE);
         return treatyRepository.save(treaty);
