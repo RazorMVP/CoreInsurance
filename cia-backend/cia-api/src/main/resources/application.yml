@@ -131,6 +131,12 @@ cia:
   notifications:
     email:
       enabled: ${EMAIL_NOTIFICATIONS_ENABLED:true}
+      # SendGrid API key — bound only when cia.notifications.email.provider=sendgrid.
+      # Exposes the documented SENDGRID_API_KEY env var to the dotted property the
+      # SendGridEmailService @Value reads; the empty default also stops a
+      # provider=sendgrid boot from failing on an unresolved placeholder.
+      sendgrid:
+        api-key: ${SENDGRID_API_KEY:}
     sms:
       enabled: ${SMS_NOTIFICATIONS_ENABLED:true}
 
