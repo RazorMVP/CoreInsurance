@@ -58,6 +58,22 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-08-21 — Partner Portal (Phase 3) kickoff — BFF + partner-auth design (`feat/partner-portal-bff`, design only)
+
+Started Frontend Phase 3 (Partner Portal, `apps/partner`, 0/5). Brainstorm → architectural design → spec; **no production code yet**. Decomposed the epic into **Sub-project A (BFF + partner-auth backend foundation)** and **Sub-project B (the 5 SPA builds, blocked on A)**.
+
+**Key context surfaced:** `/partner/v1/**` is a finished **M2M client-credentials** API, deliberately **no-CORS**, with **no partner human-auth story**. A browser SPA can't hold the confidential `client_secret` or call the no-CORS API directly.
+
+**Architecture of record (user-approved):** the **token-handler / BFF pattern** (IETF browser-apps BCP) — browser holds no secret/token; a first-party BFF (`/portal/**`) holds tokens server-side (Redis session, `HttpOnly`+`SameSite=Strict` cookie), authenticates partner humans against a dedicated **`partner` Keycloak realm** (mirrors the `platform` realm), resolves human→app via a new **`public.partner_portal_grant`** table, mints partner-app-scoped tokens by **fetching the `client_secret` from Keycloak just-in-time** (never persisted), and **proxies to `/partner/v1/**` over real HTTP** for scope/rate-limit fidelity. Demo-first sequencing (like back-office/platform).
+
+**Build-complete directive (new standing user preference, saved to memory):** "build once and for all, reduce backlogs as we build, henceforth." Applied immediately — folded into Sub-project A: (a) **partner request telemetry (A7)** — `PartnerRequestMetricsFilter` + Redis rollups + `partner_request_daily` + daily flush, so P5's Usage Dashboard is fully real (verified only `webhook_delivery_logs` existed; request-count/error-rate telemetry did not); (b) **Redis-backed distributed rate limiting** (since Redis is introduced for sessions anyway).
+
+**Spec:** [`docs/superpowers/specs/2026-08-20-partner-portal-bff-auth-design.md`](docs/superpowers/specs/2026-08-20-partner-portal-bff-auth-design.md) (2 commits).
+
+**Known follow-ups.** No rows added. Planned removal on Sub-project A landing: **`partner-ratelimit-redis-distributed`** (P3, folded into A2) — and the would-be `partner-usage-telemetry` follow-up was **never created** (built as A7 instead). Next step: write the Sub-project A implementation plan (TDD, task-by-task), then execute.
+
+---
+
 ## 2026-08-20 — P3 correctness/consistency batch (`fix/p3-consistency-batch`, own PR)
 
 Post-audit batch of 5 small, independent P3 backlog fixes (user picked the genuine correctness/consistency cluster from the 40-row P3 list). One goal: land these 5, no scope creep. Each committed as its own unit.
