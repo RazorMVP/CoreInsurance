@@ -52,7 +52,7 @@ public class CustomerService {
     @Transactional(readOnly = true)
     public Page<CustomerSummaryResponse> list(CustomerType type, KycStatus kycStatus,
                                               CustomerStatus status, String q, Pageable pageable) {
-        Specification<Customer> spec = Specification.where(CustomerSpecs.notDeleted())
+        Specification<Customer> spec = CustomerSpecs.notDeleted()
                 .and(CustomerSpecs.typeEquals(type))
                 .and(CustomerSpecs.kycStatusEquals(kycStatus))
                 .and(CustomerSpecs.customerStatusEquals(status))

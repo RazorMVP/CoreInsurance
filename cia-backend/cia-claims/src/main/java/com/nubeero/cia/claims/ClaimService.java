@@ -48,7 +48,7 @@ public class ClaimService {
 
     public Page<Claim> list(ClaimStatus status, UUID policyId, UUID customerId,
                             String q, Pageable pageable) {
-        Specification<Claim> spec = Specification.where(ClaimSpecs.notDeleted())
+        Specification<Claim> spec = ClaimSpecs.notDeleted()
                 .and(ClaimSpecs.statusEquals(status))
                 .and(ClaimSpecs.policyIdEquals(policyId))
                 .and(ClaimSpecs.customerIdEquals(customerId))

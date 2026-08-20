@@ -73,7 +73,7 @@ public class PaymentService {
             Pageable pageable) {
         var fullSpec = (spec == null
                 ? PaymentSpecs.deletedAtIsNull()
-                : Specification.where(PaymentSpecs.deletedAtIsNull()).and(spec));
+                : PaymentSpecs.deletedAtIsNull().and(spec));
         return paymentRepository.findAll(fullSpec, pageable).map(this::toListItem);
     }
 
