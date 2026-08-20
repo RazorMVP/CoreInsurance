@@ -85,7 +85,7 @@ public class PolicyService {
 
     @Transactional(readOnly = true)
     public Page<PolicySummaryResponse> list(PolicyStatus status, UUID customerId, String q, Pageable pageable) {
-        Specification<Policy> spec = Specification.where(PolicySpecs.notDeleted())
+        Specification<Policy> spec = PolicySpecs.notDeleted()
                 .and(PolicySpecs.statusEquals(status))
                 .and(PolicySpecs.customerIdEquals(customerId))
                 .and(PolicySpecs.qLike(q));

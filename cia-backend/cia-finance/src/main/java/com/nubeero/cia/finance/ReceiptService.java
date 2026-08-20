@@ -73,7 +73,7 @@ public class ReceiptService {
         // Always exclude soft-deleted rows, regardless of what the caller passes.
         var fullSpec = (spec == null
                 ? ReceiptSpecs.deletedAtIsNull()
-                : Specification.where(ReceiptSpecs.deletedAtIsNull()).and(spec));
+                : ReceiptSpecs.deletedAtIsNull().and(spec));
 
         return receiptRepository.findAll(fullSpec, pageable).map(this::toListItem);
     }

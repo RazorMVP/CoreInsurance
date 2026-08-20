@@ -51,7 +51,7 @@ public class EndorsementService {
     public Page<Endorsement> list(UUID policyId, EndorsementStatus status,
                                    EndorsementType endorsementType, UUID customerId,
                                    String q, Pageable pageable) {
-        Specification<Endorsement> spec = Specification.where(EndorsementSpecs.notDeleted())
+        Specification<Endorsement> spec = EndorsementSpecs.notDeleted()
                 .and(EndorsementSpecs.policyIdEquals(policyId))
                 .and(EndorsementSpecs.statusEquals(status))
                 .and(EndorsementSpecs.endorsementTypeEquals(endorsementType))

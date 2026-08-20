@@ -6,6 +6,7 @@ import com.nubeero.cia.partner.controller.dto.PartnerProductResponse;
 import com.nubeero.cia.setup.product.ClassOfBusinessService;
 import com.nubeero.cia.setup.product.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -37,7 +38,7 @@ public class PartnerProductController {
                description = "Returns all active insurance products for the authenticated tenant")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Products retrieved",
-            content = @Content(schema = @Schema(implementation = PartnerProductResponse.class))),
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = PartnerProductResponse.class)))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized — invalid or expired token", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — insufficient scope", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Rate limit exceeded", content = @Content)
@@ -70,7 +71,7 @@ public class PartnerProductController {
                description = "Returns the class(es) of business associated with the product — used to populate quote requests")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Classes retrieved",
-            content = @Content(schema = @Schema(implementation = PartnerClassOfBusinessResponse.class))),
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = PartnerClassOfBusinessResponse.class)))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized — invalid or expired token", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — insufficient scope", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Product not found", content = @Content),

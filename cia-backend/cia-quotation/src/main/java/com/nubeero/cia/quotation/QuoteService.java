@@ -70,7 +70,7 @@ public class QuoteService {
 
     @Transactional(readOnly = true)
     public Page<QuoteSummaryResponse> list(QuoteStatus status, UUID customerId, String q, Pageable pageable) {
-        Specification<Quote> spec = Specification.where(QuoteSpecs.notDeleted())
+        Specification<Quote> spec = QuoteSpecs.notDeleted()
                 .and(QuoteSpecs.statusEquals(status))
                 .and(QuoteSpecs.customerIdEquals(customerId))
                 .and(QuoteSpecs.qLike(q));

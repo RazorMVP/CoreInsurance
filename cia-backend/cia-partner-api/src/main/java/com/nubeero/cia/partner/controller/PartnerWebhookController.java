@@ -5,6 +5,7 @@ import com.nubeero.cia.partner.controller.dto.PartnerWebhookResponse;
 import com.nubeero.cia.partner.webhook.WebhookService;
 import com.nubeero.cia.partner.webhook.dto.RegisterWebhookRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -60,7 +61,7 @@ public class PartnerWebhookController {
                description = "Returns all webhook registrations for the authenticated partner app")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Webhooks listed",
-            content = @Content(schema = @Schema(implementation = PartnerWebhookResponse.class))),
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = PartnerWebhookResponse.class)))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized — invalid or expired token", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — insufficient scope", content = @Content),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Rate limit exceeded", content = @Content)
