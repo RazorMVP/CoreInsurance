@@ -11,10 +11,8 @@ import {
 } from '@cia/ui';
 import { useServerPagination } from '@/lib/use-server-pagination';
 import {
-  apiClient,
-  apiEnvelope,
   JournalEntrySummaryDtoSchema,
-  SpringPageSchema,
+  validatedList,
   type JournalEntrySummaryDto,
   type JournalEntryStatus,
 } from '@cia/api-client';
@@ -57,16 +55,14 @@ export default function JournalEntryBrowserPage() {
 
   const listQuery = useQuery({
     queryKey: ['closures', 'journal-entries', queryString],
-    queryFn:  async () => {
-      const res = await apiClient.get(`/api/v1/finance/journal-entries?${queryString}`);
-      return apiEnvelope(SpringPageSchema(JournalEntrySummaryDtoSchema)).parse(res.data).data;
-    },
+    queryFn:  () => validatedList(`/api/v1/finance/journal-entries?${queryString}`, JournalEntrySummaryDtoSchema),
   });
 
-  const pageData = listQuery.data;
-  const entries: JournalEntrySummaryDto[] = pageData?.content ?? [];
-  const totalElements = pageData?.totalElements ?? 0;
-  const totalPages    = pageData?.totalPages ?? 0;
+  // Backend returns the canonical {data:[...], meta:{total,page,size}} envelope
+  // (Session-137 sweep) — no Spring Page object. totalPages is derived from meta.
+  const entries: JournalEntrySummaryDto[] = listQuery.data?.data ?? [];
+  const totalElements = listQuery.data?.meta.total ?? 0;
+  const totalPages    = size > 0 ? Math.ceil(totalElements / size) : 0;
 
   return (
     <div className="p-6 space-y-5">

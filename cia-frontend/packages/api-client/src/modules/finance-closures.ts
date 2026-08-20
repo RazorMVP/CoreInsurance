@@ -195,20 +195,6 @@ export const JournalEntryDtoSchema = z.object({
 });
 export type JournalEntryDto = z.infer<typeof JournalEntryDtoSchema>;
 
-// Spring Page<T> envelope on the data field — totalElements + content[] are
-// the fields the browser table reads.
-export const SpringPageSchema = <T extends z.ZodTypeAny>(item: T) => z.object({
-  content:          z.array(item),
-  totalElements:    z.number(),
-  totalPages:       z.number(),
-  number:           z.number(),
-  size:             z.number(),
-  first:            z.boolean(),
-  last:             z.boolean(),
-  empty:            z.boolean(),
-  numberOfElements: z.number(),
-});
-
 // ── IFRS 17 PAA — Period Close (Slice 2.5) ───────────────────────────────
 
 export const LrcGroupEntrySchema = z.object({
