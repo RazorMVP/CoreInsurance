@@ -95,7 +95,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PartnerWebhookResponse"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PartnerWebhookResponse"
+                  }
                 }
               }
             }
@@ -527,7 +530,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PartnerProductResponse"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PartnerProductResponse"
+                  }
                 }
               }
             }
@@ -624,7 +630,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PartnerClassOfBusinessResponse"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PartnerClassOfBusinessResponse"
+                  }
                 }
               }
             }
