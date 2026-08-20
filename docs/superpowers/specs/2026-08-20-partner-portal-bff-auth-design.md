@@ -68,6 +68,8 @@ The **BFF is the OAuth client** (not the SPA). Endpoints under `/portal/auth`:
 
 **Session store: Redis** (already in the stack for partner rate-limiting → survives the 3+ API replicas). Sessions hold the human's tokens + a short idle TTL + absolute TTL; opaque id only in the cookie. **In-memory fallback for dev** (`@ConditionalOnProperty`, mirroring the rate-limit store toggle).
 
+**Fold-in (clears backlog `partner-ratelimit-redis-distributed`):** we are introducing a real Redis dependency here, so in the same epic the **partner rate limiter is migrated from its per-replica in-memory `ConcurrentHashMap` buckets to Redis-backed distributed buckets** (bucket4j-redis), behind the same `@ConditionalOnProperty` store toggle (in-memory stays the dev/IT default). This makes per-client rate limits correct across the 3+ API replicas — the exact gap that backlog row named — with no extra infra beyond the Redis we're already adding.
+
 ### A3 · Token minting & secret handling (Keycloak-admin JIT — approved)
 
 To call `/partner/v1/**` as a partner app, the BFF needs a partner-app-scoped **client-credentials** token in that app's **tenant** realm.
@@ -81,7 +83,7 @@ To call `/partner/v1/**` as a partner app, the BFF needs a partner-app-scoped **
 All cookie-authenticated (session), **CORS-enabled to the portal SPA origin only** (`cia.cors.allowed-origins` gains the portal URL; a dedicated policy, since `/partner/**` stays CORS-free).
 
 - `GET /portal/apps` — apps this human manages: client_id, scopes, rate tier, status, tenant label (grant table + Keycloak admin read). Drives the **app-context selector**.
-- **Management** (per app, `MANAGER`): 
+- **Management** (per app, `MANAGER`):
   - `/portal/apps/{id}/webhooks` — proxies `/partner/v1/webhooks` CRUD with the minted token.
   - `GET /portal/apps/{id}/credentials` — client_id + scopes (never the secret); `POST .../credentials/rotate` — rotate the secret via Keycloak admin, returns the new secret **once** (BFF response, not stored).
   - `GET /portal/apps/{id}/usage` — request counts / error rates / webhook-delivery logs (existing partner usage data).
@@ -97,6 +99,16 @@ New **`cia-partner-portal-bff`** Maven module — depends on `cia-common`, `cia-
 
 Increment 1 ships: the `cia-partner-portal-bff` module + the `/portal/**` contract + the `partner_portal_grant` migration + the gated `partner`-realm bootstrap (a `PartnerPortalBootstrapRunner`, `@ConditionalOnProperty` off by default, mirroring `PlatformBootstrapRunner`) + the "invite developer" internal endpoint. The **Sub-project B SPA builds against this contract in demo mode** (`DevAuthProvider`, mocked `/portal/**` data) until the `partner` realm is provisioned — exactly the state back-office and platform run in today. Nothing here provisions a live realm or requires real Keycloak infra to build/test.
 
+### A7 · Partner API request telemetry (built now — no deferral)
+
+Verified: today only **webhook delivery** is persisted (`webhook_delivery_logs`, joinable per app). There is **no** per-app API request-count / error-rate telemetry anywhere (the rate limiter's buckets are ephemeral in-memory tokens). Rather than ship a half-real Usage Dashboard, we build the missing pipeline in this epic so P5 is fully real end-to-end.
+
+- **`PartnerRequestMetricsFilter`** — a new `OncePerRequestFilter` on `/partner/v1/**`, ordered **after** authentication (so `client_id` + tenant are resolved) and around the request so the response status is known. On each request it increments per-app counters: `total`, `success` (2xx), `client_error` (4xx), `server_error` (5xx).
+- **Live store: Redis rollups** (reusing the Redis introduced for sessions) — keys `partner:usage:{tenant}:{clientId}:{yyyy-MM-dd}` (hash of the four counters), atomic `HINCRBY`, TTL ~95 days. Off the DB hot path.
+- **Durable history: `partner_request_daily`** (tenant schema: `partner_app_id`, `usage_date`, `total`, `success`, `client_error`, `server_error`, unique on `(partner_app_id, usage_date)`) — a lightweight **daily scheduled flush** (Temporal cron, mirroring the existing `PdfDownloadLogRetentionWorkflow` cron pattern) persists each day's Redis rollup into the table so history survives the Redis TTL.
+- **`/portal/apps/{id}/usage`** composes **today's live counts (Redis) + historical daily rows (table) + webhook-delivery success/failure (existing `webhook_delivery_logs`)**. Error rate = `(client_error + server_error) / total`.
+- **Dev/IT fallback:** with the in-memory store toggle, the filter increments an in-memory map and the usage endpoint reads it (same contract, no Redis needed for tests).
+
 ## Security properties
 
 - **Secret confidentiality** — `client_secret` lives only in Keycloak; the BFF retrieves it server-side JIT and never returns it to the browser (except a freshly-rotated secret, shown once in the rotate response).
@@ -107,9 +119,16 @@ Increment 1 ships: the `cia-partner-portal-bff` module + the `/portal/**` contra
 
 ## Scope
 
-**In scope (Sub-project A):** the `cia-partner-portal-bff` module; `/portal/**` (auth, apps, webhooks proxy, credentials + rotate, usage, try-it proxy); the `partner` realm + `cia-partner-portal` client provisioning (idempotent, gated); `PartnerPortalRoles`; `public.partner_portal_grant` + the internal "invite developer" endpoint; Redis (+ in-memory) session store; Keycloak-admin JIT secret retrieval + per-app token cache; CORS policy for the portal origin; ITs.
+**In scope (Sub-project A):** the `cia-partner-portal-bff` module; `/portal/**` (auth, apps, webhooks proxy, credentials + rotate, usage, try-it proxy); the `partner` realm + `cia-partner-portal` client provisioning (idempotent, gated); `PartnerPortalRoles`; `public.partner_portal_grant` + the internal "invite developer" endpoint; Redis (+ in-memory) session store; Keycloak-admin JIT secret retrieval + per-app token cache; CORS policy for the portal origin; **partner request telemetry (A7): `PartnerRequestMetricsFilter` + Redis rollups + `partner_request_daily` table + daily flush cron**; **Redis-backed distributed rate limiting (clears `partner-ratelimit-redis-distributed`)**; ITs.
 
-**Non-goals:** the SPA itself (Sub-project B); changing `/partner/v1/**` (unchanged); a live `partner` realm deployment (gated/off, provisioned at infra time like platform/back-office); billing/quota UI; partner self-signup (invite-only in v1 — a tenant admin grants access).
+**Non-goals:** the SPA itself (Sub-project B); changing `/partner/v1/**` request/response *behavior* (the metrics filter + Redis rate-limit are transparent additions — no contract change); a live `partner` realm deployment (gated/off, provisioned at infra time like platform/back-office); billing/quota UI; partner self-signup (invite-only in v1 — a tenant admin grants access; **confirmed**).
+
+## Backlog cleared by this sub-project
+
+Per the standing "build complete, reduce backlog" directive, this epic folds in and removes two existing backlog rows rather than deferring:
+
+- `partner-ratelimit-redis-distributed` (P3) — the Redis-backed distributed rate limiter (A2 fold-in).
+- The would-be `partner-usage-telemetry` follow-up is **never created** — the telemetry (A7) is built here instead of logged.
 
 ## Testing strategy
 
@@ -120,10 +139,10 @@ Increment 1 ships: the `cia-partner-portal-bff` module + the `/portal/**` contra
 - **Snapshot/guard** — the internal `/api/v1/partner-apps/{id}/developers` endpoint joins the `InternalApiSnapshotIT` surface.
 - Full reactor `mvn verify` green.
 
-## Open questions (for spec review)
+## Resolved decisions (were open questions)
 
-1. **Grant provisioning UX** — v1 is invite-only by a tenant System Admin (a grant row + Keycloak user ensure). Confirm no partner self-signup in v1.
-2. **Usage data source** — `/portal/apps/{id}/usage` reads existing partner request/webhook-delivery data. If that telemetry isn't already persisted per-app, usage is a thin/mocked surface in Increment 1 and a follow-up (`partner-usage-telemetry`). Flag for confirmation.
+1. **Grant provisioning UX — resolved: invite-only in v1.** A tenant System Admin grants a developer access (grant row + Keycloak-user ensure when the realm is live). No partner self-signup in v1.
+2. **Usage data source — resolved: build the telemetry now (A7).** Verified that only webhook-delivery data exists; the request-count/error-rate pipeline is built in this epic (A7) rather than deferred, so P5 is fully real end-to-end.
 
 ## Acceptance criteria
 
@@ -132,4 +151,6 @@ Increment 1 ships: the `cia-partner-portal-bff` module + the `/portal/**` contra
 3. The BFF mints a partner-app-scoped token by fetching the secret from Keycloak JIT (never persisted), gated by an active `partner_portal_grant`.
 4. The `partner` realm + `cia-partner-portal` client provisioning is idempotent and gated (off by default; dev + IT suite never provision).
 5. Full `mvn verify` green; the internal developer-invite endpoint is in the OpenAPI snapshot.
-6. No change to `/partner/v1/**` behavior or its (absent) CORS posture.
+6. No change to `/partner/v1/**` request/response behavior or its (absent) CORS posture (the metrics filter + Redis rate-limit are transparent).
+7. `/portal/apps/{id}/usage` returns **real** request counts + error rate (from `PartnerRequestMetricsFilter` → Redis/`partner_request_daily`) and **real** webhook-delivery history (`webhook_delivery_logs`) — no mocked panels.
+8. The partner rate limiter is Redis-backed and correct across replicas (backlog `partner-ratelimit-redis-distributed` cleared); in-memory stays the dev/IT default.
