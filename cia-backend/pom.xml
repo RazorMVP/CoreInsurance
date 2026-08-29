@@ -39,6 +39,7 @@
     <module>cia-audit</module>
     <module>cia-reports</module>
     <module>cia-compliance</module>
+    <module>cia-partner-portal-bff</module>
     <module>cia-api</module>
   </modules>
 
@@ -246,6 +247,11 @@
       <dependency>
         <groupId>com.nubeero.cia</groupId>
         <artifactId>cia-compliance</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.nubeero.cia</groupId>
+        <artifactId>cia-partner-portal-bff</artifactId>
         <version>${project.version}</version>
       </dependency>
 

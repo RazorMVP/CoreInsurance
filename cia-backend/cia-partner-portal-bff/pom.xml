@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.nubeero.cia</groupId>
+    <artifactId>cia-backend</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>cia-partner-portal-bff</artifactId>
+  <name>CIA Partner Portal BFF</name>
+  <description>Backend-for-frontend for the Partner Portal — partner-developer auth (human login,
+    distinct from the M2M OAuth2 client-credentials grant on cia-partner-api) and the cross-tenant
+    public.partner_portal_grant registry mapping a partner user to the Partner App(s) they manage.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-common</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-auth</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-partner-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.nubeero.cia</groupId>
+      <artifactId>cia-setup</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Real PostgreSQL JDBC driver — needed by PartnerPortalGrantRepositoryIT to connect to the
+         Testcontainers instance. Version managed by the spring-boot-starter-parent BOM
+         (postgresql.version property, root pom). Only cia-api carries this at runtime scope
+         for production; this module needs it at test scope for its own @DataJpaTest IT. -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!--
+        Activate failsafe to run *IT.java tests during the integration-test
+        phase. Spring Boot's parent has failsafe in pluginManagement only, so
+        without this explicit activation `mvn verify` silently skips every IT
+        in this module (mirrors the identical binding + rationale comment in
+        cia-api/pom.xml and cia-reinsurance/pom.xml).
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>
