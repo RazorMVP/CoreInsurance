@@ -536,6 +536,155 @@ public class KeycloakTenantProvisioner {
     }
 
     // -------------------------------------------------------------------------
+    // Partner-portal realm provisioning
+    // -------------------------------------------------------------------------
+
+    /**
+     * Provisions the partner-portal realm: realm + unmanaged-attribute policy +
+     * PARTNER_DEVELOPER role + cia-partner-portal SPA client + first partner-developer
+     * admin (assigned ONLY {@link PartnerPortalRoles#ALL}, never tenant or platform
+     * roles). Idempotent.
+     *
+     * <p>The partner realm is deliberately kept separate from every tenant realm and
+     * from the platform realm. A token from a tenant or platform realm will never
+     * carry PARTNER_DEVELOPER because that role only exists in the partner realm; the
+     * partner realm carries no {@code tenant_id} claim and mints no SUPER_ADMIN.
+     */
+    public void provisionPartnerPortalRealm(String realmName, PartnerPortalClientSpec clientSpec,
+                                            FirstAdminSpec spec) {
+        Keycloak client = keycloak.getIfAvailable();
+        if (client == null) {
+            log.warn("Keycloak admin client unavailable — skipping partner-portal realm provisioning for {}",
+                    realmName);
+            return;
+        }
+        ensureRealm(client, realmName);
+        ensureUnmanagedAttributePolicy(client, realmName);
+        ensurePartnerPortalClient(client, realmName, clientSpec);
+        ensurePartnerPortalRoles(client, realmName);
+        // spec.accessGroupId() has no backing access_group row in the partner realm
+        // (the partner realm has no tenant DB) — it is carried only because the shared
+        // FirstAdminSpec / ensureFirstAdminUser signature requires it.
+        ensureFirstAdminUser(client, realmName, spec, PartnerPortalRoles.ALL);
+        log.info("Partner-portal realm '{}' provisioned (PARTNER_DEVELOPER + {} client)",
+                realmName, clientSpec.clientId());
+    }
+
+    /**
+     * Seeds {@link PartnerPortalRoles#ALL} into the given realm. MUST only be called
+     * on the partner realm — seeding PARTNER_DEVELOPER into a tenant or platform realm
+     * would blur the deliberately distinct auth planes. Idempotent.
+     */
+    public void ensurePartnerPortalRoles(Keycloak client, String realmName) {
+        var roles = client.realm(realmName).roles();
+        for (String roleName : PartnerPortalRoles.ALL) {
+            try {
+                roles.get(roleName).toRepresentation();   // exists → no-op
+                log.debug("Partner-portal realm '{}' — role '{}' already present", realmName, roleName);
+            } catch (NotFoundException nfe) {
+                RoleRepresentation rep = new RoleRepresentation();
+                rep.setName(roleName);
+                rep.setDescription("CIA-managed: partner-portal role");
+                roles.create(rep);
+                log.info("Partner-portal realm '{}' — created role '{}'", realmName, roleName);
+            }
+        }
+    }
+
+    /**
+     * Idempotent upsert of the partner-portal SPA public client (create-then-reconcile).
+     * Mirrors {@link #ensurePlatformClient} exactly in structure — public client,
+     * PKCE S256, standard flow, direct-grants re-asserted disabled, redirect URIs /
+     * web origins reconciled — with one difference: no {@code tenant_id} protocol
+     * mapper is attached, since the partner realm is not a tenant.
+     *
+     * <p>Public (unlike the private {@code ensureBackOfficeClient}/{@code
+     * ensurePlatformClient} siblings) so it can also be called directly and
+     * idempotently outside full realm provisioning, mirroring the interface
+     * {@link PartnerPortalClientSpec} contract.
+     */
+    public void ensurePartnerPortalClient(String realmName, PartnerPortalClientSpec spec) {
+        Keycloak client = keycloak.getIfAvailable();
+        if (client == null) {
+            log.warn("Keycloak admin client unavailable — skipping partner-portal client provisioning for {}",
+                    realmName);
+            return;
+        }
+        ensurePartnerPortalClient(client, realmName, spec);
+    }
+
+    private void ensurePartnerPortalClient(Keycloak client, String realmName, PartnerPortalClientSpec spec) {
+        RealmResource realm = client.realm(realmName);
+        String clientId = spec.clientId();
+        List<ClientRepresentation> found = realm.clients().findByClientId(clientId);
+
+        if (found.isEmpty()) {
+            ClientRepresentation rep = desiredPartnerPortalClient(spec);
+            try (Response resp = realm.clients().create(rep)) {
+                if (resp.getStatus() >= 300) {
+                    log.warn("Partner-portal realm '{}' — client '{}' create returned HTTP {}",
+                            realmName, clientId, resp.getStatus());
+                    return;
+                }
+            }
+            log.info("Partner-portal realm '{}' — created client '{}' (PKCE S256, redirects {})",
+                    realmName, clientId, spec.redirectUris());
+            return;
+        }
+
+        // Reconcile the existing client toward the desired shape.
+        ClientRepresentation existing = found.get(0);
+        ClientRepresentation desired = desiredPartnerPortalClient(spec);
+        boolean changed = false;
+
+        if (!Boolean.TRUE.equals(existing.isPublicClient())) { existing.setPublicClient(true); changed = true; }
+        if (!Boolean.TRUE.equals(existing.isStandardFlowEnabled())) { existing.setStandardFlowEnabled(true); changed = true; }
+        // Re-assert no ROPC (password) grant: if an operator re-enabled it in the
+        // console, drift it back to PKCE-only. Mirrors ensureBackOfficeClient / ensurePlatformClient.
+        if (Boolean.TRUE.equals(existing.isDirectAccessGrantsEnabled())) {
+            existing.setDirectAccessGrantsEnabled(false);
+            changed = true;
+        }
+        if (!desired.getRedirectUris().equals(existing.getRedirectUris())) {
+            existing.setRedirectUris(desired.getRedirectUris()); changed = true;
+        }
+        if (!desired.getWebOrigins().equals(existing.getWebOrigins())) {
+            existing.setWebOrigins(desired.getWebOrigins()); changed = true;
+        }
+        Map<String, String> attrs = existing.getAttributes() != null
+                ? new HashMap<>(existing.getAttributes()) : new HashMap<>();
+        if (!"S256".equals(attrs.get("pkce.code.challenge.method"))) {
+            attrs.put("pkce.code.challenge.method", "S256");
+            existing.setAttributes(attrs);
+            changed = true;
+        }
+        if (changed) {
+            realm.clients().get(existing.getId()).update(existing);
+            log.info("Partner-portal realm '{}' — reconciled client '{}'", realmName, clientId);
+        } else {
+            log.debug("Partner-portal realm '{}' — client '{}' already conformant", realmName, clientId);
+        }
+        // No tenant_id mapper ensured — the partner realm has no tenant identity.
+    }
+
+    private ClientRepresentation desiredPartnerPortalClient(PartnerPortalClientSpec spec) {
+        ClientRepresentation rep = new ClientRepresentation();
+        rep.setClientId(spec.clientId());
+        rep.setName("NubSure Partner Portal");
+        rep.setEnabled(true);
+        rep.setPublicClient(true);
+        rep.setStandardFlowEnabled(true);          // auth-code flow
+        rep.setDirectAccessGrantsEnabled(false);   // no password grant for the SPA
+        rep.setRedirectUris(spec.redirectUris());
+        rep.setWebOrigins(List.of("+"));           // "+" = derive from redirect URIs
+        Map<String, String> attrs = new HashMap<>();
+        attrs.put("pkce.code.challenge.method", "S256");
+        attrs.put("post.logout.redirect.uris", "+"); // "+" = same as redirect URIs
+        rep.setAttributes(attrs);
+        return rep;
+    }
+
+    // -------------------------------------------------------------------------
     // Platform super-admin lifecycle (create / list / count / remove-role)
     // -------------------------------------------------------------------------
 
