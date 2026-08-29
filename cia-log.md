@@ -58,6 +58,16 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-08-26 — Partner Portal Sub-project A implementation plan (`feat/partner-portal-bff`, plan only)
+
+Wrote the TDD implementation plan for Sub-project A (BFF + partner-auth foundation) after the spec was approved with no changes. **Still no production code.** Pre-plan verification confirmed: **Redis is already wired** into the backend (`spring-boot-starter-data-redis` + `JedisPool` in `cia-partner-api/RedisClientConfig`) — so sessions/rate-limit/usage reuse it; `public`-schema tables are created via `IF NOT EXISTS` migrations (V67 pattern) → the grant table is qualified `public.` explicitly.
+
+**Plan:** [`docs/superpowers/plans/2026-08-26-partner-portal-bff-auth.md`](docs/superpowers/plans/2026-08-26-partner-portal-bff-auth.md) — 11 ordered, independently-testable tasks: (1) module scaffold + `public.partner_portal_grant`; (2) partner realm + `cia-partner-portal` client (gated); (3) invite-developer endpoint; (4) Redis/in-memory session store; (5) token-handler auth flow (`/portal/auth`, HttpOnly cookie + CSRF); (6) JIT partner-app token minting (Keycloak-admin secret + client-credentials); (7) grant authorization + `GET /portal/apps`; (8) management + try-it proxy (real HTTP to `/partner/v1`); (9) request telemetry (filter + `partner_request_daily` + Redis rollups + daily flush + usage endpoint); (10) Redis-backed distributed rate limiter; (11) `/portal` CORS + config + docs + full verify. Migrations V80 (grant) + V81 (request_daily).
+
+**Known follow-ups.** No rows added. Task 10 will remove `partner-ratelimit-redis-distributed` on landing; telemetry built in Task 9 (no `partner-usage-telemetry` row ever created). Next: execute via subagent-driven development.
+
+---
+
 ## 2026-08-21 — Partner Portal (Phase 3) kickoff — BFF + partner-auth design (`feat/partner-portal-bff`, design only)
 
 Started Frontend Phase 3 (Partner Portal, `apps/partner`, 0/5). Brainstorm → architectural design → spec; **no production code yet**. Decomposed the epic into **Sub-project A (BFF + partner-auth backend foundation)** and **Sub-project B (the 5 SPA builds, blocked on A)**.
