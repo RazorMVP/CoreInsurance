@@ -58,6 +58,16 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-08-30 — Sub-project A SDD execution (checkpoint): Tasks 1–2 landed (`feat/partner-portal-bff`)
+
+Executing the Sub-project A plan via subagent-driven development (fresh implementer per task + two-stage review + fix loop). **In progress — checkpoint, not a completed branch.** Ledger: `.superpowers/sdd/2026-08-26-partner-portal-bff-auth/progress.md`.
+
+- **Task 1 ✅** (commit d6ad7115) — `cia-partner-portal-bff` module scaffold + `public.partner_portal_grant` cross-tenant registry (V80, `public.`-qualified) + entity/repo/`GrantRole`; wired into reactor + cia-api; 3/3 Testcontainers IT. Review clean (2 deferred minors: `@Setter` on immutable fields; hand-synced test-schema copy of V80). Controller ruling carried forward: Tasks 5/7 must ensure `/portal/**` DB connections carry `public` in search_path + exercise the repo through the real app context.
+- **Task 2** (commit 2195ec6f) — partner Keycloak realm props + `PARTNER_DEVELOPER` role + idempotent `cia-partner-portal` client upsert (PKCE S256, direct-grants off, no tenant mapper) + gated `PartnerPortalBootstrapRunner` (off by default, fails fast without admin client); 3/3 gating test. **In review.**
+- Tasks 3–11 pending. Migrations so far: V80 (V81 comes in Task 9). No backlog change yet (Task 10 will clear `partner-ratelimit-redis-distributed`).
+
+---
+
 ## 2026-08-26 — Partner Portal Sub-project A implementation plan (`feat/partner-portal-bff`, plan only)
 
 Wrote the TDD implementation plan for Sub-project A (BFF + partner-auth foundation) after the spec was approved with no changes. **Still no production code.** Pre-plan verification confirmed: **Redis is already wired** into the backend (`spring-boot-starter-data-redis` + `JedisPool` in `cia-partner-api/RedisClientConfig`) — so sessions/rate-limit/usage reuse it; `public`-schema tables are created via `IF NOT EXISTS` migrations (V67 pattern) → the grant table is qualified `public.` explicitly.
