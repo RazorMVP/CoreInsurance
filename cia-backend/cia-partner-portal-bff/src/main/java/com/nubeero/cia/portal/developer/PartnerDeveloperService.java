@@ -78,6 +78,13 @@ public class PartnerDeveloperService {
 
     @Transactional
     public void revoke(UUID partnerAppId, UUID grantId, String actor) {
+        // Ownership guard — mirrors invite()/list(): confirms the app exists AND belongs to the
+        // caller's own tenant (tenant-scoped via search_path) BEFORE touching the shared
+        // public.partner_portal_grant registry. Without this, a Tenant-A admin who knows/guesses
+        // a (partnerAppId, grantId) pair belonging to Tenant-B could soft-delete that grant — the
+        // registry table is reachable from every tenant connection.
+        partnerAppService.findOrThrow(partnerAppId);
+
         PartnerPortalGrant grant = grantRepository.findById(grantId)
                 .filter(g -> partnerAppId.equals(g.getPartnerAppId()) && g.getDeletedAt() == null)
                 .orElseThrow(() -> new ResourceNotFoundException("PartnerPortalGrant", grantId));

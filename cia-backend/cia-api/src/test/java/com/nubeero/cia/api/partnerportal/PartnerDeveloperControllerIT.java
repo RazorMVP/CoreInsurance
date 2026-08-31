@@ -210,6 +210,33 @@ class PartnerDeveloperControllerIT extends PartnerDeveloperWebItSupport {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    @DisplayName("DELETE /developers/{grantId} for a grant whose app is not visible to the caller "
+            + "returns 404 and does NOT soft-delete (cross-tenant ownership guard)")
+    void revoke_appNotOwnedByCaller_404_doesNotSoftDelete() throws Exception {
+        // Simulates a grant whose partnerAppId belongs to a DIFFERENT tenant than the caller.
+        // Under real multi-tenancy, PartnerAppService.findOrThrow queries the tenant-scoped
+        // partner_apps table under the caller's own connection search_path, so an app row that
+        // physically lives in a different tenant's schema is invisible and 404s. This IT harness
+        // collapses every tenant onto one physical schema
+        // (spring.jpa.properties.hibernate.multiTenancy=NONE — see PartnerDeveloperWebItSupport),
+        // so real cross-schema invisibility can't be reproduced directly. The faithful proxy is a
+        // partnerAppId with NO backing partner_apps row at all: exactly what findOrThrow sees when
+        // the real app lives in someone else's schema. Before the fix, revoke() never called
+        // findOrThrow and would happily soft-delete this grant purely on grantId + partnerAppId
+        // equality against the shared public.partner_portal_grant row — regression-guards that gap.
+        UUID foreignAppId = UUID.randomUUID();
+        PartnerPortalGrant grant =
+                grantRepository.save(seededGrant(foreignAppId, "dev@example.com", GrantRole.MANAGER));
+
+        mvc.perform(delete("/api/v1/partner-apps/" + foreignAppId + "/developers/" + grant.getId())
+                        .with(adminJwt()))
+                .andExpect(status().isNotFound());
+
+        PartnerPortalGrant reloaded = grantRepository.findById(grant.getId()).orElseThrow();
+        assertTrue(reloaded.getDeletedAt() == null);
+    }
+
     private PartnerPortalGrant seededGrant(UUID appId, String email, GrantRole role) {
         PartnerPortalGrant grant = new PartnerPortalGrant();
         grant.setPartnerUserId(UUID.nameUUIDFromBytes(email.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
