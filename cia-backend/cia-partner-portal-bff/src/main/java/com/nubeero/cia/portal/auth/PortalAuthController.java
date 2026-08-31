@@ -47,6 +47,16 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PortalAuthController {
 
+    /**
+     * The BFF's own OAuth {@code redirect_uri} path — what {@link #callbackUrl} always builds,
+     * and therefore exactly what MUST be registered as the {@code cia-partner-portal} Keycloak
+     * client's redirect URI. Public so {@code cia-api}'s {@code
+     * PartnerPortalBootstrapProperties.redirectUris} default (the value that actually drives that
+     * registration — see its javadoc) and the test that ties the two together can reference the
+     * same literal instead of each hardcoding their own copy of the path.
+     */
+    public static final String CALLBACK_PATH = "/portal/auth/callback";
+
     private static final String LOGIN_STATE_COOKIE_NAME = "cia_portal_login_state";
     private static final Duration SESSION_ABSOLUTE_TTL = Duration.ofHours(8);
 
@@ -215,7 +225,7 @@ public class PortalAuthController {
 
     private static String callbackUrl(HttpServletRequest request) {
         return ServletUriComponentsBuilder.fromContextPath(request)
-                .path("/portal/auth/callback")
+                .path(CALLBACK_PATH)
                 .build()
                 .toUriString();
     }
