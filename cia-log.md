@@ -58,13 +58,14 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
-## 2026-08-30 — Sub-project A SDD execution (checkpoint): Tasks 1–2 landed (`feat/partner-portal-bff`)
+## 2026-08-30/31 — Sub-project A SDD execution (checkpoint): Tasks 1–3 landed (`feat/partner-portal-bff`)
 
 Executing the Sub-project A plan via subagent-driven development (fresh implementer per task + two-stage review + fix loop). **In progress — checkpoint, not a completed branch.** Ledger: `.superpowers/sdd/2026-08-26-partner-portal-bff-auth/progress.md`.
 
 - **Task 1 ✅** (commit d6ad7115) — `cia-partner-portal-bff` module scaffold + `public.partner_portal_grant` cross-tenant registry (V80, `public.`-qualified) + entity/repo/`GrantRole`; wired into reactor + cia-api; 3/3 Testcontainers IT. Review clean (2 deferred minors: `@Setter` on immutable fields; hand-synced test-schema copy of V80). Controller ruling carried forward: Tasks 5/7 must ensure `/portal/**` DB connections carry `public` in search_path + exercise the repo through the real app context.
 - **Task 2** (commit 2195ec6f) — partner Keycloak realm props + `PARTNER_DEVELOPER` role + idempotent `cia-partner-portal` client upsert (PKCE S256, direct-grants off, no tenant mapper) + gated `PartnerPortalBootstrapRunner` (off by default, fails fast without admin client); 3/3 gating test. **In review.**
-- Tasks 3–11 pending. Migrations so far: V80 (V81 comes in Task 9). No backlog change yet (Task 10 will clear `partner-ratelimit-redis-distributed`).
+- **Task 3** (commit 1dfdc000) — internal invite/list/revoke developer endpoints (`POST/GET/DELETE /api/v1/partner-apps/{id}/developers`), placed in `cia-partner-portal-bff` to avoid a module cycle; deterministic `partner_user_id` from lowercased email (demo-first); 8/8 IT + reactor verify green. **Found + fixed two real-context bugs** the Task-1 ruling predicted: `TenantContext` only populates for JWT principals (IT uses the `jwt()` post-processor + a `TENANT_CONTEXT_MISSING` guard), and existing `*WebItSupport` bases pin `spring.flyway.target` below V80 (added an unpinned base). **In review.**
+- Tasks 4–11 pending. Migrations so far: V80 (V81 comes in Task 9). No backlog change yet (Task 10 will clear `partner-ratelimit-redis-distributed`). Carry-forward: later real-context ITs (Tasks 7/9/11) need an unpinned-Flyway IT base so V80/V81 tables exist.
 
 ---
 
