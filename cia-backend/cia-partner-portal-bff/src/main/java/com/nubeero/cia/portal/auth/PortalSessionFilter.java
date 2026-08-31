@@ -25,9 +25,11 @@ import java.util.Set;
  *
  * <h2>CSRF double-submit</h2>
  * For state-changing methods (POST/PUT/PATCH/DELETE) on a request that resolves a session, the
- * {@code X-CSRF-Token} header must equal {@link PortalSession#csrfToken()} — the
- * {@code SameSite=Strict} session cookie alone stops cross-site *submission*, this stops a
- * same-site XSS payload from replaying a state-changing call with only the ambient cookie.
+ * {@code X-CSRF-Token} header must equal {@link PortalSession#csrfToken()} (compared via {@link
+ * ConstantTimeEquals}, not {@code String.equals}, so response timing can't leak how much of the
+ * token a guess got right) — the {@code SameSite=Strict} session cookie alone stops cross-site
+ * *submission*, this stops a same-site XSS payload from replaying a state-changing call with only
+ * the ambient cookie.
  *
  * <h2>Cross-tenant public-schema scoping</h2>
  * {@code /portal/**} carries no tenant — the session principal is a partner developer, not a
@@ -89,8 +91,7 @@ public class PortalSessionFilter extends OncePerRequestFilter {
     }
 
     private static boolean csrfHeaderMatches(HttpServletRequest request, PortalSession session) {
-        String header = request.getHeader(CSRF_HEADER_NAME);
-        return header != null && header.equals(session.csrfToken());
+        return ConstantTimeEquals.equals(request.getHeader(CSRF_HEADER_NAME), session.csrfToken());
     }
 
     private static void writeJsonError(HttpServletResponse response, int status, String code, String message)

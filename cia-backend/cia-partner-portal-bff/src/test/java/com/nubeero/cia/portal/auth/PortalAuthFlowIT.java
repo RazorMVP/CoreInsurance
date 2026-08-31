@@ -61,6 +61,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Testcontainers
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        // Explicit, not auto-discovered: since fix round 1 added PortalDevProfileOrderingIT's own
+        // nested @SpringBootConfiguration in this same package (com.nubeero.cia.portal.auth),
+        // @SpringBootTest's default package-walk config discovery finds two candidates and throws
+        // "Found multiple @SpringBootConfiguration annotated classes". Naming this one explicitly
+        // sidesteps the ambiguity regardless of what other fixtures live in the package.
+        classes = PortalAuthTestApplication.class,
         // cia-partner-api (a compile dependency of this module, transitively on the classpath)
         // brings bucket4j-spring-boot-starter along; its autoconfiguration activates for ANY
         // @EnableAutoConfiguration app regardless of component-scan scope and fails fast with

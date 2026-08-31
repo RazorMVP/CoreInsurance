@@ -23,10 +23,24 @@ import java.util.List;
  * (JWT resource server, {@code /api/**} + {@code /partner/**}) and dev-only {@code
  * DevSecurityConfig}. Multiple {@code SecurityFilterChain} beans coexist safely in one
  * application context as long as each carries a distinct {@code securityMatcher} and Spring
- * Security tries them in {@code @Order} — this chain's {@link #PORTAL_CHAIN_ORDER} sits ahead of
+ * Security tries them in {@code @Order}.
+ *
+ * <p><b>{@link #PORTAL_CHAIN_ORDER} = 0 is load-bearing, not cosmetic.</b> {@code
+ * DevSecurityConfig} (active only under the {@code dev} profile — the standard local workflow per
+ * {@code CLAUDE.md}) is {@code @Order(1)} with {@code securityMatcher("/**")}, i.e. it matches
+ * literally every path including {@code /portal/**}. Spring Security tries chains in ascending
+ * {@code @Order} and stops at the first one whose {@code securityMatcher} matches — so unless this
+ * chain sorts strictly <em>before</em> {@code DevSecurityConfig}, every {@code /portal/**} request
+ * under {@code dev} would hit {@code DevSecurityConfig}'s {@code anyRequest().permitAll()} instead
+ * of this chain: {@link PortalSessionFilter} would never run (no session check, no CSRF, no
+ * {@code public}-tenant pin), and {@code @AuthenticationPrincipal PortalPrincipal} in
+ * {@code PortalAuthController#me} would resolve to {@code null} and NPE. {@code 0 < 1} fixes that.
  * {@code SecurityConfig}'s implicit last-resort catch-all (no explicit {@code @Order} =
- * {@code Ordered.LOWEST_PRECEDENCE}) so {@code /portal/**} is claimed here first, and it never
- * widens its matcher, so {@code /api/**} and {@code /partner/**} traffic is never touched by it.
+ * {@code Ordered.LOWEST_PRECEDENCE}) and {@code PartnerSecurityConfig}'s {@code @Order(1)}
+ * {@code securityMatcher("/partner/**")} both carry matchers that never overlap
+ * {@code /portal/**}, so their relative order versus this chain doesn't matter for correctness —
+ * only {@code DevSecurityConfig}'s catch-all does, because it's the only sibling chain whose
+ * matcher is broad enough to also claim this chain's paths.
  *
  * <p>Session handling is entirely custom: no JWT, no {@code HttpSession} — {@link
  * PortalSessionFilter} resolves the opaque {@code cia_portal_session} cookie into a {@link
@@ -39,8 +53,10 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PortalSecurityConfig {
 
-    /** Runs ahead of {@code SecurityConfig}'s unordered (= lowest-precedence) catch-all chain. */
-    static final int PORTAL_CHAIN_ORDER = 2;
+    /**
+     * Must sort strictly before {@code DevSecurityConfig}'s {@code @Order(1)} — see class javadoc.
+     */
+    static final int PORTAL_CHAIN_ORDER = 0;
 
     private final PortalSessionFilter portalSessionFilter;
 
