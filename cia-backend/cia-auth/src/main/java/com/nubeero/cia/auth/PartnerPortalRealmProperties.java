@@ -24,4 +24,13 @@ public class PartnerPortalRealmProperties {
     private String clientId = "cia-partner-portal";
 
     private List<String> redirectUris = List.of("http://localhost:5174/*");
+
+    /**
+     * Base URL of the Partner Portal SPA. Used by the BFF token-handler flow (Task 5,
+     * {@code cia-partner-portal-bff}) as the post-login and post-logout redirect target — distinct
+     * from {@link #redirectUris}, which is the Keycloak-client-registered redirect URI list (the
+     * BFF's own {@code /portal/auth/callback} endpoint, not the SPA, is the OAuth {@code
+     * redirect_uri} since the BFF — not browser JS — performs the code exchange).
+     */
+    private String appUrl = "http://localhost:5174";
 }

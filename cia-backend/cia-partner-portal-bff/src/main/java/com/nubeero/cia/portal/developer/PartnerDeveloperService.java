@@ -92,7 +92,13 @@ public class PartnerDeveloperService {
         grantRepository.save(grant);
     }
 
-    static UUID derivePartnerUserId(String lowercasedEmail) {
+    /**
+     * Public (widened from package-private in Task 5) so {@code com.nubeero.cia.portal.auth}'s
+     * BFF login callback can derive the same {@code partnerUserId} for a developer authenticating
+     * for the first time as {@link #invite} used when the grant was created ahead of their first
+     * login — see the class-level javadoc.
+     */
+    public static UUID derivePartnerUserId(String lowercasedEmail) {
         return UUID.nameUUIDFromBytes(lowercasedEmail.getBytes(StandardCharsets.UTF_8));
     }
 
