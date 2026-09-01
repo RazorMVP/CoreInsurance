@@ -68,6 +68,16 @@ public class PartnerAppTokenService {
                 isFresh(existing) ? existing : mint(tenantRealm, clientId));
     }
 
+    /**
+     * Drops any cached token for {@code (tenantRealm, clientId)} — called after a secret rotation
+     * (Task 8's {@code POST /portal/apps/{id}/credentials/rotate}) so the NEXT call to {@link
+     * #tokenFor} is forced to re-mint against the new secret rather than keep serving a token
+     * minted under the secret that was just invalidated. A no-op if nothing is cached.
+     */
+    public void evict(String tenantRealm, String clientId) {
+        cache.remove(cacheKey(tenantRealm, clientId));
+    }
+
     private MintedToken mint(String tenantRealm, String clientId) {
         log.debug("Minting partner-app access token for tenant realm '{}', client '{}'",
                 tenantRealm, clientId);

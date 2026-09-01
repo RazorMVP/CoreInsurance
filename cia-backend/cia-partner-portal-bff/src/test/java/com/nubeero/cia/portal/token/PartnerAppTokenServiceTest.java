@@ -165,4 +165,32 @@ class PartnerAppTokenServiceTest {
         verify(tokenGrantor, never()).grant(anyString(), anyString(), eq((String) null));
         verify(tokenGrantor).grant(TENANT_REALM, CLIENT_ID, SECRET);
     }
+
+    @Test
+    void evict_forcesANextCallToReMint_evenWellWithinTheOldTokensCacheWindow() {
+        when(secretResolver.resolveSecret(TENANT_REALM, CLIENT_ID)).thenReturn(SECRET);
+        when(tokenGrantor.grant(eq(TENANT_REALM), eq(CLIENT_ID), eq(SECRET)))
+                .thenReturn(new MintedToken("access-token-pre-rotate", now.get().plus(Duration.ofMinutes(5))))
+                .thenReturn(new MintedToken("access-token-post-rotate", now.get().plus(Duration.ofMinutes(5))));
+
+        PartnerAppTokenService service = service();
+        MintedToken before = service.tokenFor(TENANT_REALM, CLIENT_ID);
+
+        service.evict(TENANT_REALM, CLIENT_ID);
+
+        // No time advance — without the evict, this would still be well inside the cache window.
+        MintedToken after = service.tokenFor(TENANT_REALM, CLIENT_ID);
+
+        assertThat(after.accessToken()).isNotEqualTo(before.accessToken());
+        assertThat(after.accessToken()).isEqualTo("access-token-post-rotate");
+        verify(secretResolver, times(2)).resolveSecret(TENANT_REALM, CLIENT_ID);
+        verify(tokenGrantor, times(2)).grant(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void evict_ofAnUncachedKey_isANoOp() {
+        // No stubbing needed — evicting something never cached must not throw or interact with
+        // either seam.
+        service().evict(TENANT_REALM, CLIENT_ID);
+    }
 }
