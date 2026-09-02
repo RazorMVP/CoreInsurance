@@ -231,6 +231,31 @@ cia:
     tenant-allowlist:
       enabled: ${CIA_PLATFORM_TENANT_ALLOWLIST_ENABLED:false}
 
+  # Partner Portal BFF (cia-partner-portal-bff) — a third auth plane alongside tenant realms
+  # and the platform realm. Insurtech developer users only (role PARTNER_DEVELOPER); the SPA
+  # never sees a Keycloak token — PortalAuthController is the OAuth2 client (token-handler
+  # pattern), the browser only ever carries the opaque cia_portal_session cookie.
+  # realm/client-id are also read by cia-auth's PartnerPortalRealmProperties and cia-api's
+  # PartnerPortalBootstrapProperties — keep all three in sync.
+  partner-portal:
+    realm: ${CIA_PARTNER_PORTAL_REALM:partner}
+    client-id: ${CIA_PARTNER_PORTAL_CLIENT_ID:cia-partner-portal}
+    # The BFF's OWN /portal/auth/callback endpoint (the value Keycloak's client registration
+    # must match) — NOT the SPA origin. See PartnerPortalBootstrapProperties#redirectUris.
+    redirect-uris: ${CIA_PARTNER_PORTAL_REDIRECT_URIS:http://localhost:8090/portal/auth/callback}
+    # Browser origins allowed to call /portal/** cross-origin with credentials (the session
+    # cookie) — CSV-bindable, mirrors cia.cors.allowed-origins. /partner/** stays CORS-free
+    # (M2M, no browser origin).
+    allowed-origins: ${CIA_PARTNER_PORTAL_ALLOWED_ORIGINS:http://localhost:5174}
+    # redis|in-memory — selects PortalSessionStore + PortalLoginStateStore impl. in-memory by
+    # default (single-instance dev); redis required for a multi-replica deployment.
+    store: ${CIA_PARTNER_PORTAL_STORE:in-memory}
+    bootstrap:
+      enabled: ${CIA_PARTNER_PORTAL_BOOTSTRAP_ENABLED:false}
+      admin-username: ${CIA_PARTNER_PORTAL_BOOTSTRAP_ADMIN_USERNAME:partnerportaladmin}
+      admin-email: ${CIA_PARTNER_PORTAL_BOOTSTRAP_ADMIN_EMAIL:partnerportaladmin@cia.local}
+      admin-temp-password: ${CIA_PARTNER_PORTAL_BOOTSTRAP_ADMIN_TEMP_PASSWORD:}
+
 springdoc:
   api-docs:
     path: /partner/v3/api-docs

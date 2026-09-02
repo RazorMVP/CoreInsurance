@@ -31,7 +31,7 @@ env:
   STORAGE_TYPE: s3
   STORAGE_ENDPOINT: ""
   STORAGE_BUCKET: cia-documents
-  PARTNER_API_RATE_LIMIT_STORE: in-memory
+  CIA_PARTNER_RATE_LIMIT_STORE: in-memory
   JAVA_OPTS: "-XX:MaxRAMPercentage=70"
   # Optional read replica for the report-heavy cia-reports analytical queries
   # (see docs-site/docs/operations/disaster-recovery.md + CLAUDE.md §7). UNSET =

@@ -19,6 +19,7 @@ public class PartnerSecurityConfig {
     private final TenantContextFilter tenantContextFilter;
     private final PartnerScopeFilter partnerScopeFilter;
     private final PartnerRateLimitFilter partnerRateLimitFilter;
+    private final PartnerRequestMetricsFilter partnerRequestMetricsFilter;
     // Realm-per-tenant resolver (S141) — replaces the removed shared JwtDecoder
     // bean. Partner tokens (OAuth2 client-credentials) are validated against
     // their own realm's JWKS, same as the internal chain.
@@ -43,7 +44,10 @@ public class PartnerSecurityConfig {
                         .authenticationManagerResolver(authenticationManagerResolver)
                 )
                 .addFilterBefore(tenantContextFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(partnerScopeFilter, TenantContextFilter.class)
+                // Metrics wraps EVERYTHING downstream (scope check, rate limit, the controller)
+                // so it observes the true final response status — see the filter's own javadoc.
+                .addFilterAfter(partnerRequestMetricsFilter, TenantContextFilter.class)
+                .addFilterAfter(partnerScopeFilter, PartnerRequestMetricsFilter.class)
                 // Rate limit after scope: tenant schema + validated JWT (client_id)
                 // are both available, so the per-client bucket can size itself from
                 // the partner's rateLimitRpm.

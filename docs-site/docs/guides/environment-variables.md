@@ -71,10 +71,28 @@ All variables have defaults for local development. Production values must be sup
 
 | Variable | Default (dev) | Description |
 | --- | --- | --- |
-| `PARTNER_API_RATE_LIMIT_STORE` | `in-memory` | `redis` / `in-memory` for bucket4j |
-| `REDIS_URL` | `redis://localhost:6379` | Redis connection (partner rate limiting) |
+| `CIA_PARTNER_RATE_LIMIT_STORE` | `in-memory` | `redis` / `in-memory` — active `PartnerBucketStore` impl for per-client rate-limit buckets (`cia.partner.rate-limit.store`). The declarative `bucket4j` starter is disabled; `PartnerRateLimitFilter` owns rate limiting. |
+| `REDIS_URL` | `redis://localhost:6379` | Redis connection (partner rate limiting + usage rollups + portal session/login-state store) |
+| `CIA_PARTNER_USAGE_STORE` | `in-memory` | `redis` / `in-memory` — active `PartnerUsageRollupStore` impl for request telemetry rollups (`cia.partner-usage.store`), powering `/portal` usage. |
 | `WEBHOOK_SIGNING_SECRET` | — | Default HMAC-SHA256 key for webhook payloads |
 | `PII_ENCRYPTION_KEY` | `dev-pii-key-do-not-use-in-prod-CHANGE-ME` | pgcrypto symmetric key for NDPR PII encryption on `customers` + `customer_directors`. Loss = unrecoverable customer PII. Recommended: 32+ random bytes, base64-encoded. Set via env / vault in production. |
+
+### Partner Portal BFF
+
+The Partner Portal BFF (`cia-partner-portal-bff`) is a third auth plane — Insurtech developer
+users only, authenticated via a `partner` Keycloak realm. The browser SPA never sees a Keycloak
+token; the BFF is the OAuth2 client (token-handler pattern) and the browser carries only the
+opaque `cia_portal_session` cookie.
+
+| Variable | Default (dev) | Description |
+| --- | --- | --- |
+| `CIA_PARTNER_PORTAL_REALM` | `partner` | Name of the Keycloak realm holding Insurtech developer users (`cia.partner-portal.realm`). Bound identically in cia-api and cia-auth — keep in sync. |
+| `CIA_PARTNER_PORTAL_CLIENT_ID` | `cia-partner-portal` | PUBLIC (not confidential) Keycloak client id for the BFF's token-handler OAuth2 flow — no client secret, PKCE (S256) instead (`cia.partner-portal.client-id`). The token-handler invariant comes from PKCE + the server-side httpOnly session, not from client confidentiality. |
+| `CIA_PARTNER_PORTAL_REDIRECT_URIS` | `http://localhost:8090/portal/auth/callback` | The BFF's own `/portal/auth/callback` endpoint — the value registered as the Keycloak client's `redirect_uri` (`cia.partner-portal.redirect-uris`, CSV). **Not** the SPA origin. |
+| `CIA_PARTNER_PORTAL_ALLOWED_ORIGINS` | `http://localhost:5174` | CSV of browser origins allowed to call `/portal/**` cross-origin with credentials (`cia.partner-portal.allowed-origins`). `allowCredentials(true)` ⇒ no `*` wildcard. `/partner/**` stays CORS-free (M2M). |
+| `CIA_PARTNER_PORTAL_STORE` | `in-memory` | `redis` / `in-memory` — selects `PortalSessionStore` + `PortalLoginStateStore` impl (`cia.partner-portal.store`). `redis` required for a multi-replica deployment. |
+| `CIA_PARTNER_PORTAL_BOOTSTRAP_ENABLED` | `false` | Master switch for `PartnerPortalBootstrapRunner` (provisions the `partner` realm + first partner-developer admin on boot). Requires `KEYCLOAK_ADMIN_ENABLED=true`. |
+| `CIA_PARTNER_PORTAL_BOOTSTRAP_ADMIN_USERNAME` / `_EMAIL` / `_TEMP_PASSWORD` | `partnerportaladmin` / `partnerportaladmin@cia.local` / — | First partner-developer admin's credentials, consumed when bootstrap is enabled. The temp password is a secret — forces `UPDATE_PASSWORD` on first login. |
 
 ### AI
 

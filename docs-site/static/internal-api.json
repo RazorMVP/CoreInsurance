@@ -11943,6 +11943,79 @@
         }
       }
     },
+    "/api/v1/partner-apps/{id}/developers": {
+      "get": {
+        "tags": [
+          "Partner App Management"
+        ],
+        "summary": "List developers granted access to this partner app",
+        "operationId": "list_36",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseListPartnerDeveloperGrantResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Partner App Management"
+        ],
+        "summary": "Invite a partner developer to manage this partner app",
+        "description": "Creates (or, if already granted, returns 409 on) a public.partner_portal_grant row for the given email + role.",
+        "operationId": "invite_1",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteDeveloperRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponsePartnerDeveloperGrantResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/finance/period-locks/{periodId}/soft-close": {
       "post": {
         "tags": [
@@ -12787,7 +12860,7 @@
         ],
         "summary": "Search / list journal entries (paginated)",
         "description": "All filters optional. Filtering by accountCode or classOfBusinessId joins to journal_entry_line \u2014 a JE with N matching lines still appears once in the result (DISTINCT). Lines are NOT included in the summary; drill into GET /{id} for the line array. The Slice 1.10 classOfBusinessId substrate is filterable here.",
-        "operationId": "list_36",
+        "operationId": "list_37",
         "parameters": [
           {
             "name": "businessFrom",
@@ -13109,7 +13182,7 @@
         ],
         "summary": "List active investment holdings",
         "description": "Returns every non-soft-deleted holding, ordered by security name.",
-        "operationId": "list_37",
+        "operationId": "list_38",
         "responses": {
           "200": {
             "description": "Holdings list",
@@ -13410,7 +13483,7 @@
           "Fiscal Years"
         ],
         "summary": "List all fiscal years (no period embedding)",
-        "operationId": "list_38",
+        "operationId": "list_39",
         "responses": {
           "200": {
             "description": "Fiscal years (ordered by start date)",
@@ -13590,7 +13663,7 @@
         ],
         "summary": "List endorsements (paginated, filterable)",
         "description": "Filter by policyId, status, and/or customerId. Each endorsement embeds its risk schedule. Used by the Debit Note Analysis Report (Module 4 feature).",
-        "operationId": "list_39",
+        "operationId": "list_40",
         "parameters": [
           {
             "name": "policyId",
@@ -13974,7 +14047,7 @@
           "Document Templates"
         ],
         "summary": "List document templates (paginated)",
-        "operationId": "list_40",
+        "operationId": "list_41",
         "parameters": [
           {
             "name": "pageable",
@@ -14211,7 +14284,7 @@
           "Receipts (Module 8)"
         ],
         "summary": "List receipts for a debit note (paginated)",
-        "operationId": "list_41",
+        "operationId": "list_42",
         "parameters": [
           {
             "name": "debitNoteId",
@@ -14780,7 +14853,7 @@
           "Customer Documents"
         ],
         "summary": "List documents attached to a customer",
-        "operationId": "list_42",
+        "operationId": "list_43",
         "parameters": [
           {
             "name": "customerId",
@@ -15024,7 +15097,7 @@
           "Payments (Module 8)"
         ],
         "summary": "List payments for a credit note (paginated)",
-        "operationId": "list_43",
+        "operationId": "list_44",
         "parameters": [
           {
             "name": "creditNoteId",
@@ -15439,7 +15512,7 @@
         ],
         "summary": "List claims (paginated, filterable)",
         "description": "Filter by any combination of policyId, status, customerId, and free-text q (matches claim number, customer name, policy number). Returns claim summaries (no nested reserves/expenses/documents).",
-        "operationId": "list_44",
+        "operationId": "list_45",
         "parameters": [
           {
             "name": "policyId",
@@ -16407,7 +16480,7 @@
           "Claim Expenses"
         ],
         "summary": "List expenses on a claim (paginated)",
-        "operationId": "list_45",
+        "operationId": "list_46",
         "parameters": [
           {
             "name": "claimId",
@@ -16654,7 +16727,7 @@
         ],
         "summary": "List documents attached to a claim",
         "description": "Optionally filter by documentType. Returns metadata only \u2014 use /{id}/content to stream bytes.",
-        "operationId": "list_46",
+        "operationId": "list_47",
         "parameters": [
           {
             "name": "claimId",
@@ -16810,7 +16883,7 @@
           "Claim Comments"
         ],
         "summary": "List comments on a claim (paginated, chronological)",
-        "operationId": "list_47",
+        "operationId": "list_48",
         "parameters": [
           {
             "name": "claimId",
@@ -17697,7 +17770,7 @@
         "tags": [
           "receipt-list-controller"
         ],
-        "operationId": "list_48",
+        "operationId": "list_49",
         "parameters": [
           {
             "name": "status",
@@ -18142,7 +18215,7 @@
         "tags": [
           "payment-list-controller"
         ],
-        "operationId": "list_49",
+        "operationId": "list_50",
         "parameters": [
           {
             "name": "status",
@@ -18344,7 +18417,7 @@
         ],
         "summary": "List all posting rules",
         "description": "Returns every non-soft-deleted rule, sorted ascending by source_event_type. Each row carries the Dr/Cr account codes plus their human-readable names resolved through the Chart of Accounts.",
-        "operationId": "list_50",
+        "operationId": "list_51",
         "responses": {
           "200": {
             "description": "Posting rules",
@@ -18477,7 +18550,7 @@
         ],
         "summary": "List recent PDF downloads for the calling user",
         "description": "Returns the calling user's PDF download events from the last `days` days, newest first. Default 1 day (today); max 30 days.",
-        "operationId": "list_51",
+        "operationId": "list_52",
         "parameters": [
           {
             "name": "days",
@@ -18740,7 +18813,7 @@
         ],
         "summary": "List submissions filtered by period and/or state",
         "description": "At least one of (periodId, state) must be supplied \u2014 both omitted is rejected to avoid a full-table scan. When both are supplied, results are the intersection. Returns summary projections (payload omitted).",
-        "operationId": "list_52",
+        "operationId": "list_53",
         "parameters": [
           {
             "name": "periodId",
@@ -19601,7 +19674,7 @@
         ],
         "summary": "List debit notes (paginated, filterable)",
         "description": "Filter by status, customerId, or entityId (the underlying policy / endorsement). All omitted returns all. Outstanding amount is computed inline (totalAmount \u2212 paidAmount).",
-        "operationId": "list_53",
+        "operationId": "list_54",
         "parameters": [
           {
             "name": "status",
@@ -19971,7 +20044,7 @@
         ],
         "summary": "List customers (paginated, filterable)",
         "description": "Filter by customer type (INDIVIDUAL / CORPORATE), KYC status, account status (ACTIVE / INACTIVE / BLACKLISTED), and free-text q (matches customer number, first/last name, email, phone \u2014 never the encrypted PII). Returns lightweight summary projection.",
-        "operationId": "list_54",
+        "operationId": "list_55",
         "parameters": [
           {
             "name": "type",
@@ -20153,7 +20226,7 @@
         ],
         "summary": "List credit notes (paginated, filterable)",
         "description": "Filter by status or entityId (the underlying claim / FAC / commission record). Outstanding amount is computed inline (totalAmount \u2212 paidAmount).",
-        "operationId": "list_55",
+        "operationId": "list_56",
         "parameters": [
           {
             "name": "status",
@@ -21298,7 +21371,7 @@
         ],
         "summary": "List login & session logs",
         "description": "Filterable by userId or date range. Requires AUDIT_VIEW or SETUP_UPDATE role.",
-        "operationId": "list_56",
+        "operationId": "list_57",
         "parameters": [
           {
             "name": "userId",
@@ -21613,6 +21686,40 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/partner-apps/{id}/developers/{grantId}": {
+      "delete": {
+        "tags": [
+          "Partner App Management"
+        ],
+        "summary": "Revoke a developer's grant on this partner app (soft delete)",
+        "operationId": "revoke_1",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "grantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
           }
         }
       }
@@ -26960,6 +27067,75 @@
           }
         }
       },
+      "InviteDeveloperRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "minLength": 1
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "MANAGER",
+              "VIEWER"
+            ]
+          }
+        },
+        "required": [
+          "email",
+          "role"
+        ]
+      },
+      "ApiResponsePartnerDeveloperGrantResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PartnerDeveloperGrantResponse"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiError"
+            }
+          }
+        }
+      },
+      "PartnerDeveloperGrantResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partnerAppId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partnerUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "MANAGER",
+              "VIEWER"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "ClosePeriodRequest": {
         "type": "object",
         "properties": {
@@ -30740,6 +30916,26 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PartnerApp"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiError"
+            }
+          }
+        }
+      },
+      "ApiResponseListPartnerDeveloperGrantResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerDeveloperGrantResponse"
             }
           },
           "meta": {

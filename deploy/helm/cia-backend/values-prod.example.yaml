@@ -22,7 +22,7 @@ env:
   STORAGE_TYPE: s3
   STORAGE_ENDPOINT: "https://s3.amazonaws.com"
   STORAGE_BUCKET: cia-documents
-  PARTNER_API_RATE_LIMIT_STORE: redis
+  CIA_PARTNER_RATE_LIMIT_STORE: redis
   REDIS_HOST: "redis.internal"
   REDIS_PORT: "6379"
 ingress:
