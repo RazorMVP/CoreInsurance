@@ -63,7 +63,12 @@ public class PortalSecurityConfig {
     @Bean
     public CorsConfigurationSource portalCorsConfigurationSource(PartnerPortalRealmProperties portalProperties) {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(portalProperties.getAppUrl()));
+        // Sourced from cia.partner-portal.allowed-origins (CSV-bindable, default the local
+        // partner Vite origin) — distinct from appUrl, which is only the post-login/logout
+        // redirect target. allowCredentials(true) (the session cookie) forbids the "*"
+        // wildcard, so origins are always enumerated exactly, mirroring CorsConfig (cia-auth)'s
+        // /api/** policy. Exposes nothing sensitive — no exposedHeaders() call.
+        config.setAllowedOrigins(portalProperties.getAllowedOrigins());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Content-Type", PortalSessionFilter.CSRF_HEADER_NAME));
         // Cookies are the only credential the SPA ever carries — must be sent cross-origin.

@@ -1,5 +1,6 @@
 package com.nubeero.cia.auth;
 
+import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -43,4 +44,19 @@ public class PartnerPortalRealmProperties {
      * client registration).
      */
     private String appUrl = "http://localhost:5174";
+
+    /**
+     * Browser origins the {@code /portal/**} CORS policy (see {@code PortalSecurityConfig} in
+     * {@code cia-partner-portal-bff}) allows to make credentialed (cookie-carrying) cross-origin
+     * requests. Bound at {@code cia.partner-portal.allowed-origins} (env
+     * {@code CIA_PARTNER_PORTAL_ALLOWED_ORIGINS}, CSV) — mirrors {@code CiaCorsProperties
+     * .allowedOrigins} for the internal {@code /api/**} CORS policy. {@code allowCredentials(true)}
+     * (the SPA sends the session cookie) forbids the {@code "*"} wildcard, so origins are always
+     * enumerated exactly, never pattern-matched. Deliberately a separate field from {@link
+     * #appUrl} — {@code appUrl} is the redirect target after login/logout (a single URL the BFF
+     * itself navigates to), while this is the set of origins a browser is allowed to call
+     * {@code /portal/**} from (may legitimately be more than one, e.g. a staging preview alongside
+     * the production SPA).
+     */
+    private List<String> allowedOrigins = List.of("http://localhost:5174");
 }
