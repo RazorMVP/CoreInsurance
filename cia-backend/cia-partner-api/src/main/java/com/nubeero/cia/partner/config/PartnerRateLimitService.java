@@ -3,11 +3,10 @@ package com.nubeero.cia.partner.config;
 import com.nubeero.cia.common.tenant.TenantContext;
 import com.nubeero.cia.partner.app.PartnerApp;
 import com.nubeero.cia.partner.app.PartnerAppRepository;
-import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.ConsumptionProbe;
-import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -26,10 +25,13 @@ import org.springframework.stereotype.Service;
  * (the same lesson as {@code FiscalPeriodLookupCache}).
  *
  * <h2>Store</h2>
- * In-memory {@link ConcurrentHashMap} — correct for a single instance and for
- * dev/test. Distributed (Redis-backed, multi-replica) buckets via the existing
- * {@code bucket4j-redis} ProxyManager are a tracked follow-up
- * ({@code partner-ratelimit-redis-distributed}).
+ * Bucket storage is delegated to a {@link PartnerBucketStore}: the default
+ * {@link InMemoryPartnerBucketStore} (correct for a single instance and for dev/test)
+ * or, behind {@code cia.partner.rate-limit.store=redis}, {@link RedisPartnerBucketStore}
+ * — buckets shared across every replica via the existing {@code bucket4j-redis} Jedis
+ * {@code ProxyManager} (closes {@code partner-ratelimit-redis-distributed}). Swapping the
+ * store is transparent: this class's public API and the rate-limit contract are unchanged,
+ * only where a client's bucket lives changes.
  *
  * <h2>rpm freshness</h2>
  * The partner's rpm is cached per key with a short TTL (avoids a DB read per
@@ -43,18 +45,28 @@ public class PartnerRateLimitService {
 
     private final PartnerAppRepository partnerAppRepository;
     private final PartnerRateLimitProperties properties;
+    private final PartnerBucketStore bucketStore;
 
-    private final ConcurrentHashMap<String, BucketEntry> buckets = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CachedRpm> rpmCache = new ConcurrentHashMap<>();
 
+    /**
+     * Plain-Java constructor — used directly by unit tests (no Spring context) and
+     * defaults to the single-instance {@link InMemoryPartnerBucketStore}.
+     */
     public PartnerRateLimitService(PartnerAppRepository partnerAppRepository,
                                    PartnerRateLimitProperties properties) {
-        this.partnerAppRepository = partnerAppRepository;
-        this.properties = properties;
+        this(partnerAppRepository, properties, new InMemoryPartnerBucketStore());
     }
 
-    /** A bucket plus the rpm it was built with, so a tier change rebuilds it. */
-    private record BucketEntry(int rpm, Bucket bucket) {}
+    /** Spring-wired constructor — {@code bucketStore} is whichever store the toggle activated. */
+    @Autowired
+    public PartnerRateLimitService(PartnerAppRepository partnerAppRepository,
+                                   PartnerRateLimitProperties properties,
+                                   PartnerBucketStore bucketStore) {
+        this.partnerAppRepository = partnerAppRepository;
+        this.properties = properties;
+        this.bucketStore = bucketStore;
+    }
 
     private record CachedRpm(int rpm, long cachedAtMillis) {}
 
@@ -70,10 +82,9 @@ public class PartnerRateLimitService {
     public RateLimitVerdict tryConsume(String clientId) {
         int rpm = resolveRpm(clientId);
         String key = key(clientId);
-        BucketEntry entry = buckets.compute(key, (k, existing) ->
-                (existing == null || existing.rpm() != rpm) ? new BucketEntry(rpm, newBucket(rpm)) : existing);
+        Bucket bucket = bucketStore.bucketFor(key, rpm);
 
-        ConsumptionProbe probe = entry.bucket().tryConsumeAndReturnRemaining(1);
+        ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
         long nowSeconds = System.currentTimeMillis() / 1000L;
         long waitSeconds = (long) Math.ceil(probe.getNanosToWaitForRefill() / 1_000_000_000.0);
         return new RateLimitVerdict(
@@ -87,12 +98,12 @@ public class PartnerRateLimitService {
     /** Drop the cached rpm + bucket for a client (call when its tier/rpm changes). */
     public void evict(String clientId) {
         String key = key(clientId);
-        buckets.remove(key);
+        bucketStore.evict(key);
         rpmCache.remove(key);
     }
 
     public void evictAll() {
-        buckets.clear();
+        bucketStore.evictAll();
         rpmCache.clear();
     }
 
@@ -109,14 +120,6 @@ public class PartnerRateLimitService {
                 .orElse(properties.getDefaultRpm());
         rpmCache.put(key, new CachedRpm(rpm, System.currentTimeMillis()));
         return rpm;
-    }
-
-    private static Bucket newBucket(int rpm) {
-        Bandwidth limit = Bandwidth.builder()
-                .capacity(rpm)
-                .refillGreedy(rpm, Duration.ofMinutes(1))
-                .build();
-        return Bucket.builder().addLimit(limit).build();
     }
 
     private static String key(String clientId) {
