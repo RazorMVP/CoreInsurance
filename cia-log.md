@@ -58,6 +58,18 @@ Priority key: **P1** high-impact / next 2–3 slices · **P2** medium / queued w
 
 ---
 
+## 2026-09-03 — Partner Portal Sub-project A SHIPPED (PR #70 → `main`); Sub-project B brainstorm kickoff
+
+**Sub-project A (Partner Portal BFF + partner-auth) merged to `main`** — PR #70, merge commit `a563f39d`, 25-commit branch. All 8 CI checks green (Backend Testcontainers 16m, container image, E2E, Trivy, kind-smoke, helm, Frontend; Docs skipped); full reactor `mvn verify` 631 ITs 0F/0E/1 skip. Delivered via subagent-driven development: 11 tasks, each two-stage-reviewed + fix loops (Tasks 3/5/10 needed rounds — cross-tenant revoke authz hole; dev-profile security-chain break + client-side PKCE verifier + redirect_uri mismatch; Redis keyspace leak — all caught by review and fixed), a clean whole-branch review (opus, Ready-to-merge=Yes 0 Crit/0 Imp), and a 6-fix final wave. The token-handler BFF (`cia-partner-portal-bff`), `partner` realm + PKCE client (gated off), `public.partner_portal_grant` (V80), `/portal/**` surface (auth/apps/webhooks/credentials/usage/try-it proxy), JIT token minting, request telemetry (V81), Redis-distributed rate-limit, and `/portal` CORS are all live. Browser holds no secret/token (verified branch-wide).
+
+**Backlog reconciliation:** `partner-ratelimit-redis-distributed` **cleared** (Task 10); one reviewer-endorsed deferral added — `partner-portal-realm-eq-schema` (P3): token minting assumes realm==schema (current provisioning default), resolve at live-Keycloak wiring. No `partner-usage-telemetry` row ever created (built in Task 9). Net workstream: one pre-existing row closed, one gated-path limitation tracked.
+
+**Sub-project B (Partner Portal SPA, `apps/partner`) — brainstorm in progress (design only, no code).** Decision locked: build the 4 contract-backed builds (P1 Auth, P2 API Explorer, P3 Webhook Management, P5 Usage Dashboard); **P4 Sandbox scoped OUT** as its own future backend-sandbox epic (no sandbox surface exists on the backend — §8 describes it but it was never built; it's a separate subsystem, not a FE toggle). Design pending user approval before the spec. Auth model = BFF cookie-session (`PortalAuthProvider`, not Keycloak-JS) + demo-first mock; dark-mode shell + app-context selector; `@cia/api-client/modules/portal.ts` zod layer.
+
+**Known follow-ups.** Backlog: +1 (`partner-portal-realm-eq-schema`, from A's final review) already added; A's `partner-ratelimit-redis-distributed` removal landed. Sub-project B may add a `partner-portal-sandbox-epic` row once its scope is confirmed. No other changes.
+
+---
+
 ## 2026-09-02 — Sub-project A final fix wave (`feat/partner-portal-bff`)
 
 Whole-branch review returned "Ready to merge = Yes"; folded in the 6 cheap Minors + 2 backlog-row-clearing fixes rather than deferring (build-complete directive).
