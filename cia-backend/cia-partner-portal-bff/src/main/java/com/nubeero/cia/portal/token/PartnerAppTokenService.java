@@ -82,6 +82,15 @@ public class PartnerAppTokenService {
         log.debug("Minting partner-app access token for tenant realm '{}', client '{}'",
                 tenantRealm, clientId);
         String secret = secretResolver.resolveSecret(tenantRealm, clientId);
+        if (secret == null || secret.isBlank()) {
+            // Defense-in-depth: KeycloakAdminPartnerClientSecretResolver already rejects this, but
+            // a null/blank secret from ANY PartnerClientSecretResolver implementation (e.g. a
+            // mistakenly PUBLIC Keycloak client with no secret to fetch) must fail with a clear,
+            // typed error here too rather than NPE inside the client-credentials grant call.
+            throw new PartnerAppTokenException("PARTNER_APP_SECRET_MISSING",
+                    "No client_secret resolved for partner app client '" + clientId
+                            + "' in tenant realm '" + tenantRealm + "' — cannot mint an access token.");
+        }
         return tokenGrantor.grant(tenantRealm, clientId, secret);
     }
 

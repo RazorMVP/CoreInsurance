@@ -49,6 +49,14 @@ public class KeycloakAdminPartnerClientSecretResolver implements PartnerClientSe
 
         String internalId = found.get(0).getId();
         String secret = realm.clients().get(internalId).getSecret().getValue();
+        if (secret == null || secret.isBlank()) {
+            // Happens when the Keycloak client is mistakenly PUBLIC (no client_secret to fetch) —
+            // fail with a clear, typed error instead of letting a null propagate into an NPE
+            // downstream in PartnerAppTokenService's client-credentials grant call.
+            throw new PartnerAppTokenException("PARTNER_APP_SECRET_MISSING",
+                    "Keycloak client '" + clientId + "' in tenant realm '" + tenantRealm
+                            + "' has no client_secret — is it mistakenly configured as a PUBLIC client?");
+        }
         // Deliberately log only the coordinates, never the secret value.
         log.debug("Resolved client_secret for partner app '{}' in tenant realm '{}'", clientId, tenantRealm);
         return secret;

@@ -45,9 +45,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PortalProxyController {
 
-    /** Hop-by-hop headers stripped from the relayed upstream response — see {@link #toResponseEntity}. */
+    /**
+     * Headers stripped from the relayed upstream response — see {@link #toResponseEntity}.
+     * {@code transfer-encoding}/{@code connection} are hop-by-hop headers that must never be
+     * relayed verbatim over a fresh response. {@code set-cookie}/{@code set-cookie2} are stripped
+     * defensively so an upstream {@code /partner/v1} {@code Set-Cookie} could never flow into a
+     * {@code /portal/**} response and interact with the portal's own {@code cia_portal_session}
+     * cookie — {@code /partner/v1} sets none today, but the proxy must not assume that stays true.
+     */
     private static final Set<String> STRIPPED_RESPONSE_HEADERS =
-            Set.of("transfer-encoding", "connection");
+            Set.of("transfer-encoding", "connection", "set-cookie", "set-cookie2");
 
     private final PortalProxyService proxyService;
 

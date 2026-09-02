@@ -12,6 +12,7 @@ import java.time.ZoneOffset;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -192,5 +193,19 @@ class PartnerAppTokenServiceTest {
         // No stubbing needed — evicting something never cached must not throw or interact with
         // either seam.
         service().evict(TENANT_REALM, CLIENT_ID);
+    }
+
+    @Test
+    void tokenFor_nullSecretFromResolver_throwsPartnerAppTokenException_notNpe() {
+        // A partner app mistakenly configured as a PUBLIC Keycloak client has no client_secret to
+        // fetch — the resolver returns null. This must surface as a typed PartnerAppTokenException,
+        // never propagate to the tokenGrantor.grant(...) call as a raw NPE.
+        when(secretResolver.resolveSecret(TENANT_REALM, CLIENT_ID)).thenReturn(null);
+
+        assertThatThrownBy(() -> service().tokenFor(TENANT_REALM, CLIENT_ID))
+                .isInstanceOf(PartnerAppTokenException.class)
+                .hasMessageContaining(CLIENT_ID);
+
+        verify(tokenGrantor, never()).grant(anyString(), anyString(), org.mockito.ArgumentMatchers.any());
     }
 }

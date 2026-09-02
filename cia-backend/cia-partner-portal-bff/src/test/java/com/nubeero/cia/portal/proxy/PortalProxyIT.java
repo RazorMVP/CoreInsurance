@@ -359,6 +359,26 @@ class PortalProxyIT {
         assertThat(UPSTREAM.recordedRequests().get(0).path()).isEqualTo("/partner/v1/quotes");
     }
 
+    @Test
+    void tryIt_upstreamSetCookie_isNeverRelayedToThePortalResponse() throws Exception {
+        UPSTREAM.stub("GET", "/products", 200, "application/json", "[]",
+                Map.of("Set-Cookie", "JSESSIONID=upstream-should-never-leak; Path=/"));
+
+        UUID partnerUserId = PartnerDeveloperService.derivePartnerUserId(MANAGER_EMAIL + ".set-cookie");
+        grantRepository.save(grant(partnerUserId, MANAGER_EMAIL, APP_ID, GrantRole.MANAGER));
+        Cookie sessionCookie = sessionCookieFor(partnerUserId, MANAGER_EMAIL, "csrf-set-cookie");
+
+        MvcResult result = mvc.perform(get("/portal/apps/{appId}/try/products", APP_ID).cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        // The upstream genuinely sent a Set-Cookie — the assertion is that PortalProxyController
+        // strips it before it reaches the browser, not that the upstream never sends one.
+        assertThat(result.getResponse().getHeaderNames())
+                .as("no Set-Cookie/Set-Cookie2 header should be relayed from the upstream response")
+                .noneMatch(name -> name.equalsIgnoreCase("Set-Cookie") || name.equalsIgnoreCase("Set-Cookie2"));
+    }
+
     // ── Webhooks CRUD ───────────────────────────────────────────────────────────────────
 
     @Test

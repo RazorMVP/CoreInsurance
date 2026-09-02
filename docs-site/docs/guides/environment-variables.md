@@ -87,7 +87,7 @@ opaque `cia_portal_session` cookie.
 | Variable | Default (dev) | Description |
 | --- | --- | --- |
 | `CIA_PARTNER_PORTAL_REALM` | `partner` | Name of the Keycloak realm holding Insurtech developer users (`cia.partner-portal.realm`). Bound identically in cia-api and cia-auth — keep in sync. |
-| `CIA_PARTNER_PORTAL_CLIENT_ID` | `cia-partner-portal` | Confidential Keycloak client id for the BFF's token-handler OAuth2 flow (`cia.partner-portal.client-id`). |
+| `CIA_PARTNER_PORTAL_CLIENT_ID` | `cia-partner-portal` | PUBLIC (not confidential) Keycloak client id for the BFF's token-handler OAuth2 flow — no client secret, PKCE (S256) instead (`cia.partner-portal.client-id`). The token-handler invariant comes from PKCE + the server-side httpOnly session, not from client confidentiality. |
 | `CIA_PARTNER_PORTAL_REDIRECT_URIS` | `http://localhost:8090/portal/auth/callback` | The BFF's own `/portal/auth/callback` endpoint — the value registered as the Keycloak client's `redirect_uri` (`cia.partner-portal.redirect-uris`, CSV). **Not** the SPA origin. |
 | `CIA_PARTNER_PORTAL_ALLOWED_ORIGINS` | `http://localhost:5174` | CSV of browser origins allowed to call `/portal/**` cross-origin with credentials (`cia.partner-portal.allowed-origins`). `allowCredentials(true)` ⇒ no `*` wildcard. `/partner/**` stays CORS-free (M2M). |
 | `CIA_PARTNER_PORTAL_STORE` | `in-memory` | `redis` / `in-memory` — selects `PortalSessionStore` + `PortalLoginStateStore` impl (`cia.partner-portal.store`). `redis` required for a multi-replica deployment. |

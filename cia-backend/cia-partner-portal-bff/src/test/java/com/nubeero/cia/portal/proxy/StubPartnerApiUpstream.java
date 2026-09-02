@@ -47,7 +47,7 @@ final class StubPartnerApiUpstream {
     record RecordedRequest(String method, String path, String query, String authorizationHeader, String body) {
     }
 
-    private record StubResponse(int status, String contentType, String body) {
+    private record StubResponse(int status, String contentType, String body, Map<String, String> extraHeaders) {
     }
 
     StubPartnerApiUpstream() throws IOException {
@@ -70,7 +70,17 @@ final class StubPartnerApiUpstream {
 
     /** Registers a canned response for one exact {@code METHOD path} pair (path under {@code /partner/v1}). */
     void stub(String method, String path, int status, String contentType, String body) {
-        stubs.put(method + " /partner/v1" + path, new StubResponse(status, contentType, body));
+        stubs.put(method + " /partner/v1" + path, new StubResponse(status, contentType, body, Map.of()));
+    }
+
+    /**
+     * Same as {@link #stub}, plus arbitrary extra response headers — used by
+     * {@link PortalProxyIT#tryIt_upstreamSetCookie_isNeverRelayedToThePortalResponse()} to prove an
+     * upstream {@code Set-Cookie} is stripped rather than relayed.
+     */
+    void stub(String method, String path, int status, String contentType, String body,
+            Map<String, String> extraHeaders) {
+        stubs.put(method + " /partner/v1" + path, new StubResponse(status, contentType, body, extraHeaders));
     }
 
     List<RecordedRequest> recordedRequests() {
@@ -101,6 +111,7 @@ final class StubPartnerApiUpstream {
                         "{\"errors\":[{\"code\":\"NOT_STUBBED\",\"message\":\"" + method + " " + path + "\"}]}");
                 return;
             }
+            stub.extraHeaders().forEach((name, value) -> exchange.getResponseHeaders().add(name, value));
             respond(exchange, stub.status(), stub.contentType(), stub.body());
         } finally {
             exchange.close();

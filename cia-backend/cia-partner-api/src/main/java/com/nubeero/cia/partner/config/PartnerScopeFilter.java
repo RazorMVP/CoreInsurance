@@ -18,7 +18,15 @@ import java.util.List;
 
 /**
  * Enforces OAuth2 scope requirements per partner API endpoint.
- * Runs after JWT authentication — the token is already validated by Spring Security.
+ *
+ * <p>Registered in {@code PartnerSecurityConfig} via a chain of {@code addFilterBefore}/{@code
+ * addFilterAfter} calls anchored at {@code UsernamePasswordAuthenticationFilter.class} — the same
+ * pre-auth position {@link com.nubeero.cia.auth.TenantContextFilter} and {@link
+ * PartnerRequestMetricsFilter} use. Spring Security's default filter-order registration places
+ * {@code UsernamePasswordAuthenticationFilter} (and therefore this filter) BEFORE {@code
+ * BearerTokenAuthenticationFilter} — the OAuth2 resource-server filter that actually validates the
+ * bearer JWT and populates {@link Authentication} in the {@link SecurityContextHolder}. So this
+ * filter runs BEFORE bearer-token authentication, not after it.
  *
  * <p>Routes are evaluated in declaration order; the first match wins. Most-specific
  * patterns must precede broader ones (e.g. {@code /policies/&#42;/claims} before
