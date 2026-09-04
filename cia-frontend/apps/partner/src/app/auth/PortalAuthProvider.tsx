@@ -17,11 +17,12 @@ export function PortalAuthProvider({ children }: { children: React.ReactNode }) 
   }, [sessionQuery.data?.csrfToken]);
 
   // A live 401 (session expired mid-app) forces the login screen.
+  const refetch = sessionQuery.refetch;
   useEffect(() => {
-    const onUnauth = () => sessionQuery.refetch();
+    const onUnauth = () => refetch();
     window.addEventListener('portal:unauthorized', onUnauth);
     return () => window.removeEventListener('portal:unauthorized', onUnauth);
-  }, [sessionQuery]);
+  }, [refetch]);
 
   if (sessionQuery.isLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">Loading…</div>;
