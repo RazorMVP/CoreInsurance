@@ -9,3 +9,5 @@ export * from './endorsement';
 export * from './reinsurance';
 export * from './audit';
 export * from './platform';
+export * from './portal';
+export * from './portal-mocks';
