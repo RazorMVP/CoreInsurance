@@ -13,7 +13,9 @@
  */
 import axios, { AxiosInstance } from 'axios';
 import { z } from 'zod';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiEnvelope } from '../validation';
+import { mockPortalApi } from './portal-mocks';
 
 // ── Enums ──
 export const GrantRoleSchema = z.enum(['MANAGER', 'VIEWER']);
@@ -216,4 +218,85 @@ export function getUsage(appId: string): Promise<PortalUsageDto> {
 }
 export function tryIt(appId: string, method: string, path: string, body?: unknown): Promise<TryItResult> {
   return portalTry(appId, method, path, body);
+}
+
+// ── react-query hooks — every hook routes to `mockPortalApi` in demo mode,
+// else the real API wrapper function above. ──
+
+const k = {
+  session: ['portal', 'session'] as const,
+  apps: ['portal', 'apps'] as const,
+  credentials: (appId: string) => ['portal', 'credentials', appId] as const,
+  webhooks: (appId: string) => ['portal', 'webhooks', appId] as const,
+  usage: (appId: string) => ['portal', 'usage', appId] as const,
+};
+
+export function useSession() {
+  return useQuery({
+    queryKey: k.session,
+    queryFn: () => (isPortalDemoMode() ? mockPortalApi.getMe() : getMe()),
+    retry: false,
+  });
+}
+export function useApps() {
+  return useQuery({
+    queryKey: k.apps,
+    queryFn: () => (isPortalDemoMode() ? mockPortalApi.getApps() : getApps()),
+  });
+}
+export function useCredentials(appId: string) {
+  return useQuery({
+    queryKey: k.credentials(appId),
+    queryFn: () => (isPortalDemoMode() ? mockPortalApi.getCredentials(appId) : getCredentials(appId)),
+    enabled: !!appId,
+  });
+}
+export function useRotateSecret(appId: string) {
+  return useMutation({
+    mutationFn: () => (isPortalDemoMode() ? mockPortalApi.rotateSecret(appId) : rotateSecret(appId)),
+  });
+}
+export function useWebhooks(appId: string) {
+  return useQuery({
+    queryKey: k.webhooks(appId),
+    queryFn: () => (isPortalDemoMode() ? mockPortalApi.getWebhooks(appId) : getWebhooks(appId)),
+    enabled: !!appId,
+  });
+}
+export function useCreateWebhook(appId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RegisterWebhookInput) =>
+      (isPortalDemoMode() ? mockPortalApi.createWebhook(appId, input) : createWebhook(appId, input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: k.webhooks(appId) }),
+  });
+}
+export function useDeleteWebhook(appId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (webhookId: string) =>
+      (isPortalDemoMode() ? mockPortalApi.deleteWebhook(appId, webhookId) : deleteWebhook(appId, webhookId)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: k.webhooks(appId) }),
+  });
+}
+export function useUsage(appId: string) {
+  return useQuery({
+    queryKey: k.usage(appId),
+    queryFn: () => (isPortalDemoMode() ? mockPortalApi.getUsage(appId) : getUsage(appId)),
+    enabled: !!appId,
+    staleTime: 15_000,
+  });
+}
+export function useTryIt(appId: string) {
+  return useMutation({
+    mutationFn: (args: { method: string; path: string; body?: unknown }) =>
+      (isPortalDemoMode()
+        ? mockPortalApi.tryIt(appId, args.method, args.path)
+        : tryIt(appId, args.method, args.path, args.body)),
+  });
+}
+export function useLogout() {
+  return useMutation({
+    mutationFn: () => (isPortalDemoMode() ? mockPortalApi.logout() : logout()),
+  });
 }
