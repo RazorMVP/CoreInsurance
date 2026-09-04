@@ -30,6 +30,10 @@ describe('portal hooks in demo mode', () => {
     const before = list.current.data?.length ?? 0;
     const { result: create } = renderHook(() => useCreateWebhook('app-1'), { wrapper: w });
     await create.current.mutateAsync({ targetUrl: 'https://x.example/h', secret: 'sixteen-char-secret!', eventTypes: ['policy.bound'] });
-    expect(before).toBeGreaterThanOrEqual(1);
+    // The mutation's onSuccess invalidates the ['portal','webhooks','app-1'] key that `list`
+    // is subscribed to, so it refetches on the same QueryClient — wait for the refetch to
+    // land, then prove the create actually took effect (not just that it didn't throw).
+    await waitFor(() => expect(list.current.data?.length ?? 0).toBe(before + 1));
+    expect(list.current.data?.some((wh) => wh.targetUrl === 'https://x.example/h')).toBe(true);
   });
 });
