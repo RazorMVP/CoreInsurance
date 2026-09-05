@@ -28,7 +28,7 @@ export default function ExplorerPage() {
   const send = () => {
     let parsed: unknown;
     if (method !== 'GET' && body.trim()) {
-      try { parsed = JSON.parse(body); setBodyError(null); }
+      try { parsed = JSON.parse(body); }
       catch { setBodyError('Body is not valid JSON'); return; }
     }
     setBodyError(null);
