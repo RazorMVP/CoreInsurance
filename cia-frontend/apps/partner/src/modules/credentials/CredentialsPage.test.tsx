@@ -18,6 +18,10 @@ describe('CredentialsPage', () => {
   it('shows client id + scopes and reveals a rotated secret once', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('insurtech-aggregator')).toBeInTheDocument());
+    // "Rotate secret" is gated (disabled) on selectedApp.role === 'MANAGER', which resolves
+    // from a separate (apps) query than the credentials query above — wait for it to be
+    // enabled before clicking, not just present.
+    await waitFor(() => expect(screen.getByRole('button', { name: /rotate secret/i })).toBeEnabled());
     await userEvent.click(screen.getByRole('button', { name: /rotate secret/i }));
     await waitFor(() => expect(screen.getByText(/demo-secret-/)).toBeInTheDocument());
     await userEvent.click(screen.getByRole('button', { name: /dismiss/i }));

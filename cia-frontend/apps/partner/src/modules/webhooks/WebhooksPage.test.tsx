@@ -21,6 +21,10 @@ describe('WebhooksPage', () => {
   it('lists existing webhooks by targetUrl and validates the secret length', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('https://insurtech.example/hooks/cia')).toBeInTheDocument());
+    // The register form is gated on selectedApp.role === 'MANAGER', which resolves from a
+    // separate (apps) query than the webhooks list above — wait for the gated control itself
+    // before interacting, not just the webhooks query.
+    await waitFor(() => expect(screen.getByLabelText(/target url/i)).toBeInTheDocument());
     await userEvent.type(screen.getByLabelText(/target url/i), 'https://x.example/h');
     await userEvent.type(screen.getByLabelText(/signing secret/i), 'short');
     await userEvent.click(screen.getByLabelText(/policy.bound/i));
@@ -31,6 +35,9 @@ describe('WebhooksPage', () => {
   it('requires a second confirm click before deleting a webhook (I4)', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('https://insurtech.example/hooks/cia')).toBeInTheDocument());
+    // The per-row Delete button is also gated on selectedApp.role === 'MANAGER' (a separate
+    // apps query) — wait for it to exist before clicking.
+    await waitFor(() => expect(screen.getByRole('button', { name: /^delete$/i })).toBeInTheDocument());
 
     const deleteButton = screen.getByRole('button', { name: /^delete$/i });
     await userEvent.click(deleteButton);
