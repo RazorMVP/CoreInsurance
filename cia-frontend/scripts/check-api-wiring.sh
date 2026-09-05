@@ -14,12 +14,12 @@
 
 set -uo pipefail
 
-ROOT="cia-frontend/apps/back-office/src/modules"
-
-if [ ! -d "$ROOT" ]; then
-  echo "✗ $ROOT not found — run from repo root."
-  exit 2
-fi
+# One entry per app module root this guard governs. Loop over these (rather
+# than a single ROOT) so every app is scanned, not just back-office.
+ROOTS=(
+  "cia-frontend/apps/back-office/src/modules"
+  "cia-frontend/apps/partner/src/modules"
+)
 
 VIOLATIONS=0
 
@@ -58,31 +58,39 @@ report_with_optout() {
   done <<< "$matches"
 }
 
-echo "Checking $ROOT for API-wiring violations..."
-echo ""
+for ROOT in "${ROOTS[@]}"; do
+  if [ ! -d "$ROOT" ]; then
+    echo "✗ $ROOT not found — run from repo root."
+    exit 2
+  fi
 
-# ── Rule 1: console.log in module code ───────────────────────────────────────
-# Even outside onSubmit, console.log shouldn't ship to production. Allow
-# explicit opt-outs (e.g. dev-only debug temporarily kept while triaging).
-matches=$(grep -rEnH 'console\.log\(' --include='*.tsx' --include='*.ts' "$ROOT" 2>/dev/null || true)
-report_with_optout "console.log in module code (use logger or remove)" "$matches"
+  echo "Checking $ROOT for API-wiring violations..."
+  echo ""
 
-# ── Rule 2: mock array declarations ──────────────────────────────────────────
-# Match `const mockX = [` or `const MOCK_X = [` — at line start OR indented
-# (mocks declared inside function bodies, branches, useEffect callbacks).
-# Inline mocks inside test files or hooks/helpers/ subdirs are out of scope —
-# those directories aren't covered by this scan.
-matches=$(grep -rEnH '^[[:space:]]*const (mock[A-Z][A-Za-z0-9_]*|MOCK_[A-Z0-9_]+)\s*[:=]' \
-  --include='*.tsx' --include='*.ts' "$ROOT" 2>/dev/null || true)
-report_with_optout "top-level mock declaration (wire to useQuery or mark with // allow-mock:)" "$matches"
+  # ── Rule 1: console.log in module code ─────────────────────────────────────
+  # Even outside onSubmit, console.log shouldn't ship to production. Allow
+  # explicit opt-outs (e.g. dev-only debug temporarily kept while triaging).
+  matches=$(grep -rEnH 'console\.log\(' --include='*.tsx' --include='*.ts' "$ROOT" 2>/dev/null || true)
+  report_with_optout "console.log in module code (use logger or remove)" "$matches"
 
-# ── Rule 3: stale TODOs that mean "I haven't wired this yet" ─────────────────
-matches=$(grep -rEnH '//[[:space:]]*TODO:?[[:space:]]*(useMutation|useQuery|useCreate|useUpdate)' \
-  --include='*.tsx' --include='*.ts' "$ROOT" 2>/dev/null || true)
-report_with_optout "stale TODO — wire the hook now" "$matches"
+  # ── Rule 2: mock array declarations ────────────────────────────────────────
+  # Match `const mockX = [` or `const MOCK_X = [` — at line start OR indented
+  # (mocks declared inside function bodies, branches, useEffect callbacks).
+  # Inline mocks inside test files or hooks/helpers/ subdirs are out of scope —
+  # those directories aren't covered by this scan.
+  matches=$(grep -rEnH '^[[:space:]]*const (mock[A-Z][A-Za-z0-9_]*|MOCK_[A-Z0-9_]+)\s*[:=]' \
+    --include='*.tsx' --include='*.ts' "$ROOT" 2>/dev/null || true)
+  report_with_optout "top-level mock declaration (wire to useQuery or mark with // allow-mock:)" "$matches"
+
+  # ── Rule 3: stale TODOs that mean "I haven't wired this yet" ───────────────
+  matches=$(grep -rEnH '//[[:space:]]*TODO:?[[:space:]]*(useMutation|useQuery|useCreate|useUpdate)' \
+    --include='*.tsx' --include='*.ts' "$ROOT" 2>/dev/null || true)
+  report_with_optout "stale TODO — wire the hook now" "$matches"
+
+  echo ""
+done
 
 # ── Summary ──────────────────────────────────────────────────────────────────
-echo ""
 if [ "$VIOLATIONS" -gt 0 ]; then
   echo "✗ $VIOLATIONS API-wiring violation(s) found."
   echo ""

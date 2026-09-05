@@ -25,7 +25,19 @@
     "down slice-by-slice; don't add new ones without strong justification."
   ],
 
-  "manualMap": {},
+  "manualMap": {
+    "PortalGrantDto": "PartnerDeveloperGrantResponse",
+    "PortalAppSummaryDto": "PortalAppSummary",
+    "PortalCredentialsDto": "PortalAppCredentialsResponse",
+    "PortalRotateSecretDto": "PortalAppCredentialsRotateResponse",
+    "PortalWebhookDto": "PartnerWebhookResponse",
+    "PortalMeDto": "PortalMeResponse",
+    "PortalUsageDto": "PortalUsageResponse",
+    "UsageDayDto": "UsageDayResponse",
+    "UsageHistoryEntryDto": "UsageHistoryEntryResponse",
+    "WebhookDeliverySummaryDto": "WebhookDeliverySummaryResponse",
+    "PortalLogoutDto": "PortalLogoutResponse"
+  },
 
   "ignoreDtos": [],
 
