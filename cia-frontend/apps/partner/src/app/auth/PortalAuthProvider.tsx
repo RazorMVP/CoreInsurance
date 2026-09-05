@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect } from 'react';
+import { createContext, useContext, useEffect, useRef } from 'react';
 import { useSession, useLogout, setPortalCsrfToken, isPortalDemoMode, type PortalMeDto } from '@cia/api-client';
 import { LoginScreen } from './LoginScreen';
 
@@ -16,10 +16,16 @@ export function PortalAuthProvider({ children }: { children: React.ReactNode }) 
     setPortalCsrfToken(sessionQuery.data?.csrfToken ?? null);
   }, [sessionQuery.data?.csrfToken]);
 
-  // A live 401 (session expired mid-app) forces the login screen.
+  // A live 401 (session expired mid-app) forces the login screen — but once the
+  // session is already known-invalid, a 401 is expected (not a fresh expiry), so
+  // the handler must be a no-op or a logged-out visitor loops `getMe()` forever
+  // (portal.ts's response interceptor dispatches this event on every 401).
+  const isErrorRef = useRef(false);
+  useEffect(() => { isErrorRef.current = sessionQuery.isError; }, [sessionQuery.isError]);
+
   const refetch = sessionQuery.refetch;
   useEffect(() => {
-    const onUnauth = () => refetch();
+    const onUnauth = () => { if (!isErrorRef.current) refetch(); };
     window.addEventListener('portal:unauthorized', onUnauth);
     return () => window.removeEventListener('portal:unauthorized', onUnauth);
   }, [refetch]);

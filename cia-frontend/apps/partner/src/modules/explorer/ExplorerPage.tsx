@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTryIt, type TryItResult } from '@cia/api-client';
 import { useSelectedApp } from '../../app/AppContext';
+import { SelectAppNotice } from '../../app/SelectAppNotice';
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 const QUICK = [
@@ -24,6 +25,15 @@ export default function ExplorerPage() {
   const [body, setBody] = useState('');
   const [result, setResult] = useState<TryItResult | null>(null);
   const [bodyError, setBodyError] = useState<string | null>(null);
+
+  if (!appId) {
+    return (
+      <div className="max-w-3xl space-y-5">
+        <h1 className="text-xl font-semibold text-foreground">API Explorer</h1>
+        <SelectAppNotice />
+      </div>
+    );
+  }
 
   const send = () => {
     let parsed: unknown;

@@ -1,9 +1,17 @@
 import { useState } from 'react';
 import { useWebhooks, useCreateWebhook, useDeleteWebhook, useUsage } from '@cia/api-client';
 import { useSelectedApp } from '../../app/AppContext';
+import { SelectAppNotice } from '../../app/SelectAppNotice';
 import { formatInt, formatTimestamp } from '../../lib/format';
 
 const EVENTS = ['policy.bound', 'policy.endorsed', 'policy.cancelled', 'claim.registered', 'claim.approved', 'claim.settled', 'quote.created', 'quote.expired', 'kyc.completed', 'renewal.due'];
+
+interface UpstreamErrorShape { response?: { data?: { errors?: { message?: string }[] } } }
+
+function createErrorMessage(err: unknown): string {
+  const detail = (err as UpstreamErrorShape | null)?.response?.data?.errors?.[0]?.message;
+  return detail ?? 'Could not register the webhook. Try again.';
+}
 
 export default function WebhooksPage() {
   const { selectedAppId, selectedApp } = useSelectedApp();
@@ -18,6 +26,7 @@ export default function WebhooksPage() {
   const [secret, setSecret] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   const toggle = (ev: string) => setSelected((s) => (s.includes(ev) ? s.filter((e) => e !== ev) : [...s, ev]));
 
@@ -31,7 +40,20 @@ export default function WebhooksPage() {
     });
   };
 
+  const requestDelete = (id: string) => setConfirmingId(id);
+  const confirmDelete = (id: string) => { setConfirmingId(null); del.mutate(id); };
+  const cancelDelete = () => setConfirmingId(null);
+
   const wd = usageQuery.data?.webhookDeliveries;
+
+  if (!selectedAppId) {
+    return (
+      <div className="max-w-3xl space-y-6">
+        <h1 className="text-xl font-semibold text-foreground">Webhooks</h1>
+        <SelectAppNotice />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -56,7 +78,7 @@ export default function WebhooksPage() {
             ))}
           </fieldset>
           {error && <p className="text-sm text-red-400">{error}</p>}
-          {create.isError && <p className="text-sm text-red-400">Could not register the webhook. Try again.</p>}
+          {create.isError && <p className="text-sm text-red-400">{createErrorMessage(create.error)}</p>}
           <button onClick={submit} disabled={create.isPending} className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50">
             {create.isPending ? 'Registering…' : 'Register webhook'}
           </button>
@@ -77,11 +99,22 @@ export default function WebhooksPage() {
               </div>
               <div className="flex items-center gap-3">
                 <span className={`text-xs ${w.active ? 'text-emerald-400' : 'text-muted-foreground'}`}>{w.active ? 'Active' : 'Inactive'}</span>
-                {canManage && <button onClick={() => del.mutate(w.id)} disabled={del.isPending} className="text-xs text-red-400 hover:underline disabled:opacity-50">Delete</button>}
+                {canManage && (
+                  confirmingId === w.id ? (
+                    <span className="flex items-center gap-2">
+                      <span className="text-xs text-amber-400">Confirm delete?</span>
+                      <button onClick={() => confirmDelete(w.id)} disabled={del.isPending} className="text-xs font-medium text-red-400 hover:underline disabled:opacity-50">Confirm</button>
+                      <button onClick={cancelDelete} className="text-xs text-muted-foreground hover:underline">Cancel</button>
+                    </span>
+                  ) : (
+                    <button onClick={() => requestDelete(w.id)} disabled={del.isPending} className="text-xs text-red-400 hover:underline disabled:opacity-50">Delete</button>
+                  )
+                )}
               </div>
             </li>
           ))}
         </ul>
+        {del.isError && <p className="p-4 pt-0 text-sm text-red-400">Could not delete the webhook. Try again.</p>}
       </div>
 
       <div className="rounded-lg border border-border bg-card p-5">

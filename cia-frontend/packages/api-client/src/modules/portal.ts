@@ -175,6 +175,20 @@ async function portalDelete(url: string): Promise<void> {
   await portalClient.delete(url);
 }
 // Try-it: relay status + body VERBATIM (never through apiEnvelope — 403/429 bodies must survive).
+//
+// Trade-off: `validateStatus: () => true` is required so an upstream 403/429/500 from the
+// partner API resolves (not rejects) and reaches the caller with its body intact — but it
+// also means axios never rejects on a 401, so the *response* interceptor's `portal:unauthorized`
+// dispatch (which only runs on a rejected promise) never fires here even if the 401 is actually
+// the BFF's OWN session expiring (not an upstream partner-API 401). Rather than losing that
+// case, detect it explicitly by body shape (`PORTAL_SESSION_REQUIRED`) and dispatch the same
+// event manually — so an expired portal session still returns the user to login instead of
+// rendering "Status: 401" in the Explorer.
+function isPortalSessionExpired(status: number, body: unknown): boolean {
+  if (status !== 401) return false;
+  const errors = (body as { errors?: { code?: string }[] } | null)?.errors;
+  return Array.isArray(errors) && errors.some((e) => e?.code === 'PORTAL_SESSION_REQUIRED');
+}
 async function portalTry(appId: string, method: string, path: string, body?: unknown): Promise<TryItResult> {
   const clean = path.replace(/^\/+/, '');
   const res = await portalClient.request({
@@ -183,6 +197,9 @@ async function portalTry(appId: string, method: string, path: string, body?: unk
     data: ['GET', 'HEAD'].includes(method.toUpperCase()) ? undefined : body,
     validateStatus: () => true,
   });
+  if (isPortalSessionExpired(res.status, res.data)) {
+    window.dispatchEvent(new CustomEvent('portal:unauthorized'));
+  }
   return { status: res.status, body: res.data };
 }
 

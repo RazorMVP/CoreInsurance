@@ -1,3 +1,7 @@
+// `formatNaira` / `formatDate` are unused by any partner page today — kept deliberately as a
+// mirrored set matching back-office's `lib/format.ts` API so pages can move between apps without
+// import churn. They are fully unit-tested; that coverage exercises the helpers themselves, not
+// any live page path.
 const DASH = '—';
 
 export function formatNaira(v: number | null | undefined): string {

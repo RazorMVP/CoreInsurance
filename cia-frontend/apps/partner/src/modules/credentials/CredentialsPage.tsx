@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useCredentials, useRotateSecret } from '@cia/api-client';
 import { useSelectedApp } from '../../app/AppContext';
+import { SelectAppNotice } from '../../app/SelectAppNotice';
 import { copyToClipboard } from '../../lib/copy';
 
 export default function CredentialsPage() {
@@ -11,7 +12,20 @@ export default function CredentialsPage() {
   const [revealed, setRevealed] = useState<string | null>(null);
   const canRotate = selectedApp?.role === 'MANAGER';
 
-  const onRotate = () => rotate.mutate(undefined, { onSuccess: (r) => setRevealed(r.clientSecret) });
+  if (!selectedAppId) {
+    return (
+      <div className="max-w-2xl space-y-6">
+        <h1 className="text-xl font-semibold text-foreground">Credentials</h1>
+        <SelectAppNotice />
+      </div>
+    );
+  }
+
+  const onRotate = () => {
+    rotate.reset();
+    rotate.mutate(undefined, { onSuccess: (r) => setRevealed(r.clientSecret) });
+  };
+  const dismiss = () => { setRevealed(null); rotate.reset(); };
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -42,7 +56,7 @@ export default function CredentialsPage() {
           <p className="mt-2 break-all font-mono text-sm text-foreground">{revealed}</p>
           <div className="mt-3 flex gap-2">
             <button onClick={() => copyToClipboard(revealed)} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground">Copy</button>
-            <button onClick={() => setRevealed(null)} className="rounded-md border border-border px-3 py-1.5 text-sm text-foreground">Dismiss</button>
+            <button onClick={dismiss} className="rounded-md border border-border px-3 py-1.5 text-sm text-foreground">Dismiss</button>
           </div>
         </div>
       ) : (

@@ -49,7 +49,7 @@ is committed for the partner app.
    read by the **CI workflow's** `vercel build`, which runs with `working-directory:
    cia-frontend/apps/partner`, making the app dir itself the project root (see Troubleshooting).
    Both are correct for their own code path; they are not the same string by design.
-7. **Don't click Deploy yet** — add env vars (Step 2) first, or you'll trip the production guard.
+7. **Don't click Deploy yet** — add env vars (Step 2) first. Unlike back-office/platform, `apps/partner`'s `main.tsx` has no production guard that throws on absent auth config; a premature deploy here would instead just build against whatever `VITE_API_BASE_URL`/`VITE_DEMO_MODE` happen to be in the Vercel dashboard at that moment, which is why Step 2's "don't set anything in the dashboard yet" ordering matters.
 8. **Settings ▸ General ▸ Project ID** → copy the `prj_…` value. That's your
    `VERCEL_PARTNER_PROJECT_ID`.
 
@@ -107,6 +107,14 @@ pages render fully against realistic mock shapes — the honest frontend-only-de
    Sub-project A / backend infra setting; nothing in this repo's frontend code changes for it.
    The `partner` Keycloak realm + `cia-partner-portal` client must also exist (provisioned by
    enabling the gated `PartnerPortalBootstrapRunner` per the main `CLAUDE.md` env-var table).
+4. **Second, separate infra prerequisite — CORS is not enough.** The BFF sets `cia_portal_session`
+   with `SameSite=Strict`. `SameSite` is evaluated on the **registrable domain**, so a
+   Vercel-hosted SPA (`*.vercel.app`) calling a differently-named API host is cross-site — the
+   browser will not send the session cookie at all, no matter how the CORS allowlist above is
+   configured. Real mode therefore needs **one of**: (a) the SPA and the BFF served from the
+   **same registrable domain** (e.g. `partner.cia.app` calling `api.cia.app`), or (b) the BFF's
+   `cia_portal_session` cookie relaxed to `SameSite=None; Secure`. Tracked as backlog
+   `partner-portal-samesite-cookie` (P2) — see `cia-log.md`.
 
 ---
 
@@ -166,11 +174,17 @@ from that working directory. (Back-office doesn't hit this because *its* `vercel
 settings instead.) `installCommand`/`buildCommand` need no change: pnpm walks up from
 `apps/partner` to find the workspace root, so workspace packages resolve.
 
-**Production build throws an API/auth error instead of rendering.** Working as designed if that
-environment is not in demo mode and has no real `VITE_API_BASE_URL` / BFF reachable. Either set
-`VITE_DEMO_MODE=true` there, or finish the "Later" half of Step 2 with a real deployed BFF +
-`partner` Keycloak realm + the CORS allowlist entry.
+**Production build shows the login screen instead of the app.** Working as designed if that
+environment is not in demo mode and has no real `VITE_API_BASE_URL` / BFF reachable — unlike
+back-office/platform, `apps/partner`'s `main.tsx` has no production guard that throws on absent
+auth config; instead `GET /portal/auth/me` fails and `PortalAuthProvider` renders `LoginScreen` (a
+normal, non-crashing state). Either set `VITE_DEMO_MODE=true` there, or finish the "Later" half of
+Step 2 with a real deployed BFF + `partner` Keycloak realm + the CORS allowlist entry + the
+SameSite prerequisite (Step 2.4) below.
 
 **Empty/erroring lists on the real (non-demo) URL.** Check `CIA_PARTNER_PORTAL_ALLOWED_ORIGINS` on
 the BFF includes this exact Vercel origin — a missing entry fails silently as a browser CORS
-error, not a visible app error, since the credentialed cookie request never completes.
+error, not a visible app error, since the credentialed cookie request never completes. **CORS
+alone is not sufficient** — if the SPA and BFF are on different registrable domains (e.g. a
+`*.vercel.app` origin calling a differently-named API host), the `SameSite=Strict`
+`cia_portal_session` cookie is never sent regardless of CORS; see Step 2.4 above.

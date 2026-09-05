@@ -1,5 +1,6 @@
 import { useUsage } from '@cia/api-client';
 import { useSelectedApp } from '../../app/AppContext';
+import { SelectAppNotice } from '../../app/SelectAppNotice';
 import { formatInt, formatPercent } from '../../lib/format';
 import { UsageChart } from './UsageChart';
 
@@ -16,6 +17,15 @@ export default function UsagePage() {
   const { selectedAppId } = useSelectedApp();
   const usageQuery = useUsage(selectedAppId ?? '');
   const u = usageQuery.data;
+
+  if (!selectedAppId) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-xl font-semibold text-foreground">Usage</h1>
+        <SelectAppNotice />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

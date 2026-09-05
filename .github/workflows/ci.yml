@@ -84,7 +84,7 @@ jobs:
         working-directory: cia-frontend
         run: pnpm --filter @cia/partner typecheck
 
-      - name: Unit tests — Vitest (back-office + platform)
+      - name: Unit tests — Vitest (back-office + platform + partner)
         working-directory: cia-frontend
         run: pnpm test
 

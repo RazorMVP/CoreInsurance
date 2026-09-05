@@ -59,9 +59,11 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PARTNER_PROJECT_ID }}
           # Demo-only build until a real `partner` Keycloak + backend exist. Baked at build time
-          # here (NOT a Vercel dashboard env var — that path is error-prone: an empty value silently
-          # ships a blank page via the main.tsx guard). REMOVE this line when wiring real auth and
-          # set VITE_API_BASE_URL in Vercel instead.
+          # here (NOT a Vercel dashboard env var — that path is error-prone: an empty value would
+          # silently ship a build that calls the real (unreachable) BFF). Note: unlike back-office/
+          # platform, `main.tsx` has no production guard that throws on absent auth config — this
+          # flag only decides whether `portal-mocks.ts` or the real credentialed client is used.
+          # REMOVE this line when wiring real auth and set VITE_API_BASE_URL in Vercel instead.
           VITE_DEMO_MODE: 'true'
 
       - name: Build (preview)
